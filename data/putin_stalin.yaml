@@ -1,0 +1,496 @@
+# Fact Pack: Putin and Stalin as Autocrats
+# ==========================================
+# DESIGN PRINCIPLE: Zero cross-entity contamination.
+# Every claim, evidence item, property, and uncertainty is scoped to
+# exactly ONE entity on ONE axis. The engine derives all comparisons.
+
+entities:
+  - id: putin
+    name: "Vladimir Putin"
+    description: "President/Prime Minister of Russia, in power since 1999"
+  - id: stalin
+    name: "Joseph Stalin"
+    description: "General Secretary of the Communist Party of the Soviet Union, ruled 1924–1953"
+
+# ---------------------------------------------------------------------------
+# Axes: structural metadata only, no entity references
+# ---------------------------------------------------------------------------
+axes:
+  - id: legitimacy
+    name: "Legitimacy"
+    description: "How a leader justifies and maintains their claim to power"
+    polarity: capability
+    sub_axes: []
+
+  - id: coercion
+    name: "Coercion"
+    description: "Use of force, repression, and intimidation against domestic populations"
+    polarity: cost
+    sub_axes:
+      - id: surveillance
+        name: "Surveillance"
+      - id: purges
+        name: "Purges & Political Violence"
+      - id: imprisonment
+        name: "Imprisonment & Detention"
+
+  - id: elite_control
+    name: "Elite Control"
+    description: "Management of inner circles, oligarchs, and party/state apparatus"
+    sub_axes: []
+
+  - id: ideology
+    name: "Ideology"
+    description: "Role of ideology in governance and public life"
+    sub_axes: []
+
+  - id: economic_management
+    name: "Economic Management"
+    description: "Approach to economic policy, state control, and resource allocation"
+    sub_axes: []
+
+  - id: information_control
+    name: "Information Control"
+    description: "Control of media, narrative, and public discourse"
+    sub_axes: []
+
+  - id: foreign_policy_risk
+    name: "Foreign Policy Risk"
+    description: "Approach to international relations, military adventurism, and geopolitical risk"
+    sub_axes: []
+
+# ---------------------------------------------------------------------------
+# Claims: strictly per-entity, per-axis. No mention of the other entity.
+# ---------------------------------------------------------------------------
+claims:
+  # -- Putin: Legitimacy --
+  - id: putin_legitimacy_1
+    entity: putin
+    axis: legitimacy
+    text: "Putin maintains a veneer of democratic legitimacy through managed elections, constitutional amendments, and high approval ratings."
+  - id: putin_legitimacy_2
+    entity: putin
+    axis: legitimacy
+    text: "Putin's legitimacy rests heavily on personal popularity, economic stability narratives, and nationalist sentiment."
+
+  # -- Stalin: Legitimacy --
+  - id: stalin_legitimacy_1
+    entity: stalin
+    axis: legitimacy
+    text: "Stalin derived legitimacy from revolutionary credentials, the cult of personality, and the claim to be Lenin's true successor."
+  - id: stalin_legitimacy_2
+    entity: stalin
+    axis: legitimacy
+    text: "Stalin's legitimacy was reinforced by the narrative of industrialization success and victory in World War II."
+
+  # -- Putin: Coercion --
+  - id: putin_coercion_1
+    entity: putin
+    axis: coercion
+    sub_axis: surveillance
+    text: "Putin's regime employs extensive digital surveillance through SORM and cooperation with FSB-aligned telecom infrastructure."
+  - id: putin_coercion_2
+    entity: putin
+    axis: coercion
+    sub_axis: imprisonment
+    text: "Political opponents like Navalny have been imprisoned on charges widely seen as politically motivated."
+  - id: putin_coercion_3
+    entity: putin
+    axis: coercion
+    sub_axis: purges
+    text: "Putin's political violence is targeted: assassinations of journalists and defectors, poisoning of opponents."
+
+  # -- Stalin: Coercion --
+  - id: stalin_coercion_1
+    entity: stalin
+    axis: coercion
+    sub_axis: purges
+    text: "Stalin conducted the Great Purge (1936–1938), executing or imprisoning hundreds of thousands of party members, military officers, and citizens."
+  - id: stalin_coercion_2
+    entity: stalin
+    axis: coercion
+    sub_axis: imprisonment
+    text: "The Gulag system held millions of prisoners in forced labor camps, with mortality rates often exceeding 20%."
+  - id: stalin_coercion_3
+    entity: stalin
+    axis: coercion
+    sub_axis: surveillance
+    text: "Stalin's NKVD maintained an extensive informant network; denunciation by neighbors and colleagues was systematized."
+
+  # -- Putin: Elite Control --
+  - id: putin_elite_1
+    entity: putin
+    axis: elite_control
+    text: "Putin manages oligarchs through a tacit bargain: loyalty in exchange for wealth, with examples like Khodorkovsky showing the cost of defiance."
+  - id: putin_elite_2
+    entity: putin
+    axis: elite_control
+    text: "Putin's inner circle draws heavily from FSB/KGB networks (the siloviki), creating a security-state elite."
+
+  # -- Stalin: Elite Control --
+  - id: stalin_elite_1
+    entity: stalin
+    axis: elite_control
+    text: "Stalin controlled elites through terror: no one in the Politburo was safe, as demonstrated by the purges of Zinoviev, Kamenev, and Bukharin."
+  - id: stalin_elite_2
+    entity: stalin
+    axis: elite_control
+    text: "Stalin rotated and eliminated subordinates to prevent any rival power base from forming."
+
+  # -- Putin: Ideology --
+  - id: putin_ideology_1
+    entity: putin
+    axis: ideology
+    text: "Putin's governance is pragmatically authoritarian; he invokes conservatism, Orthodox Christianity, and anti-Western sentiment as needed."
+  - id: putin_ideology_2
+    entity: putin
+    axis: ideology
+    text: "There is no coherent 'Putinism' comparable to a formal state doctrine; ideology is instrumental."
+
+  # -- Stalin: Ideology --
+  - id: stalin_ideology_1
+    entity: stalin
+    axis: ideology
+    text: "Stalin enforced Marxism-Leninism as state doctrine, with ideological conformity required in all spheres including science (Lysenkoism) and art (Socialist Realism)."
+  - id: stalin_ideology_2
+    entity: stalin
+    axis: ideology
+    text: "Stalin adapted ideology to justify personal rule through 'Socialism in One Country' and the cult of personality."
+
+  # -- Putin: Economic Management --
+  - id: putin_econ_1
+    entity: putin
+    axis: economic_management
+    text: "Putin's economy is a petrostate model: heavy reliance on oil/gas exports, with state-controlled champions like Gazprom and Rosneft."
+  - id: putin_econ_2
+    entity: putin
+    axis: economic_management
+    text: "Putin initially oversaw significant GDP growth (2000–2008) but the economy has stagnated under sanctions and structural problems."
+
+  # -- Stalin: Economic Management --
+  - id: stalin_econ_1
+    entity: stalin
+    axis: economic_management
+    text: "Stalin implemented forced collectivization and Five-Year Plans, achieving rapid industrialization at enormous human cost including the Holodomor famine."
+  - id: stalin_econ_2
+    entity: stalin
+    axis: economic_management
+    text: "Stalin's command economy eliminated private enterprise and centralized all economic decisions in Gosplan."
+
+  # -- Putin: Information Control --
+  - id: putin_info_1
+    entity: putin
+    axis: information_control
+    text: "Putin controls major TV networks (Channel One, Russia-1, NTV) while allowing limited online dissent that is increasingly curtailed."
+  - id: putin_info_2
+    entity: putin
+    axis: information_control
+    text: "Russia's 'foreign agent' laws and media restrictions create a chilling effect without full censorship."
+
+  # -- Stalin: Information Control --
+  - id: stalin_info_1
+    entity: stalin
+    axis: information_control
+    text: "Stalin exercised total control over all media; Pravda and TASS were the sole information sources, and history was rewritten to erase purged figures."
+  - id: stalin_info_2
+    entity: stalin
+    axis: information_control
+    text: "Stalin's regime controlled artistic and scientific output through state censorship organs (Glavlit)."
+
+  # -- Putin: Foreign Policy Risk --
+  - id: putin_foreign_1
+    entity: putin
+    axis: foreign_policy_risk
+    text: "Putin has pursued military adventurism in Georgia (2008), Crimea (2014), Syria (2015), and the full-scale invasion of Ukraine (2022)."
+  - id: putin_foreign_2
+    entity: putin
+    axis: foreign_policy_risk
+    text: "Putin uses nuclear brinkmanship and energy leverage as tools of foreign policy coercion."
+
+  # -- Stalin: Foreign Policy Risk --
+  - id: stalin_foreign_1
+    entity: stalin
+    axis: foreign_policy_risk
+    text: "Stalin expanded Soviet influence through the Iron Curtain, the Berlin Blockade, and support for communist movements worldwide."
+  - id: stalin_foreign_2
+    entity: stalin
+    axis: foreign_policy_risk
+    text: "Stalin avoided direct military confrontation with the West, preferring proxy approaches (e.g., Korean War) and diplomatic pressure."
+
+# ---------------------------------------------------------------------------
+# Evidence: each item supports exactly one claim about one entity.
+# No cross-entity references.
+# ---------------------------------------------------------------------------
+evidence:
+  - id: ev_putin_elections
+    supports: putin_legitimacy_1
+    text: "Putin won the 2024 presidential election with 87% of the vote in an election with no genuine opposition candidates."
+    source: "International election monitoring reports, 2024"
+
+  - id: ev_putin_approval
+    supports: putin_legitimacy_2
+    text: "Levada Center polls consistently show Putin approval ratings above 60%, peaking above 80% after the Crimea annexation."
+    source: "Levada Center polling data, 2000–2024"
+
+  - id: ev_stalin_cult
+    supports: stalin_legitimacy_1
+    text: "Cities, institutions, and geographic features were renamed after Stalin; his image was ubiquitous in public spaces."
+    source: "Service, Robert. Stalin: A Biography. 2004."
+
+  - id: ev_stalin_ww2
+    supports: stalin_legitimacy_2
+    text: "The Soviet victory in WWII became the most powerful legitimating narrative in Soviet political culture."
+    source: "Overy, Richard. Russia's War. 1997."
+
+  - id: ev_sorm
+    supports: putin_coercion_1
+    text: "SORM (System of Operative-Investigative Measures) requires all Russian telecom operators to install FSB monitoring equipment."
+    source: "Soldatov & Borogan, The Red Web, 2015"
+
+  - id: ev_navalny
+    supports: putin_coercion_2
+    text: "Alexei Navalny was sentenced to 19 years in a 'special regime' penal colony and died in custody in February 2024."
+    source: "International press reporting, 2024"
+
+  - id: ev_great_purge
+    supports: stalin_coercion_1
+    text: "Estimates of Great Purge victims range from 680,000 executed to over 1 million total deaths including camp mortality."
+    source: "Getty & Naumov, The Road to Terror, 1999"
+
+  - id: ev_gulag
+    supports: stalin_coercion_2
+    text: "At its peak the Gulag held approximately 1.5 million prisoners; total throughput was 18 million over its existence."
+    source: "Applebaum, Anne. Gulag: A History. 2003."
+
+  - id: ev_khodorkovsky
+    supports: putin_elite_1
+    text: "Mikhail Khodorkovsky, once Russia's richest man, was arrested in 2003 and spent 10 years in prison after challenging Putin politically."
+    source: "International press reporting, 2003–2013"
+
+  - id: ev_show_trials
+    supports: stalin_elite_1
+    text: "The Moscow Show Trials (1936–1938) resulted in the execution of nearly all Old Bolsheviks from Lenin's original circle."
+    source: "Conquest, Robert. The Great Terror. 1968."
+
+  - id: ev_lysenko
+    supports: stalin_ideology_1
+    text: "Lysenkoism rejected Mendelian genetics in favor of ideologically approved pseudoscience, setting Soviet biology back decades."
+    source: "Soyfer, Valery. Lysenko and the Tragedy of Soviet Science. 1994."
+
+  - id: ev_holodomor
+    supports: stalin_econ_1
+    text: "The 1932–1933 famine in Ukraine killed an estimated 3.5–7.5 million people, driven by forced grain requisitions."
+    source: "Snyder, Timothy. Bloodlands. 2010."
+
+  - id: ev_gazprom
+    supports: putin_econ_1
+    text: "Gazprom supplies approximately 40% of Europe's natural gas and is majority-owned by the Russian state."
+    source: "Gazprom annual reports; EU energy statistics"
+
+  - id: ev_pravda
+    supports: stalin_info_1
+    text: "Pravda's circulation reached 10.6 million by 1975; under Stalin it was the sole authoritative news source."
+    source: "Kenez, Peter. The Birth of the Propaganda State. 1985."
+
+  - id: ev_ukraine_invasion
+    supports: putin_foreign_1
+    text: "Russia's full-scale invasion of Ukraine in February 2022 is the largest conventional military operation in Europe since WWII."
+    source: "International press and military analysis, 2022–2024"
+
+  - id: ev_iron_curtain
+    supports: stalin_foreign_1
+    text: "By 1949, Stalin had established communist satellite states across Eastern Europe, creating the Iron Curtain division."
+    source: "Gaddis, John Lewis. The Cold War: A New History. 2005."
+
+# ---------------------------------------------------------------------------
+# Properties: per-entity, per-axis measurable attributes.
+# These are the RAW INPUTS the theory layer uses to DERIVE comparisons.
+# No property references another entity.
+# ---------------------------------------------------------------------------
+properties:
+  # -- Coercion scale --
+  - entity: putin
+    axis: coercion
+    key: repression_scale
+    value: targeted
+    ordinal: 2
+    note: "Selective targeting of individuals: journalists, opposition leaders, defectors."
+
+  - entity: stalin
+    axis: coercion
+    key: repression_scale
+    value: mass
+    ordinal: 5
+    note: "Systematic mass repression affecting millions through purges, deportations, and forced labor."
+
+  # -- Ideology coherence --
+  - entity: putin
+    axis: ideology
+    key: ideological_coherence
+    value: instrumental
+    ordinal: 1
+    note: "No formal state doctrine; ideology deployed tactically."
+
+  - entity: stalin
+    axis: ideology
+    key: ideological_coherence
+    value: totalizing
+    ordinal: 5
+    note: "Marxism-Leninism enforced as mandatory doctrine across all spheres."
+
+  # -- Foreign policy aggression --
+  - entity: putin
+    axis: foreign_policy_risk
+    key: military_directness
+    value: direct
+    ordinal: 4
+    note: "Direct military interventions in Georgia, Ukraine, Syria."
+
+  - entity: stalin
+    axis: foreign_policy_risk
+    key: military_directness
+    value: indirect
+    ordinal: 2
+    note: "Preferred proxy conflicts and diplomatic coercion over direct confrontation."
+
+  # -- Information control degree --
+  - entity: putin
+    axis: information_control
+    key: media_control_degree
+    value: partial
+    ordinal: 3
+    note: "Controls broadcast media; internet partially restricted but not fully censored."
+
+  - entity: stalin
+    axis: information_control
+    key: media_control_degree
+    value: total
+    ordinal: 5
+    note: "Complete state monopoly on all information channels."
+
+  # -- Elite control mechanism --
+  - entity: putin
+    axis: elite_control
+    key: control_mechanism
+    value: co-optation
+    ordinal: 2
+    note: "Bargain-based: loyalty exchanged for wealth and position."
+
+  - entity: stalin
+    axis: elite_control
+    key: control_mechanism
+    value: terror
+    ordinal: 5
+    note: "No elite was safe; rotation and elimination of subordinates."
+
+  # -- Economic state control --
+  - entity: putin
+    axis: economic_management
+    key: state_control_degree
+    value: partial_state
+    ordinal: 3
+    note: "State-controlled champions in key sectors; private enterprise exists."
+
+  - entity: stalin
+    axis: economic_management
+    key: state_control_degree
+    value: total_command
+    ordinal: 5
+    note: "Complete command economy; all private enterprise eliminated."
+
+  # -- Legitimacy basis --
+  - entity: putin
+    axis: legitimacy
+    key: legitimacy_basis
+    value: electoral_managed
+    ordinal: 3
+    note: "Managed elections and plebiscitary approval."
+
+  - entity: stalin
+    axis: legitimacy
+    key: legitimacy_basis
+    value: revolutionary_mythic
+    ordinal: 4
+    note: "Revolutionary credentials and cult of personality."
+
+# ---------------------------------------------------------------------------
+# Relations: entity-blind structural metadata about axes.
+# NO cross-entity references. NO comparative judgments.
+# ---------------------------------------------------------------------------
+relations:
+  # Hierarchy: coercion subdivides into surveillance, purges, imprisonment
+  - id: rel_hierarchy_coercion
+    kind: hierarchy
+    axis: coercion
+    parent: coercion
+    children: [surveillance, purges, imprisonment]
+
+  # Property declarations: which properties are ordinal-comparable
+  # and which property key, when values diverge, signals a contradiction
+  - id: rel_ordinal_repression
+    kind: ordinal
+    axis: coercion
+    property_key: repression_scale
+    direction: higher_is_more
+    note: "Higher ordinal = more repressive"
+
+  - id: rel_ordinal_ideology
+    kind: ordinal
+    axis: ideology
+    property_key: ideological_coherence
+    direction: higher_is_more
+    note: "Higher ordinal = more ideologically rigid"
+
+  - id: rel_ordinal_military
+    kind: ordinal
+    axis: foreign_policy_risk
+    property_key: military_directness
+    direction: higher_is_more
+    note: "Higher ordinal = more directly aggressive"
+
+  - id: rel_ordinal_media
+    kind: ordinal
+    axis: information_control
+    property_key: media_control_degree
+    direction: higher_is_more
+    note: "Higher ordinal = tighter control"
+
+  - id: rel_ordinal_elite
+    kind: ordinal
+    axis: elite_control
+    property_key: control_mechanism
+    direction: higher_is_more
+    note: "Higher ordinal = more coercive control"
+
+  - id: rel_ordinal_econ
+    kind: ordinal
+    axis: economic_management
+    property_key: state_control_degree
+    direction: higher_is_more
+    note: "Higher ordinal = more state control"
+
+  - id: rel_ordinal_legitimacy
+    kind: ordinal
+    axis: legitimacy
+    property_key: legitimacy_basis
+    direction: higher_is_more
+    note: "Higher ordinal = more mythic/non-democratic basis"
+
+# ---------------------------------------------------------------------------
+# Uncertainties: per-axis caveats. Each is about one axis, not comparative.
+# ---------------------------------------------------------------------------
+uncertainties:
+  - axis: legitimacy
+    text: "Approval ratings may be inflated by social desirability bias and fear of expressing dissent to pollsters."
+  - axis: coercion
+    text: "The full extent of political killings in any regime is inherently difficult to measure; attributed deaths may be over- or under-counted."
+  - axis: economic_management
+    text: "Rapid industrialization under command economies may produce genuine transformation despite enormous human cost — the counterfactual is debated."
+  - axis: foreign_policy_risk
+    text: "Apparent caution in foreign policy may reflect strategic calculation rather than principled restraint."
+  - axis: elite_control
+    text: "Bargain-based elite management may be more fragile than it appears, with potential for defection under pressure."
+  - axis: ideology
+    text: "Pragmatic use of ideological themes may constitute an emergent ideology (e.g., sovereign democracy, Eurasianism) rather than pure instrumentalism."
+  - axis: information_control
+    text: "Modern information environments with VPNs and encrypted messaging create qualitatively different control challenges than pre-digital regimes faced."
