@@ -1,7 +1,7 @@
 # NL Layer — Known Bugs
 
 Tracked bugs in the Natural Language UX layer (`src/nl/`).
-Discovered via 30 transcript demos and 46 red-team probes.
+Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcripts.
 
 ---
 
@@ -98,7 +98,37 @@ Discovered via 30 transcript demos and 46 red-team probes.
 - **Root cause:** "file" after correction is a bare word, not recognized as a path (no extension, no slash). The user meant "the file" generically but there's no actual filename.
 - **Status:** Working as designed — the system correctly asks for clarification when no specific file is provided. The error message could be friendlier.
 
+### ~~BUG-013: "also skip X" not recognized as edit~~ ✅ FIXED
+- **File:** `src/nl/intent.rs`
+- **Symptom:** "also skip node_modules" after creating a plan returns `NeedsClarification` instead of `PlanEdited`.
+- **Root cause:** `try_edit()` checks `tokens.first()` which is "also", not an edit keyword. The function returns `None` and the input falls through to the fallback.
+- **Repro:** Create a walk_tree plan, then `process_input("also skip node_modules", &mut state)`.
+- **Fix:** Skip filler prefixes ("also", "and", "then", "now", "plus", "additionally", "but", "oh", "hey", "ok", "okay", "so", "well") before checking the first meaningful token for edit keywords.
+
+### ~~BUG-014: "ok search for TODO" captures "ok" as keyword~~ ✅ FIXED
+- **File:** `src/nl/slots.rs`
+- **Symptom:** `ok search for TODO in ~/src` produces `search_content` with `pattern: "ok"` instead of `pattern: "TODO"`.
+- **Root cause:** "ok" is not in the stopwords list in `extract_slots()`. It gets classified as a `Keyword` and becomes the first keyword, which `build_workflow` uses as the search pattern.
+- **Repro:** `process_input("ok search for TODO in ~/src", &mut state)`.
+- **Fix:** Add conversational fillers ("ok", "okay", "sure", "yes", "yeah", "yep", "yea", "alright", "right", "well", "hmm", "um", "uh", "hey", "oh") to the stopwords list.
+
+### ~~BUG-015: "ok lgtm" not recognized as approval~~ ✅ FIXED
+- **File:** `src/nl/intent.rs`
+- **Symptom:** "ok lgtm" returns `NeedsClarification` instead of `Approved`.
+- **Root cause:** The compound approval logic checks if the tail is a multi-word approval, but "lgtm" is a single-word approval. The tail `"lgtm"` doesn't match any multi-word pattern.
+- **Repro:** `process_input("ok lgtm", &mut state)` after creating a plan.
+- **Fix:** Also check if the tail is a single-word approval (not just multi-word).
+
+### ~~BUG-016: `~/backup/database.sql` typed as Dir(Bytes)~~ ✅ FIXED
+- **File:** `src/workflow.rs`, `src/nl/dialogue.rs`
+- **Symptom:** `compress ~/backup/database.sql` fails type-checking because the input is typed as `Dir(Bytes)` instead of `File(Bytes)`.
+- **Root cause:** In `infer_input_type()`, the `value.starts_with("~/")` directory heuristic fires BEFORE extension-based file detection. A path like `~/backup/database.sql` matches the `~/` prefix and gets typed as a directory. The `.sql` extension check doesn't exist in the explicit extension list (only `.txt`, `.json`, `.yaml`, etc. are checked).
+- **Repro:** `process_input("compress ~/backup/database.sql", &mut state)`.
+- **Fix:** Added `has_known_file_extension()` check and Image file check before the directory heuristic. Also synced `is_file_path()` in `dialogue.rs` with expanded extension list.
+
 ---
+
+## 📊 Summary: 16 bugs total — 14 fixed, 1 deferred, 1 by-design
 
 ## 📋 Discovered but not bugs
 

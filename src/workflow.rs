@@ -551,6 +551,40 @@ fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
     }
 }
 
+/// Check if a value string ends with a known file extension.
+/// Used to prevent the directory heuristic from misclassifying files like
+/// ~/backup/database.sql as Dir(Bytes).
+fn has_known_file_extension(value: &str) -> bool {
+    if let Some(dot_pos) = value.rfind('.') {
+        let ext = &value[dot_pos + 1..];
+        if ext.is_empty() {
+            return false;
+        }
+        matches!(ext,
+            // Text/code
+            "txt" | "md" | "rs" | "py" | "js" | "ts" | "go" | "java" | "c" | "cpp" | "h"
+            | "json" | "yaml" | "yml" | "toml" | "xml" | "html" | "css" | "csv"
+            | "log" | "sh" | "bash" | "zsh" | "fish"
+            // Archives
+            | "tar" | "gz" | "tgz" | "zip" | "bz2" | "xz" | "7z" | "rar"
+            | "cbz" | "cbr"
+            // Documents
+            | "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx"
+            // Images
+            | "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "bmp" | "ico"
+            // Media
+            | "mp3" | "mp4" | "wav" | "avi" | "mkv" | "mov"
+            // Data
+            | "db" | "sql" | "sqlite"
+            // Config
+            | "cfg" | "conf" | "ini" | "env"
+            | "plist" | "lock" | "bak" | "tmp" | "swp"
+        )
+    } else {
+        false
+    }
+}
+
 /// Infer the TypeExpr for a workflow input based on its name and value.
 ///
 /// Heuristics:
@@ -626,6 +660,23 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
     // PDF files
     if value_lower.ends_with(".pdf") {
         return Ok(TypeExpr::file(TypeExpr::prim("PDF")));
+    }
+
+    // Image files
+    if value_lower.ends_with(".png") || value_lower.ends_with(".jpg")
+        || value_lower.ends_with(".jpeg") || value_lower.ends_with(".gif")
+        || value_lower.ends_with(".svg") || value_lower.ends_with(".webp")
+        || value_lower.ends_with(".bmp") || value_lower.ends_with(".ico")
+    {
+        return Ok(TypeExpr::file(TypeExpr::prim("Image")));
+    }
+
+    // Other known file extensions — catch-all before directory heuristic
+    // This prevents ~/path/file.sql from being typed as Dir(Bytes)
+    if has_known_file_extension(&value_lower) {
+        // Generic file with bytes content — the specific type isn't known
+        // but it's definitely a file, not a directory
+        return Ok(TypeExpr::file(TypeExpr::prim("Bytes")));
     }
 
     // Directory (by name hint or trailing slash)

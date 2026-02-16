@@ -567,6 +567,150 @@ fn test_nl_generated_yaml_compiles_zip() {
     assert_yaml_compiles(&r);
 }
 
+// =========================================================================
+// Hardening: transcript bug fixes
+// =========================================================================
+
+// -- "also skip X" continuation edits --
+
+#[test]
+fn test_hardening_also_skip_as_edit() {
+    let mut state = DialogueState::new();
+    let r1 = process_input("walk the directory tree in ~/src", &mut state);
+    assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+    let r2 = process_input("also skip node_modules", &mut state);
+    match &r2 {
+        NlResponse::PlanEdited { diff_description, .. } => {
+            let desc_lower = diff_description.to_lowercase();
+            assert!(desc_lower.contains("skip") || desc_lower.contains("filter") || desc_lower.contains("exclude"),
+                "should describe skip edit: {}", diff_description);
+        }
+        other => panic!("expected PlanEdited for 'also skip', got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_hardening_and_then_skip() {
+    let mut state = DialogueState::new();
+    let _ = process_input("find all PDFs in ~/Documents", &mut state);
+    let r = process_input("and then skip hidden files", &mut state);
+    match &r {
+        NlResponse::PlanEdited { .. } => {} // success
+        other => panic!("expected PlanEdited for 'and then skip', got: {:?}", other),
+    }
+}
+
+// -- "ok search for TODO" keyword extraction --
+
+#[test]
+fn test_hardening_ok_search_todo_keyword() {
+    let mut state = DialogueState::new();
+    let r = process_input("ok search for TODO in ~/src", &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            let yaml_lower = workflow_yaml.to_lowercase();
+            assert!(!yaml_lower.contains("pattern: \"ok\"") && !yaml_lower.contains("pattern: ok"),
+                "'ok' should NOT be the search pattern: {}", workflow_yaml);
+            // "todo" should be the keyword
+            assert!(yaml_lower.contains("todo"),
+                "should contain 'todo' as keyword: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_hardening_so_find_pdfs_no_so_keyword() {
+    let mut state = DialogueState::new();
+    let r = process_input("so find all PDFs in ~/Documents", &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            // "so" should not appear as a keyword/pattern
+            assert!(!workflow_yaml.contains("pattern: \"so\"") && !workflow_yaml.contains("pattern: so\n"),
+                "'so' should NOT be a keyword: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+// -- "ok lgtm" compound approval --
+
+#[test]
+fn test_hardening_ok_lgtm_approves() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("ok lgtm", &mut state);
+    assert!(matches!(r, NlResponse::Approved),
+        "'ok lgtm' should approve, got: {:?}", r);
+}
+
+#[test]
+fn test_hardening_sure_yeah_approves() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("sure yeah", &mut state);
+    assert!(matches!(r, NlResponse::Approved),
+        "'sure yeah' should approve, got: {:?}", r);
+}
+
+#[test]
+fn test_hardening_fine_ok_approves() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("fine ok", &mut state);
+    assert!(matches!(r, NlResponse::Approved),
+        "'fine ok' should approve, got: {:?}", r);
+}
+
+// -- ~/path/file.sql type inference --
+
+#[test]
+fn test_hardening_tilde_sql_file_compiles() {
+    let mut state = DialogueState::new();
+    let r = process_input("compress ~/backup/database.sql", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "~/backup/database.sql should create plan: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_hardening_tilde_tar_gz_compiles() {
+    let mut state = DialogueState::new();
+    let r = process_input("extract ~/archive.tar.gz", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "~/archive.tar.gz should create plan: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_hardening_tilde_dir_still_works() {
+    let mut state = DialogueState::new();
+    let r = process_input("list ~/Documents", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "~/Documents should create plan: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+// -- Dictionary expansion: slang doesn't break things --
+
+#[test]
+fn test_hardening_slang_doesnt_create_workflow() {
+    let mut state = DialogueState::new();
+    let r = process_input("yikes whoa that's crazy", &mut state);
+    assert!(!matches!(r, NlResponse::PlanCreated { .. }),
+        "slang should NOT create workflow: {:?}", r);
+}
+
+#[test]
+fn test_hardening_gonna_wanna_passthrough() {
+    let mut state = DialogueState::new();
+    // "gonna" and "wanna" should not be corrected to domain ops
+    let r = process_input("I'm gonna wanna compress file.txt", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "should still create workflow with slang: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
 #[test]
 fn test_nl_generated_yaml_compiles_list() {
     let mut state = DialogueState::new();

@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-16T11:40:45Z | Size: 15.5k chars
+> Updated: 2026-02-16T20:27:05Z | Size: 16.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -151,3 +151,15 @@
 - `src/nl/dialogue.rs` — apply_skip filters 25 action words; apply_remove defaults to last step for action-verb ops
 - `tests/nl_tests.rs` — 21 new red-team integration tests
 - **567 total tests, all passing, zero warnings**
+
+### NL Hardening Phase (plan `nl-hardening`, all 6 items done)
+- `src/nl/intent.rs` [447-460] - Filler prefix skipping in `try_edit()` (also/and/then/now/plus/etc.)
+- `src/nl/intent.rs` [209-213] - Single-word tail check in compound approval (`is_approve()`)
+- `src/nl/slots.rs` [142-144] - 15 conversational fillers added to stopwords in `extract_slots()`
+- `src/workflow.rs` [558-590] - `has_known_file_extension()` helper function
+- `src/workflow.rs` [665-681] - Image file check + catch-all extension check before directory heuristic
+- `src/nl/dialogue.rs` [379-399] - `is_file_path()` synced with expanded extension list
+- `src/nl/typo.rs` [240-955] - Dictionary expanded from ~388 to ~2000 unique words
+- `BUGS.md` - 16 bugs total: 14 fixed, 1 deferred (BUG-009), 1 by-design (BUG-012)
+- **591 total tests**, all passing, zero warnings
+  - Unit: 406, NL integration: 87, FS integration: 27, Generic planner: 14, Integration: 18, Power tools: 20, Workflow: 19

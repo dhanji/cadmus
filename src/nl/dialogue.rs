@@ -386,14 +386,15 @@ fn is_file_path(path: &str) -> bool {
         !name.is_empty() && !ext.is_empty() && matches!(ext,
             "txt" | "md" | "rs" | "py" | "js" | "ts" | "go" | "java" | "c" | "cpp" | "h"
             | "json" | "yaml" | "yml" | "toml" | "xml" | "html" | "css" | "csv"
-            | "log" | "sh" | "bash" | "zsh"
+            | "log" | "sh" | "bash" | "zsh" | "fish"
             | "tar" | "gz" | "tgz" | "zip" | "bz2" | "xz" | "7z" | "rar"
             | "cbz" | "cbr"
-            | "pdf" | "doc" | "docx" | "plist"
-            | "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp"
-            | "mp3" | "mp4" | "wav"
+            | "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "plist"
+            | "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "bmp" | "ico"
+            | "mp3" | "mp4" | "wav" | "avi" | "mkv" | "mov"
             | "db" | "sql" | "sqlite"
             | "cfg" | "conf" | "ini" | "env"
+            | "lock" | "bak" | "tmp" | "swp"
         )
     } else {
         false

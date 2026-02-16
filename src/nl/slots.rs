@@ -125,6 +125,9 @@ pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
         "can", "may", "might", "shall", "and", "or", "but", "not",
         "up", "everything", "all", "any", "every", "some",
         "please", "just", "also", "then", "so", "if",
+        // Conversational fillers — must not become keywords
+        "ok", "okay", "sure", "yes", "yeah", "yep", "yea",
+        "alright", "right", "well", "hmm", "um", "uh", "hey", "oh",
     ];
 
     let mut i = 0;
@@ -697,5 +700,27 @@ mod tests {
     fn test_extract_bare_filename_as_path() {
         let slots = extract_slots(&tokens(&["gzip_compress", "my_file.txt"]));
         assert_eq!(slots.target_path, Some("my_file.txt".to_string()));
+    }
+
+    // -- Hardening: conversational fillers as stopwords (I2) --
+
+    #[test]
+    fn test_ok_not_keyword() {
+        let slots = extract_slots(&tokens(&["search_content", "ok", "todo", "~/src"]));
+        assert!(!slots.keywords.contains(&"ok".to_string()), "keywords: {:?}", slots.keywords);
+        assert!(slots.keywords.contains(&"todo".to_string()), "keywords: {:?}", slots.keywords);
+    }
+
+    #[test]
+    fn test_so_not_keyword() {
+        let slots = extract_slots(&tokens(&["find_matching", "so", "*.pdf", "~/Documents"]));
+        assert!(!slots.keywords.contains(&"so".to_string()), "keywords: {:?}", slots.keywords);
+    }
+
+    #[test]
+    fn test_yeah_not_keyword() {
+        let slots = extract_slots(&tokens(&["search_content", "yeah", "error", "~/logs"]));
+        assert!(!slots.keywords.contains(&"yeah".to_string()), "keywords: {:?}", slots.keywords);
+        assert!(slots.keywords.contains(&"error".to_string()), "keywords: {:?}", slots.keywords);
     }
 }

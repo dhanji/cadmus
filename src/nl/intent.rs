@@ -215,6 +215,11 @@ fn is_approve(tokens: &[String]) -> bool {
             if filler.iter().any(|f| tail == *f || tail.starts_with(f)) {
                 return true;
             }
+            // Also: "ok lgtm", "sure yeah", "fine ok" — first is approval, tail is single-word approval
+            let tail_tokens: Vec<&str> = tail.split_whitespace().collect();
+            if tail_tokens.len() == 1 && single_approvals.contains(&tail_tokens[0]) {
+                return true;
+            }
         }
     }
 
@@ -429,8 +434,17 @@ fn try_edit(tokens: &[String]) -> Option<Intent> {
         (&["insert", "prepend", "put"], EditAction::Insert),
     ];
 
-    // Check if the first meaningful token is an edit action
-    let first = tokens.first()?;
+    // Skip filler prefixes so "also skip X", "and remove step 2", "then add filter" work.
+    let filler_prefixes = ["also", "and", "then", "now", "plus", "additionally",
+                           "but", "oh", "hey", "ok", "okay", "so", "well"];
+    let mut start = 0;
+    while start < tokens.len() && filler_prefixes.contains(&tokens[start].as_str()) {
+        start += 1;
+    }
+    if start >= tokens.len() {
+        return None;
+    }
+    let first = &tokens[start];
 
     // "skip" / "remove" / "add" / etc. as first token
     for (keywords, action) in action_map {
@@ -452,7 +466,7 @@ fn try_edit(tokens: &[String]) -> Option<Intent> {
             if has_step_ref || has_named || has_subdirectory
                 || (action.clone() == EditAction::Skip)
             {
-                let rest: Vec<String> = tokens[1..].to_vec();
+                let rest: Vec<String> = tokens[start + 1..].to_vec();
                 return Some(Intent::EditStep {
                     action: action.clone(),
                     rest,
@@ -465,7 +479,7 @@ fn try_edit(tokens: &[String]) -> Option<Intent> {
     if first == "move_entry" || first == "move" {
         let has_step = tokens.iter().any(|t| t == "step");
         if has_step {
-            let rest: Vec<String> = tokens[1..].to_vec();
+            let rest: Vec<String> = tokens[start + 1..].to_vec();
             return Some(Intent::EditStep {
                 action: EditAction::Move,
                 rest,
@@ -1044,5 +1058,58 @@ mod tests {
     #[test]
     fn test_approve_ok_go_for_it() {
         assert_eq!(recognize("ok go for it"), Intent::Approve);
+    }
+
+    // -- Hardening: filler prefix edits (I1) --
+
+    #[test]
+    fn test_also_skip_node_modules() {
+        let intent = recognize("also skip node_modules");
+        match intent {
+            Intent::EditStep { action, rest } => {
+                assert_eq!(action, EditAction::Skip);
+                assert!(rest.iter().any(|t| t == "node_modules"), "rest: {:?}", rest);
+            }
+            other => panic!("expected EditStep(Skip), got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_and_remove_last_step() {
+        let intent = recognize("and remove the last step");
+        match intent {
+            Intent::EditStep { action, .. } => {
+                assert_eq!(action, EditAction::Remove);
+            }
+            other => panic!("expected EditStep(Remove), got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_then_skip_hidden_files() {
+        let intent = recognize("then skip hidden files");
+        match intent {
+            Intent::EditStep { action, .. } => {
+                assert_eq!(action, EditAction::Skip);
+            }
+            other => panic!("expected EditStep(Skip), got: {:?}", other),
+        }
+    }
+
+    // -- Hardening: compound approval with single-word tail (I3) --
+
+    #[test]
+    fn test_approve_ok_lgtm() {
+        assert_eq!(recognize("ok lgtm"), Intent::Approve);
+    }
+
+    #[test]
+    fn test_approve_sure_yeah() {
+        assert_eq!(recognize("sure yeah"), Intent::Approve);
+    }
+
+    #[test]
+    fn test_approve_fine_ok() {
+        assert_eq!(recognize("fine ok"), Intent::Approve);
     }
 }
