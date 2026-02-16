@@ -12,6 +12,7 @@
 //! - Words with no close match pass through unchanged (no false corrections)
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 // ---------------------------------------------------------------------------
 // Embedded fallback
@@ -242,6 +243,17 @@ fn edit_distance(a: &str, b: &str) -> usize {
 /// - Common type names (file, dir, seq, entry, etc.)
 /// - Common filesystem vocabulary
 /// - Common action words
+// ---------------------------------------------------------------------------
+// Cached singleton
+// ---------------------------------------------------------------------------
+
+static DOMAIN_DICT: OnceLock<SymSpellDict> = OnceLock::new();
+
+/// Get the cached domain dictionary (loaded once, reused forever).
+pub fn domain_dict() -> &'static SymSpellDict {
+    DOMAIN_DICT.get_or_init(build_domain_dict)
+}
+
 /// Build the domain-bounded SymSpell dictionary from YAML.
 ///
 /// Loads word frequencies from `data/nl/nl_dictionary.yaml` (disk-first,

@@ -96,7 +96,7 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
     let first_pass = normalize::normalize(input);
 
     // 2. Typo correction on the raw tokens (before synonym mapping)
-    let dict = typo::build_domain_dict();
+    let dict = typo::domain_dict();
     let corrected_tokens = dict.correct_tokens(&first_pass.tokens);
 
     // 3. Re-normalize the corrected tokens to apply synonym mapping
