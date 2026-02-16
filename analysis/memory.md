@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-16T03:22:49Z | Size: 7.1k chars
+> Updated: 2026-02-16T07:27:15Z | Size: 8.7k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -69,3 +69,29 @@
 - `tests/workflow_tests.rs` - 11 integration tests
 - `src/main.rs` - `--workflow <path>` CLI flag, backward compatible no-args demo
 - Total tests: 221 (171 unit + 7 fs_integration + 14 generic_planner + 18 integration + 11 workflow)
+
+### YAML Ops Pack System
+- `src/registry.rs` [546-695] - `load_ops_pack_str()`, `load_ops_pack()`, `load_ops_pack_str_into()`, `OpsPack`, `OpDef`, `OpDefProperties`, `OpsPackError`
+- `data/fs_ops.yaml` - 49 filesystem ops (source of truth, no Rust recompilation needed)
+- `data/comparison_ops.yaml` - 6 comparison reasoning ops
+- `data/coding_ops.yaml` - 6 code analysis ops
+- `src/fs_types.rs` uses `include_str!("../data/fs_ops.yaml")` as fallback + disk-first loading
+
+### Option(a) Constructor
+- `src/type_expr.rs:84-87` - `fn option(inner: TypeExpr) -> Self` — first-class constructor
+
+### walk_tree Change
+- `walk_tree` now returns `Seq(Entry(Name, a))` (flat)
+- `walk_tree_hierarchy` returns `Tree(Entry(Name, a))` (preserves hierarchy)
+- `flatten_tree` converts `Tree(a) → Seq(a)`
+
+### Test Counts
+- 263 total tests after Phases 1-5 commit (bbaa444)
+- 187 unit + 27 fs_integration + 14 reasoner_tests + 18 tiramisu + 17 workflow
+
+### Workflow Type Inference
+- `src/workflow.rs:562` - `infer_input_type()` now handles URLs (http/https/ftp), .log/.csv/.json/.yaml/.yml/.toml/.xml/.html/.css/.sh extensions
+
+### Documentation Files
+- `ARCHITECTURE.md` [1..340] — concise architecture description: type system, registry (mono+poly), YAML ops packs, fact packs, both planners, strategies, algebra, theory, workflow DSL, module map
+- `PLAYBOOK.md` [1..705] — step-by-step guide: adding ops packs, fact packs, workflows, common mistakes, database domain worked example, quick reference schemas
