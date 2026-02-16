@@ -13,6 +13,12 @@ use reasoning_engine::workflow;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
+    // --chat mode: interactive NL UX
+    if args.iter().any(|a| a == "--chat") {
+        run_chat_mode();
+        return;
+    }
+
     // --workflow <path> mode: load and execute a workflow YAML file
     if let Some(pos) = args.iter().position(|a| a == "--workflow") {
         let path = args.get(pos + 1).unwrap_or_else(|| {
@@ -34,6 +40,108 @@ fn main() {
 // ---------------------------------------------------------------------------
 // Workflow mode
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Chat mode (NL UX)
+// ---------------------------------------------------------------------------
+
+fn run_chat_mode() {
+    use std::io::{self, BufRead, Write};
+    use reasoning_engine::nl;
+    use reasoning_engine::nl::dialogue::DialogueState;
+
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║              REASONING ENGINE v0.5.0                        ║");
+    println!("║    Natural Language UX                                      ║");
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+    println!("Type a command in natural language. Examples:");
+    println!("  zip up everything in ~/Downloads");
+    println!("  find all PDFs in ~/Documents");
+    println!("  what's walk mean");
+    println!();
+    println!("Type 'quit' or 'exit' to leave.");
+    println!();
+
+    let mut state = DialogueState::new();
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+
+    loop {
+        print!("> ");
+        stdout.flush().unwrap();
+
+        let mut line = String::new();
+        match stdin.lock().read_line(&mut line) {
+            Ok(0) => break, // EOF
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Error reading input: {}", e);
+                break;
+            }
+        }
+
+        let input = line.trim();
+        if input.is_empty() {
+            continue;
+        }
+        if input == "quit" || input == "exit" || input == "q" {
+            println!("Bye!");
+            break;
+        }
+
+        let response = nl::process_input(input, &mut state);
+
+        match response {
+            nl::NlResponse::PlanCreated { prompt, .. } => {
+                println!();
+                println!("{}", prompt);
+                println!();
+            }
+            nl::NlResponse::PlanEdited { prompt, .. } => {
+                println!();
+                println!("{}", prompt);
+                println!();
+            }
+            nl::NlResponse::Explanation { text } => {
+                println!();
+                println!("{}", text);
+                println!();
+            }
+            nl::NlResponse::Approved => {
+                println!();
+                println!("✅ Plan approved!");
+                if let Some(wf) = &state.current_workflow {
+                    println!("Workflow '{}' is ready to execute.", wf.workflow);
+                }
+                println!();
+            }
+            nl::NlResponse::Rejected => {
+                println!();
+                println!("Plan discarded. Start fresh!");
+                println!();
+            }
+            nl::NlResponse::NeedsClarification { needs } => {
+                println!();
+                for need in &needs {
+                    println!("🤔 {}", need);
+                }
+                println!();
+            }
+            nl::NlResponse::ParamSet { description, .. } => {
+                println!();
+                println!("{}", description);
+                println!();
+            }
+            nl::NlResponse::Error { message } => {
+                println!();
+                println!("❌ {}", message);
+                println!();
+            }
+        }
+    }
+}
+
 
 fn run_workflow_mode(path: &Path) {
     println!("╔══════════════════════════════════════════════════════════════╗");

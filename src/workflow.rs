@@ -629,6 +629,11 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
     }
 
     // Directory (by name hint or trailing slash)
+    if name_lower == "textdir" || name_lower == "text_dir" {
+        // Directory containing text files — used by search_content pipelines
+        return Ok(TypeExpr::dir(TypeExpr::file(TypeExpr::prim("Text"))));
+    }
+
     if name_lower.contains("dir") || name_lower == "path"
         || value.ends_with('/') || value.starts_with("~/")
         || value.starts_with("/")

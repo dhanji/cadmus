@@ -1,0 +1,675 @@
+//! Natural Language UX layer.
+//!
+//! A deterministic, low-latency adapter that converts chatty user input
+//! into structured workflow YAML / Goal DSL instructions for the reasoning
+//! engine. Operates in four stages:
+//!
+//! 1. **Normalization** — case fold, punctuation strip, ordinal canonicalization,
+//!    synonym mapping (`normalize`)
+//! 2. **Typo correction** — domain-bounded SymSpell dictionary (`typo`)
+//! 3. **Intent recognition** — closed grammar over canonical edit instructions (`intent`)
+//! 4. **Slot extraction** — targets, anchors, parameters, modifiers (`slots`)
+//!
+//! Plus dialogue state management (`dialogue`) for multi-turn conversations.
+
+pub mod normalize;
+pub mod typo;
+pub mod intent;
+pub mod slots;
+pub mod dialogue;
+
+use dialogue::{DialogueState, DialogueError, FocusEntry};
+use intent::Intent;
+use intent::EditAction;
+use slots::ExtractedSlots;
+
+// ---------------------------------------------------------------------------
+// NlResponse — the output of the NL UX layer
+// ---------------------------------------------------------------------------
+
+/// The response from processing a user input through the NL layer.
+#[derive(Debug, Clone)]
+pub enum NlResponse {
+    /// A new workflow plan was created.
+    PlanCreated {
+        /// The workflow YAML string.
+        workflow_yaml: String,
+        /// Human-readable summary of what the plan does.
+        summary: String,
+        /// The prompt to show the user.
+        prompt: String,
+    },
+    /// An existing workflow plan was edited.
+    PlanEdited {
+        /// The revised workflow YAML string.
+        workflow_yaml: String,
+        /// Description of what changed.
+        diff_description: String,
+        /// The prompt to show the user.
+        prompt: String,
+    },
+    /// An explanation of an operation or concept.
+    Explanation {
+        /// The explanation text.
+        text: String,
+    },
+    /// The user approved the current plan.
+    Approved,
+    /// The user rejected the current plan.
+    Rejected,
+    /// The input was ambiguous — we need clarification.
+    NeedsClarification {
+        /// What we need to know.
+        needs: Vec<String>,
+    },
+    /// A parameter was set.
+    ParamSet {
+        /// Description of what was set.
+        description: String,
+        /// The revised workflow YAML (if a workflow exists).
+        workflow_yaml: Option<String>,
+    },
+    /// An error occurred.
+    Error {
+        /// Error message.
+        message: String,
+    },
+}
+
+// ---------------------------------------------------------------------------
+// Public API — the main entry point
+// ---------------------------------------------------------------------------
+
+/// Process a user input through the full NL pipeline.
+///
+/// Pipeline: normalize → typo_correct → parse_intent → extract_slots
+/// → resolve_references → execute.
+///
+/// This is the single entry point for the NL UX layer.
+pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
+    state.next_turn();
+
+    // Pipeline: normalize → typo correct → re-normalize (for synonyms) → intent → slots
+    //
+    // 1. First normalize: case fold, strip punctuation, expand contractions, ordinals
+    let first_pass = normalize::normalize(input);
+
+    // 2. Typo correction on the raw tokens (before synonym mapping)
+    let dict = typo::build_domain_dict();
+    let corrected_tokens = dict.correct_tokens(&first_pass.tokens);
+
+    // 3. Re-normalize the corrected tokens to apply synonym mapping
+    //    We join with spaces, preserving path tokens that have original case
+    let corrected_input = corrected_tokens.join(" ");
+    let normalized = normalize::normalize(&corrected_input);
+
+    // 4. Parse intent from the fully normalized+corrected tokens
+    let intent_result = intent::parse_intent(&normalized);
+
+    // 5. Extract slots from canonical tokens
+    let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+    // 5. Update focus stack with mentioned ops/paths
+    update_focus(state, &extracted);
+
+    // 6. Store last intent
+    state.last_intent = Some(intent_result.clone());
+
+    // 7. Dispatch based on intent
+    match intent_result {
+        Intent::CreateWorkflow { op, rest: _ } => {
+            handle_create_workflow(op, &extracted, state)
+        }
+        Intent::EditStep { action, rest: _ } => {
+            handle_edit_step(action, &extracted, state)
+        }
+        Intent::ExplainOp { subject, rest: _ } => {
+            handle_explain(&subject)
+        }
+        Intent::Approve => {
+            if state.current_workflow.is_some() {
+                NlResponse::Approved
+            } else {
+                NlResponse::NeedsClarification {
+                    needs: vec![
+                        "There's nothing to approve yet.".to_string(),
+                        "Try creating a plan first, like 'zip up ~/Downloads'.".to_string(),
+                    ],
+                }
+            }
+        }
+        Intent::Reject => {
+            state.current_workflow = None;
+            NlResponse::Rejected
+        }
+        Intent::AskQuestion { tokens } => {
+            handle_question(&tokens)
+        }
+        Intent::SetParam { param, value, rest: _ } => {
+            handle_set_param(param, value, &extracted, state)
+        }
+        Intent::NeedsClarification { needs } => {
+            NlResponse::NeedsClarification { needs }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Intent handlers
+// ---------------------------------------------------------------------------
+
+fn handle_create_workflow(
+    op: Option<String>,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> NlResponse {
+    match dialogue::build_workflow(&op, slots, None) {
+        Ok(wf) => {
+            let yaml = dialogue::workflow_to_yaml(&wf);
+
+            // Validate: try to compile through the engine
+            match validate_workflow_yaml(&yaml) {
+                Ok(()) => {
+                    let summary = format_summary(&wf);
+                    let prompt = format!("{}\n\n{}\n\n{}",
+                        casual_ack(state.turn_count),
+                        yaml,
+                        "Approve? Or edit plan?"
+                    );
+
+                    state.current_workflow = Some(wf);
+                    state.focus.push(FocusEntry::WholePlan);
+
+                    NlResponse::PlanCreated {
+                        workflow_yaml: yaml,
+                        summary,
+                        prompt,
+                    }
+                }
+                Err(e) => NlResponse::Error {
+                    message: format!("Generated workflow failed validation: {}", e),
+                },
+            }
+        }
+        Err(DialogueError::CannotBuild(msg)) => {
+            NlResponse::NeedsClarification {
+                needs: vec![msg],
+            }
+        }
+        Err(e) => NlResponse::Error {
+            message: format!("{}", e),
+        },
+    }
+}
+
+fn handle_edit_step(
+    action: EditAction,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> NlResponse {
+    let wf = match &state.current_workflow {
+        Some(wf) => wf.clone(),
+        None => {
+            return NlResponse::NeedsClarification {
+                needs: vec![
+                    "There's no current plan to edit.".to_string(),
+                    "Try creating one first, like 'zip up ~/Downloads'.".to_string(),
+                ],
+            };
+        }
+    };
+
+    match dialogue::apply_edit(&wf, &action, slots, state) {
+        Ok((edited_wf, diff_desc)) => {
+            let yaml = dialogue::workflow_to_yaml(&edited_wf);
+
+            match validate_workflow_yaml(&yaml) {
+                Ok(()) => {
+                    let prompt = format!("{}\n\n{}\n\nApprove?",
+                        diff_desc,
+                        yaml,
+                    );
+
+                    state.current_workflow = Some(edited_wf);
+
+                    NlResponse::PlanEdited {
+                        workflow_yaml: yaml,
+                        diff_description: diff_desc,
+                        prompt,
+                    }
+                }
+                Err(e) => NlResponse::Error {
+                    message: format!("Edited workflow failed validation: {}", e),
+                },
+            }
+        }
+        Err(DialogueError::NeedsContext(msg)) => {
+            NlResponse::NeedsClarification {
+                needs: vec![msg],
+            }
+        }
+        Err(DialogueError::InvalidTarget(msg)) => {
+            NlResponse::NeedsClarification {
+                needs: vec![msg],
+            }
+        }
+        Err(e) => NlResponse::Error {
+            message: format!("{}", e),
+        },
+    }
+}
+
+fn handle_explain(subject: &str) -> NlResponse {
+    let text = get_op_explanation(subject);
+    NlResponse::Explanation { text }
+}
+
+fn handle_question(tokens: &[String]) -> NlResponse {
+    // Check if any token is an op name — if so, explain it
+    for token in tokens {
+        if normalize::is_canonical_op(token) {
+            return NlResponse::Explanation {
+                text: get_op_explanation(token),
+            };
+        }
+    }
+
+    NlResponse::NeedsClarification {
+        needs: vec![
+            "I'm not sure how to answer that.".to_string(),
+            "Try asking about a specific operation, like 'what does walk_tree mean?'".to_string(),
+        ],
+    }
+}
+
+fn handle_set_param(
+    param: Option<String>,
+    value: Option<String>,
+    _slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> NlResponse {
+    let wf = match &state.current_workflow {
+        Some(wf) => wf.clone(),
+        None => {
+            return NlResponse::NeedsClarification {
+                needs: vec!["There's no current plan to modify.".to_string()],
+            };
+        }
+    };
+
+    let desc = match (&param, &value) {
+        (Some(p), Some(v)) => format!("Set {} to {}.", p, v),
+        _ => "Parameter updated.".to_string(),
+    };
+
+    // For now, just acknowledge — full param editing would modify workflow inputs
+    if let (Some(p), Some(v)) = (param, value) {
+        let mut edited = wf;
+        edited.inputs.insert(p.clone(), v.clone());
+        let yaml = dialogue::workflow_to_yaml(&edited);
+        state.current_workflow = Some(edited);
+
+        NlResponse::ParamSet {
+            description: desc,
+            workflow_yaml: Some(yaml),
+        }
+    } else {
+        NlResponse::NeedsClarification {
+            needs: vec!["What parameter and value? Try 'set <param> to <value>'.".to_string()],
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Update the focus stack based on extracted slots.
+fn update_focus(state: &mut DialogueState, slots: &ExtractedSlots) {
+    if let Some(op) = &slots.primary_op {
+        state.focus.push(FocusEntry::MentionedOp { op: op.clone() });
+    }
+    if let Some(path) = &slots.target_path {
+        state.focus.push(FocusEntry::Artifact { path: path.clone() });
+    }
+}
+
+/// Validate a workflow YAML string by parsing and compiling it.
+fn validate_workflow_yaml(yaml: &str) -> Result<(), String> {
+    let parsed = crate::workflow::parse_workflow(yaml)
+        .map_err(|e| format!("Parse error: {}", e))?;
+    let registry = crate::fs_types::build_full_registry();
+    crate::workflow::compile_workflow(&parsed, &registry)
+        .map_err(|e| format!("Compile error: {}", e))?;
+    Ok(())
+}
+
+/// Generate a casual acknowledgment phrase, varying by turn count.
+fn casual_ack(turn: usize) -> &'static str {
+    const ACKS: &[&str] = &[
+        "Right on it!",
+        "Here's what I've got:",
+        "Sure thing!",
+        "Coming right up!",
+        "On it!",
+        "Here you go:",
+        "Let's do this!",
+        "Got it!",
+        "Alright, here's the plan:",
+        "No problem!",
+    ];
+    ACKS[turn % ACKS.len()]
+}
+
+/// Generate a human-readable summary of a workflow.
+fn format_summary(wf: &crate::workflow::WorkflowDef) -> String {
+    let steps_desc: Vec<String> = wf.steps.iter()
+        .map(|s| s.op.replace('_', " "))
+        .collect();
+
+    let path = wf.inputs.get("path").map(|s| s.as_str()).unwrap_or(".");
+
+    format!(
+        "Plan: {} — {} step(s) operating on {}:\n  {}",
+        wf.workflow,
+        wf.steps.len(),
+        path,
+        steps_desc.join(" → "),
+    )
+}
+
+/// Get an explanation for an operation.
+fn get_op_explanation(op: &str) -> String {
+    let base_explanation = match op {
+        "walk_tree" => "Walk the directory tree — sequentially step down each directory and subdirectory, processing all their files one by one. Returns a flat sequence of all entries found.",
+        "walk_tree_hierarchy" => "Walk the directory tree preserving the hierarchy structure. Returns a tree of entries that mirrors the filesystem layout.",
+        "list_dir" => "List the contents of a directory (non-recursive). Returns entries for files and subdirectories at the top level only.",
+        "filter" => "Filter a sequence of entries, keeping only those that match a pattern or condition.",
+        "sort_by" => "Sort a sequence of entries by a key (name, size, date, etc.).",
+        "find_matching" => "Find entries matching a glob pattern (e.g., *.pdf, foo*).",
+        "search_content" => "Search the contents of files for a text pattern (like grep).",
+        "pack_archive" => "Pack files into an archive (zip, tar, etc.).",
+        "extract_archive" => "Extract files from an archive (unzip, untar, etc.).",
+        "read_file" => "Read the contents of a file.",
+        "write_file" => "Write content to a file.",
+        "copy" => "Copy a file or directory to a new location.",
+        "move_entry" => "Move a file or directory to a new location.",
+        "delete" => "Delete a file or directory.",
+        "rename" => "Rename a file or directory.",
+        "create_dir" => "Create a new directory.",
+        "stat" => "Get metadata about a file (size, permissions, modification time, etc.).",
+        "head" => "Show the first N lines of a file.",
+        "tail" => "Show the last N lines of a file.",
+        "unique" => "Remove duplicate lines from a sequence.",
+        "count" => "Count the number of entries or lines.",
+        "diff" => "Compare two files and show their differences.",
+        "checksum" => "Compute a checksum (hash) of a file for integrity verification.",
+        "download" => "Download a file from a URL.",
+        "upload" => "Upload a file to a remote location.",
+        "sync" => "Synchronize files between two locations.",
+        "git_log" => "Show the git commit history.",
+        "git_status" => "Show the current git repository status.",
+        "git_diff" => "Show changes between commits, working tree, etc.",
+        "git_commit" => "Record changes to the git repository.",
+        "git_add" => "Stage files for the next git commit.",
+        "git_push" => "Push local commits to a remote repository.",
+        "git_pull" => "Fetch and merge changes from a remote repository.",
+        _ => "An operation in the reasoning engine's filesystem toolkit.",
+    };
+
+    base_explanation.to_string()
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- Full round-trip: create workflow --
+
+    #[test]
+    fn test_process_zip_up_downloads() {
+        let mut state = DialogueState::new();
+        let response = process_input("zip up everything in my downloads", &mut state);
+
+        match response {
+            NlResponse::PlanCreated { workflow_yaml, summary: _, prompt } => {
+                assert!(workflow_yaml.contains("walk_tree"));
+                assert!(workflow_yaml.contains("pack_archive"));
+                assert!(prompt.contains("Approve"));
+                assert!(state.current_workflow.is_some());
+            }
+            other => panic!("expected PlanCreated, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_process_find_pdfs() {
+        let mut state = DialogueState::new();
+        let response = process_input("find all PDFs in ~/Documents", &mut state);
+
+        match response {
+            NlResponse::PlanCreated { workflow_yaml, .. } => {
+                assert!(workflow_yaml.contains("walk_tree") || workflow_yaml.contains("find_matching"));
+            }
+            other => panic!("expected PlanCreated, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_process_list_dir() {
+        let mut state = DialogueState::new();
+        let response = process_input("list ~/Downloads", &mut state);
+
+        match response {
+            NlResponse::PlanCreated { workflow_yaml, .. } => {
+                assert!(workflow_yaml.contains("list_dir"));
+            }
+            other => panic!("expected PlanCreated, got: {:?}", other),
+        }
+    }
+
+    // -- Explain --
+
+    #[test]
+    fn test_process_whats_walk_mean() {
+        let mut state = DialogueState::new();
+        let response = process_input("what's walk mean", &mut state);
+
+        match response {
+            NlResponse::Explanation { text } => {
+                assert!(text.contains("directory") || text.contains("walk"),
+                    "explanation should mention directory/walk: {}", text);
+            }
+            other => panic!("expected Explanation, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_process_explain_filter() {
+        let mut state = DialogueState::new();
+        let response = process_input("explain filter", &mut state);
+
+        match response {
+            NlResponse::Explanation { text } => {
+                assert!(text.contains("filter") || text.contains("match"),
+                    "text: {}", text);
+            }
+            other => panic!("expected Explanation, got: {:?}", other),
+        }
+    }
+
+    // -- Approve / Reject --
+
+    #[test]
+    fn test_process_lgtm() {
+        let mut state = DialogueState::new();
+        process_input("zip up ~/Downloads", &mut state);
+        let response = process_input("lgtm", &mut state);
+        assert!(matches!(response, NlResponse::Approved));
+    }
+
+    #[test]
+    fn test_process_sounds_good() {
+        let mut state = DialogueState::new();
+        process_input("zip up ~/Downloads", &mut state);
+        let response = process_input("sounds good", &mut state);
+        assert!(matches!(response, NlResponse::Approved));
+    }
+
+    #[test]
+    fn test_process_nah_start_over() {
+        let mut state = DialogueState::new();
+        // First create a workflow
+        process_input("zip up ~/Downloads", &mut state);
+        assert!(state.current_workflow.is_some());
+
+        // Then reject
+        let response = process_input("nah", &mut state);
+        assert!(matches!(response, NlResponse::Rejected));
+        assert!(state.current_workflow.is_none());
+    }
+
+    // -- Edit --
+
+    #[test]
+    fn test_process_skip_subdirectory() {
+        let mut state = DialogueState::new();
+
+        // First create a workflow
+        let r1 = process_input("zip up everything in ~/Downloads", &mut state);
+        assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+
+        // Then edit it
+        let r2 = process_input("skip any subdirectory named foo", &mut state);
+        match r2 {
+            NlResponse::PlanEdited { workflow_yaml, .. } => {
+                assert!(workflow_yaml.contains("filter"),
+                    "should have filter step: {}", workflow_yaml);
+            }
+            other => panic!("expected PlanEdited, got: {:?}", other),
+        }
+    }
+
+    // -- Typo correction --
+
+    #[test]
+    fn test_process_with_typos() {
+        let mut state = DialogueState::new();
+        // Use a realistic command with a path so the workflow compiles
+        let response = process_input("extrct the archve at ~/comic.cbz", &mut state);
+
+        match response {
+            NlResponse::PlanCreated { workflow_yaml, .. } => {
+                assert!(workflow_yaml.contains("extract_archive"),
+                    "typo should be corrected: {}", workflow_yaml);
+            }
+            other => panic!("expected PlanCreated, got: {:?}", other),
+        }
+    }
+
+    // -- NeedsClarification --
+
+    #[test]
+    fn test_process_gibberish() {
+        let mut state = DialogueState::new();
+        let response = process_input("asdfghjkl qwerty", &mut state);
+        assert!(matches!(response, NlResponse::NeedsClarification { .. }));
+    }
+
+    // -- Three-turn conversation --
+
+    #[test]
+    fn test_three_turn_conversation() {
+        let mut state = DialogueState::new();
+
+        // Turn 1: Create
+        let r1 = process_input("zip up everything in ~/Downloads", &mut state);
+        assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+        assert!(state.current_workflow.is_some());
+
+        // Turn 2: Edit
+        let r2 = process_input("skip any subdirectory named .git", &mut state);
+        match &r2 {
+            NlResponse::PlanEdited { workflow_yaml, .. } => {
+                assert!(workflow_yaml.contains("filter"));
+            }
+            other => panic!("expected PlanEdited, got: {:?}", other),
+        }
+
+        // Turn 3: Approve
+        let r3 = process_input("lgtm", &mut state);
+        assert!(matches!(r3, NlResponse::Approved));
+    }
+
+    // -- Casual ack variation --
+
+    #[test]
+    fn test_casual_ack_varies() {
+        let ack1 = casual_ack(0);
+        let ack2 = casual_ack(1);
+        let ack3 = casual_ack(2);
+        // At least some should be different
+        assert!(ack1 != ack2 || ack2 != ack3, "acks should vary");
+    }
+
+    // -- Generated YAML round-trips --
+
+    #[test]
+    fn test_generated_yaml_roundtrips() {
+        let mut state = DialogueState::new();
+        let response = process_input("zip up everything in ~/Downloads", &mut state);
+
+        if let NlResponse::PlanCreated { workflow_yaml, .. } = response {
+            // Parse it back
+            let parsed = crate::workflow::parse_workflow(&workflow_yaml);
+            assert!(parsed.is_ok(), "should parse: {:?}", parsed.err());
+        }
+    }
+
+    // -- Edit on empty state --
+
+    #[test]
+    fn test_edit_without_workflow() {
+        let mut state = DialogueState::new();
+        let response = process_input("skip any subdirectory named foo", &mut state);
+        // Should get clarification, not an error
+        assert!(matches!(response, NlResponse::NeedsClarification { .. }));
+    }
+
+    // -- B6 bugfix: approve/reject without plan --
+
+    #[test]
+    fn test_approve_without_plan_needs_clarification() {
+        let mut state = DialogueState::new();
+        let response = process_input("approve", &mut state);
+        assert!(matches!(response, NlResponse::NeedsClarification { .. }),
+            "approve without plan should need clarification, got: {:?}", response);
+    }
+
+    #[test]
+    fn test_approve_after_plan_created_works() {
+        let mut state = DialogueState::new();
+        let r1 = process_input("zip up everything in ~/Downloads", &mut state);
+        assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+        let r2 = process_input("approve", &mut state);
+        assert!(matches!(r2, NlResponse::Approved));
+    }
+
+    #[test]
+    fn test_approve_after_error_needs_clarification() {
+        let mut state = DialogueState::new();
+        // This should fail validation (no workflow stored)
+        let r1 = process_input("do the thing", &mut state);
+        assert!(matches!(r1, NlResponse::NeedsClarification { .. }),
+            "do the thing should need clarification: {:?}", r1);
+        assert!(state.current_workflow.is_none());
+        // Now approve should also need clarification
+        let r2 = process_input("approve", &mut state);
+        assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
+            "approve after error should need clarification, got: {:?}", r2);
+    }
+}

@@ -1,0 +1,1200 @@
+//! Dialogue state, focus stack, and DSL generation for the NL UX layer.
+//!
+//! Maintains lightweight state across conversation turns:
+//! - **FocusStack** — ranked entries for anaphora resolution ("it", "that")
+//! - **DialogueState** — current workflow, focus stack, turn count, last intent
+//! - **Delta transforms** — apply edits to existing WorkflowDef
+//! - **DSL generation** — build WorkflowDef from intent + slots
+//!
+//! CRITICAL: All generated WorkflowDefs are validated by feeding them through
+//! `workflow::compile_workflow()`. The NL layer never bypasses the engine.
+
+use std::collections::HashMap;
+
+use crate::nl::intent::{Intent, EditAction};
+use crate::nl::slots::{ExtractedSlots, SlotValue, StepRef, Anchor, Modifier};
+use crate::workflow::{WorkflowDef, RawStep, StepArgs};
+
+// ---------------------------------------------------------------------------
+// Focus stack for anaphora resolution
+// ---------------------------------------------------------------------------
+
+/// An entry in the focus stack, ranked by recency and type.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FocusEntry {
+    /// The last step that was edited/added.
+    EditedStep { step_index: usize, op: String },
+    /// The last operation that was mentioned.
+    MentionedOp { op: String },
+    /// The last path/artifact that was mentioned.
+    Artifact { path: String },
+    /// The whole workflow/plan.
+    WholePlan,
+}
+
+/// A ranked focus stack for resolving references like "it" and "that".
+#[derive(Debug, Clone)]
+pub struct FocusStack {
+    entries: Vec<FocusEntry>,
+}
+
+impl FocusStack {
+    pub fn new() -> Self {
+        Self { entries: Vec::new() }
+    }
+
+    /// Push a new entry to the top of the stack.
+    pub fn push(&mut self, entry: FocusEntry) {
+        // Remove duplicates
+        self.entries.retain(|e| e != &entry);
+        // Push to front (most recent)
+        self.entries.insert(0, entry);
+        // Keep stack bounded
+        if self.entries.len() > 10 {
+            self.entries.truncate(10);
+        }
+    }
+
+    /// Resolve "it" — returns the top of the stack.
+    pub fn resolve_it(&self) -> Option<&FocusEntry> {
+        self.entries.first()
+    }
+
+    /// Resolve "that" — returns the last mentioned item.
+    pub fn resolve_that(&self) -> Option<&FocusEntry> {
+        self.entries.iter().find(|e| matches!(e,
+            FocusEntry::MentionedOp { .. } | FocusEntry::EditedStep { .. }
+        ))
+    }
+
+    /// Resolve "the plan" / "the workflow" — returns WholePlan if present.
+    pub fn resolve_plan(&self) -> Option<&FocusEntry> {
+        self.entries.iter().find(|e| matches!(e, FocusEntry::WholePlan))
+    }
+
+    /// Get the ranking order: last_edited > last_mentioned > last_artifact > whole_plan.
+    pub fn ranked(&self) -> Vec<&FocusEntry> {
+        let mut result = Vec::new();
+        // Edited steps first
+        for e in &self.entries {
+            if matches!(e, FocusEntry::EditedStep { .. }) {
+                result.push(e);
+            }
+        }
+        // Then mentioned ops
+        for e in &self.entries {
+            if matches!(e, FocusEntry::MentionedOp { .. }) && !result.contains(&e) {
+                result.push(e);
+            }
+        }
+        // Then artifacts
+        for e in &self.entries {
+            if matches!(e, FocusEntry::Artifact { .. }) && !result.contains(&e) {
+                result.push(e);
+            }
+        }
+        // Then whole plan
+        for e in &self.entries {
+            if matches!(e, FocusEntry::WholePlan) && !result.contains(&e) {
+                result.push(e);
+            }
+        }
+        result
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dialogue state
+// ---------------------------------------------------------------------------
+
+/// The full dialogue state maintained across conversation turns.
+#[derive(Debug, Clone)]
+pub struct DialogueState {
+    /// The current workflow being built/edited (None if no workflow yet).
+    pub current_workflow: Option<WorkflowDef>,
+    /// Focus stack for anaphora resolution.
+    pub focus: FocusStack,
+    /// Number of turns in this conversation.
+    pub turn_count: usize,
+    /// The last recognized intent.
+    pub last_intent: Option<Intent>,
+}
+
+impl DialogueState {
+    pub fn new() -> Self {
+        Self {
+            current_workflow: None,
+            focus: FocusStack::new(),
+            turn_count: 0,
+            last_intent: None,
+        }
+    }
+
+    /// Advance the turn counter.
+    pub fn next_turn(&mut self) {
+        self.turn_count += 1;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dialogue errors
+// ---------------------------------------------------------------------------
+
+/// Errors from dialogue operations.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DialogueError {
+    /// Tried to edit but there's no current workflow.
+    NeedsContext(String),
+    /// The edit target doesn't exist.
+    InvalidTarget(String),
+    /// Can't build a workflow from the given intent.
+    CannotBuild(String),
+}
+
+impl std::fmt::Display for DialogueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DialogueError::NeedsContext(msg) => write!(f, "No current plan to edit: {}", msg),
+            DialogueError::InvalidTarget(msg) => write!(f, "Invalid target: {}", msg),
+            DialogueError::CannotBuild(msg) => write!(f, "Cannot build workflow: {}", msg),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Workflow generation from intent + slots
+// ---------------------------------------------------------------------------
+
+/// Build a WorkflowDef from a CreateWorkflow intent and extracted slots.
+pub fn build_workflow(
+    op: &Option<String>,
+    slots: &ExtractedSlots,
+    description: Option<&str>,
+) -> Result<WorkflowDef, DialogueError> {
+    let primary_op = op.as_deref()
+        .or(slots.primary_op.as_deref())
+        .ok_or_else(|| DialogueError::CannotBuild(
+            "No operation detected. Try something like 'zip up ~/Downloads'.".to_string()
+        ))?;
+
+    let mut inputs = HashMap::new();
+    let mut steps = Vec::new();
+
+    // Determine the target path
+    let target_path = slots.target_path.clone()
+        .unwrap_or_else(|| ".".to_string());
+
+    // Collect all paths from slots (for multi-path ops like rename)
+    let all_paths: Vec<String> = slots.slots.iter()
+        .filter_map(|s| match s {
+            SlotValue::Path(p) => Some(p.clone()),
+            _ => None,
+        })
+        .collect();
+
+    // Build steps based on the primary operation
+    match primary_op {
+        // Archive operations: walk → pack/extract
+        "pack_archive" => {
+            inputs.insert("path".to_string(), target_path.clone());
+            steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
+            // Add filter if there's a pattern
+            if let Some(pattern) = slots.patterns.first() {
+                let mut params = HashMap::new();
+                params.insert("pattern".to_string(), pattern.clone());
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+            }
+            steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::None });
+        }
+        "extract_archive" => {
+            inputs.insert("file".to_string(), target_path.clone());
+            steps.push(RawStep { op: "extract_archive".to_string(), args: StepArgs::None });
+        }
+
+        // List/walk operations
+        "list_dir" => {
+            inputs.insert("path".to_string(), target_path.clone());
+            steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
+            if let Some(pattern) = slots.patterns.first() {
+                let mut params = HashMap::new();
+                params.insert("pattern".to_string(), pattern.clone());
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+            }
+            if slots.modifiers.contains(&Modifier::Reverse) {
+                steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) });
+            }
+        }
+        "walk_tree" => {
+            inputs.insert("path".to_string(), target_path.clone());
+            steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
+            if let Some(pattern) = slots.patterns.first() {
+                let mut params = HashMap::new();
+                params.insert("pattern".to_string(), pattern.clone());
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+            }
+        }
+
+        // Find/search operations
+        "find_matching" => {
+            inputs.insert("path".to_string(), target_path.clone());
+            steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
+            let mut params = HashMap::new();
+            if let Some(pattern) = slots.patterns.first() {
+                params.insert("pattern".to_string(), pattern.clone());
+            } else if let Some(kw) = slots.keywords.first() {
+                params.insert("pattern".to_string(), format!("*{}*", kw));
+            }
+            steps.push(RawStep { op: "find_matching".to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
+            steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) });
+        }
+        "search_content" => {
+            // search_content needs Seq(Entry(Name, File(Text))) + Pattern
+            // Always build: walk_tree → read_file: each → search_content
+            // Use "textdir" input name so type system infers Dir(File(Text))
+            let mut params = HashMap::new();
+            if let Some(kw) = slots.keywords.first() {
+                params.insert("pattern".to_string(), kw.clone());
+            }
+            let is_file_target = is_file_path(&target_path);
+            if is_file_target {
+                // Use parent dir, then filter to the specific file
+                inputs.insert("textdir".to_string(), dir_of(&target_path));
+                steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
+                let fname = filename_of(&target_path);
+                let mut filter_params = HashMap::new();
+                filter_params.insert("pattern".to_string(), fname);
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(filter_params) });
+            } else {
+                inputs.insert("textdir".to_string(), target_path.clone());
+                steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
+            }
+            steps.push(RawStep {
+                op: "search_content".to_string(),
+                args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) },
+            });
+        }
+
+        // Sort
+        "sort_by" => {
+            inputs.insert("path".to_string(), target_path.clone());
+            steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
+            let sort_key = slots.keywords.first()
+                .cloned()
+                .unwrap_or_else(|| "name".to_string());
+            steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar(sort_key) });
+        }
+
+        // Filter
+        "filter" => {
+            inputs.insert("path".to_string(), target_path.clone());
+            steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
+            let mut params = HashMap::new();
+            if let Some(pattern) = slots.patterns.first() {
+                params.insert("pattern".to_string(), pattern.clone());
+            }
+            steps.push(RawStep { op: "filter".to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
+        }
+
+        // Default: just use the op directly
+        other => {
+            // Categorize the op to choose the right input type
+            if is_url_op(other) {
+                // URL ops: git_clone, download, wget_download
+                inputs.insert("url".to_string(), target_path.clone());
+            } else if is_git_repo_op(other) {
+                // Git ops that work on a repo (not clone)
+                inputs.insert("repo".to_string(), target_path.clone());
+            } else if is_entry_op(other) {
+                // Entry ops: rename, move_entry, delete
+                // These need Entry(Name, a) input — build a pipeline
+                inputs.insert("path".to_string(), dir_of(&target_path));
+                steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
+                // Filter to the specific file
+                let filter_name = filename_of(&target_path);
+                if !filter_name.is_empty() {
+                    let mut params = HashMap::new();
+                    params.insert("pattern".to_string(), filter_name);
+                    steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                }
+                // Apply the op to each matching entry
+                let mut op_args = StepArgs::Scalar("each".to_string());
+                // For rename: add the new name as a param
+                if other == "rename" && all_paths.len() >= 2 {
+                    let new_name = filename_of(&all_paths[1]);
+                    if !new_name.is_empty() {
+                        let mut params = HashMap::new();
+                        params.insert("to".to_string(), new_name);
+                        params.insert("each".to_string(), "true".to_string());
+                        op_args = StepArgs::Map(params);
+                    }
+                }
+                steps.push(RawStep { op: other.to_string(), args: op_args });
+                // Skip the default step push below
+                let workflow_name = description
+                    .map(|d| d.to_string())
+                    .unwrap_or_else(|| generate_workflow_name(primary_op, &slots));
+                return Ok(WorkflowDef { workflow: workflow_name, inputs, steps });
+            } else if is_file_path(&target_path) {
+                // File ops with a file target: use "file" input name
+                inputs.insert("file".to_string(), target_path.clone());
+            } else {
+                // Default: directory input
+                inputs.insert("path".to_string(), target_path.clone());
+            }
+            steps.push(RawStep { op: other.to_string(), args: StepArgs::None });
+        }
+    }
+
+    let workflow_name = description
+        .map(|d| d.to_string())
+        .unwrap_or_else(|| generate_workflow_name(primary_op, &slots));
+
+    Ok(WorkflowDef {
+        workflow: workflow_name,
+        inputs,
+        steps,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Op categorization helpers for input type inference
+// ---------------------------------------------------------------------------
+
+/// Ops that take a URL as input.
+fn is_url_op(op: &str) -> bool {
+    matches!(op, "git_clone" | "download" | "wget_download")
+}
+
+/// Git ops that work on an existing repo (not clone).
+fn is_git_repo_op(op: &str) -> bool {
+    op.starts_with("git_") && !is_url_op(op)
+}
+
+/// Ops that take Entry(Name, a) as first input.
+fn is_entry_op(op: &str) -> bool {
+    matches!(op, "rename" | "move_entry" | "delete")
+}
+
+/// Check if a path looks like a file (has a known extension, not a directory).
+fn is_file_path(path: &str) -> bool {
+    if path == "." || path.ends_with('/') {
+        return false;
+    }
+    if let Some(dot_pos) = path.rfind('.') {
+        let ext = &path[dot_pos + 1..];
+        let name = &path[..dot_pos];
+        !name.is_empty() && !ext.is_empty() && matches!(ext,
+            "txt" | "md" | "rs" | "py" | "js" | "ts" | "go" | "java" | "c" | "cpp" | "h"
+            | "json" | "yaml" | "yml" | "toml" | "xml" | "html" | "css" | "csv"
+            | "log" | "sh" | "bash" | "zsh"
+            | "tar" | "gz" | "tgz" | "zip" | "bz2" | "xz" | "7z" | "rar"
+            | "cbz" | "cbr"
+            | "pdf" | "doc" | "docx" | "plist"
+            | "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp"
+            | "mp3" | "mp4" | "wav"
+            | "db" | "sql" | "sqlite"
+            | "cfg" | "conf" | "ini" | "env"
+        )
+    } else {
+        false
+    }
+}
+
+/// Extract the directory part of a path (everything before the last /).
+fn dir_of(path: &str) -> String {
+    if let Some(pos) = path.rfind('/') {
+        path[..pos].to_string()
+    } else {
+        ".".to_string()
+    }
+}
+
+/// Extract the filename part of a path (everything after the last /).
+fn filename_of(path: &str) -> String {
+    if let Some(pos) = path.rfind('/') {
+        path[pos + 1..].to_string()
+    } else {
+        path.to_string()
+    }
+}
+
+/// Generate a human-readable workflow name from the operation and slots.
+fn generate_workflow_name(op: &str, slots: &ExtractedSlots) -> String {
+    let op_desc = match op {
+        "pack_archive" => "Zip files",
+        "extract_archive" => "Extract archive",
+        "list_dir" => "List directory",
+        "walk_tree" => "Walk directory tree",
+        "find_matching" => "Find matching files",
+        "search_content" => "Search file contents",
+        "sort_by" => "Sort files",
+        "filter" => "Filter files",
+        "copy" => "Copy files",
+        "delete" => "Delete files",
+        "rename" => "Rename files",
+        "move_entry" => "Move files",
+        "read_file" => "Read file",
+        "write_file" => "Write file",
+        "diff" => "Compare files",
+        "checksum" => "Compute checksums",
+        "download" => "Download file",
+        "upload" => "Upload file",
+        "git_log" => "Git log",
+        "git_status" => "Git status",
+        "git_diff" => "Git diff",
+        other => other,
+    };
+
+    if let Some(path) = &slots.target_path {
+        format!("{} in {}", op_desc, path)
+    } else {
+        op_desc.to_string()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Delta transforms: edit existing WorkflowDef
+// ---------------------------------------------------------------------------
+
+/// Apply an edit action to an existing WorkflowDef.
+pub fn apply_edit(
+    workflow: &WorkflowDef,
+    action: &EditAction,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> Result<(WorkflowDef, String), DialogueError> {
+    let mut wf = workflow.clone();
+
+    match action {
+        EditAction::Skip => apply_skip(&mut wf, slots, state),
+        EditAction::Remove => apply_remove(&mut wf, slots, state),
+        EditAction::Add => apply_add(&mut wf, slots, state),
+        EditAction::Move => apply_move(&mut wf, slots, state),
+        EditAction::Change => apply_change(&mut wf, slots, state),
+        EditAction::Insert => apply_insert(&mut wf, slots, state),
+    }
+}
+
+/// Add a filter step to skip items matching a pattern/name.
+fn apply_skip(
+    wf: &mut WorkflowDef,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> Result<(WorkflowDef, String), DialogueError> {
+    // Determine what to skip
+    let skip_target = slots.keywords.first()
+        .or(slots.patterns.first())
+        .ok_or_else(|| DialogueError::InvalidTarget(
+            "What should I skip? Provide a name or pattern.".to_string()
+        ))?;
+
+    // Build a filter step that excludes the target
+    let mut params = HashMap::new();
+    params.insert("exclude".to_string(), skip_target.clone());
+
+    // Find the best position to insert the filter (after walk_tree if present)
+    let insert_pos = wf.steps.iter()
+        .position(|s| s.op == "walk_tree" || s.op == "walk_tree_hierarchy" || s.op == "list_dir")
+        .map(|p| p + 1)
+        .unwrap_or(0);
+
+    let new_step = RawStep {
+        op: "filter".to_string(),
+        args: StepArgs::Map(params),
+    };
+
+    wf.steps.insert(insert_pos, new_step);
+
+    // Update focus
+    state.focus.push(FocusEntry::EditedStep {
+        step_index: insert_pos,
+        op: "filter".to_string(),
+    });
+
+    let desc = format!(
+        "Added a filter step to skip entries matching \"{}\" (and case variants).",
+        skip_target
+    );
+
+    Ok((wf.clone(), desc))
+}
+
+/// Remove a step from the workflow.
+fn apply_remove(
+    wf: &mut WorkflowDef,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> Result<(WorkflowDef, String), DialogueError> {
+    let step_idx = resolve_step_index(wf, slots)?;
+
+    let removed_op = wf.steps[step_idx].op.clone();
+    wf.steps.remove(step_idx);
+
+    state.focus.push(FocusEntry::MentionedOp { op: removed_op.clone() });
+
+    let desc = format!("Removed step {} ({}).", step_idx + 1, removed_op);
+    Ok((wf.clone(), desc))
+}
+
+/// Add a new step to the workflow.
+fn apply_add(
+    wf: &mut WorkflowDef,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> Result<(WorkflowDef, String), DialogueError> {
+    let op = slots.primary_op.as_deref()
+        .or_else(|| slots.keywords.first().map(|s| s.as_str()))
+        .ok_or_else(|| DialogueError::InvalidTarget(
+            "What step should I add? Provide an operation name.".to_string()
+        ))?;
+
+    let new_step = build_step_from_slots(op, slots);
+
+    let insert_pos = match &slots.anchor {
+        Some(Anchor::Before(sr)) => resolve_step_ref(wf, sr)?,
+        Some(Anchor::After(sr)) => resolve_step_ref(wf, sr)? + 1,
+        Some(Anchor::AtStart) => 0,
+        Some(Anchor::AtEnd) | None => wf.steps.len(),
+    };
+
+    let insert_pos = insert_pos.min(wf.steps.len());
+    wf.steps.insert(insert_pos, new_step);
+
+    state.focus.push(FocusEntry::EditedStep {
+        step_index: insert_pos,
+        op: op.to_string(),
+    });
+
+    let desc = format!("Added {} at step {}.", op, insert_pos + 1);
+    Ok((wf.clone(), desc))
+}
+
+/// Move a step to a new position.
+fn apply_move(
+    wf: &mut WorkflowDef,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> Result<(WorkflowDef, String), DialogueError> {
+    let from_idx = resolve_step_index(wf, slots)?;
+    let step = wf.steps.remove(from_idx);
+    let op = step.op.clone();
+
+    let to_idx = match &slots.anchor {
+        Some(Anchor::Before(sr)) => resolve_step_ref(wf, sr)?,
+        Some(Anchor::After(sr)) => resolve_step_ref(wf, sr)? + 1,
+        Some(Anchor::AtStart) => 0,
+        Some(Anchor::AtEnd) | None => wf.steps.len(),
+    };
+
+    let to_idx = to_idx.min(wf.steps.len());
+    wf.steps.insert(to_idx, step);
+
+    state.focus.push(FocusEntry::EditedStep {
+        step_index: to_idx,
+        op: op.clone(),
+    });
+
+    let desc = format!("Moved {} from step {} to step {}.", op, from_idx + 1, to_idx + 1);
+    Ok((wf.clone(), desc))
+}
+
+/// Change a step's parameters.
+fn apply_change(
+    wf: &mut WorkflowDef,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> Result<(WorkflowDef, String), DialogueError> {
+    let step_idx = resolve_step_index(wf, slots)?;
+
+    // Update the step's args with new values from slots
+    let step = &mut wf.steps[step_idx];
+    let op = step.op.clone();
+
+    if let Some(pattern) = slots.patterns.first() {
+        let mut params = match &step.args {
+            StepArgs::Map(m) => m.clone(),
+            _ => HashMap::new(),
+        };
+        params.insert("pattern".to_string(), pattern.clone());
+        step.args = StepArgs::Map(params);
+    } else if slots.keywords.len() >= 2 {
+        // "change X to Y" — keywords[0] is old value, keywords[1] is new value
+        let new_val = slots.keywords.last().unwrap().clone();
+        match &step.args {
+            StepArgs::Scalar(_) => {
+                step.args = StepArgs::Scalar(new_val.clone());
+            }
+            StepArgs::Map(m) => {
+                let mut params = m.clone();
+                // Try to find and update the matching param
+                let old_val = &slots.keywords[0];
+                for (_, v) in params.iter_mut() {
+                    if v == old_val {
+                        *v = new_val.clone();
+                        break;
+                    }
+                }
+                step.args = StepArgs::Map(params);
+            }
+            StepArgs::None => {
+                step.args = StepArgs::Scalar(new_val.clone());
+            }
+        }
+    }
+
+    state.focus.push(FocusEntry::EditedStep {
+        step_index: step_idx,
+        op: op.clone(),
+    });
+
+    let desc = format!("Updated step {} ({}).", step_idx + 1, op);
+    Ok((wf.clone(), desc))
+}
+
+/// Insert a step (alias for add, but with explicit position).
+fn apply_insert(
+    wf: &mut WorkflowDef,
+    slots: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> Result<(WorkflowDef, String), DialogueError> {
+    apply_add(wf, slots, state)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Resolve a step index from extracted slots.
+fn resolve_step_index(wf: &WorkflowDef, slots: &ExtractedSlots) -> Result<usize, DialogueError> {
+    if let Some(step_ref) = slots.step_refs.first() {
+        resolve_step_ref(wf, step_ref)
+    } else if let Some(op) = &slots.primary_op {
+        // Find step by op name
+        wf.steps.iter().position(|s| s.op == *op)
+            .ok_or_else(|| DialogueError::InvalidTarget(
+                format!("No step with operation '{}' found.", op)
+            ))
+    } else {
+        Err(DialogueError::InvalidTarget(
+            "Which step? Provide a step number or operation name.".to_string()
+        ))
+    }
+}
+
+/// Resolve a StepRef to a 0-indexed position.
+fn resolve_step_ref(wf: &WorkflowDef, step_ref: &StepRef) -> Result<usize, DialogueError> {
+    match step_ref {
+        StepRef::Number(n) => {
+            let idx = (*n as usize).saturating_sub(1);
+            if idx < wf.steps.len() {
+                Ok(idx)
+            } else {
+                Err(DialogueError::InvalidTarget(
+                    format!("Step {} doesn't exist (workflow has {} steps).", n, wf.steps.len())
+                ))
+            }
+        }
+        StepRef::Previous => {
+            if wf.steps.len() > 1 {
+                Ok(wf.steps.len() - 2)
+            } else {
+                Ok(0)
+            }
+        }
+        StepRef::Next => Ok(wf.steps.len()), // past the end = append
+        StepRef::First => Ok(0),
+        StepRef::Last => {
+            if wf.steps.is_empty() {
+                Err(DialogueError::InvalidTarget("Workflow has no steps.".to_string()))
+            } else {
+                Ok(wf.steps.len() - 1)
+            }
+        }
+    }
+}
+
+/// Build a RawStep from an op name and extracted slots.
+fn build_step_from_slots(op: &str, slots: &ExtractedSlots) -> RawStep {
+    let mut params = HashMap::new();
+
+    for slot in &slots.slots {
+        match slot {
+            SlotValue::Pattern(p) => { params.insert("pattern".to_string(), p.clone()); }
+            SlotValue::Param(k, v) => { params.insert(k.clone(), v.clone()); }
+            _ => {}
+        }
+    }
+
+    let args = if params.is_empty() {
+        StepArgs::None
+    } else {
+        StepArgs::Map(params)
+    };
+
+    RawStep {
+        op: op.to_string(),
+        args,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Workflow serialization to YAML
+// ---------------------------------------------------------------------------
+
+/// Serialize a WorkflowDef to YAML string.
+pub fn workflow_to_yaml(wf: &WorkflowDef) -> String {
+    let mut lines = Vec::new();
+
+    lines.push(format!("workflow: {:?}", wf.workflow));
+    lines.push(String::new());
+    lines.push("inputs:".to_string());
+
+    // Sort inputs for deterministic output
+    let mut input_keys: Vec<&String> = wf.inputs.keys().collect();
+    input_keys.sort();
+    for key in input_keys {
+        lines.push(format!("  {}: {:?}", key, wf.inputs[key]));
+    }
+
+    lines.push(String::new());
+    lines.push("steps:".to_string());
+
+    for step in &wf.steps {
+        match &step.args {
+            StepArgs::None => {
+                lines.push(format!("  - {}", step.op));
+            }
+            StepArgs::Scalar(s) => {
+                lines.push(format!("  - {}: {}", step.op, s));
+            }
+            StepArgs::Map(m) => {
+                lines.push(format!("  - {}:", step.op));
+                let mut keys: Vec<&String> = m.keys().collect();
+                keys.sort();
+                for key in keys {
+                    lines.push(format!("      {}: {:?}", key, m[key]));
+                }
+            }
+        }
+    }
+
+    lines.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::nl::normalize;
+    use crate::nl::intent;
+    use crate::nl::slots;
+
+    // -- Workflow generation --
+
+    #[test]
+    fn test_build_workflow_pack_archive() {
+        let normalized = normalize::normalize("zip up everything in ~/Downloads");
+        let parsed = intent::parse_intent(&normalized);
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        match parsed {
+            Intent::CreateWorkflow { op, .. } => {
+                let wf = build_workflow(&op, &extracted, None).unwrap();
+                assert_eq!(wf.inputs["path"], "~/Downloads");
+                assert!(wf.steps.iter().any(|s| s.op == "walk_tree"));
+                assert!(wf.steps.iter().any(|s| s.op == "pack_archive"));
+            }
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_build_workflow_extract() {
+        let normalized = normalize::normalize("extract the archive at ~/comic.cbz");
+        let parsed = intent::parse_intent(&normalized);
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        match parsed {
+            Intent::CreateWorkflow { op, .. } => {
+                let wf = build_workflow(&op, &extracted, None).unwrap();
+                assert!(wf.steps.iter().any(|s| s.op == "extract_archive"));
+            }
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_build_workflow_find_pdfs() {
+        let normalized = normalize::normalize("find all PDFs in ~/Documents");
+        let parsed = intent::parse_intent(&normalized);
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        match parsed {
+            Intent::CreateWorkflow { op, .. } => {
+                let wf = build_workflow(&op, &extracted, None).unwrap();
+                assert!(wf.steps.iter().any(|s| s.op == "walk_tree" || s.op == "find_matching"));
+            }
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_build_workflow_no_op_error() {
+        let extracted = slots::extract_slots(&[]);
+        let result = build_workflow(&None, &extracted, None);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            DialogueError::CannotBuild(_) => {}
+            other => panic!("expected CannotBuild, got: {:?}", other),
+        }
+    }
+
+    // -- Workflow YAML serialization --
+
+    #[test]
+    fn test_workflow_to_yaml_roundtrip() {
+        let wf = WorkflowDef {
+            workflow: "Test workflow".to_string(),
+            inputs: {
+                let mut m = HashMap::new();
+                m.insert("path".to_string(), "~/Downloads".to_string());
+                m
+            },
+            steps: vec![
+                RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
+                RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
+            ],
+        };
+
+        let yaml = workflow_to_yaml(&wf);
+        assert!(yaml.contains("workflow:"));
+        assert!(yaml.contains("walk_tree"));
+        assert!(yaml.contains("sort_by: name"));
+
+        // Verify it can be parsed back
+        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        assert_eq!(parsed.steps.len(), 2);
+        assert_eq!(parsed.steps[0].op, "walk_tree");
+        assert_eq!(parsed.steps[1].op, "sort_by");
+    }
+
+    #[test]
+    fn test_workflow_to_yaml_with_map_args() {
+        let wf = WorkflowDef {
+            workflow: "Filter test".to_string(),
+            inputs: {
+                let mut m = HashMap::new();
+                m.insert("path".to_string(), "/tmp".to_string());
+                m
+            },
+            steps: vec![
+                RawStep { op: "list_dir".to_string(), args: StepArgs::None },
+                RawStep {
+                    op: "filter".to_string(),
+                    args: StepArgs::Map({
+                        let mut m = HashMap::new();
+                        m.insert("pattern".to_string(), "*.pdf".to_string());
+                        m
+                    }),
+                },
+            ],
+        };
+
+        let yaml = workflow_to_yaml(&wf);
+        assert!(yaml.contains("filter:"));
+        assert!(yaml.contains("pattern:"));
+    }
+
+    // -- Generated workflow compiles through engine --
+
+    #[test]
+    fn test_generated_workflow_compiles() {
+        let normalized = normalize::normalize("zip up everything in ~/Downloads");
+        let parsed = intent::parse_intent(&normalized);
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        match parsed {
+            Intent::CreateWorkflow { op, .. } => {
+                let wf = build_workflow(&op, &extracted, None).unwrap();
+                let yaml = workflow_to_yaml(&wf);
+
+                // Parse it back through the workflow engine
+                let parsed_back = crate::workflow::parse_workflow(&yaml).unwrap();
+
+                // Compile it through the engine
+                let registry = crate::fs_types::build_full_registry();
+                let compiled = crate::workflow::compile_workflow(&parsed_back, &registry);
+                assert!(compiled.is_ok(), "workflow should compile: {:?}", compiled.err());
+            }
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
+        }
+    }
+
+    // -- Edit operations --
+
+    #[test]
+    fn test_edit_on_empty_state_error() {
+        let mut state = DialogueState::new();
+        let slots = slots::extract_slots(&["skip".to_string(), "foo".to_string()]);
+        let _result = apply_edit(
+            &WorkflowDef {
+                workflow: "test".to_string(),
+                inputs: HashMap::new(),
+                steps: vec![],
+            },
+            &EditAction::Skip,
+            &slots,
+            &mut state,
+        );
+        // Skip on empty workflow should still work (inserts at position 0)
+        // But skip with no keyword should fail
+        // With no keywords at all, skip should fail
+        let slots_empty = slots::extract_slots(&[]);
+        let result_empty = apply_edit(
+            &WorkflowDef {
+                workflow: "test".to_string(),
+                inputs: HashMap::new(),
+                steps: vec![],
+            },
+            &EditAction::Skip,
+            &slots_empty,
+            &mut state,
+        );
+        assert!(result_empty.is_err(), "skip with no keywords should fail");
+    }
+
+    #[test]
+    fn test_edit_skip_adds_filter() {
+        let mut state = DialogueState::new();
+        let wf = WorkflowDef {
+            workflow: "test".to_string(),
+            inputs: HashMap::new(),
+            steps: vec![
+                RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
+                RawStep { op: "pack_archive".to_string(), args: StepArgs::None },
+            ],
+        };
+
+        let normalized = normalize::normalize("skip any subdirectory named foo");
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        let (edited, desc) = apply_skip(&mut wf.clone(), &extracted, &mut state).unwrap();
+        assert!(edited.steps.iter().any(|s| s.op == "filter"), "should have filter step");
+        // The skip target comes from keywords — "foo" is extracted via "named foo"
+        assert!(
+            desc.contains("foo") || desc.contains("subdirectory") || desc.contains("skip"),
+            "desc should mention the skip target: {}", desc
+        );
+        // Filter should be after walk_tree
+        let walk_pos = edited.steps.iter().position(|s| s.op == "walk_tree").unwrap();
+        let filter_pos = edited.steps.iter().position(|s| s.op == "filter").unwrap();
+        assert!(filter_pos > walk_pos, "filter should be after walk_tree");
+    }
+
+    #[test]
+    fn test_edit_remove_step() {
+        let mut state = DialogueState::new();
+        let wf = WorkflowDef {
+            workflow: "test".to_string(),
+            inputs: HashMap::new(),
+            steps: vec![
+                RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
+                RawStep { op: "filter".to_string(), args: StepArgs::None },
+                RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
+            ],
+        };
+
+        let extracted = slots::extract_slots(&["step".to_string(), "2".to_string()]);
+        let (edited, desc) = apply_remove(&mut wf.clone(), &extracted, &mut state).unwrap();
+        assert_eq!(edited.steps.len(), 2);
+        assert_eq!(edited.steps[0].op, "walk_tree");
+        assert_eq!(edited.steps[1].op, "sort_by");
+        assert!(desc.contains("filter"));
+    }
+
+    #[test]
+    fn test_edit_move_step() {
+        let mut state = DialogueState::new();
+        let wf = WorkflowDef {
+            workflow: "test".to_string(),
+            inputs: HashMap::new(),
+            steps: vec![
+                RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
+                RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
+                RawStep { op: "filter".to_string(), args: StepArgs::None },
+            ],
+        };
+
+        // "move step 3 before step 2"
+        let extracted = slots::extract_slots(&[
+            "step".to_string(), "3".to_string(),
+            "before".to_string(), "step".to_string(), "2".to_string(),
+        ]);
+
+        let (edited, _desc) = apply_move(&mut wf.clone(), &extracted, &mut state).unwrap();
+        assert_eq!(edited.steps[0].op, "walk_tree");
+        assert_eq!(edited.steps[1].op, "filter");
+        assert_eq!(edited.steps[2].op, "sort_by");
+    }
+
+    // -- Focus stack --
+
+    #[test]
+    fn test_focus_stack_resolve_it() {
+        let mut stack = FocusStack::new();
+        stack.push(FocusEntry::WholePlan);
+        stack.push(FocusEntry::MentionedOp { op: "filter".to_string() });
+        stack.push(FocusEntry::EditedStep { step_index: 1, op: "walk_tree".to_string() });
+
+        // "it" should resolve to the most recent entry (EditedStep)
+        let resolved = stack.resolve_it().unwrap();
+        assert!(matches!(resolved, FocusEntry::EditedStep { op, .. } if op == "walk_tree"));
+    }
+
+    #[test]
+    fn test_focus_stack_ranking() {
+        let mut stack = FocusStack::new();
+        stack.push(FocusEntry::WholePlan);
+        stack.push(FocusEntry::Artifact { path: "~/Downloads".to_string() });
+        stack.push(FocusEntry::MentionedOp { op: "filter".to_string() });
+        stack.push(FocusEntry::EditedStep { step_index: 1, op: "walk_tree".to_string() });
+
+        let ranked = stack.ranked();
+        // EditedStep first, then MentionedOp, then Artifact, then WholePlan
+        assert!(matches!(ranked[0], FocusEntry::EditedStep { .. }));
+        assert!(matches!(ranked[1], FocusEntry::MentionedOp { .. }));
+        assert!(matches!(ranked[2], FocusEntry::Artifact { .. }));
+        assert!(matches!(ranked[3], FocusEntry::WholePlan));
+    }
+
+    #[test]
+    fn test_focus_stack_dedup() {
+        let mut stack = FocusStack::new();
+        stack.push(FocusEntry::MentionedOp { op: "filter".to_string() });
+        stack.push(FocusEntry::MentionedOp { op: "walk_tree".to_string() });
+        stack.push(FocusEntry::MentionedOp { op: "filter".to_string() }); // duplicate
+
+        // Should have 2 entries, not 3
+        assert_eq!(stack.entries.len(), 2);
+        // Most recent "filter" should be at top
+        assert!(matches!(&stack.entries[0], FocusEntry::MentionedOp { op } if op == "filter"));
+    }
+
+    // -- Dialogue state --
+
+    #[test]
+    fn test_dialogue_state_new() {
+        let state = DialogueState::new();
+        assert!(state.current_workflow.is_none());
+        assert_eq!(state.turn_count, 0);
+        assert!(state.last_intent.is_none());
+    }
+
+    #[test]
+    fn test_dialogue_state_turn_count() {
+        let mut state = DialogueState::new();
+        state.next_turn();
+        state.next_turn();
+        assert_eq!(state.turn_count, 2);
+    }
+
+    // -- Delta-edited workflow re-compiles --
+
+    #[test]
+    fn test_edited_workflow_recompiles() {
+        let mut state = DialogueState::new();
+
+        // Create initial workflow
+        let wf = WorkflowDef {
+            workflow: "test".to_string(),
+            inputs: {
+                let mut m = HashMap::new();
+                m.insert("path".to_string(), "~/Downloads".to_string());
+                m
+            },
+            steps: vec![
+                RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
+                RawStep { op: "pack_archive".to_string(), args: StepArgs::None },
+            ],
+        };
+
+        // Apply skip edit
+        let normalized = normalize::normalize("skip any subdirectory named foo");
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+        let (edited, _) = apply_skip(&mut wf.clone(), &extracted, &mut state).unwrap();
+
+        // Serialize and re-compile
+        let yaml = workflow_to_yaml(&edited);
+        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let registry = crate::fs_types::build_full_registry();
+        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
+        assert!(compiled.is_ok(), "edited workflow should compile: {:?}", compiled.err());
+    }
+
+    // -- B3 bugfix: input type inference --
+
+    #[test]
+    fn test_build_workflow_compress_file_compiles() {
+        // "compress my_file.txt" should produce a workflow that compiles
+        let normalized = normalize::normalize("compress my_file.txt");
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+        let op = Some("gzip_compress".to_string());
+        let wf = build_workflow(&op, &extracted, None).unwrap();
+        // Should use "file" input name for file ops
+        assert!(wf.inputs.contains_key("file"), "should have 'file' input: {:?}", wf.inputs);
+        assert_eq!(wf.inputs["file"], "my_file.txt");
+        let yaml = workflow_to_yaml(&wf);
+        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let registry = crate::fs_types::build_full_registry();
+        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
+        assert!(compiled.is_ok(), "compress file workflow should compile: {:?}", compiled.err());
+    }
+
+    #[test]
+    fn test_build_workflow_hash_yaml_compiles() {
+        let normalized = normalize::normalize("hash config.yaml");
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+        let op = Some("openssl_hash".to_string());
+        let wf = build_workflow(&op, &extracted, None).unwrap();
+        assert!(wf.inputs.contains_key("file"), "should have 'file' input: {:?}", wf.inputs);
+        let yaml = workflow_to_yaml(&wf);
+        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let registry = crate::fs_types::build_full_registry();
+        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
+        assert!(compiled.is_ok(), "hash yaml workflow should compile: {:?}", compiled.err());
+    }
+
+    #[test]
+    fn test_build_workflow_search_content_dir_compiles() {
+        // "search for TODO" with no file target should use textdir
+        let normalized = normalize::normalize("search for TODO");
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+        let op = Some("search_content".to_string());
+        let wf = build_workflow(&op, &extracted, None).unwrap();
+        assert!(wf.inputs.contains_key("textdir"), "should have 'textdir' input: {:?}", wf.inputs);
+        let yaml = workflow_to_yaml(&wf);
+        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let registry = crate::fs_types::build_full_registry();
+        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
+        assert!(compiled.is_ok(), "search content workflow should compile: {:?}", compiled.err());
+    }
+
+    #[test]
+    fn test_build_workflow_dir_ops_still_compile() {
+        // walk_tree, list_dir, pack_archive should still use "path" input
+        for op_name in &["walk_tree", "list_dir", "pack_archive"] {
+            let extracted = slots::extract_slots(&["~/Downloads".to_string()]);
+            let op = Some(op_name.to_string());
+            let wf = build_workflow(&op, &extracted, None).unwrap();
+            assert!(wf.inputs.contains_key("path"), "{} should have 'path' input: {:?}", op_name, wf.inputs);
+            let yaml = workflow_to_yaml(&wf);
+            let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+            let registry = crate::fs_types::build_full_registry();
+            let compiled = crate::workflow::compile_workflow(&parsed, &registry);
+            assert!(compiled.is_ok(), "{} workflow should compile: {:?}", op_name, compiled.err());
+        }
+    }
+}
