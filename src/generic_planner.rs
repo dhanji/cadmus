@@ -406,6 +406,347 @@ pub fn plan_multi(
     Ok(plans)
 }
 
+// ===========================================================================
+// TypeExpr-based planner — unification, map insertion, fold insertion
+// ===========================================================================
+
+use crate::type_expr::{TypeExpr, unify};
+
+// ---------------------------------------------------------------------------
+// ExprGoal — goal using TypeExpr
+// ---------------------------------------------------------------------------
+
+/// A goal for the expr-based planner: produce a value of the given TypeExpr.
+#[derive(Debug, Clone)]
+pub struct ExprGoal {
+    /// The output type the plan must produce
+    pub target: TypeExpr,
+    /// Available typed literals (leaf inputs)
+    pub available: Vec<ExprLiteral>,
+    /// Maximum search depth
+    pub max_depth: usize,
+}
+
+/// A typed literal for the expr planner.
+#[derive(Debug, Clone)]
+pub struct ExprLiteral {
+    /// Unique key
+    pub key: String,
+    /// The type of this literal as a TypeExpr
+    pub type_expr: TypeExpr,
+    /// Human-readable description
+    pub description: String,
+}
+
+impl ExprLiteral {
+    pub fn new(key: impl Into<String>, type_expr: TypeExpr, desc: impl Into<String>) -> Self {
+        Self { key: key.into(), type_expr, description: desc.into() }
+    }
+}
+
+impl ExprGoal {
+    pub fn new(target: TypeExpr, available: Vec<ExprLiteral>) -> Self {
+        Self { target, available, max_depth: 20 }
+    }
+
+    pub fn with_max_depth(mut self, depth: usize) -> Self {
+        self.max_depth = depth;
+        self
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ExprPlanNode — plan tree with Map and Fold
+// ---------------------------------------------------------------------------
+
+/// A node in the expr-based plan tree.
+#[derive(Debug, Clone)]
+pub enum ExprPlanNode {
+    /// Apply a polymorphic operation
+    Op {
+        op_name: String,
+        output_type: TypeExpr,
+        children: Vec<ExprPlanNode>,
+    },
+    /// A leaf literal
+    Leaf {
+        key: String,
+        output_type: TypeExpr,
+    },
+    /// Map: apply an operation element-wise over a sequence
+    /// Seq(A) → Seq(B) via op A→B
+    Map {
+        op_name: String,
+        elem_output: TypeExpr,
+        child: Box<ExprPlanNode>,
+    },
+    /// Fold: reduce a sequence using an associative binary operation
+    /// Seq(B) → B via associative op B+B→B
+    Fold {
+        op_name: String,
+        output_type: TypeExpr,
+        child: Box<ExprPlanNode>,
+    },
+}
+
+impl ExprPlanNode {
+    pub fn output_type(&self) -> &TypeExpr {
+        match self {
+            ExprPlanNode::Op { output_type, .. } => output_type,
+            ExprPlanNode::Leaf { output_type, .. } => output_type,
+            ExprPlanNode::Map { elem_output, .. } => elem_output,
+            ExprPlanNode::Fold { output_type, .. } => output_type,
+        }
+    }
+
+    /// Collect all operation names in the plan.
+    pub fn op_names(&self) -> HashSet<String> {
+        let mut names = HashSet::new();
+        self.collect_ops(&mut names);
+        names
+    }
+
+    fn collect_ops(&self, names: &mut HashSet<String>) {
+        match self {
+            ExprPlanNode::Op { op_name, children, .. } => {
+                names.insert(op_name.clone());
+                for c in children { c.collect_ops(names); }
+            }
+            ExprPlanNode::Leaf { .. } => {}
+            ExprPlanNode::Map { op_name, child, .. } => {
+                names.insert(format!("map({})", op_name));
+                names.insert(op_name.clone());
+                child.collect_ops(names);
+            }
+            ExprPlanNode::Fold { op_name, child, .. } => {
+                names.insert(format!("fold({})", op_name));
+                names.insert(op_name.clone());
+                child.collect_ops(names);
+            }
+        }
+    }
+
+    /// Collect all leaf keys.
+    pub fn leaf_keys(&self) -> HashSet<String> {
+        let mut keys = HashSet::new();
+        self.collect_leaves(&mut keys);
+        keys
+    }
+
+    fn collect_leaves(&self, keys: &mut HashSet<String>) {
+        match self {
+            ExprPlanNode::Op { children, .. } => {
+                for c in children { c.collect_leaves(keys); }
+            }
+            ExprPlanNode::Leaf { key, .. } => { keys.insert(key.clone()); }
+            ExprPlanNode::Map { child, .. } | ExprPlanNode::Fold { child, .. } => {
+                child.collect_leaves(keys);
+            }
+        }
+    }
+}
+
+impl fmt::Display for ExprPlanNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_indent_expr(f, 0)
+    }
+}
+
+impl ExprPlanNode {
+    fn fmt_indent_expr(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
+        let pad = "  ".repeat(indent);
+        match self {
+            ExprPlanNode::Op { op_name, output_type, children } => {
+                writeln!(f, "{}Op({}) → {}", pad, op_name, output_type)?;
+                for c in children { c.fmt_indent_expr(f, indent + 1)?; }
+                Ok(())
+            }
+            ExprPlanNode::Leaf { key, output_type } => {
+                writeln!(f, "{}Leaf({}: {})", pad, key, output_type)
+            }
+            ExprPlanNode::Map { op_name, elem_output, child } => {
+                writeln!(f, "{}Map({}) → Seq({})", pad, op_name, elem_output)?;
+                child.fmt_indent_expr(f, indent + 1)
+            }
+            ExprPlanNode::Fold { op_name, output_type, child } => {
+                writeln!(f, "{}Fold({}) → {}", pad, op_name, output_type)?;
+                child.fmt_indent_expr(f, indent + 1)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// plan_expr — the unification-based planner
+// ---------------------------------------------------------------------------
+
+/// Plan using TypeExpr goals and polymorphic operations.
+///
+/// Algorithm:
+/// 1. If a literal matches the target type (via unification), return Leaf.
+/// 2. Find poly ops whose output unifies with the target.
+/// 3. For each candidate, recursively plan its concrete inputs.
+/// 4. If target is Seq(B) and we have Seq(A) + op A→B, insert Map.
+/// 5. If target is B and we have Seq(B) + associative B+B→B, insert Fold.
+pub fn plan_expr(
+    goal: &ExprGoal,
+    registry: &OperationRegistry,
+) -> Result<ExprPlanNode, PlanError> {
+    let mut used: HashSet<String> = HashSet::new();
+    let mut visiting: Vec<String> = Vec::new();
+    plan_expr_recursive(
+        &goal.target,
+        &goal.available,
+        registry,
+        &mut used,
+        &mut visiting,
+        0,
+        goal.max_depth,
+    )
+}
+
+fn plan_expr_recursive(
+    target: &TypeExpr,
+    available: &[ExprLiteral],
+    registry: &OperationRegistry,
+    used: &mut HashSet<String>,
+    visiting: &mut Vec<String>,
+    depth: usize,
+    max_depth: usize,
+) -> Result<ExprPlanNode, PlanError> {
+    if depth > max_depth {
+        return Err(PlanError::DepthExceeded { depth });
+    }
+
+    let target_str = target.to_string();
+
+    // Cycle check
+    if visiting.contains(&target_str) {
+        return Err(PlanError::CycleDetected {
+            type_id: TypeId::new(&target_str),
+            chain: visiting.clone(),
+        });
+    }
+
+    // 1. Check literals
+    for lit in available {
+        if !used.contains(&lit.key) {
+            if unify(&lit.type_expr, target).is_ok() {
+                used.insert(lit.key.clone());
+                return Ok(ExprPlanNode::Leaf {
+                    key: lit.key.clone(),
+                    output_type: target.clone(),
+                });
+            }
+        }
+    }
+
+    visiting.push(target_str.clone());
+
+    // 2. Try poly ops whose output unifies with target
+    let matches = registry.ops_for_output_expr(target);
+    let mut last_error: Option<PlanError> = None;
+
+    for m in &matches {
+        let mut branch_used = used.clone();
+        let mut success = true;
+        let mut children = Vec::new();
+
+        for input in &m.concrete_inputs {
+            match plan_expr_recursive(input, available, registry, &mut branch_used, visiting, depth + 1, max_depth) {
+                Ok(child) => children.push(child),
+                Err(e) => { last_error = Some(e); success = false; break; }
+            }
+        }
+
+        if success {
+            *used = branch_used;
+            visiting.pop();
+            return Ok(ExprPlanNode::Op {
+                op_name: m.op.name.clone(),
+                output_type: m.concrete_output.clone(),
+                children,
+            });
+        }
+    }
+
+    // 3. Map insertion: target is Seq(B), we have Seq(A), and op A→B exists
+    if let TypeExpr::Constructor(seq_name, seq_args) = target {
+        if seq_name == "Seq" && seq_args.len() == 1 {
+            let target_elem = &seq_args[0];
+
+            // Look for available Seq(?) literals or plannable Seq(?) values
+            for lit in available {
+                if used.contains(&lit.key) { continue; }
+                if let TypeExpr::Constructor(lit_seq, lit_args) = &lit.type_expr {
+                    if lit_seq == "Seq" && lit_args.len() == 1 {
+                        let source_elem = &lit_args[0];
+                        // Find an op that takes source_elem and produces target_elem
+                        let elem_matches = registry.ops_for_output_expr(target_elem);
+                        for em in &elem_matches {
+                            if em.concrete_inputs.len() == 1 {
+                                if unify(&em.concrete_inputs[0], source_elem).is_ok() {
+                                    used.insert(lit.key.clone());
+                                    visiting.pop();
+                                    return Ok(ExprPlanNode::Map {
+                                        op_name: em.op.name.clone(),
+                                        elem_output: target_elem.clone(),
+                                        child: Box::new(ExprPlanNode::Leaf {
+                                            key: lit.key.clone(),
+                                            output_type: lit.type_expr.clone(),
+                                        }),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Fold insertion: target is B, we have Seq(B), and associative B+B→B exists
+    for lit in available {
+        if used.contains(&lit.key) { continue; }
+        if let TypeExpr::Constructor(seq_name, seq_args) = &lit.type_expr {
+            if seq_name == "Seq" && seq_args.len() == 1 {
+                let elem_type = &seq_args[0];
+                if unify(elem_type, target).is_ok() {
+                    // Find an associative op B+B→B
+                    let fold_matches = registry.ops_for_output_expr(target);
+                    for fm in &fold_matches {
+                        if fm.concrete_inputs.len() == 2 {
+                            if unify(&fm.concrete_inputs[0], target).is_ok()
+                                && unify(&fm.concrete_inputs[1], target).is_ok()
+                            {
+                                if let Some(poly_op) = registry.get_poly(&fm.op.name) {
+                                    if poly_op.properties.associative {
+                                        used.insert(lit.key.clone());
+                                        visiting.pop();
+                                        return Ok(ExprPlanNode::Fold {
+                                            op_name: fm.op.name.clone(),
+                                            output_type: target.clone(),
+                                            child: Box::new(ExprPlanNode::Leaf {
+                                                key: lit.key.clone(),
+                                                output_type: lit.type_expr.clone(),
+                                            }),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    visiting.pop();
+    Err(last_error.unwrap_or(PlanError::NoPlanFound {
+        reason: format!("no plan for type '{}'", target),
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -718,5 +1059,219 @@ mod tests {
         let keys = plan.leaf_keys();
         assert!(keys.contains("x1"), "should use x1");
         assert!(keys.contains("x2"), "should use x2");
+    }
+
+    // -----------------------------------------------------------------------
+    // ExprPlanNode tests — unification-based planner
+    // -----------------------------------------------------------------------
+
+    use crate::type_expr::TypeExpr;
+    use crate::registry::PolyOpSignature;
+
+    fn make_fs_registry() -> OperationRegistry {
+        let mut reg = OperationRegistry::new();
+
+        // list_dir<a>: Dir(a) → Seq(Entry(Name, a))
+        reg.register_poly(
+            "list_dir",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::dir(TypeExpr::var("a"))],
+                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+            ),
+            AlgebraicProperties::none(),
+            "ls",
+        );
+
+        // extract_archive<a, fmt>: File(Archive(a, fmt)) → Seq(Entry(Name, a))
+        reg.register_poly(
+            "extract_archive",
+            PolyOpSignature::new(
+                vec!["a".into(), "fmt".into()],
+                vec![TypeExpr::file(TypeExpr::archive(TypeExpr::var("a"), TypeExpr::var("fmt")))],
+                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+            ),
+            AlgebraicProperties::none(),
+            "unzip",
+        );
+
+        // pack_archive<a, fmt>: Seq(Entry(Name, a)), fmt → File(Archive(a, fmt))
+        reg.register_poly(
+            "pack_archive",
+            PolyOpSignature::new(
+                vec!["a".into(), "fmt".into()],
+                vec![
+                    TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+                    TypeExpr::var("fmt"),
+                ],
+                TypeExpr::file(TypeExpr::archive(TypeExpr::var("a"), TypeExpr::var("fmt"))),
+            ),
+            AlgebraicProperties::none(),
+            "zip",
+        );
+
+        // concat_seq<a>: Seq(a), Seq(a) → Seq(a)  [associative]
+        reg.register_poly(
+            "concat_seq",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::seq(TypeExpr::var("a")), TypeExpr::seq(TypeExpr::var("a"))],
+                TypeExpr::seq(TypeExpr::var("a")),
+            ),
+            AlgebraicProperties::associative(),
+            "concatenate sequences",
+        );
+
+        // read_file: File(a) → a
+        reg.register_poly(
+            "read_file",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::file(TypeExpr::var("a"))],
+                TypeExpr::var("a"),
+            ),
+            AlgebraicProperties::none(),
+            "cat",
+        );
+
+        reg
+    }
+
+    #[test]
+    fn test_plan_expr_literal_match() {
+        let reg = make_fs_registry();
+        let goal = ExprGoal::new(
+            TypeExpr::prim("Path"),
+            vec![ExprLiteral::new("p1", TypeExpr::prim("Path"), "/tmp")],
+        );
+        let plan = plan_expr(&goal, &reg).unwrap();
+        match &plan {
+            ExprPlanNode::Leaf { key, .. } => assert_eq!(key, "p1"),
+            other => panic!("expected Leaf, got: {}", other),
+        }
+    }
+
+    #[test]
+    fn test_plan_expr_single_op() {
+        let reg = make_fs_registry();
+        // Goal: Seq(Entry(Name, Bytes)) from Dir(Bytes)
+        let goal = ExprGoal::new(
+            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))),
+            vec![ExprLiteral::new("d1", TypeExpr::dir(TypeExpr::prim("Bytes")), "/tmp")],
+        );
+        let plan = plan_expr(&goal, &reg).unwrap();
+        let ops = plan.op_names();
+        assert!(ops.contains("list_dir"), "plan should use list_dir, got: {}", plan);
+    }
+
+    #[test]
+    fn test_plan_expr_chain() {
+        let reg = make_fs_registry();
+        // Goal: Seq(Entry(Name, File(Image))) from File(Archive(File(Image), Cbz))
+        let goal = ExprGoal::new(
+            TypeExpr::seq(TypeExpr::entry(
+                TypeExpr::prim("Name"),
+                TypeExpr::file(TypeExpr::prim("Image")),
+            )),
+            vec![ExprLiteral::new(
+                "cbz1",
+                TypeExpr::file(TypeExpr::archive(TypeExpr::file(TypeExpr::prim("Image")), TypeExpr::prim("Cbz"))),
+                "comic.cbz",
+            )],
+        );
+        let plan = plan_expr(&goal, &reg).unwrap();
+        let ops = plan.op_names();
+        assert!(ops.contains("extract_archive"), "plan should use extract_archive, got: {}", plan);
+    }
+
+    #[test]
+    fn test_plan_expr_no_producer() {
+        let reg = OperationRegistry::new();
+        let goal = ExprGoal::new(TypeExpr::prim("Nonexistent"), vec![]);
+        let result = plan_expr(&goal, &reg);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_plan_expr_cycle_terminates() {
+        // Register ops that could cycle: A→B and B→A
+        let mut reg = OperationRegistry::new();
+        reg.register_poly(
+            "a_to_b",
+            PolyOpSignature::mono(vec![TypeExpr::prim("A")], TypeExpr::prim("B")),
+            AlgebraicProperties::none(),
+            "a→b",
+        );
+        reg.register_poly(
+            "b_to_a",
+            PolyOpSignature::mono(vec![TypeExpr::prim("B")], TypeExpr::prim("A")),
+            AlgebraicProperties::none(),
+            "b→a",
+        );
+
+        let goal = ExprGoal::new(TypeExpr::prim("A"), vec![]).with_max_depth(10);
+        let result = plan_expr(&goal, &reg);
+        assert!(result.is_err(), "should fail due to cycle or depth");
+    }
+
+    #[test]
+    fn test_plan_expr_map_insertion() {
+        // We have Seq(A) and op A→B, goal is Seq(B)
+        let mut reg = OperationRegistry::new();
+        reg.register_poly(
+            "transform",
+            PolyOpSignature::mono(
+                vec![TypeExpr::prim("A")],
+                TypeExpr::prim("B"),
+            ),
+            AlgebraicProperties::none(),
+            "transform A to B",
+        );
+
+        let goal = ExprGoal::new(
+            TypeExpr::seq(TypeExpr::prim("B")),
+            vec![ExprLiteral::new("seq_a", TypeExpr::seq(TypeExpr::prim("A")), "sequence of As")],
+        );
+        let plan = plan_expr(&goal, &reg).unwrap();
+        let ops = plan.op_names();
+        assert!(ops.contains("transform"), "plan should use transform: {}", plan);
+        assert!(ops.contains("map(transform)"), "plan should have map(transform): {}", plan);
+        match &plan {
+            ExprPlanNode::Map { op_name, .. } => assert_eq!(op_name, "transform"),
+            other => panic!("expected Map node, got: {}", other),
+        }
+    }
+
+    #[test]
+    fn test_plan_expr_fold_insertion() {
+        // We have Seq(B) and associative B+B→B, goal is B
+        let mut reg = OperationRegistry::new();
+        reg.register_poly(
+            "concat_seq",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::seq(TypeExpr::var("a")), TypeExpr::seq(TypeExpr::var("a"))],
+                TypeExpr::seq(TypeExpr::var("a")),
+            ),
+            AlgebraicProperties::associative(),
+            "concat",
+        );
+
+        let goal = ExprGoal::new(
+            TypeExpr::seq(TypeExpr::prim("X")),
+            vec![ExprLiteral::new(
+                "nested",
+                TypeExpr::seq(TypeExpr::seq(TypeExpr::prim("X"))),
+                "sequence of sequences",
+            )],
+        );
+        let plan = plan_expr(&goal, &reg).unwrap();
+        let ops = plan.op_names();
+        assert!(ops.contains("concat_seq"), "plan should use concat_seq: {}", plan);
+        assert!(ops.contains("fold(concat_seq)"), "plan should have fold(concat_seq): {}", plan);
+        match &plan {
+            ExprPlanNode::Fold { op_name, .. } => assert_eq!(op_name, "concat_seq"),
+            other => panic!("expected Fold node, got: {}", other),
+        }
     }
 }

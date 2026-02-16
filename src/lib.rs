@@ -1,8 +1,11 @@
 pub mod types;
+pub mod type_expr;
 pub mod fact_pack;
 pub mod theory;
+pub mod fs_types;
 pub mod planner;
 pub mod pipeline;
+pub mod fs_strategy;
 pub mod registry;
 pub mod generic_planner;
 pub mod algebra;

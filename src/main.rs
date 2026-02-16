@@ -1,11 +1,14 @@
 use reasoning_engine::coding_strategy;
+use reasoning_engine::fs_strategy::{FilesystemStrategy, run_fs_goal};
+use reasoning_engine::generic_planner::ExprLiteral;
 use reasoning_engine::pipeline;
+use reasoning_engine::type_expr::TypeExpr;
 use reasoning_engine::types::Goal;
 
 fn main() {
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              REASONING ENGINE v0.2.0                        ║");
-    println!("║         Strategy Pattern — Generalized Reasoner             ║");
+    println!("║              REASONING ENGINE v0.3.0                        ║");
+    println!("║    Strategy Pattern + Filesystem Type Grammar               ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 
@@ -192,6 +195,65 @@ fn main() {
     }
 
     println!();
+    println!();
+
+    // -----------------------------------------------------------------------
+    // Strategy 3: Filesystem (dry-run planning)
+    // -----------------------------------------------------------------------
+    println!("━━━ STRATEGY 3: Filesystem (Dry-Run) ━━━");
+    println!();
+    println!("Goal: Extract images from a CBZ comic archive");
+    println!();
+
+    let fs_target = TypeExpr::seq(TypeExpr::entry(
+        TypeExpr::prim("Name"),
+        TypeExpr::file(TypeExpr::prim("Image")),
+    ));
+    let fs_available = vec![
+        ExprLiteral::new(
+            "comic.cbz",
+            TypeExpr::file(TypeExpr::archive(
+                TypeExpr::file(TypeExpr::prim("Image")),
+                TypeExpr::prim("Cbz"),
+            )),
+            "my_comic.cbz",
+        ),
+    ];
+
+    match run_fs_goal(fs_target, fs_available) {
+        Ok(trace) => {
+            println!("{}", trace);
+        }
+        Err(e) => {
+            eprintln!("ERROR (filesystem): {}", e);
+        }
+    }
+
+    println!();
+    println!("Goal: List directory contents");
+    println!();
+
+    let strategy = FilesystemStrategy::new();
+    match strategy.dry_run(
+        TypeExpr::seq(TypeExpr::entry(
+            TypeExpr::prim("Name"),
+            TypeExpr::prim("Bytes"),
+        )),
+        vec![ExprLiteral::new(
+            "/home/user/docs",
+            TypeExpr::dir(TypeExpr::prim("Bytes")),
+            "/home/user/docs",
+        )],
+    ) {
+        Ok(trace) => {
+            println!("{}", trace);
+        }
+        Err(e) => {
+            eprintln!("ERROR (filesystem): {}", e);
+        }
+    }
+
+    println!();
     println!("═══ ENGINE COMPLETE ═══");
-    println!("Both strategies executed through the unified pipeline.");
+    println!("All three strategies executed through the unified pipeline.");
 }

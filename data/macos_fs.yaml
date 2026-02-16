@@ -1,0 +1,356 @@
+# Fact Pack: macOS Filesystem Knowledge
+# =======================================
+# Domain knowledge about macOS/POSIX filesystem operations, tools,
+# archive formats, and package management. Used by FilesystemStrategy
+# to inform planning decisions.
+
+entities:
+  - id: macos_fs
+    name: "macOS Filesystem"
+    description: "macOS filesystem environment with POSIX tools and Apple extensions"
+
+axes:
+  - id: path_conventions
+    name: "Path Conventions"
+    description: "POSIX and macOS path layout conventions"
+    polarity: capability
+    sub_axes: []
+
+  - id: tools
+    name: "CLI Tools"
+    description: "Available command-line tools for filesystem operations"
+    polarity: capability
+    sub_axes:
+      - id: core_utils
+        name: "Core Utilities"
+      - id: archive_tools
+        name: "Archive Tools"
+      - id: search_tools
+        name: "Search Tools"
+
+  - id: permissions
+    name: "File Permissions"
+    description: "POSIX permission model and macOS extensions"
+    polarity: capability
+    sub_axes: []
+
+  - id: package_management
+    name: "Package Management"
+    description: "Homebrew package manager for macOS"
+    polarity: capability
+    sub_axes: []
+
+  - id: metadata
+    name: "Filesystem Metadata"
+    description: "Extended attributes, Spotlight, and filesystem metadata"
+    polarity: capability
+    sub_axes: []
+
+  - id: archive_formats
+    name: "Archive Formats"
+    description: "Knowledge about archive file formats and their properties"
+    polarity: capability
+    sub_axes: []
+
+# ---------------------------------------------------------------------------
+# Claims: factual knowledge scoped to entity + axis
+# ---------------------------------------------------------------------------
+claims:
+  # --- Path Conventions ---
+  - entity: macos_fs
+    axis: path_conventions
+    claim: "Root filesystem at /, user home at ~/ or /Users/<name>"
+    confidence: 1.0
+    evidence:
+      - "POSIX standard defines / as root"
+      - "macOS uses /Users/<name> for home directories"
+    properties:
+      standard: "POSIX"
+      paths: ["/", "/usr", "/usr/local", "/tmp", "/var", "/etc", "/Users"]
+
+  - entity: macos_fs
+    axis: path_conventions
+    claim: "Temporary files in /tmp (symlink to /private/tmp on macOS)"
+    confidence: 1.0
+    evidence:
+      - "POSIX defines /tmp for temporary files"
+      - "macOS /tmp → /private/tmp symlink"
+    properties:
+      temp_dir: "/tmp"
+      real_path: "/private/tmp"
+
+  # --- Core Utilities ---
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "ls lists directory contents with various format options"
+    confidence: 1.0
+    evidence:
+      - "man ls — list directory contents"
+      - "Flags: -l (long), -a (all), -R (recursive), -S (size sort), -t (time sort)"
+    properties:
+      command: "ls"
+      type_signature: "Dir(a) → Seq(Entry(Name, a))"
+      common_flags: ["-l", "-a", "-R", "-S", "-t", "-1"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "cat reads and concatenates file contents"
+    confidence: 1.0
+    evidence:
+      - "man cat — concatenate and print files"
+    properties:
+      command: "cat"
+      type_signature: "File(a) → a"
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "mv renames or moves files and directories"
+    confidence: 1.0
+    evidence:
+      - "man mv — move files"
+    properties:
+      command: "mv"
+      type_signature: "Entry(Name, a), Name → Entry(Name, a)"
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "find walks directory trees with filtering predicates"
+    confidence: 1.0
+    evidence:
+      - "man find — walk a file hierarchy"
+      - "Predicates: -name, -type, -size, -mtime, -exec"
+    properties:
+      command: "find"
+      type_signature: "Dir(a) → Tree(Entry(Name, a))"
+      common_flags: ["-name", "-type", "-size", "-mtime", "-exec", "-maxdepth"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "tree displays directory structure as a tree"
+    confidence: 0.9
+    evidence:
+      - "tree — list contents of directories in a tree-like format"
+      - "Not installed by default on macOS, available via brew install tree"
+    properties:
+      command: "tree"
+      install: "brew install tree"
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "sort sorts lines of text files"
+    confidence: 1.0
+    evidence:
+      - "man sort — sort lines of text files"
+    properties:
+      command: "sort"
+      type_signature: "Seq(a) → Seq(a)"
+      common_flags: ["-n", "-r", "-k", "-t", "-u"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "sed performs stream editing (find/replace, delete, insert)"
+    confidence: 1.0
+    evidence:
+      - "man sed — stream editor"
+    properties:
+      command: "sed"
+      common_flags: ["-i", "-e", "-n"]
+
+  # --- Search Tools ---
+  - entity: macos_fs
+    axis: tools
+    sub_axis: search_tools
+    claim: "grep searches file contents for patterns"
+    confidence: 1.0
+    evidence:
+      - "man grep — file pattern searcher"
+      - "Supports basic, extended, and Perl-compatible regex"
+    properties:
+      command: "grep"
+      type_signature: "Seq(Entry(Name, File(Text))), Pattern → Seq(Match(Pattern, Line))"
+      common_flags: ["-r", "-l", "-n", "-i", "-E", "-P", "-c"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: search_tools
+    claim: "mdfind uses Spotlight index for fast file search (macOS-specific)"
+    confidence: 1.0
+    evidence:
+      - "man mdfind — finds files matching a given query"
+      - "Uses Spotlight metadata index, much faster than find for indexed attributes"
+    properties:
+      command: "mdfind"
+      platform: "macOS"
+      common_flags: ["-name", "-onlyin", "-literal"]
+
+  # --- Archive Tools ---
+  - entity: macos_fs
+    axis: tools
+    sub_axis: archive_tools
+    claim: "zip creates ZIP archives with deflate compression"
+    confidence: 1.0
+    evidence:
+      - "man zip — package and compress files"
+    properties:
+      command: "zip"
+      type_signature: "Seq(Entry(Name, a)), Zip → File(Archive(a, Zip))"
+      common_flags: ["-r", "-j", "-9", "-0"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: archive_tools
+    claim: "unzip extracts ZIP archives"
+    confidence: 1.0
+    evidence:
+      - "man unzip — list, test and extract compressed files in a ZIP archive"
+    properties:
+      command: "unzip"
+      type_signature: "File(Archive(a, Zip)) → Seq(Entry(Name, a))"
+      common_flags: ["-o", "-d", "-l"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: archive_tools
+    claim: "tar creates and extracts tar archives, optionally with gzip compression"
+    confidence: 1.0
+    evidence:
+      - "man tar — manipulate tape archives"
+    properties:
+      command: "tar"
+      type_signature_create: "Seq(Entry(Name, a)), Tar → File(Archive(a, Tar))"
+      type_signature_extract: "File(Archive(a, Tar)) → Seq(Entry(Name, a))"
+      common_flags: ["-c", "-x", "-z", "-f", "-v"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: archive_tools
+    claim: "ditto copies files and directories, preserving macOS metadata (macOS-specific)"
+    confidence: 1.0
+    evidence:
+      - "man ditto — copy directory hierarchies, create and extract archives"
+      - "Preserves resource forks, HFS metadata, and extended attributes"
+    properties:
+      command: "ditto"
+      platform: "macOS"
+      common_flags: ["-V", "--rsrc", "-c", "-k", "--sequesterRsrc"]
+
+  # --- Permissions ---
+  - entity: macos_fs
+    axis: permissions
+    claim: "POSIX rwx permission model with owner/group/other and octal notation"
+    confidence: 1.0
+    evidence:
+      - "chmod uses octal (755, 644) or symbolic (u+x, g-w) notation"
+      - "ls -l shows permissions as rwxrwxrwx"
+    properties:
+      commands: ["chmod", "chown", "chgrp"]
+      common_modes: ["755", "644", "700", "600"]
+
+  # --- Package Management ---
+  - entity: macos_fs
+    axis: package_management
+    claim: "Homebrew is the standard macOS package manager"
+    confidence: 0.95
+    evidence:
+      - "https://brew.sh — The Missing Package Manager for macOS"
+      - "Installs to /usr/local (Intel) or /opt/homebrew (Apple Silicon)"
+    properties:
+      command: "brew"
+      cellar_intel: "/usr/local/Cellar"
+      cellar_arm: "/opt/homebrew/Cellar"
+      prefix_intel: "/usr/local"
+      prefix_arm: "/opt/homebrew"
+
+  - entity: macos_fs
+    axis: package_management
+    claim: "brew install/list/info manage packages; brew cask for GUI apps"
+    confidence: 0.95
+    evidence:
+      - "brew install <pkg> — install a formula"
+      - "brew list — list installed formulae"
+      - "brew info <pkg> — show formula info"
+      - "brew install --cask <app> — install a GUI application"
+    properties:
+      subcommands: ["install", "uninstall", "list", "info", "update", "upgrade", "search"]
+      cask_subcommands: ["install --cask", "list --cask"]
+
+  # --- Metadata ---
+  - entity: macos_fs
+    axis: metadata
+    claim: "Extended attributes (xattr) store additional file metadata on macOS"
+    confidence: 1.0
+    evidence:
+      - "man xattr — display and manipulate extended attributes"
+      - "Common attrs: com.apple.quarantine, com.apple.metadata:*"
+    properties:
+      command: "xattr"
+      common_flags: ["-l", "-d", "-c", "-r"]
+
+  - entity: macos_fs
+    axis: metadata
+    claim: "Spotlight indexes file metadata for fast search via mdls/mdfind"
+    confidence: 1.0
+    evidence:
+      - "man mdls — lists the metadata attributes for the specified file"
+      - "man mdfind — finds files matching a given query using Spotlight"
+    properties:
+      commands: ["mdls", "mdfind", "mdutil"]
+      platform: "macOS"
+
+  # --- Archive Formats ---
+  - entity: macos_fs
+    axis: archive_formats
+    claim: "ZIP format uses deflate compression, widely supported"
+    confidence: 1.0
+    evidence:
+      - "ZIP is the most widely supported archive format"
+      - "Uses DEFLATE compression by default"
+    properties:
+      format: "Zip"
+      extension: ".zip"
+      compression: "deflate"
+      tools: ["zip", "unzip", "ditto"]
+
+  - entity: macos_fs
+    axis: archive_formats
+    claim: "CBZ is a ZIP archive containing comic book images, ordered by filename"
+    confidence: 1.0
+    evidence:
+      - "CBZ = Comic Book Zip — a ZIP file with .cbz extension"
+      - "Contains image files (JPEG/PNG) named in reading order"
+    properties:
+      format: "Cbz"
+      extension: ".cbz"
+      base_format: "Zip"
+      content_type: "Image"
+      ordering: "filename-alphabetical"
+
+  - entity: macos_fs
+    axis: archive_formats
+    claim: "TAR is a stream-based archive format, often combined with gzip"
+    confidence: 1.0
+    evidence:
+      - "tar = tape archive — concatenates files into a single stream"
+      - "tar.gz / .tgz = tar with gzip compression"
+    properties:
+      format: "Tar"
+      extensions: [".tar", ".tar.gz", ".tgz"]
+      compression: "none (tar) or gzip (tar.gz)"
+      tools: ["tar"]
+
+  - entity: macos_fs
+    axis: archive_formats
+    claim: "A nonexistent_tool can be referenced in claims without error"
+    confidence: 0.0
+    evidence:
+      - "This claim references a tool that does not exist"
+    properties:
+      command: "nonexistent_tool_xyz"
+      note: "Fact packs can contain incorrect claims — the engine reasons about them"

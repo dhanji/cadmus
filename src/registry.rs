@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use crate::type_expr::{TypeExpr, Substitution, unify};
 
 // ---------------------------------------------------------------------------
 // TypeId — strategy-defined type vocabulary
@@ -215,6 +216,8 @@ impl fmt::Debug for OpEntry {
 pub struct OperationRegistry {
     /// All registered operations, keyed by name
     ops: HashMap<String, OpEntry>,
+    /// Polymorphic operations (TypeExpr-based)
+    poly_ops: Vec<PolyOpEntry>,
     /// Index: output TypeId → list of op names that produce it
     by_output: HashMap<TypeId, Vec<String>>,
 }
@@ -224,6 +227,7 @@ impl fmt::Debug for OperationRegistry {
         f.debug_struct("OperationRegistry")
             .field("ops", &self.ops.keys().collect::<Vec<_>>())
             .field("by_output", &self.by_output)
+            .field("poly_ops", &self.poly_ops.iter().map(|p| &p.name).collect::<Vec<_>>())
             .finish()
     }
 }
@@ -233,6 +237,7 @@ impl OperationRegistry {
         Self {
             ops: HashMap::new(),
             by_output: HashMap::new(),
+            poly_ops: Vec::new(),
         }
     }
 
@@ -344,6 +349,190 @@ impl OperationRegistry {
 impl Default for OperationRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PolyOpSignature — polymorphic operation signatures using TypeExpr
+// ---------------------------------------------------------------------------
+
+/// A polymorphic operation signature using compositional types.
+///
+/// Unlike `OpSignature` which uses flat `TypeId` strings, `PolyOpSignature`
+/// uses `TypeExpr` for inputs and output, allowing type variables that get
+/// bound during unification-based lookup.
+///
+/// Example: `extract_archive<a, fmt>: File(Archive(a, fmt)) → Seq(Entry(Name, a))`
+#[derive(Debug, Clone)]
+pub struct PolyOpSignature {
+    /// Type parameter names (e.g., ["a", "fmt"])
+    pub type_params: Vec<String>,
+    /// Input types (may contain type variables)
+    pub inputs: Vec<TypeExpr>,
+    /// Output type (may contain type variables)
+    pub output: TypeExpr,
+}
+
+impl PolyOpSignature {
+    pub fn new(type_params: Vec<String>, inputs: Vec<TypeExpr>, output: TypeExpr) -> Self {
+        Self { type_params, inputs, output }
+    }
+
+    /// A monomorphic poly signature (no type params).
+    pub fn mono(inputs: Vec<TypeExpr>, output: TypeExpr) -> Self {
+        Self { type_params: vec![], inputs, output }
+    }
+
+    /// A leaf poly signature (no inputs).
+    pub fn leaf(output: TypeExpr) -> Self {
+        Self { type_params: vec![], inputs: vec![], output }
+    }
+
+    /// Freshen type variables with a unique prefix to avoid capture.
+    /// Returns a new signature with renamed variables and the renaming map.
+    pub fn freshen(&self, prefix: &str) -> (PolyOpSignature, HashMap<String, String>) {
+        let mut rename_map = HashMap::new();
+        for param in &self.type_params {
+            rename_map.insert(param.clone(), format!("{}_{}", prefix, param));
+        }
+
+        let freshen_expr = |expr: &TypeExpr| -> TypeExpr {
+            let mut subst = Substitution::empty();
+            for (old, new) in &rename_map {
+                subst.bind(old.clone(), TypeExpr::Var(new.clone())).ok();
+            }
+            expr.apply_subst(&subst)
+        };
+
+        let new_sig = PolyOpSignature {
+            type_params: self.type_params.iter().map(|p| rename_map[p].clone()).collect(),
+            inputs: self.inputs.iter().map(|i| freshen_expr(i)).collect(),
+            output: freshen_expr(&self.output),
+        };
+
+        (new_sig, rename_map)
+    }
+}
+
+impl fmt::Display for PolyOpSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.type_params.is_empty() {
+            write!(f, "<{}>", self.type_params.join(", "))?;
+        }
+        write!(f, "(")?;
+        for (i, input) in self.inputs.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", input)?;
+        }
+        write!(f, ") → {}", self.output)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PolyOpEntry — a registered polymorphic operation
+// ---------------------------------------------------------------------------
+
+/// A fully registered polymorphic operation.
+pub struct PolyOpEntry {
+    /// Unique name for this operation
+    pub name: String,
+    /// Polymorphic type signature
+    pub signature: PolyOpSignature,
+    /// Algebraic properties for canonicalization
+    pub properties: AlgebraicProperties,
+    /// Human-readable description of what command/action this op represents
+    pub description: String,
+}
+
+impl fmt::Debug for PolyOpEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PolyOpEntry")
+            .field("name", &self.name)
+            .field("signature", &self.signature)
+            .field("properties", &self.properties)
+            .field("description", &self.description)
+            .finish()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PolyOpMatch — result of a unification-based lookup
+// ---------------------------------------------------------------------------
+
+/// A match from `ops_for_output_expr()`: a poly op whose output unified
+/// with the requested type, plus the resulting substitution.
+#[derive(Debug)]
+pub struct PolyOpMatch<'a> {
+    /// The matched operation
+    pub op: &'a PolyOpEntry,
+    /// The substitution that makes the op's output equal to the requested type
+    pub substitution: Substitution,
+    /// The concrete input types after applying the substitution
+    pub concrete_inputs: Vec<TypeExpr>,
+    /// The concrete output type after applying the substitution
+    pub concrete_output: TypeExpr,
+}
+
+// ---------------------------------------------------------------------------
+// OperationRegistry — poly extensions
+// ---------------------------------------------------------------------------
+
+impl OperationRegistry {
+    /// Register a polymorphic operation.
+    pub fn register_poly(
+        &mut self,
+        name: impl Into<String>,
+        signature: PolyOpSignature,
+        properties: AlgebraicProperties,
+        description: impl Into<String>,
+    ) -> &mut Self {
+        let name = name.into();
+        self.poly_ops.push(PolyOpEntry {
+            name,
+            signature,
+            properties,
+            description: description.into(),
+        });
+        self
+    }
+
+    /// Look up all polymorphic operations whose output type unifies with the
+    /// given type expression. Returns matches with their substitutions.
+    pub fn ops_for_output_expr(&self, target: &TypeExpr) -> Vec<PolyOpMatch<'_>> {
+        let mut matches = Vec::new();
+        for (i, op) in self.poly_ops.iter().enumerate() {
+            // Freshen type variables to avoid capture between different lookups
+            let (fresh_sig, _rename) = op.signature.freshen(&format!("f{}", i));
+
+            // Try to unify the op's output with the target
+            if let Ok(subst) = unify(&fresh_sig.output, target) {
+                let concrete_inputs: Vec<TypeExpr> = fresh_sig.inputs
+                    .iter()
+                    .map(|inp| inp.apply_subst(&subst))
+                    .collect();
+                let concrete_output = fresh_sig.output.apply_subst(&subst);
+
+                matches.push(PolyOpMatch {
+                    op,
+                    substitution: subst,
+                    concrete_inputs,
+                    concrete_output,
+                });
+            }
+        }
+        matches
+    }
+
+    /// Get a polymorphic operation by name.
+    pub fn get_poly(&self, name: &str) -> Option<&PolyOpEntry> {
+        self.poly_ops.iter().find(|op| op.name == name)
+    }
+
+    /// Get all registered polymorphic operation names.
+    pub fn poly_op_names(&self) -> Vec<&str> {
+        self.poly_ops.iter().map(|op| op.name.as_str()).collect()
     }
 }
 
@@ -568,5 +757,145 @@ mod tests {
         };
         let result = (op.exec)(&ctx).unwrap();
         assert_eq!(result, "echo: hello");
+    }
+
+    // --- Poly op tests ---
+
+    #[test]
+    fn test_register_poly_and_lookup() {
+        use crate::type_expr::TypeExpr;
+
+        let mut reg = OperationRegistry::new();
+        // extract_archive<a, fmt>: File(Archive(a, fmt)) → Seq(Entry(Name, a))
+        reg.register_poly(
+            "extract_archive",
+            PolyOpSignature::new(
+                vec!["a".into(), "fmt".into()],
+                vec![TypeExpr::file(TypeExpr::archive(TypeExpr::var("a"), TypeExpr::var("fmt")))],
+                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+            ),
+            AlgebraicProperties::none(),
+            "unzip/extract archive contents",
+        );
+
+        // Lookup: Seq(Entry(Name, File(Image))) should match with {a → File(Image)}
+        let target = TypeExpr::seq(TypeExpr::entry(
+            TypeExpr::prim("Name"),
+            TypeExpr::file(TypeExpr::prim("Image")),
+        ));
+        let matches = reg.ops_for_output_expr(&target);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].op.name, "extract_archive");
+
+        // Check concrete input after substitution
+        assert_eq!(matches[0].concrete_inputs.len(), 1);
+        // The input should have 'a' bound to File(Image), fmt stays as a var
+        let input = &matches[0].concrete_inputs[0];
+        // Check it's File(Archive(File(Image), <something>))
+        match input {
+            TypeExpr::Constructor(name, args) if name == "File" => {
+                match &args[0] {
+                    TypeExpr::Constructor(name2, args2) if name2 == "Archive" => {
+                        assert_eq!(args2[0], TypeExpr::file(TypeExpr::prim("Image")));
+                        // fmt is unbound — could be any var
+                    }
+                    other => panic!("expected Archive constructor, got: {}", other),
+                }
+            }
+            other => panic!("expected File constructor, got: {}", other),
+        }
+    }
+
+    #[test]
+    fn test_poly_lookup_no_match() {
+        use crate::type_expr::TypeExpr;
+
+        let mut reg = OperationRegistry::new();
+        reg.register_poly(
+            "list_dir",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::dir(TypeExpr::var("a"))],
+                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+            ),
+            AlgebraicProperties::none(),
+            "ls — list directory contents",
+        );
+
+        // Lookup for a completely unrelated type
+        let target = TypeExpr::prim("Metadata");
+        let matches = reg.ops_for_output_expr(&target);
+        assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn test_existing_typeid_apis_unchanged_with_poly() {
+        use crate::type_expr::TypeExpr;
+
+        let mut reg = OperationRegistry::new();
+        // Register a monomorphic op
+        reg.register(
+            "summarize",
+            OpSignature::new(vec![TypeId::new("Evidence")], TypeId::new("Claim")),
+            AlgebraicProperties::none(),
+            make_noop_exec(),
+        );
+        // Register a poly op
+        reg.register_poly(
+            "list_dir",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::dir(TypeExpr::var("a"))],
+                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+            ),
+            AlgebraicProperties::none(),
+            "ls",
+        );
+
+        // Monomorphic lookup still works
+        let ops = reg.ops_for_output(&TypeId::new("Claim"));
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].name, "summarize");
+
+        // Poly lookup works independently
+        let target = TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::prim("Bytes")));
+        let poly_matches = reg.ops_for_output_expr(&target);
+        assert_eq!(poly_matches.len(), 1);
+        assert_eq!(poly_matches[0].op.name, "list_dir");
+    }
+
+    #[test]
+    fn test_two_poly_ops_same_output_shape() {
+        use crate::type_expr::TypeExpr;
+
+        let mut reg = OperationRegistry::new();
+        // Both produce Seq(Entry(Name, a))
+        reg.register_poly(
+            "list_dir",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::dir(TypeExpr::var("a"))],
+                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+            ),
+            AlgebraicProperties::none(),
+            "ls",
+        );
+        reg.register_poly(
+            "find_matching",
+            PolyOpSignature::new(
+                vec!["a".into()],
+                vec![TypeExpr::prim("Pattern"), TypeExpr::seq(TypeExpr::var("a"))],
+                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
+            ),
+            AlgebraicProperties::none(),
+            "find/grep — filter entries matching pattern",
+        );
+
+        let target = TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::prim("Bytes")));
+        let matches = reg.ops_for_output_expr(&target);
+        assert_eq!(matches.len(), 2);
+        let names: Vec<&str> = matches.iter().map(|m| m.op.name.as_str()).collect();
+        assert!(names.contains(&"list_dir"));
+        assert!(names.contains(&"find_matching"));
     }
 }
