@@ -1,14 +1,112 @@
+use std::env;
+use std::path::Path;
+use std::process;
+
 use reasoning_engine::coding_strategy;
 use reasoning_engine::fs_strategy::{FilesystemStrategy, run_fs_goal};
 use reasoning_engine::generic_planner::ExprLiteral;
 use reasoning_engine::pipeline;
 use reasoning_engine::type_expr::TypeExpr;
 use reasoning_engine::types::Goal;
+use reasoning_engine::workflow;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    // --workflow <path> mode: load and execute a workflow YAML file
+    if let Some(pos) = args.iter().position(|a| a == "--workflow") {
+        let path = args.get(pos + 1).unwrap_or_else(|| {
+            eprintln!("Usage: reasoning_engine --workflow <path.yaml>");
+            eprintln!();
+            eprintln!("Example:");
+            eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml");
+            process::exit(1);
+        });
+
+        run_workflow_mode(Path::new(path));
+        return;
+    }
+
+    // Default: run all three strategy demos
+    run_demo_mode();
+}
+
+// ---------------------------------------------------------------------------
+// Workflow mode
+// ---------------------------------------------------------------------------
+
+fn run_workflow_mode(path: &Path) {
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              REASONING ENGINE v0.3.0                        ║");
-    println!("║    Strategy Pattern + Filesystem Type Grammar               ║");
+    println!("║              REASONING ENGINE v0.4.0                        ║");
+    println!("║    Workflow DSL                                             ║");
+    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+
+    println!("Loading workflow: {}", path.display());
+    println!();
+
+    let def = match workflow::load_workflow(path) {
+        Ok(def) => def,
+        Err(e) => {
+            eprintln!("ERROR: {}", e);
+            process::exit(1);
+        }
+    };
+
+    println!("Workflow: {}", def.workflow);
+    println!("Inputs:");
+    for (k, v) in &def.inputs {
+        println!("  {} = {}", k, v);
+    }
+    println!("Steps: {}", def.steps.len());
+    for (i, step) in def.steps.iter().enumerate() {
+        let args_str = match &step.args {
+            workflow::StepArgs::None => String::new(),
+            workflow::StepArgs::Scalar(s) => format!(": {}", s),
+            workflow::StepArgs::Map(m) => {
+                let pairs: Vec<String> = m.iter()
+                    .map(|(k, v)| format!("{}={}", k, v))
+                    .collect();
+                format!(": {{{}}}", pairs.join(", "))
+            }
+        };
+        println!("  {}. {}{}", i + 1, step.op, args_str);
+    }
+    println!();
+
+    // Compile
+    let registry = reasoning_engine::fs_types::build_fs_registry();
+    let compiled = match workflow::compile_workflow(&def, &registry) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("COMPILE ERROR: {}", e);
+            process::exit(1);
+        }
+    };
+
+    println!("═══ Compiled Workflow ═══");
+    println!("{}", compiled);
+
+    // Execute
+    let trace = match workflow::execute_workflow(&compiled, &registry) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("EXECUTION ERROR: {}", e);
+            process::exit(1);
+        }
+    };
+
+    println!("{}", trace);
+}
+
+// ---------------------------------------------------------------------------
+// Demo mode (original behavior)
+// ---------------------------------------------------------------------------
+
+fn run_demo_mode() {
+    println!("╔══════════════════════════════════════════════════════════════╗");
+    println!("║              REASONING ENGINE v0.4.0                        ║");
+    println!("║    Strategy Pattern + Workflow DSL                          ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 
@@ -255,5 +353,5 @@ fn main() {
 
     println!();
     println!("═══ ENGINE COMPLETE ═══");
-    println!("All three strategies executed through the unified pipeline.");
+    println!("All strategies executed through the unified pipeline.");
 }
