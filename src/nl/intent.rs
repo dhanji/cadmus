@@ -195,7 +195,30 @@ fn is_approve(tokens: &[String]) -> bool {
         "all good", "all set", "we are good",
     ];
 
-    multi_approvals.iter().any(|a| joined == *a || joined.starts_with(a))
+    if multi_approvals.iter().any(|a| joined == *a || joined.starts_with(a)) {
+        return true;
+    }
+
+    // Compound approval: single-word approval + multi-word approval tail
+    // e.g. "perfect, ship it" → tokens ["perfect", "ship", "it"]
+    // "perfect" is a single approval, "ship it" is a multi approval
+    if tokens.len() >= 2 {
+        let first = &tokens[0];
+        if single_approvals.contains(&first.as_str()) {
+            let tail = tokens[1..].join(" ");
+            if multi_approvals.iter().any(|a| tail == *a || tail.starts_with(a)) {
+                return true;
+            }
+            // Also: "sure why not", "yeah that works" — first is approval, rest is filler
+            let filler = ["why not", "that works", "works for me", "i think",
+                          "let us do it", "go for it", "of course"];
+            if filler.iter().any(|f| tail == *f || tail.starts_with(f)) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /// Check if the input is a rejection.
@@ -218,6 +241,10 @@ fn is_reject(tokens: &[String]) -> bool {
         "scrap that", "scrap it", "scrap the plan",
         "nah scrap", "nah forget", "nah scratch", "nah never",
         "nevermind", "i do not want", "i do not like",
+        "actually no", "actually nah", "actually never mind",
+        "wait no", "wait stop", "wait cancel",
+        "nah i am good", "nah i am fine", "no i am good", "no i am fine",
+        "forget about it", "forget about that",
         "that is wrong", "that is not right", "that is not what i want",
         "undo that", "undo it", "take it back",
         "go back", "back up", "step back",
@@ -962,5 +989,60 @@ mod tests {
             }
             other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
+    }
+
+    // -- Red-team: rejection patterns --
+
+    #[test]
+    fn test_reject_never_mind() {
+        assert_eq!(recognize("never mind"), Intent::Reject);
+    }
+
+    #[test]
+    fn test_reject_actually_no() {
+        assert_eq!(recognize("actually no"), Intent::Reject);
+    }
+
+    #[test]
+    fn test_reject_wait_no() {
+        assert_eq!(recognize("wait no"), Intent::Reject);
+    }
+
+    #[test]
+    fn test_reject_nah_i_am_good() {
+        assert_eq!(recognize("nah i am good"), Intent::Reject);
+    }
+
+    #[test]
+    fn test_reject_forget_about_it() {
+        assert_eq!(recognize("forget about it"), Intent::Reject);
+    }
+
+    // -- Red-team: approval patterns --
+
+    #[test]
+    fn test_approve_perfect_ship_it() {
+        // "perfect, ship it" → tokens ["perfect", "ship", "it"]
+        assert_eq!(recognize("perfect ship it"), Intent::Approve);
+    }
+
+    #[test]
+    fn test_approve_yep_run_it() {
+        assert_eq!(recognize("yep run it"), Intent::Approve);
+    }
+
+    #[test]
+    fn test_approve_sure_why_not() {
+        assert_eq!(recognize("sure why not"), Intent::Approve);
+    }
+
+    #[test]
+    fn test_approve_yeah_that_works() {
+        assert_eq!(recognize("yeah that works"), Intent::Approve);
+    }
+
+    #[test]
+    fn test_approve_ok_go_for_it() {
+        assert_eq!(recognize("ok go for it"), Intent::Approve);
     }
 }

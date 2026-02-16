@@ -634,3 +634,242 @@ fn assert_yaml_compiles_edited(response: &NlResponse) {
             .expect("should compile");
     }
 }
+
+// ==========================================================================
+// Red-team integration tests
+// ==========================================================================
+
+// -- BUG-001: "never mind" rejection --
+
+#[test]
+fn test_redteam_never_mind_rejects() {
+    let mut state = DialogueState::new();
+    let r1 = process_input("compress file.txt", &mut state);
+    assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+    let r2 = process_input("never mind", &mut state);
+    assert!(matches!(r2, NlResponse::Rejected),
+        "never mind should reject, got: {:?}", r2);
+}
+
+// -- BUG-002/003: search keyword extraction --
+
+#[test]
+fn test_redteam_search_todo_keyword() {
+    let mut state = DialogueState::new();
+    let r = process_input("search for TODO in ~/src", &mut state);
+    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
+        assert!(workflow_yaml.contains("todo") || workflow_yaml.contains("TODO"),
+            "search pattern should contain 'todo', got:\n{}", workflow_yaml);
+        assert!(!workflow_yaml.contains("good"),
+            "search pattern should NOT contain 'good', got:\n{}", workflow_yaml);
+    } else {
+        panic!("expected PlanCreated, got: {:?}", r);
+    }
+}
+
+#[test]
+fn test_redteam_search_fixme_keyword() {
+    let mut state = DialogueState::new();
+    let r = process_input("search for FIXME in ~/src", &mut state);
+    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
+        assert!(workflow_yaml.contains("fixme") || workflow_yaml.contains("FIXME"),
+            "search pattern should contain 'fixme', got:\n{}", workflow_yaml);
+    } else {
+        panic!("expected PlanCreated, got: {:?}", r);
+    }
+}
+
+// -- BUG-004: comma-containing approve phrases --
+
+#[test]
+fn test_redteam_perfect_comma_ship_it_approves() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("perfect, ship it", &mut state);
+    assert!(matches!(r, NlResponse::Approved),
+        "perfect, ship it should approve, got: {:?}", r);
+}
+
+#[test]
+fn test_redteam_yep_comma_run_it_approves() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("yep, run it", &mut state);
+    assert!(matches!(r, NlResponse::Approved),
+        "yep, run it should approve, got: {:?}", r);
+}
+
+// -- BUG-005: natural rejection phrases --
+
+#[test]
+fn test_redteam_actually_no_rejects() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("actually no", &mut state);
+    assert!(matches!(r, NlResponse::Rejected),
+        "actually no should reject, got: {:?}", r);
+}
+
+#[test]
+fn test_redteam_forget_about_it_rejects() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("forget about it", &mut state);
+    assert!(matches!(r, NlResponse::Rejected),
+        "forget about it should reject, got: {:?}", r);
+}
+
+#[test]
+fn test_redteam_wait_no_rejects() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("wait no", &mut state);
+    assert!(matches!(r, NlResponse::Rejected),
+        "wait no should reject, got: {:?}", r);
+}
+
+// -- BUG-006: double approve --
+
+#[test]
+fn test_redteam_double_approve_fails() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r1 = process_input("yes", &mut state);
+    assert!(matches!(r1, NlResponse::Approved));
+    let r2 = process_input("yes", &mut state);
+    assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
+        "second approve should need clarification, got: {:?}", r2);
+}
+
+// -- BUG-008: "remove the step" --
+
+#[test]
+fn test_redteam_remove_the_step_removes_last() {
+    let mut state = DialogueState::new();
+    let r1 = process_input("find all PDFs in ~/Documents", &mut state);
+    assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+    let r2 = process_input("remove the last step", &mut state);
+    match &r2 {
+        NlResponse::PlanEdited { diff_description, .. } => {
+            assert!(diff_description.contains("Removed"),
+                "should describe removal: {}", diff_description);
+        }
+        other => panic!("expected PlanEdited, got: {:?}", other),
+    }
+}
+
+// -- BUG-010: "sure why not" and "yeah that works" approval --
+
+#[test]
+fn test_redteam_sure_why_not_approves() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("sure why not", &mut state);
+    assert!(matches!(r, NlResponse::Approved),
+        "sure why not should approve, got: {:?}", r);
+}
+
+#[test]
+fn test_redteam_yeah_that_works_approves() {
+    let mut state = DialogueState::new();
+    let _ = process_input("compress file.txt", &mut state);
+    let r = process_input("yeah that works", &mut state);
+    assert!(matches!(r, NlResponse::Approved),
+        "yeah that works should approve, got: {:?}", r);
+}
+
+// -- BUG-011: casual English shouldn't create workflows --
+
+#[test]
+fn test_redteam_mind_not_workflow() {
+    let mut state = DialogueState::new();
+    let r = process_input("I have something in mind", &mut state);
+    assert!(!matches!(r, NlResponse::PlanCreated { .. }),
+        "casual English should NOT create workflow, got: {:?}", r);
+}
+
+// -- Adversarial inputs --
+
+#[test]
+fn test_redteam_unicode_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("compress /Users/me/résumé.pdf", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "unicode path should work: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_redteam_only_punctuation() {
+    let mut state = DialogueState::new();
+    let r = process_input("!@#$%^&*()", &mut state);
+    assert!(matches!(r, NlResponse::NeedsClarification { .. }),
+        "punctuation-only should clarify: {:?}", r);
+}
+
+#[test]
+fn test_redteam_relative_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("compress ./src/main.rs", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }));
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_redteam_dotdot_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("compress ../other/file.txt", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }));
+    assert_yaml_compiles(&r);
+}
+
+// -- Multi-turn state transitions --
+
+#[test]
+fn test_redteam_create_reject_create_approve() {
+    let mut state = DialogueState::new();
+    let r1 = process_input("compress file.txt", &mut state);
+    assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+    let r2 = process_input("no", &mut state);
+    assert!(matches!(r2, NlResponse::Rejected));
+    let r3 = process_input("list ~/Desktop", &mut state);
+    assert!(matches!(r3, NlResponse::PlanCreated { .. }));
+    let r4 = process_input("yes", &mut state);
+    assert!(matches!(r4, NlResponse::Approved));
+}
+
+#[test]
+fn test_redteam_create_overwrite_approve() {
+    let mut state = DialogueState::new();
+    let r1 = process_input("compress file.txt", &mut state);
+    assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+    // Second create overwrites first
+    let r2 = process_input("list ~/Desktop", &mut state);
+    assert!(matches!(r2, NlResponse::PlanCreated { .. }));
+    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r2 {
+        assert!(workflow_yaml.contains("list_dir"),
+            "second plan should be list_dir: {}", workflow_yaml);
+    }
+    let r3 = process_input("yes", &mut state);
+    assert!(matches!(r3, NlResponse::Approved));
+}
+
+// -- Typo correction edge cases --
+
+#[test]
+fn test_redteam_heavy_typos_still_work() {
+    let mut state = DialogueState::new();
+    let r = process_input("extrct the archve at ~/comic.cbz", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "heavy typos should still create plan: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_redteam_transposed_letters() {
+    let mut state = DialogueState::new();
+    let r = process_input("wlak teh direcotry tree in /var", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "transposed letters should still create plan: {:?}", r);
+    assert_yaml_compiles(&r);
+}

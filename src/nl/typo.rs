@@ -368,6 +368,16 @@ pub fn build_domain_dict() -> SymSpellDict {
         ("know", 60), ("knew", 40), ("see", 60), ("saw", 40),
         ("come", 40), ("came", 40), ("go", 60), ("went", 40),
         ("get", 80), ("got", 60), ("going", 40), ("getting", 40),
+        // Rejection/approval words that must survive typo correction
+        ("mind", 60), ("never", 60), ("wait", 60), ("hold", 40),
+        ("maybe", 40), ("perhaps", 40), ("later", 40),
+        // Common code-comment markers (search keywords)
+        ("todo", 60), ("fixme", 60), ("hack", 40), ("note", 40),
+        ("xxx", 40), ("bug", 40), ("warn", 40), ("error", 60),
+        // More common English that gets false-corrected
+        ("something", 40), ("anything", 40),
+        ("someone", 40), ("anyone", 40),
+        ("kind", 40), ("find", 80), ("bind", 40), ("wind", 40),
     ];
 
     SymSpellDict::new(&entries, 2, 7)
@@ -603,4 +613,37 @@ mod tests {
         let tokens = d.correct_tokens(&["nah".into(), "scrap".into(), "that".into()]);
         assert_eq!(tokens, vec!["nah", "scrap", "that"]);
     }
+
+    #[test]
+    fn test_mind_not_corrected_to_find() {
+        let d = dict();
+        assert_eq!(d.correct("mind"), "mind");
+    }
+
+    #[test]
+    fn test_never_not_corrected() {
+        let d = dict();
+        assert_eq!(d.correct("never"), "never");
+    }
+
+    #[test]
+    fn test_todo_not_corrected_to_good() {
+        let d = dict();
+        assert_eq!(d.correct("todo"), "todo");
+    }
+
+    #[test]
+    fn test_fixme_not_corrected() {
+        let d = dict();
+        assert_eq!(d.correct("fixme"), "fixme");
+    }
+
+    #[test]
+    fn test_never_mind_tokens_unchanged() {
+        let d = dict();
+        let tokens = d.correct_tokens(&["never".into(), "mind".into()]);
+        assert_eq!(tokens, vec!["never", "mind"]);
+    }
 }
+
+

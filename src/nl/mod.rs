@@ -128,6 +128,8 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
         }
         Intent::Approve => {
             if state.current_workflow.is_some() {
+                // Clear the workflow so a second approve won't succeed
+                state.current_workflow = None;
                 NlResponse::Approved
             } else {
                 NlResponse::NeedsClarification {
@@ -671,5 +673,30 @@ mod tests {
         let r2 = process_input("approve", &mut state);
         assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
             "approve after error should need clarification, got: {:?}", r2);
+    }
+
+    #[test]
+    fn test_double_approve_fails() {
+        let mut state = DialogueState::new();
+        let r1 = process_input("compress file.txt", &mut state);
+        assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+        let r2 = process_input("yes", &mut state);
+        assert!(matches!(r2, NlResponse::Approved), "first approve should succeed: {:?}", r2);
+        // Second approve should fail — workflow was cleared
+        let r3 = process_input("yes", &mut state);
+        assert!(matches!(r3, NlResponse::NeedsClarification { .. }),
+            "second approve should need clarification, got: {:?}", r3);
+    }
+
+    #[test]
+    fn test_approve_clears_then_new_plan_works() {
+        let mut state = DialogueState::new();
+        let _ = process_input("compress file.txt", &mut state);
+        let _ = process_input("yes", &mut state);
+        // After approve+clear, creating a new plan should work
+        let r = process_input("list ~/Desktop", &mut state);
+        assert!(matches!(r, NlResponse::PlanCreated { .. }), "new plan after approve: {:?}", r);
+        let r2 = process_input("ok", &mut state);
+        assert!(matches!(r2, NlResponse::Approved), "approve new plan: {:?}", r2);
     }
 }

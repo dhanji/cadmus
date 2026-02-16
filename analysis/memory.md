@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-16T08:29:55Z | Size: 10.3k chars
+> Updated: 2026-02-16T11:40:45Z | Size: 15.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -109,3 +109,45 @@
 - `tests/power_tools_tests.rs` — 20 integration tests (ops, facts, composition)
 - `PLAYBOOK.md` — Added Section 0 (Audit Existing Packs), Section 3a (Fact Pack Composition), Section 6 (Power Tools Worked Example)
 - **Total: 298 tests** (200 unit + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 workflow), all passing, zero warnings
+
+### NL UX Layer Feature (plan `nl-ux-layer`)
+- `src/nl/mod.rs` [1..647] — Orchestrator: `process_input()`, `NlResponse` (8 variants: PlanCreated, PlanEdited, Explanation, Approved, Rejected, NeedsClarification, ParamSet, Error), `casual_ack()`, `get_op_explanation()`, `validate_workflow_yaml()`
+- `src/nl/normalize.rs` [1..860] — `normalize()`, `NormalizedInput`, `CANONICAL_OPS` (113 ops), `is_canonical_op()`, `build_synonym_table()` (200+ entries), `apply_synonyms()` greedy longest-match, `tokenize()` with path case preservation, `expand_contractions()` (37 patterns), `canonicalize_ordinal()`. 26 tests.
+- `src/nl/typo.rs` [1..518] — `SymSpellDict`, `build_domain_dict()` (~280 words), `correct()`, `correct_tokens()`, `generate_deletes()`, `edit_distance()` (Damerau-Levenshtein). Max edit distance 2, prefix length 7. 21 tests.
+- `src/nl/intent.rs` [1..907] — `Intent` enum (8 variants: CreateWorkflow, EditStep, ExplainOp, Approve, Reject, AskQuestion, SetParam, NeedsClarification), `EditAction` enum (6 variants), `parse_intent()`, `recognize()`. Closed grammar with ranked patterns. 39 tests.
+- `src/nl/slots.rs` [1..597] — `SlotValue` (7 variants: Path, OpName, StepRef, Pattern, Param, Modifier, Keyword), `StepRef`, `Modifier`, `Anchor`, `ExtractedSlots`, `extract_slots()`, `fuzzy_match_op()`, `edit_distance_bounded()`. 24 tests.
+- `src/nl/dialogue.rs` [1..997] — `FocusStack`, `FocusEntry` (4 variants), `DialogueState`, `DialogueError`, `build_workflow()`, `apply_edit()` (skip/remove/add/move/change/insert), `workflow_to_yaml()`. 17 tests.
+- `tests/nl_tests.rs` [1..466] — 41 integration tests: 11 diverse phrasings, typo correction, 4 explanations, 7 approve + 4 reject, 3 edits, 3 multi-turn conversations, 5 YAML compilation checks
+- `src/main.rs` — `--chat` mode added (stdin line-by-line NL processing)
+- **Total: 481 tests** (342 unit + 41 nl_integration + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 workflow), all passing, zero warnings
+- **Key design**: NL layer always produces WorkflowDef YAML → feeds through workflow::compile_workflow() → engine validates and type-checks. Never bypasses the reasoner.
+
+### NL Bugfixes (plan: nl-bugfixes)
+- `src/nl/typo.rs` [337..370] - Added ~60 common English words to SymSpell dictionary to prevent false corrections ("the"→"tee", "thing"→"tee", "that"→"what", "scrap"→"script")
+- `src/nl/slots.rs` [259..310] - `is_path()` expanded: bare filenames with known extensions, trailing-slash dirs, URL-like paths. New `is_file_extension()` with ~60 extensions
+- `src/nl/dialogue.rs` [193..355] - `build_workflow()` rewritten: categorizes ops as file/dir/entry/url/git, uses correct input names. New helpers: `is_url_op()`, `is_git_repo_op()`, `is_entry_op()`, `is_file_path()`, `dir_of()`, `filename_of()`
+- `src/workflow.rs` [631..643] - Added `textdir` input type → `Dir(File(Text))` for search_content pipelines
+- `src/nl/normalize.rs` [379..395] - Added 7 single-word git synonyms: clone, commit, checkout, merge, fetch, pull, push
+- `src/nl/intent.rs` [384..399] - Compound sentence detection: "skip that, compress X instead" → CreateWorkflow
+- `src/nl/intent.rs` [214..221] - Added "scrap that/it" to reject patterns
+- `src/nl/intent.rs` [531..546] - Removed "do" from question starters
+- `src/nl/mod.rs` [129..145] - Approve/reject now check state.current_workflow before firing
+- 525 total tests, 44 new tests added, all passing, zero warnings
+
+### Red-team findings for NL layer
+- `src/nl/typo.rs` — "mind"→"find" (ed1), "never"→"need" (ed2), "todo"→"good" (ed2 via DL transposition), "fixme" lost. Root cause: these common words aren't in SymSpell dict
+- `src/nl/intent.rs:168-200` — `is_approve()` doesn't match comma-separated phrases like "perfect, ship it" because tokens are ["perfect", "ship", "it"] and multi_approvals has "ship it" not "perfect ship it"
+- `src/nl/intent.rs:202-227` — `is_reject()` has "never mind" but tokens become "need find" after typo correction
+- `src/nl/mod.rs:129-135` — Approve handler doesn't clear `state.current_workflow`, allowing double-approve
+- `src/nl/dialogue.rs:485` — `apply_skip` uses `slots.keywords.first()` which returns "skip" (the action word) instead of ".git" (the target)
+- `src/nl/dialogue.rs:668-682` — `resolve_step_index` falls through to op-name lookup when no step_ref, so "remove the step" looks for op "delete" instead of defaulting to last step
+- `src/nl/normalize.rs` — "remove" maps to "delete" (synonym), so "remove the step" becomes "delete the step" in canonical tokens
+
+### Red-team plan (nl-redteam) completed
+- `BUGS.md` — 12 bugs documented, 10 fixed, 1 deferred (multi-input ops), 1 by-design
+- `src/nl/typo.rs` — Added ~20 more words to SymSpell dict (mind, never, todo, fixme, etc.)
+- `src/nl/intent.rs` — Added 12 rejection patterns, compound approval logic with filler phrases
+- `src/nl/mod.rs` — Clear current_workflow on approve (fixes double-approve)
+- `src/nl/dialogue.rs` — apply_skip filters 25 action words; apply_remove defaults to last step for action-verb ops
+- `tests/nl_tests.rs` — 21 new red-team integration tests
+- **567 total tests, all passing, zero warnings**

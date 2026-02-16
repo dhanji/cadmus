@@ -482,7 +482,14 @@ fn apply_skip(
     state: &mut DialogueState,
 ) -> Result<(WorkflowDef, String), DialogueError> {
     // Determine what to skip
-    let skip_target = slots.keywords.first()
+    // Filter out edit-action words — the user says "skip .git" but "skip" itself
+    // ends up as a keyword. We want the actual target, not the action verb.
+    let action_words = ["skip", "exclude", "ignore", "omit", "filter",
+                        "remove", "delete", "drop", "hide", "subdirectory",
+                        "subdirectories", "subfolder", "subdir", "directory",
+                        "directories", "folder", "folders", "file", "files",
+                        "named", "called", "matching", "any", "every"];
+    let skip_target = slots.keywords.iter().find(|k| !action_words.contains(&k.as_str()))
         .or(slots.patterns.first())
         .ok_or_else(|| DialogueError::InvalidTarget(
             "What should I skip? Provide a name or pattern.".to_string()
@@ -525,7 +532,26 @@ fn apply_remove(
     slots: &ExtractedSlots,
     state: &mut DialogueState,
 ) -> Result<(WorkflowDef, String), DialogueError> {
-    let step_idx = resolve_step_index(wf, slots)?;
+    // Try to resolve the step. If the primary_op is an edit-action verb
+    // (e.g. "remove" → "delete" via synonym), it won't match any workflow step.
+    // In that case, default to the last step — "remove the step" means "remove the last step".
+    let step_idx = match resolve_step_index(wf, slots) {
+        Ok(idx) => idx,
+        Err(_) => {
+            // Check if the "op" is actually an edit-action verb, not a real workflow op
+            let action_verbs = ["delete", "remove", "drop", "cut"];
+            let is_action_verb = slots.primary_op.as_ref()
+                .map(|op| action_verbs.contains(&op.as_str()))
+                .unwrap_or(false);
+            if is_action_verb && !wf.steps.is_empty() {
+                wf.steps.len() - 1 // default to last step
+            } else {
+                return Err(DialogueError::InvalidTarget(
+                    "Which step? Provide a step number or operation name.".to_string()
+                ));
+            }
+        }
+    };
 
     let removed_op = wf.steps[step_idx].op.clone();
     wf.steps.remove(step_idx);
@@ -1196,5 +1222,95 @@ mod tests {
             let compiled = crate::workflow::compile_workflow(&parsed, &registry);
             assert!(compiled.is_ok(), "{} workflow should compile: {:?}", op_name, compiled.err());
         }
+    }
+
+    #[test]
+    fn test_skip_filter_extracts_target_not_action_word() {
+        // "skip any subdirectory named .git" → keywords include "skip", "subdirectory", ".git"
+        // apply_skip should use ".git", not "skip"
+        let mut state = DialogueState::new();
+        let extracted = crate::nl::slots::extract_slots(
+            &["skip", "subdirectory", "named", ".git"]
+                .iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        );
+
+        // Build a base workflow with walk_tree
+        let base_extracted = crate::nl::slots::extract_slots(
+            &["walk_tree", "~/Downloads"]
+                .iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        );
+        let mut wf = build_workflow(&Some("walk_tree".to_string()), &base_extracted, None).unwrap();
+        wf.steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::None });
+
+        let (edited, desc) = apply_skip(&mut wf.clone(), &extracted, &mut state).unwrap();
+
+        // The filter should exclude ".git", not "skip"
+        let filter_step = edited.steps.iter().find(|s| s.op == "filter").unwrap();
+        match &filter_step.args {
+            StepArgs::Map(m) => {
+                let exclude = m.get("exclude").unwrap();
+                assert_eq!(exclude, ".git", "filter should exclude '.git', got '{}'", exclude);
+            }
+            other => panic!("expected Map args, got: {:?}", other),
+        }
+        assert!(desc.contains("skip"), "description should mention skip: {}", desc);
+    }
+
+    #[test]
+    fn test_skip_without_target_errors() {
+        let mut state = DialogueState::new();
+        let extracted = crate::nl::slots::extract_slots(
+            &["skip"].iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        );
+        let mut wf = build_workflow(&Some("walk_tree".to_string()), &extracted, None).unwrap();
+        let result = apply_skip(&mut wf, &extracted, &mut state);
+        assert!(result.is_err(), "skip without target should error");
+    }
+
+    #[test]
+    fn test_remove_the_step_defaults_to_last() {
+        // "remove the step" → tokens ["delete", "the", "step"]
+        // "delete" becomes primary_op, but it's an action verb, not a workflow op
+        let mut state = DialogueState::new();
+
+        // Build a 3-step workflow
+        let extracted = crate::nl::slots::extract_slots(
+            &["find_matching", "~/Documents"]
+                .iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        );
+        let wf = build_workflow(&Some("find_matching".to_string()), &extracted, None).unwrap();
+        let original_len = wf.steps.len();
+        assert!(original_len >= 2, "need at least 2 steps, got {}", original_len);
+
+        let last_op = wf.steps.last().unwrap().op.clone();
+
+        // Simulate "remove the step" — slots have primary_op = "delete"
+        let remove_slots = crate::nl::slots::extract_slots(
+            &["delete", "the", "step"]
+                .iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        );
+
+        let (edited, desc) = apply_remove(&mut wf.clone(), &remove_slots, &mut state).unwrap();
+        assert_eq!(edited.steps.len(), original_len - 1, "should have removed one step");
+        assert!(desc.contains(&last_op), "should have removed last op '{}': {}", last_op, desc);
+    }
+
+    #[test]
+    fn test_remove_step_1_still_works() {
+        let mut state = DialogueState::new();
+        let extracted = crate::nl::slots::extract_slots(
+            &["find_matching", "~/Documents"]
+                .iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        );
+        let wf = build_workflow(&Some("find_matching".to_string()), &extracted, None).unwrap();
+        let first_op = wf.steps[0].op.clone();
+
+        // "remove step 1" — has a step ref
+        let remove_slots = crate::nl::slots::extract_slots(
+            &["delete", "step", "1"]
+                .iter().map(|s| s.to_string()).collect::<Vec<_>>()
+        );
+        let (_edited, desc) = apply_remove(&mut wf.clone(), &remove_slots, &mut state).unwrap();
+        assert!(desc.contains(&first_op), "should have removed first op '{}': {}", first_op, desc);
     }
 }
