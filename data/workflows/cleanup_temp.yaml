@@ -1,0 +1,12 @@
+# Workflow: Cleanup Temp
+# ======================
+# Find old temporary files and list them for review.
+
+workflow: "cleanup_temp"
+inputs:
+  path: "/tmp"
+steps:
+  - walk_tree
+  - filter:
+      pattern: "*.tmp"
+  - sort_by: name

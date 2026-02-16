@@ -205,12 +205,16 @@ impl ReasonerStrategy for ComparisonStrategy {
     type Output = ReasoningOutput;
 
     fn build_registry(&self) -> OperationRegistry {
-        // The comparison strategy uses the existing OperationKind system.
-        // We register each as a generic op in the registry.
-        // However, the actual execution still goes through the existing pipeline
-        // executors — the registry is used for type-directed planning validation.
         let mut reg = OperationRegistry::new();
 
+        // Load type signatures from YAML ops pack (source of truth for what ops exist).
+        // The poly ops enable type-directed planning via TypeExpr unification.
+        const COMPARISON_OPS_YAML: &str = include_str!("../data/comparison_ops.yaml");
+        crate::registry::load_ops_pack_str_into(COMPARISON_OPS_YAML, &mut reg)
+            .expect("embedded comparison_ops.yaml should always parse");
+
+        // Also register monomorphic ops with exec bindings for the classic planner path.
+        // These stub exec bindings exist because actual execution goes through execute_node().
         use crate::registry::{AlgebraicProperties, OpSignature};
 
         reg.register(

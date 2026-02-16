@@ -27,6 +27,12 @@ axes:
         name: "Archive Tools"
       - id: search_tools
         name: "Search Tools"
+      - id: text_tools
+        name: "Text Processing Tools"
+      - id: macos_tools
+        name: "macOS-Specific Tools"
+      - id: network_tools
+        name: "Network Tools"
 
   - id: permissions
     name: "File Permissions"
@@ -354,3 +360,293 @@ claims:
     properties:
       command: "nonexistent_tool_xyz"
       note: "Fact packs can contain incorrect claims — the engine reasons about them"
+
+  # =========================================================================
+  # Phase 1: File Lifecycle Tools
+  # =========================================================================
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "cp copies files and directories"
+    confidence: 1.0
+    evidence:
+      - "man cp — copy files"
+      - "Flags: -r (recursive), -p (preserve attributes), -a (archive mode)"
+    properties:
+      command: "cp"
+      type_signature: "File(a), Path → File(a)"
+      common_flags: ["-r", "-p", "-a", "-v"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "rm removes files and directories"
+    confidence: 1.0
+    evidence:
+      - "man rm — remove directory entries"
+      - "Flags: -r (recursive), -f (force), -i (interactive)"
+    properties:
+      command: "rm"
+      type_signature: "Entry(Name, a) → Unit"
+      common_flags: ["-r", "-f", "-i", "-v"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "mkdir creates directories"
+    confidence: 1.0
+    evidence:
+      - "man mkdir — make directories"
+      - "Flag: -p creates intermediate directories as needed"
+    properties:
+      command: "mkdir"
+      type_signature: "Path → Dir(Bytes)"
+      common_flags: ["-p", "-v"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "ln creates links between files"
+    confidence: 1.0
+    evidence:
+      - "man ln — make links"
+      - "Flag: -s creates symbolic (soft) links"
+    properties:
+      command: "ln"
+      type_signature: "Path, Path → Entry(Name, Bytes)"
+      common_flags: ["-s", "-f", "-v"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "chmod changes file permissions"
+    confidence: 1.0
+    evidence:
+      - "man chmod — change file modes"
+      - "Supports octal (755) and symbolic (u+x) modes"
+    properties:
+      command: "chmod"
+      type_signature: "Path, Permissions → Unit"
+      common_flags: ["-R", "-v"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: core_utils
+    claim: "chown changes file ownership"
+    confidence: 1.0
+    evidence:
+      - "man chown — change file owner and group"
+      - "Format: user:group"
+    properties:
+      command: "chown"
+      type_signature: "Path, Owner → Unit"
+      common_flags: ["-R", "-v"]
+
+  # =========================================================================
+  # Phase 2: Text Processing Tools
+  # =========================================================================
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: text_tools
+    claim: "sed performs stream editing for text transformation"
+    confidence: 1.0
+    evidence:
+      - "man sed — stream editor"
+      - "sed 's/pattern/replacement/g' for global substitution"
+    properties:
+      command: "sed"
+      type_signature: "File(a), Pattern, Text → File(a)"
+      common_flags: ["-i", "-E", "-n"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: text_tools
+    claim: "head outputs the first part of files"
+    confidence: 1.0
+    evidence:
+      - "man head — display first lines of a file"
+      - "head -n 10 shows first 10 lines"
+    properties:
+      command: "head"
+      type_signature: "File(Text), Count → File(Text)"
+      common_flags: ["-n", "-c"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: text_tools
+    claim: "tail outputs the last part of files"
+    confidence: 1.0
+    evidence:
+      - "man tail — display the last part of a file"
+      - "tail -n 20 shows last 20 lines, tail -f follows"
+    properties:
+      command: "tail"
+      type_signature: "File(Text), Count → File(Text)"
+      common_flags: ["-n", "-f", "-c"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: text_tools
+    claim: "sort with -u flag deduplicates lines"
+    confidence: 1.0
+    evidence:
+      - "man sort — sort or merge records (lines) of text"
+      - "sort -u removes duplicate lines"
+    properties:
+      command: "sort -u"
+      type_signature: "Seq(Line) → Seq(Line)"
+      common_flags: ["-u", "-r", "-n", "-k"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: text_tools
+    claim: "wc counts lines, words, and characters"
+    confidence: 1.0
+    evidence:
+      - "man wc — word, line, character, and byte count"
+      - "wc -l counts lines"
+    properties:
+      command: "wc"
+      type_signature: "Seq(a) → Count"
+      common_flags: ["-l", "-w", "-c", "-m"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: text_tools
+    claim: "diff compares files line by line"
+    confidence: 1.0
+    evidence:
+      - "man diff — compare files line by line"
+      - "Outputs unified diff format with -u flag"
+    properties:
+      command: "diff"
+      type_signature: "File(Text), File(Text) → Diff"
+      common_flags: ["-u", "-r", "-q", "--color"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: text_tools
+    claim: "shasum computes SHA checksums"
+    confidence: 1.0
+    evidence:
+      - "man shasum — print or check SHA checksums"
+      - "shasum -a 256 for SHA-256"
+    properties:
+      command: "shasum"
+      type_signature: "File(a) → Hash"
+      common_flags: ["-a 256", "-a 512", "-c"]
+
+  # =========================================================================
+  # Phase 4: macOS-Specific Tools
+  # =========================================================================
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: macos_tools
+    claim: "mdfind searches using Spotlight metadata"
+    confidence: 1.0
+    evidence:
+      - "man mdfind — finds files matching a given query"
+      - "Uses Spotlight index for fast search"
+    properties:
+      command: "mdfind"
+      type_signature: "Pattern → Seq(Entry(Name, Bytes))"
+      common_flags: ["-name", "-onlyin", "-live"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: macos_tools
+    claim: "xattr manages extended attributes on files"
+    confidence: 1.0
+    evidence:
+      - "man xattr — display and manipulate extended attributes"
+      - "xattr -p reads, -w writes, -d deletes attributes"
+    properties:
+      command: "xattr"
+      type_signature: "Path, XattrKey → XattrValue"
+      common_flags: ["-p", "-w", "-d", "-l", "-r", "-c"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: macos_tools
+    claim: "open launches files and applications"
+    confidence: 1.0
+    evidence:
+      - "man open — open files and directories"
+      - "open -a specifies application, open -R reveals in Finder"
+    properties:
+      command: "open"
+      type_signature: "Path → Unit"
+      common_flags: ["-a", "-R", "-e", "-t", "-W"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: macos_tools
+    claim: "pbcopy and pbpaste access the macOS clipboard"
+    confidence: 1.0
+    evidence:
+      - "man pbcopy — copy stdin to clipboard"
+      - "man pbpaste — paste clipboard to stdout"
+    properties:
+      commands: ["pbcopy", "pbpaste"]
+      type_signature_copy: "a → Unit"
+      type_signature_paste: "→ Text"
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: macos_tools
+    claim: "defaults and plutil read and write plist files"
+    confidence: 1.0
+    evidence:
+      - "man defaults — access macOS user defaults system"
+      - "man plutil — property list utility"
+    properties:
+      commands: ["defaults", "plutil"]
+      type_signature_read: "File(Plist) → Plist"
+      type_signature_write: "Plist, Path → File(Plist)"
+
+  # =========================================================================
+  # Phase 5: Network Tools
+  # =========================================================================
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: network_tools
+    claim: "curl transfers data from or to a server"
+    confidence: 1.0
+    evidence:
+      - "man curl — transfer a URL"
+      - "curl -O downloads, curl -T uploads"
+    properties:
+      command: "curl"
+      type_signature_download: "URL → File(Bytes)"
+      type_signature_upload: "File(a), URL → Unit"
+      common_flags: ["-O", "-L", "-T", "-s", "-o"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: network_tools
+    claim: "rsync synchronizes files and directories"
+    confidence: 1.0
+    evidence:
+      - "man rsync — a fast, versatile, remote (and local) file-copying tool"
+      - "rsync -a for archive mode (preserves permissions, timestamps)"
+    properties:
+      command: "rsync"
+      type_signature: "Dir(a), Path → Dir(a)"
+      common_flags: ["-a", "-v", "--delete", "--dry-run", "-z"]
+
+  - entity: macos_fs
+    axis: tools
+    sub_axis: network_tools
+    claim: "scp copies files between hosts over SSH"
+    confidence: 1.0
+    evidence:
+      - "man scp — OpenSSH secure file copy"
+      - "scp local_file user@host:remote_path"
+    properties:
+      command: "scp"
+      type_signature: "File(a), URL → Unit"
+      common_flags: ["-r", "-P", "-i", "-v"]

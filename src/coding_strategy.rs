@@ -77,6 +77,13 @@ impl ReasonerStrategy for CodingStrategy {
     fn build_registry(&self) -> OperationRegistry {
         let mut reg = OperationRegistry::new();
 
+        // Load type signatures from YAML ops pack (source of truth for what ops exist).
+        // The poly ops enable type-directed planning via TypeExpr unification.
+        const CODING_OPS_YAML: &str = include_str!("../data/coding_ops.yaml");
+        crate::registry::load_ops_pack_str_into(CODING_OPS_YAML, &mut reg)
+            .expect("embedded coding_ops.yaml should always parse");
+
+        // Also register monomorphic ops with exec bindings for the classic planner path.
         // parse_source: SourceCode → AST
         reg.register(
             "parse_source",

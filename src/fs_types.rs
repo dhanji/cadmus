@@ -1,5 +1,4 @@
-use crate::registry::{AlgebraicProperties, OperationRegistry, PolyOpSignature};
-use crate::type_expr::TypeExpr;
+use crate::registry::{OperationRegistry, load_ops_pack, load_ops_pack_str};
 
 // ---------------------------------------------------------------------------
 // Filesystem type vocabulary
@@ -7,232 +6,27 @@ use crate::type_expr::TypeExpr;
 //
 // Primitives:  Path, Bytes, Name, Text, Line, Pattern, Metadata
 // Constructors: File(content), Dir(entry), Archive(content, format),
-//               Seq(elem), Entry(key, val), Match(pattern, val), Tree(node)
+//               Seq(elem), Entry(key, val), Match(pattern, val), Tree(node),
+//               Option(inner)
 // Format tags:  Zip, Cbz, Tar, TarGz
 
+/// The embedded filesystem ops pack YAML, used as fallback when the file
+/// is not found on disk.
+const FS_OPS_YAML: &str = include_str!("../data/fs_ops.yaml");
+
 /// Build and return an OperationRegistry populated with the filesystem
-/// type vocabulary: ~15 polymorphic operations covering directory listing,
-/// file I/O, archive manipulation, search, filtering, and renaming.
+/// type vocabulary from the ops pack YAML.
+///
+/// Tries to load from `data/fs_ops.yaml` on disk first (so edits take
+/// effect without recompilation). Falls back to the embedded copy.
 pub fn build_fs_registry() -> OperationRegistry {
-    let mut reg = OperationRegistry::new();
-
-    // 1. list_dir<a>: Dir(a) → Seq(Entry(Name, a))
-    //    Lists directory contents as name-value pairs.
-    reg.register_poly(
-        "list_dir",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![TypeExpr::dir(TypeExpr::var("a"))],
-            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
-        ),
-        AlgebraicProperties::none(),
-        "ls — list directory contents",
-    );
-
-    // 2. read_file<a>: File(a) → a
-    //    Read file contents.
-    reg.register_poly(
-        "read_file",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![TypeExpr::file(TypeExpr::var("a"))],
-            TypeExpr::var("a"),
-        ),
-        AlgebraicProperties::none(),
-        "cat — read file contents",
-    );
-
-    // 3. write_file<a>: a, Path → File(a)
-    //    Write content to a file at the given path.
-    reg.register_poly(
-        "write_file",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![TypeExpr::var("a"), TypeExpr::prim("Path")],
-            TypeExpr::file(TypeExpr::var("a")),
-        ),
-        AlgebraicProperties::none(),
-        "write content to file at path",
-    );
-
-    // 4. stat: Path → Metadata
-    //    Get file/directory metadata (size, mtime, permissions).
-    reg.register_poly(
-        "stat",
-        PolyOpSignature::mono(
-            vec![TypeExpr::prim("Path")],
-            TypeExpr::prim("Metadata"),
-        ),
-        AlgebraicProperties { idempotent: true, ..Default::default() },
-        "stat — get file metadata",
-    );
-
-    // 5. walk_tree<a>: Dir(a) → Tree(Entry(Name, a))
-    //    Recursively walk a directory tree.
-    reg.register_poly(
-        "walk_tree",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![TypeExpr::dir(TypeExpr::var("a"))],
-            TypeExpr::tree(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
-        ),
-        AlgebraicProperties::none(),
-        "find — recursively walk directory tree",
-    );
-
-    // 6. filter<a>: Seq(a), Pattern → Seq(a)
-    //    Filter a sequence by a pattern. Idempotent.
-    reg.register_poly(
-        "filter",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![TypeExpr::seq(TypeExpr::var("a")), TypeExpr::prim("Pattern")],
-            TypeExpr::seq(TypeExpr::var("a")),
-        ),
-        AlgebraicProperties { idempotent: true, ..Default::default() },
-        "grep/filter — filter sequence by pattern",
-    );
-
-    // 7. sort_by<a>: Seq(a) → Seq(a)
-    //    Sort a sequence. Idempotent.
-    reg.register_poly(
-        "sort_by",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![TypeExpr::seq(TypeExpr::var("a"))],
-            TypeExpr::seq(TypeExpr::var("a")),
-        ),
-        AlgebraicProperties { idempotent: true, ..Default::default() },
-        "sort — sort sequence elements",
-    );
-
-    // 8. extract_archive<a, fmt>: File(Archive(a, fmt)) → Seq(Entry(Name, a))
-    //    Extract archive contents.
-    reg.register_poly(
-        "extract_archive",
-        PolyOpSignature::new(
-            vec!["a".into(), "fmt".into()],
-            vec![TypeExpr::file(TypeExpr::archive(TypeExpr::var("a"), TypeExpr::var("fmt")))],
-            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
-        ),
-        AlgebraicProperties::none(),
-        "unzip/tar -x — extract archive contents",
-    );
-
-    // 9. pack_archive<a, fmt>: Seq(Entry(Name, a)), fmt → File(Archive(a, fmt))
-    //    Pack entries into an archive.
-    reg.register_poly(
-        "pack_archive",
-        PolyOpSignature::new(
-            vec!["a".into(), "fmt".into()],
-            vec![
-                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
-                TypeExpr::var("fmt"),
-            ],
-            TypeExpr::file(TypeExpr::archive(TypeExpr::var("a"), TypeExpr::var("fmt"))),
-        ),
-        AlgebraicProperties::none(),
-        "zip/tar -c — pack entries into archive",
-    );
-
-    // 10. concat_seq<a>: Seq(a), Seq(a) → Seq(a)
-    //     Concatenate two sequences. Associative but NOT commutative (order matters).
-    reg.register_poly(
-        "concat_seq",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![TypeExpr::seq(TypeExpr::var("a")), TypeExpr::seq(TypeExpr::var("a"))],
-            TypeExpr::seq(TypeExpr::var("a")),
-        ),
-        AlgebraicProperties {
-            associative: true,
-            commutative: false,
-            identity: Some("[]".to_string()),
-            ..Default::default()
-        },
-        "cat/concat — concatenate sequences (order-preserving)",
-    );
-
-    // 11. rename: Entry(Name, a), Name → Entry(Name, a)
-    //     Rename an entry (change its name, keep its value).
-    reg.register_poly(
-        "rename",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![
-                TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a")),
-                TypeExpr::prim("Name"),
-            ],
-            TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a")),
-        ),
-        AlgebraicProperties::none(),
-        "mv — rename entry",
-    );
-
-    // 12. move_entry: Entry(Name, a), Path → Entry(Name, a)
-    //     Move an entry to a new location.
-    reg.register_poly(
-        "move_entry",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![
-                TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a")),
-                TypeExpr::prim("Path"),
-            ],
-            TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a")),
-        ),
-        AlgebraicProperties::none(),
-        "mv — move entry to new path",
-    );
-
-    // 13. search_content: Seq(Entry(Name, File(Text))), Pattern → Seq(Match(Pattern, Line))
-    //     Search file contents for a pattern.
-    reg.register_poly(
-        "search_content",
-        PolyOpSignature::mono(
-            vec![
-                TypeExpr::seq(TypeExpr::entry(
-                    TypeExpr::prim("Name"),
-                    TypeExpr::file(TypeExpr::prim("Text")),
-                )),
-                TypeExpr::prim("Pattern"),
-            ],
-            TypeExpr::seq(TypeExpr::match_type(TypeExpr::prim("Pattern"), TypeExpr::prim("Line"))),
-        ),
-        AlgebraicProperties::none(),
-        "grep — search file contents for pattern",
-    );
-
-    // 14. find_matching<a>: Pattern, Seq(Entry(Name, a)) → Seq(Entry(Name, a))
-    //     Filter entries whose names match a pattern.
-    reg.register_poly(
-        "find_matching",
-        PolyOpSignature::new(
-            vec!["a".into()],
-            vec![
-                TypeExpr::prim("Pattern"),
-                TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
-            ],
-            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))),
-        ),
-        AlgebraicProperties { idempotent: true, ..Default::default() },
-        "find -name — filter entries by name pattern",
-    );
-
-    // 15. map_entries<a, b>: Seq(Entry(Name, a)) → Seq(Entry(Name, b))
-    //     Transform entry values (requires an op a→b to be available).
-    reg.register_poly(
-        "map_entries",
-        PolyOpSignature::new(
-            vec!["a".into(), "b".into()],
-            vec![TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a")))],
-            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("b"))),
-        ),
-        AlgebraicProperties::none(),
-        "xargs/map — transform entry values",
-    );
-
-    reg
+    // Try disk first
+    if let Ok(reg) = load_ops_pack("data/fs_ops.yaml") {
+        return reg;
+    }
+    // Fallback to embedded
+    load_ops_pack_str(FS_OPS_YAML)
+        .expect("embedded fs_ops.yaml should always parse")
 }
 
 // ---------------------------------------------------------------------------
@@ -242,19 +36,33 @@ pub fn build_fs_registry() -> OperationRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use crate::type_expr::TypeExpr;
 
     #[test]
     fn test_all_ops_registered() {
         let reg = build_fs_registry();
         let names = reg.poly_op_names();
-        assert!(names.len() >= 15, "expected at least 15 ops, got {}", names.len());
+        assert!(names.len() >= 49, "expected at least 49 ops, got {}", names.len());
 
         let expected = vec![
+            // Original 15 + walk_tree_hierarchy + flatten_tree
             "list_dir", "read_file", "write_file", "stat", "walk_tree",
+            "walk_tree_hierarchy", "flatten_tree",
             "filter", "sort_by", "extract_archive", "pack_archive",
             "concat_seq", "rename", "move_entry", "search_content",
             "find_matching", "map_entries",
+            // Phase 1: file lifecycle
+            "copy", "delete", "create_dir", "create_link", "set_permissions", "set_owner",
+            // Phase 2: content transforms
+            "replace", "head", "tail", "unique", "count", "diff", "checksum",
+            // Phase 3: metadata accessors
+            "get_size", "get_mtime", "get_permissions", "get_file_type",
+            // Phase 4: macOS-specific
+            "spotlight_search", "get_xattr", "set_xattr", "remove_xattr",
+            "remove_quarantine", "open_file", "open_with", "reveal",
+            "clipboard_copy", "clipboard_paste", "read_plist", "write_plist",
+            // Phase 5: network
+            "download", "upload", "sync",
         ];
         for name in &expected {
             assert!(

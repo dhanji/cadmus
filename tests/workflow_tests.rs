@@ -228,3 +228,74 @@ steps:
     assert!(fm_step.command_hint.contains("hello"),
         "hint should contain expanded var: {}", fm_step.command_hint);
 }
+
+// ---------------------------------------------------------------------------
+// New workflow examples (Phases 1-5)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_workflow_copy_and_organize() {
+    let path = PathBuf::from("data/workflows/copy_and_organize.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("walk_tree") || display.contains("list_dir"),
+        "should walk/list: {}", display);
+    assert!(display.contains("sort_by"), "should sort: {}", display);
+}
+
+#[test]
+fn test_workflow_preview_log() {
+    let path = PathBuf::from("data/workflows/preview_log.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("walk_tree") || display.contains("find"),
+        "should walk: {}", display);
+    assert!(display.contains("sort_by"),
+        "should sort: {}", display);
+}
+
+#[test]
+fn test_workflow_find_duplicates() {
+    let path = PathBuf::from("data/workflows/find_duplicates.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("walk_tree") || display.contains("find"),
+        "should walk: {}", display);
+    assert!(display.contains("sort_by"), "should sort: {}", display);
+}
+
+#[test]
+fn test_workflow_cleanup_temp() {
+    let path = PathBuf::from("data/workflows/cleanup_temp.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("walk_tree") || display.contains("find"),
+        "should walk: {}", display);
+    assert!(display.contains("sort_by"), "should sort: {}", display);
+}
+
+#[test]
+fn test_workflow_spotlight_find() {
+    let path = PathBuf::from("data/workflows/spotlight_find.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("spotlight_search") || display.contains("mdfind"),
+        "should spotlight search: {}", display);
+    assert!(display.contains("sort_by"), "should sort: {}", display);
+}
+
+#[test]
+fn test_workflow_download_and_extract() {
+    let path = PathBuf::from("data/workflows/download_and_extract.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("extract_archive") || display.contains("unzip"),
+        "should extract: {}", display);
+    assert!(display.contains("sort_by"), "should sort: {}", display);
+}

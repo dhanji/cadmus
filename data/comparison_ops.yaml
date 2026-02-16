@@ -1,0 +1,41 @@
+# Comparison Strategy Operations Pack
+# ====================================
+# Domain-specific typed operations for comparative reasoning.
+# Used by ComparisonStrategy for type-directed planning.
+
+name: comparison
+description: "Comparative reasoning operations for analyzing claims, evidence, and contrasts"
+
+ops:
+  - name: retrieve_evidence
+    output: "Evidence"
+    description: "retrieve evidence from domain data"
+
+  - name: summarize_evidence
+    inputs: ["Evidence"]
+    output: "Claim"
+    description: "summarize evidence into a claim"
+
+  - name: compare_claims
+    inputs: ["Claim", "Claim"]
+    output: "Contrast"
+    properties:
+      commutative: true
+    description: "compare two claims to find contrasts"
+
+  - name: find_similarity
+    inputs: ["Claim", "Claim"]
+    output: "Similarity"
+    properties:
+      commutative: true
+    description: "find similarities between two claims"
+
+  - name: summarize_axis
+    inputs: ["Claim", "Contrast", "Similarity"]
+    output: "Summary"
+    description: "summarize an axis from claim, contrast, and similarity"
+
+  - name: surface_uncertainty
+    inputs: ["Claim"]
+    output: "Uncertainty"
+    description: "surface uncertainties in a claim"

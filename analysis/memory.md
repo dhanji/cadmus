@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-15T23:54:57Z | Size: 6.3k chars
+> Updated: 2026-02-16T03:22:49Z | Size: 7.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -57,3 +57,15 @@
 - `src/main.rs` — Updated to v0.3.0 with Strategy 3 filesystem dry-run demo.
 - **Total: 187 tests** (148 unit + 7 fs_integration + 14 generic_planner + 18 original), all passing, zero warnings.
 - **Key design**: TypeExpr is additive — existing TypeId-based strategies unchanged. Poly registry sits alongside monomorphic registry.
+
+### Workflow YAML DSL
+- `src/workflow.rs` [1-1200] - `WorkflowDef`, `RawStep`, `StepArgs`, `CompiledStep`, `CompiledWorkflow`, `WorkflowError`
+  - `parse_workflow()` - custom serde deserializer for step syntax (bare string / scalar / map)
+  - `compile_workflow()` - threads types through step chain, each mode, multi-input unification
+  - `execute_workflow()` - produces `DryRunTrace` from compiled workflow
+  - `run_workflow()` / `run_workflow_str()` - convenience functions
+  - `infer_input_type()` - heuristic type inference from input name/value
+- `data/workflows/` - example workflow YAML files (find_pdfs, extract_cbz, find_large_files)
+- `tests/workflow_tests.rs` - 11 integration tests
+- `src/main.rs` - `--workflow <path>` CLI flag, backward compatible no-args demo
+- Total tests: 221 (171 unit + 7 fs_integration + 14 generic_planner + 18 integration + 11 workflow)

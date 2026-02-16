@@ -78,6 +78,11 @@ impl TypeExpr {
         TypeExpr::Constructor("Match".to_string(), vec![pattern, val])
     }
 
+    /// Sugar: `Option(inner)` — represents an optional value.
+    pub fn option(inner: TypeExpr) -> Self {
+        TypeExpr::Constructor("Option".to_string(), vec![inner])
+    }
+
     /// Returns true if this type expression contains any type variables.
     pub fn has_vars(&self) -> bool {
         match self {
@@ -861,5 +866,64 @@ mod tests {
         assert_eq!(composed.get("a"), Some(&TypeExpr::prim("Bytes")));
         // s2 maps b→Bytes
         assert_eq!(composed.get("b"), Some(&TypeExpr::prim("Bytes")));
+    }
+
+    // --- Option(a) first-class constructor ---
+
+    #[test]
+    fn test_option_convenience_constructor() {
+        let ty = TypeExpr::option(TypeExpr::prim("Bytes"));
+        assert_eq!(ty, TypeExpr::Constructor("Option".to_string(), vec![TypeExpr::prim("Bytes")]));
+    }
+
+    #[test]
+    fn test_option_display() {
+        let ty = TypeExpr::option(TypeExpr::prim("Bytes"));
+        assert_eq!(ty.to_string(), "Option(Bytes)");
+    }
+
+    #[test]
+    fn test_option_parse_roundtrip() {
+        let ty = TypeExpr::parse("Option(Bytes)").unwrap();
+        assert_eq!(ty, TypeExpr::option(TypeExpr::prim("Bytes")));
+        assert_eq!(ty.to_string(), "Option(Bytes)");
+    }
+
+    #[test]
+    fn test_option_parse_with_var() {
+        let ty = TypeExpr::parse("Option(a)").unwrap();
+        assert_eq!(ty, TypeExpr::option(TypeExpr::var("a")));
+    }
+
+    #[test]
+    fn test_option_nested() {
+        let ty = TypeExpr::parse("Option(Option(Bytes))").unwrap();
+        assert_eq!(ty, TypeExpr::option(TypeExpr::option(TypeExpr::prim("Bytes"))));
+        assert_eq!(ty.to_string(), "Option(Option(Bytes))");
+    }
+
+    #[test]
+    fn test_option_unify_with_concrete() {
+        // Option(a) unifies with Option(Bytes) → {a → Bytes}
+        let left = TypeExpr::option(TypeExpr::var("a"));
+        let right = TypeExpr::option(TypeExpr::prim("Bytes"));
+        let subst = unify(&left, &right).unwrap();
+        assert_eq!(subst.get("a"), Some(&TypeExpr::prim("Bytes")));
+    }
+
+    #[test]
+    fn test_option_unify_mismatch() {
+        // Option(Bytes) vs Seq(Bytes) → constructor mismatch
+        let left = TypeExpr::option(TypeExpr::prim("Bytes"));
+        let right = TypeExpr::seq(TypeExpr::prim("Bytes"));
+        let err = unify(&left, &right).unwrap_err();
+        assert!(matches!(err, UnifyError::ConstructorMismatch { .. }));
+    }
+
+    #[test]
+    fn test_option_in_complex_type() {
+        // Seq(Entry(Name, Option(File(Bytes)))) round-trips
+        let ty = TypeExpr::parse("Seq(Entry(Name, Option(File(Bytes))))").unwrap();
+        assert_eq!(ty.to_string(), "Seq(Entry(Name, Option(File(Bytes))))");
     }
 }

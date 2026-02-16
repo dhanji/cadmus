@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::path::Path;
 use crate::type_expr::{TypeExpr, Substitution, unify};
+use serde::Deserialize;
 
 // ---------------------------------------------------------------------------
 // TypeId — strategy-defined type vocabulary
@@ -537,6 +539,165 @@ impl OperationRegistry {
 }
 
 // ---------------------------------------------------------------------------
+// YAML Ops Pack — load domain operations from YAML files
+// ---------------------------------------------------------------------------
+
+/// Error type for ops pack loading.
+#[derive(Debug)]
+pub enum OpsPackError {
+    /// I/O error reading the file
+    Io(std::io::Error),
+    /// YAML parsing error
+    Yaml(serde_yaml::Error),
+    /// Type signature parse error for a specific op
+    TypeParse {
+        op_name: String,
+        field: String,
+        source: String,
+        message: String,
+    },
+}
+
+impl fmt::Display for OpsPackError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OpsPackError::Io(e) => write!(f, "ops pack I/O error: {}", e),
+            OpsPackError::Yaml(e) => write!(f, "ops pack YAML error: {}", e),
+            OpsPackError::TypeParse { op_name, field, source, message } => {
+                write!(f, "ops pack type error in '{}' field '{}': {} (source: \"{}\")", op_name, field, message, source)
+            }
+        }
+    }
+}
+
+impl std::error::Error for OpsPackError {}
+
+impl From<std::io::Error> for OpsPackError {
+    fn from(e: std::io::Error) -> Self {
+        OpsPackError::Io(e)
+    }
+}
+
+impl From<serde_yaml::Error> for OpsPackError {
+    fn from(e: serde_yaml::Error) -> Self {
+        OpsPackError::Yaml(e)
+    }
+}
+
+/// YAML schema for an ops pack file.
+#[derive(Debug, Deserialize)]
+pub struct OpsPack {
+    /// Human-readable name for this ops pack
+    #[serde(default)]
+    pub name: String,
+    /// Description of the domain
+    #[serde(default)]
+    pub description: String,
+    /// The operation definitions
+    #[serde(default)]
+    pub ops: Vec<OpDef>,
+}
+
+/// YAML schema for a single operation definition.
+#[derive(Debug, Deserialize)]
+pub struct OpDef {
+    /// Operation name (e.g., "list_dir")
+    pub name: String,
+    /// Type parameter names (e.g., ["a", "fmt"]). Empty for monomorphic ops.
+    #[serde(default)]
+    pub type_params: Vec<String>,
+    /// Input type expressions as strings (e.g., ["Dir(a)"])
+    #[serde(default)]
+    pub inputs: Vec<String>,
+    /// Output type expression as string (e.g., "Seq(Entry(Name, a))")
+    pub output: String,
+    /// Algebraic properties
+    #[serde(default)]
+    pub properties: OpDefProperties,
+    /// Human-readable description / command hint for dry-run
+    #[serde(default)]
+    pub description: String,
+}
+
+/// YAML schema for algebraic properties.
+#[derive(Debug, Default, Deserialize)]
+pub struct OpDefProperties {
+    #[serde(default)]
+    pub commutative: bool,
+    #[serde(default)]
+    pub associative: bool,
+    #[serde(default)]
+    pub identity: Option<String>,
+    #[serde(default)]
+    pub absorbing: Option<String>,
+    #[serde(default)]
+    pub idempotent: bool,
+}
+
+impl From<OpDefProperties> for AlgebraicProperties {
+    fn from(p: OpDefProperties) -> Self {
+        AlgebraicProperties {
+            commutative: p.commutative,
+            associative: p.associative,
+            identity: p.identity,
+            absorbing: p.absorbing,
+            idempotent: p.idempotent,
+        }
+    }
+}
+
+/// Load an ops pack from a YAML string, returning a populated OperationRegistry.
+pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> {
+    let pack: OpsPack = serde_yaml::from_str(yaml)?;
+    let mut reg = OperationRegistry::new();
+
+    for op_def in pack.ops {
+        // Parse input type expressions
+        let inputs: Vec<TypeExpr> = op_def.inputs.iter().enumerate().map(|(i, s)| {
+            TypeExpr::parse(s).map_err(|e| OpsPackError::TypeParse {
+                op_name: op_def.name.clone(),
+                field: format!("inputs[{}]", i),
+                source: s.clone(),
+                message: e.to_string(),
+            })
+        }).collect::<Result<Vec<_>, _>>()?;
+
+        // Parse output type expression
+        let output = TypeExpr::parse(&op_def.output).map_err(|e| OpsPackError::TypeParse {
+            op_name: op_def.name.clone(),
+            field: "output".to_string(),
+            source: op_def.output.clone(),
+            message: e.to_string(),
+        })?;
+
+        let sig = PolyOpSignature::new(op_def.type_params, inputs, output);
+        let props: AlgebraicProperties = op_def.properties.into();
+
+        reg.register_poly(op_def.name, sig, props, op_def.description);
+    }
+
+    Ok(reg)
+}
+
+/// Load an ops pack from a YAML file path, returning a populated OperationRegistry.
+pub fn load_ops_pack(path: impl AsRef<Path>) -> Result<OperationRegistry, OpsPackError> {
+    let content = std::fs::read_to_string(path.as_ref())?;
+    load_ops_pack_str(&content)
+}
+
+/// Load an ops pack from a YAML string into an existing registry.
+pub fn load_ops_pack_str_into(yaml: &str, reg: &mut OperationRegistry) -> Result<(), OpsPackError> {
+    let loaded = load_ops_pack_str(yaml)?;
+    // Move all poly ops from loaded into reg
+    for name in loaded.poly_op_names() {
+        if let Some(op) = loaded.get_poly(name) {
+            reg.register_poly(&op.name, op.signature.clone(), op.properties.clone(), &op.description);
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -897,5 +1058,156 @@ mod tests {
         let names: Vec<&str> = matches.iter().map(|m| m.op.name.as_str()).collect();
         assert!(names.contains(&"list_dir"));
         assert!(names.contains(&"find_matching"));
+    }
+
+    // --- YAML ops pack loader tests ---
+
+    #[test]
+    fn test_load_ops_pack_basic() {
+        let yaml = r#"
+name: test_pack
+description: A test ops pack
+ops:
+  - name: list_dir
+    type_params: [a]
+    inputs: ["Dir(a)"]
+    output: "Seq(Entry(Name, a))"
+    description: "ls — list directory contents"
+"#;
+        let reg = load_ops_pack_str(yaml).unwrap();
+        let names = reg.poly_op_names();
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0], "list_dir");
+
+        let op = reg.get_poly("list_dir").unwrap();
+        assert_eq!(op.signature.type_params, vec!["a".to_string()]);
+        assert_eq!(op.signature.inputs.len(), 1);
+        assert_eq!(op.signature.inputs[0], TypeExpr::dir(TypeExpr::var("a")));
+        assert_eq!(op.signature.output, TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::var("a"))));
+        assert_eq!(op.description, "ls — list directory contents");
+    }
+
+    #[test]
+    fn test_load_ops_pack_with_properties() {
+        let yaml = r#"
+ops:
+  - name: unique
+    type_params: [a]
+    inputs: ["Seq(a)"]
+    output: "Seq(a)"
+    properties:
+      idempotent: true
+    description: "sort -u — deduplicate"
+  - name: concat_seq
+    type_params: [a]
+    inputs: ["Seq(a)", "Seq(a)"]
+    output: "Seq(a)"
+    properties:
+      associative: true
+      identity: "empty_seq"
+    description: "cat — concatenate sequences"
+"#;
+        let reg = load_ops_pack_str(yaml).unwrap();
+        assert_eq!(reg.poly_op_names().len(), 2);
+
+        let unique = reg.get_poly("unique").unwrap();
+        assert!(unique.properties.idempotent);
+        assert!(!unique.properties.commutative);
+
+        let concat = reg.get_poly("concat_seq").unwrap();
+        assert!(concat.properties.associative);
+        assert_eq!(concat.properties.identity, Some("empty_seq".to_string()));
+    }
+
+    #[test]
+    fn test_load_ops_pack_monomorphic() {
+        let yaml = r#"
+ops:
+  - name: stat
+    inputs: ["Path"]
+    output: "Metadata"
+    description: "stat — get file metadata"
+"#;
+        let reg = load_ops_pack_str(yaml).unwrap();
+        let op = reg.get_poly("stat").unwrap();
+        assert!(op.signature.type_params.is_empty());
+        assert_eq!(op.signature.inputs, vec![TypeExpr::prim("Path")]);
+        assert_eq!(op.signature.output, TypeExpr::prim("Metadata"));
+    }
+
+    #[test]
+    fn test_load_ops_pack_empty() {
+        let yaml = r#"
+name: empty
+ops: []
+"#;
+        let reg = load_ops_pack_str(yaml).unwrap();
+        assert!(reg.poly_op_names().is_empty());
+    }
+
+    #[test]
+    fn test_load_ops_pack_no_ops_field() {
+        let yaml = r#"
+name: minimal
+description: no ops defined
+"#;
+        let reg = load_ops_pack_str(yaml).unwrap();
+        assert!(reg.poly_op_names().is_empty());
+    }
+
+    #[test]
+    fn test_load_ops_pack_malformed_type() {
+        let yaml = r#"
+ops:
+  - name: bad_op
+    inputs: ["Dir("]
+    output: "Seq(a)"
+"#;
+        let err = load_ops_pack_str(yaml).unwrap_err();
+        match err {
+            OpsPackError::TypeParse { op_name, field, .. } => {
+                assert_eq!(op_name, "bad_op");
+                assert_eq!(field, "inputs[0]");
+            }
+            other => panic!("expected TypeParse error, got: {}", other),
+        }
+    }
+
+    #[test]
+    fn test_load_ops_pack_malformed_output() {
+        let yaml = r#"
+ops:
+  - name: bad_out
+    inputs: ["Path"]
+    output: ""
+"#;
+        let err = load_ops_pack_str(yaml).unwrap_err();
+        match err {
+            OpsPackError::TypeParse { op_name, field, .. } => {
+                assert_eq!(op_name, "bad_out");
+                assert_eq!(field, "output");
+            }
+            other => panic!("expected TypeParse error, got: {}", other),
+        }
+    }
+
+    #[test]
+    fn test_load_ops_pack_lookup_works() {
+        let yaml = r#"
+ops:
+  - name: read_file
+    type_params: [a]
+    inputs: ["File(a)"]
+    output: "a"
+    description: "cat — read file contents"
+"#;
+        let reg = load_ops_pack_str(yaml).unwrap();
+        // Look up: what produces Bytes?
+        let target = TypeExpr::prim("Bytes");
+        let matches = reg.ops_for_output_expr(&target);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].op.name, "read_file");
+        // Input should be File(Bytes)
+        assert_eq!(matches[0].concrete_inputs[0], TypeExpr::file(TypeExpr::prim("Bytes")));
     }
 }

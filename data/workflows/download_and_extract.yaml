@@ -1,0 +1,10 @@
+# Workflow: Download and Extract
+# ==============================
+# Given an archive file, extract its contents and sort them.
+
+workflow: "download_and_extract"
+inputs:
+  archive: "archive.zip"
+steps:
+  - extract_archive
+  - sort_by: name

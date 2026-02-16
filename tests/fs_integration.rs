@@ -142,11 +142,11 @@ fn test_zip_round_trip_plan() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Dir Tree Walk: plan walk_tree on nested directory
+// 3. Dir Tree Walk: plan walk_tree_hierarchy on nested directory (Tree output)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_dir_tree_walk_plan() {
+fn test_dir_tree_walk_hierarchy_plan() {
     let strategy = FilesystemStrategy::new();
 
     // Goal: Tree(Entry(Name, Bytes)) — recursive directory tree
@@ -168,8 +168,8 @@ fn test_dir_tree_walk_plan() {
         .filter(|s| s.kind == StepKind::Op)
         .map(|s| s.op_name.as_str())
         .collect();
-    assert!(op_names.contains(&"walk_tree"),
-        "dir walk should use walk_tree, got: {:?}", op_names);
+    assert!(op_names.contains(&"walk_tree_hierarchy"),
+        "dir walk for Tree target should use walk_tree_hierarchy, got: {:?}", op_names);
 
     // Verify trace mentions find (the underlying command)
     let display = trace.to_string();
@@ -183,6 +183,38 @@ fn test_dir_tree_walk_plan() {
         .unwrap();
     assert!(last_op.output.contains("Tree"),
         "output should be Tree type, got: {}", last_op.output);
+}
+
+// ---------------------------------------------------------------------------
+// 3b. Dir Flat Walk: plan walk_tree on nested directory (Seq output)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_dir_flat_walk_plan() {
+    let strategy = FilesystemStrategy::new();
+
+    // Goal: Seq(Entry(Name, Bytes)) — flat recursive listing
+    let target = TypeExpr::seq(TypeExpr::entry(
+        TypeExpr::prim("Name"),
+        TypeExpr::prim("Bytes"),
+    ));
+    let available = vec![
+        ExprLiteral::new(
+            "project_dir",
+            TypeExpr::dir(TypeExpr::prim("Bytes")),
+            "/home/user/project — deeply nested directory",
+        ),
+    ];
+
+    let trace = strategy.dry_run(target, available).unwrap();
+
+    let op_names: Vec<&str> = trace.steps.iter()
+        .filter(|s| s.kind == StepKind::Op)
+        .map(|s| s.op_name.as_str())
+        .collect();
+    // walk_tree now returns Seq, so it should be used for flat listing
+    assert!(op_names.contains(&"walk_tree") || op_names.contains(&"list_dir"),
+        "flat walk should use walk_tree or list_dir, got: {:?}", op_names);
 }
 
 // ---------------------------------------------------------------------------
@@ -296,5 +328,177 @@ fn test_repack_no_inputs_fails() {
 fn test_fs_strategy_registry_has_all_ops() {
     let strategy = FilesystemStrategy::new();
     let names = strategy.registry().poly_op_names();
-    assert!(names.len() >= 15, "should have at least 15 ops, got {}", names.len());
+    assert!(names.len() >= 49, "should have at least 49 ops, got {}", names.len());
+}
+
+// ===========================================================================
+// Phase 1-5 Op Signature & Property Tests
+// ===========================================================================
+
+use reasoning_engine::fs_types::build_fs_registry;
+
+// --- Phase 1: File Lifecycle ---
+
+#[test]
+fn test_copy_signature_and_properties() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("copy").unwrap();
+    assert_eq!(op.signature.inputs.len(), 2);
+    assert!(op.properties.idempotent, "copy should be idempotent");
+}
+
+#[test]
+fn test_delete_not_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("delete").unwrap();
+    assert!(!op.properties.idempotent, "delete should NOT be idempotent");
+    // delete returns Unit
+    assert_eq!(op.signature.output, TypeExpr::prim("Unit"));
+}
+
+#[test]
+fn test_create_dir_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("create_dir").unwrap();
+    assert!(op.properties.idempotent, "create_dir should be idempotent (mkdir -p)");
+}
+
+#[test]
+fn test_set_permissions_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("set_permissions").unwrap();
+    assert!(op.properties.idempotent);
+    assert_eq!(op.signature.output, TypeExpr::prim("Unit"));
+}
+
+// --- Phase 2: Content Transforms ---
+
+#[test]
+fn test_replace_not_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("replace").unwrap();
+    assert!(!op.properties.idempotent, "replace should NOT be idempotent");
+    assert_eq!(op.signature.inputs.len(), 3); // File(a), Pattern, Text
+}
+
+#[test]
+fn test_head_tail_idempotent() {
+    let reg = build_fs_registry();
+    let head = reg.get_poly("head").unwrap();
+    let tail = reg.get_poly("tail").unwrap();
+    assert!(head.properties.idempotent);
+    assert!(tail.properties.idempotent);
+}
+
+#[test]
+fn test_unique_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("unique").unwrap();
+    assert!(op.properties.idempotent, "unique should be idempotent");
+}
+
+#[test]
+fn test_count_returns_count_not_seq() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("count").unwrap();
+    assert_eq!(op.signature.output, TypeExpr::prim("Count"));
+}
+
+#[test]
+fn test_checksum_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("checksum").unwrap();
+    assert!(op.properties.idempotent);
+    assert_eq!(op.signature.output, TypeExpr::prim("Hash"));
+}
+
+#[test]
+fn test_diff_returns_diff() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("diff").unwrap();
+    assert_eq!(op.signature.output, TypeExpr::prim("Diff"));
+    assert_eq!(op.signature.inputs.len(), 2);
+}
+
+// --- Phase 3: Metadata Accessors ---
+
+#[test]
+fn test_metadata_accessors_all_idempotent() {
+    let reg = build_fs_registry();
+    for name in &["get_size", "get_mtime", "get_permissions", "get_file_type"] {
+        let op = reg.get_poly(name).unwrap();
+        assert!(op.properties.idempotent, "{} should be idempotent", name);
+        assert_eq!(op.signature.inputs.len(), 1, "{} takes 1 input", name);
+        assert_eq!(op.signature.inputs[0], TypeExpr::prim("Metadata"),
+            "{} input should be Metadata", name);
+    }
+}
+
+#[test]
+fn test_metadata_accessor_output_types() {
+    let reg = build_fs_registry();
+    assert_eq!(reg.get_poly("get_size").unwrap().signature.output, TypeExpr::prim("Size"));
+    assert_eq!(reg.get_poly("get_mtime").unwrap().signature.output, TypeExpr::prim("Timestamp"));
+    assert_eq!(reg.get_poly("get_permissions").unwrap().signature.output, TypeExpr::prim("Permissions"));
+    assert_eq!(reg.get_poly("get_file_type").unwrap().signature.output, TypeExpr::prim("FileType"));
+}
+
+// --- Phase 4: macOS-Specific ---
+
+#[test]
+fn test_side_effect_ops_return_unit() {
+    let reg = build_fs_registry();
+    for name in &["open_file", "reveal", "clipboard_copy", "set_xattr",
+                   "remove_xattr", "remove_quarantine", "set_permissions", "set_owner"] {
+        let op = reg.get_poly(name).unwrap();
+        assert_eq!(op.signature.output, TypeExpr::prim("Unit"),
+            "{} should return Unit", name);
+    }
+}
+
+#[test]
+fn test_remove_quarantine_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("remove_quarantine").unwrap();
+    assert!(op.properties.idempotent);
+}
+
+#[test]
+fn test_read_plist_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("read_plist").unwrap();
+    assert!(op.properties.idempotent);
+}
+
+// --- Phase 5: Network ---
+
+#[test]
+fn test_download_produces_file_bytes() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("download").unwrap();
+    assert_eq!(op.signature.inputs[0], TypeExpr::prim("URL"));
+    assert_eq!(op.signature.output, TypeExpr::file(TypeExpr::prim("Bytes")));
+}
+
+#[test]
+fn test_upload_returns_unit() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("upload").unwrap();
+    assert_eq!(op.signature.output, TypeExpr::prim("Unit"));
+}
+
+#[test]
+fn test_sync_idempotent() {
+    let reg = build_fs_registry();
+    let op = reg.get_poly("sync").unwrap();
+    assert!(op.properties.idempotent, "sync should be idempotent (rsync)");
+}
+
+// --- Total op count ---
+
+#[test]
+fn test_total_op_count() {
+    let reg = build_fs_registry();
+    let count = reg.poly_op_names().len();
+    assert_eq!(count, 49, "expected 49 total ops, got {}", count);
 }

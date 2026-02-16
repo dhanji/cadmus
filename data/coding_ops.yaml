@@ -1,0 +1,38 @@
+# Coding Strategy Operations Pack
+# ================================
+# Domain-specific typed operations for code analysis and refactoring.
+# Used by CodingStrategy for type-directed planning.
+
+name: coding
+description: "Code analysis and refactoring operations"
+
+ops:
+  - name: parse_source
+    inputs: ["SourceCode"]
+    output: "AST"
+    description: "parse source code into AST"
+
+  - name: analyze_types
+    inputs: ["AST"]
+    output: "TypeSignature"
+    description: "analyze types from AST"
+
+  - name: detect_smells
+    inputs: ["AST"]
+    output: "CodeSmell"
+    description: "detect code smells in AST"
+
+  - name: plan_refactoring
+    inputs: ["AST", "CodeSmell"]
+    output: "Refactoring"
+    description: "plan refactoring from AST and code smells"
+
+  - name: generate_tests
+    inputs: ["Refactoring", "TypeSignature"]
+    output: "TestCase"
+    description: "generate test cases from refactoring plan and type signatures"
+
+  - name: apply_refactoring
+    inputs: ["SourceCode", "Refactoring"]
+    output: "SourceCode"
+    description: "apply refactoring to source code"

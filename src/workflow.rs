@@ -562,6 +562,14 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
     let name_lower = name.to_lowercase();
     let value_lower = value.to_lowercase();
 
+    // URL (check before archive extensions since URLs may end in .zip)
+    if name_lower == "url" || name_lower.contains("url")
+        || value_lower.starts_with("http://") || value_lower.starts_with("https://")
+        || value_lower.starts_with("ftp://")
+    {
+        return Ok(TypeExpr::prim("URL"));
+    }
+
     // Archive files
     if value_lower.ends_with(".cbz") {
         return Ok(TypeExpr::file(TypeExpr::archive(
@@ -592,6 +600,11 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
     if value_lower.ends_with(".txt") || value_lower.ends_with(".md")
         || value_lower.ends_with(".rs") || value_lower.ends_with(".py")
         || value_lower.ends_with(".js") || value_lower.ends_with(".ts")
+        || value_lower.ends_with(".log") || value_lower.ends_with(".csv")
+        || value_lower.ends_with(".json") || value_lower.ends_with(".yaml")
+        || value_lower.ends_with(".yml") || value_lower.ends_with(".toml")
+        || value_lower.ends_with(".xml") || value_lower.ends_with(".html")
+        || value_lower.ends_with(".css") || value_lower.ends_with(".sh")
     {
         return Ok(TypeExpr::file(TypeExpr::prim("Text")));
     }
@@ -1071,8 +1084,8 @@ steps:
 
     #[test]
     fn test_compile_type_mismatch_detected() {
-        // stat takes Path, but walk_tree produces Tree(Entry(Name, Bytes))
-        // stat after walk_tree should fail
+        // stat takes Path, but walk_tree produces Seq(Entry(Name, Bytes))
+        // stat after walk_tree should fail (Seq != Path)
         let yaml = r#"
 workflow: "bad"
 inputs:

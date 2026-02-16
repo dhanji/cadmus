@@ -1,26 +1,43 @@
 # Filesystem Reasoner Roadmap
 
-## Design Principle: No Grammar Extensions
+## Status
 
-The `TypeExpr` grammar (`Primitive`, `Constructor`, `Var`) is already open.
-New primitives like `Size`, `Permissions`, `Timestamp` are just strings —
-`TypeExpr::prim("Size")` works today. New constructors like `Symlink(Path)`
-are just `TypeExpr::cons("Symlink", vec![...])`. Nothing needs to change in
-`type_expr.rs`.
+- **Phase 1–5: COMPLETE** (see below)
+- **Phase 6–8: DEFERRED** (architectural changes, not vocabulary)
 
-All gaps are filled by:
-- **New ops** in `build_fs_registry()` — reference types by name
-- **New fact pack claims** — describe tools, availability, platform constraints
-- **New workflow examples** — exercise the new ops
+## Architecture: YAML Ops Packs
 
-Entities (`macos_fs`) live in fact packs only. The type system doesn't know
-about them. Fact packs describe the world; the planner operates on types and
-ops. The connection between them (consulting facts during planning) is a
-future integration point (see Phase 6).
+All domain operations are now defined in **YAML ops packs** — no Rust
+recompilation needed to add new ops. The layout:
+
+```
+data/
+  fs_ops.yaml          ← filesystem ops (49 ops)
+  comparison_ops.yaml   ← comparative reasoning ops (6 ops)
+  coding_ops.yaml       ← code analysis ops (6 ops)
+  macos_fs.yaml         ← macOS fact pack (tool knowledge, claims)
+  workflows/            ← workflow YAML definitions
+```
+
+The `TypeExpr` grammar (`Primitive`, `Constructor`, `Var`) is open — new
+types are just strings. `Option(a)` is a first-class constructor alongside
+`Seq`, `File`, `Dir`, `Entry`, `Archive`, `Tree`, `Match`.
+
+## Design Principles
+
+- **Ops are data, not code** — YAML ops packs define type signatures and
+  algebraic properties. The core engine loads them at runtime.
+- **Fact packs are separate** — tool knowledge, claims, and platform
+  constraints live in fact packs (e.g., `macos_fs.yaml`).
+- **No grammar extensions needed** — new primitives like `Size`, `URL`,
+  `Permissions` are just strings. New constructors like `Option(a)` are
+  first-class.
+- **Pluggable per domain** — a new domain (database, cloud) just drops in
+  a `<domain>_ops.yaml` + `<domain>_facts.yaml`.
 
 ---
 
-## Phase 1: Unblock Tree + File Lifecycle
+## Phase 1: Unblock Tree + File Lifecycle ✅ COMPLETE
 
 **Priority: Critical — these block basic workflows**
 
@@ -118,7 +135,7 @@ steps:
 
 ---
 
-## Phase 2: Content Transformation
+## Phase 2: Content Transformation ✅ COMPLETE
 
 **Priority: High — needed for text processing workflows**
 
@@ -194,7 +211,7 @@ steps:
 
 ---
 
-## Phase 3: Metadata Destructuring
+## Phase 3: Metadata Destructuring ✅ COMPLETE
 
 **Priority: High — makes `stat` useful**
 
@@ -256,7 +273,7 @@ sequence type.
 
 ---
 
-## Phase 4: macOS-Specific Ops
+## Phase 4: macOS-Specific Ops ✅ COMPLETE
 
 **Priority: Medium — differentiates from generic POSIX**
 
@@ -341,7 +358,7 @@ Expand `macos_fs.yaml` with claims for:
 
 ---
 
-## Phase 5: Network + Download
+## Phase 5: Network + Download ✅ COMPLETE
 
 **Priority: Medium — common in automation workflows**
 
