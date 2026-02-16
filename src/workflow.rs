@@ -14,7 +14,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::fs_strategy::{DryRunTrace, StepKind, TraceStep};
-use crate::fs_types::build_fs_registry;
+use crate::fs_types::build_full_registry;
 use crate::generic_planner::ExprPlanNode;
 use crate::registry::OperationRegistry;
 use crate::type_expr::{TypeExpr, unify};
@@ -596,13 +596,27 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
         )));
     }
 
-    // Text files
+    // JSON files (before generic text — structured data)
+    if value_lower.ends_with(".json") {
+        return Ok(TypeExpr::file(TypeExpr::prim("Json")));
+    }
+
+    // YAML files (before generic text — structured data)
+    if value_lower.ends_with(".yaml") || value_lower.ends_with(".yml") {
+        return Ok(TypeExpr::file(TypeExpr::prim("Yaml")));
+    }
+
+    // CSV files (before generic text — structured data)
+    if value_lower.ends_with(".csv") {
+        return Ok(TypeExpr::file(TypeExpr::prim("Csv")));
+    }
+
+    // Text files (generic — after structured formats)
     if value_lower.ends_with(".txt") || value_lower.ends_with(".md")
         || value_lower.ends_with(".rs") || value_lower.ends_with(".py")
         || value_lower.ends_with(".js") || value_lower.ends_with(".ts")
-        || value_lower.ends_with(".log") || value_lower.ends_with(".csv")
-        || value_lower.ends_with(".json") || value_lower.ends_with(".yaml")
-        || value_lower.ends_with(".yml") || value_lower.ends_with(".toml")
+        || value_lower.ends_with(".log")
+        || value_lower.ends_with(".toml")
         || value_lower.ends_with(".xml") || value_lower.ends_with(".html")
         || value_lower.ends_with(".css") || value_lower.ends_with(".sh")
     {
@@ -620,6 +634,15 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
         || value.starts_with("/")
     {
         return Ok(TypeExpr::dir(TypeExpr::prim("Bytes")));
+    }
+
+    // --- Power tools types ---
+
+    // Git repository
+    if name_lower == "repo" || name_lower.contains("repository")
+        || value_lower.ends_with(".git")
+    {
+        return Ok(TypeExpr::prim("Repo"));
     }
 
     // Pattern/keyword
@@ -744,7 +767,7 @@ fn build_plan_chain(compiled: &CompiledWorkflow) -> ExprPlanNode {
 /// Load a workflow YAML file, compile it, and produce a dry-run trace.
 pub fn run_workflow(path: &Path) -> Result<DryRunTrace, WorkflowError> {
     let def = load_workflow(path)?;
-    let registry = build_fs_registry();
+    let registry = build_full_registry();
     let compiled = compile_workflow(&def, &registry)?;
     execute_workflow(&compiled, &registry)
 }
@@ -752,7 +775,7 @@ pub fn run_workflow(path: &Path) -> Result<DryRunTrace, WorkflowError> {
 /// Parse a workflow YAML string, compile it, and produce a dry-run trace.
 pub fn run_workflow_str(yaml: &str) -> Result<DryRunTrace, WorkflowError> {
     let def = parse_workflow(yaml)?;
-    let registry = build_fs_registry();
+    let registry = build_full_registry();
     let compiled = compile_workflow(&def, &registry)?;
     execute_workflow(&compiled, &registry)
 }
@@ -1004,7 +1027,7 @@ steps:
   - extract_archive
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 1);
@@ -1025,7 +1048,7 @@ steps:
   - nonexistent_op
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let result = compile_workflow(&def, &registry);
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -1049,7 +1072,7 @@ steps:
       extension: ".pdf"
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 2);
@@ -1071,7 +1094,7 @@ steps:
   - read_file: each
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 2);
@@ -1095,7 +1118,7 @@ steps:
   - stat
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let result = compile_workflow(&def, &registry);
         assert!(result.is_err(), "stat after walk_tree should be a type mismatch");
         match result.unwrap_err() {
@@ -1119,7 +1142,7 @@ steps:
   - extract_archive
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let compiled = compile_workflow(&def, &registry).unwrap();
         let trace = execute_workflow(&compiled, &registry).unwrap();
 
@@ -1140,7 +1163,7 @@ steps:
   - sort_by: name
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let compiled = compile_workflow(&def, &registry).unwrap();
         let trace = execute_workflow(&compiled, &registry).unwrap();
 
@@ -1165,7 +1188,7 @@ steps:
   - read_file: each
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let compiled = compile_workflow(&def, &registry).unwrap();
         let trace = execute_workflow(&compiled, &registry).unwrap();
 
@@ -1221,7 +1244,7 @@ steps:
   - sort_by: name
 "#;
         let def = parse_workflow(yaml).unwrap();
-        let registry = build_fs_registry();
+        let registry = build_full_registry();
         let compiled = compile_workflow(&def, &registry).unwrap();
         let display = format!("{}", compiled);
         assert!(display.contains("List and sort"));

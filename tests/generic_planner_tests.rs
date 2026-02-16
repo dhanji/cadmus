@@ -357,7 +357,7 @@ fn test_both_strategies_use_same_registry_interface() {
     let comp_goal = reasoning_engine::types::Goal {
         description: "test".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_path: "data/putin_stalin.yaml".into(),
+        fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
     };
     let comp_strategy = reasoning_engine::strategy::ComparisonStrategy::new(comp_goal).unwrap();
     let comp_reg = comp_strategy.build_registry();

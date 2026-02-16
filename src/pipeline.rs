@@ -24,7 +24,7 @@ mod tests {
         Goal {
             description: "Compare Putin and Stalin as autocrats".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_path: "data/putin_stalin.yaml".into(),
+            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
         }
     }
 
@@ -75,7 +75,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["a".into()],
-            fact_pack_path: "data/nonexistent.yaml".into(),
+            fact_pack_paths: vec!["data/nonexistent.yaml".into()],
         };
         let result = run(&goal);
         assert!(result.is_err());
@@ -124,7 +124,7 @@ uncertainties:
         let goal = Goal {
             description: "test".into(),
             entities: vec!["a".into(), "b".into()],
-            fact_pack_path: path.to_str().unwrap().into(),
+            fact_pack_paths: vec![path.to_str().unwrap().into()],
         };
         let output = run(&goal).unwrap();
         assert_eq!(output.axes.len(), 1);

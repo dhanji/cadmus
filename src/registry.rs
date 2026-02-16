@@ -1210,4 +1210,21 @@ ops:
         // Input should be File(Bytes)
         assert_eq!(matches[0].concrete_inputs[0], TypeExpr::file(TypeExpr::prim("Bytes")));
     }
+
+    #[test]
+    fn test_load_power_tools_ops_pack() {
+        let yaml = include_str!("../data/power_tools_ops.yaml");
+        let reg = load_ops_pack_str(yaml).unwrap();
+        let names = reg.poly_op_names();
+        assert!(names.len() >= 55, "expected at least 55 ops, got {}", names.len());
+
+        // Spot-check a few ops from different categories
+        assert!(reg.get_poly("git_commit").is_some(), "missing git_commit");
+        assert!(reg.get_poly("jq_query").is_some(), "missing jq_query");
+        assert!(reg.get_poly("tmux_new_session").is_some(), "missing tmux_new_session");
+        assert!(reg.get_poly("awk_extract").is_some(), "missing awk_extract");
+        assert!(reg.get_poly("ps_list").is_some(), "missing ps_list");
+        assert!(reg.get_poly("ssh_exec").is_some(), "missing ssh_exec");
+        assert!(reg.get_poly("gzip_compress").is_some(), "missing gzip_compress");
+    }
 }

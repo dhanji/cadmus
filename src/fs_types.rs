@@ -1,4 +1,4 @@
-use crate::registry::{OperationRegistry, load_ops_pack, load_ops_pack_str};
+use crate::registry::{OperationRegistry, load_ops_pack, load_ops_pack_str, load_ops_pack_str_into};
 
 // ---------------------------------------------------------------------------
 // Filesystem type vocabulary
@@ -14,6 +14,14 @@ use crate::registry::{OperationRegistry, load_ops_pack, load_ops_pack_str};
 /// is not found on disk.
 const FS_OPS_YAML: &str = include_str!("../data/fs_ops.yaml");
 
+/// The embedded power tools ops pack YAML, used as fallback when the file
+/// is not found on disk.
+const POWER_TOOLS_OPS_YAML: &str = include_str!("../data/power_tools_ops.yaml");
+
+// ---------------------------------------------------------------------------
+// Registry builders
+// ---------------------------------------------------------------------------
+
 /// Build and return an OperationRegistry populated with the filesystem
 /// type vocabulary from the ops pack YAML.
 ///
@@ -27,6 +35,30 @@ pub fn build_fs_registry() -> OperationRegistry {
     // Fallback to embedded
     load_ops_pack_str(FS_OPS_YAML)
         .expect("embedded fs_ops.yaml should always parse")
+}
+
+/// Build a full registry with both filesystem and power tools ops.
+///
+/// Used by the workflow system and other contexts that need the complete
+/// set of operations. The fs_strategy uses `build_fs_registry()` alone
+/// to keep the planner search space manageable.
+pub fn build_full_registry() -> OperationRegistry {
+    let mut reg = if let Ok(r) = load_ops_pack("data/fs_ops.yaml") {
+        r
+    } else {
+        load_ops_pack_str(FS_OPS_YAML)
+            .expect("embedded fs_ops.yaml should always parse")
+    };
+
+    // Merge power tools ops
+    let _ = load_ops_pack_str_into(
+        &std::fs::read_to_string("data/power_tools_ops.yaml")
+            .unwrap_or_else(|_| POWER_TOOLS_OPS_YAML.to_string()),
+        &mut reg,
+    );
+    // If power_tools fails to parse, we still return the fs-only registry.
+
+    reg
 }
 
 // ---------------------------------------------------------------------------
@@ -187,5 +219,20 @@ mod tests {
         let reg = build_fs_registry();
         let op = reg.get_poly("concat_seq").unwrap();
         assert_eq!(op.properties.identity, Some("[]".to_string()));
+    }
+
+    #[test]
+    fn test_build_fs_registry_includes_power_tools() {
+        let reg = build_full_registry();
+        // fs_ops
+        assert!(reg.get_poly("list_dir").is_some(), "missing fs op list_dir");
+        assert!(reg.get_poly("read_file").is_some(), "missing fs op read_file");
+        // power_tools ops
+        assert!(reg.get_poly("git_log").is_some(), "missing power_tools op git_log");
+        assert!(reg.get_poly("jq_query").is_some(), "missing power_tools op jq_query");
+        assert!(reg.get_poly("tmux_new_session").is_some(), "missing power_tools op tmux_new_session");
+        assert!(reg.get_poly("ps_list").is_some(), "missing power_tools op ps_list");
+        // Total should be fs_ops + power_tools
+        assert!(reg.poly_op_names().len() >= 100, "expected at least 100 ops in merged registry, got {}", reg.poly_op_names().len());
     }
 }

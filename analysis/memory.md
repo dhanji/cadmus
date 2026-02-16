@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-16T07:27:15Z | Size: 8.7k chars
+> Updated: 2026-02-16T08:29:55Z | Size: 10.3k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -95,3 +95,17 @@
 ### Documentation Files
 - `ARCHITECTURE.md` [1..340] — concise architecture description: type system, registry (mono+poly), YAML ops packs, fact packs, both planners, strategies, algebra, theory, workflow DSL, module map
 - `PLAYBOOK.md` [1..705] — step-by-step guide: adding ops packs, fact packs, workflows, common mistakes, database domain worked example, quick reference schemas
+
+### Power Tools Pack Feature (plan `power-tools-pack`)
+- `src/fact_pack.rs` [131..213] — `FactPack::merge()` with entity/axis/relation dedup, `FactPack::merge_all()`, `FactPack::empty()`, `Relation::id()` helper
+- `src/fact_pack.rs` [268..296] — `load_fact_pack_str()`, `load_fact_packs()` multi-path loader
+- `src/types.rs` [139..166] — `Goal.fact_pack_paths: Vec<String>` (replaces `fact_pack_path`), `Goal::with_single_fact_pack()` convenience
+- `data/power_tools_ops.yaml` — 64 ops: 20 git, 6 tmux/screen, 8 jq/yq/csv, 8 awk/sed/cut/tr/paste/tee/column, 10 ps/kill/df/du/lsof/file/uname/uptime, 6 ssh/scp/wget/nc/ping/dig, 6 gzip/xz/base64/openssl
+- `data/power_tools.yaml` — 10 entities, 5 axes, 80 claims, 24 evidence, 30+ properties, 8 relations, 5 uncertainties. Entity groups: tmux vs screen, rg vs grep vs ag, jq vs yq, awk vs sed, git solo
+- `data/workflows/git_log_search.yaml` — git_log → filter → sort_by
+- `data/workflows/process_logs.yaml` — awk_extract → sed_script
+- `src/fs_types.rs` [29..60] — `build_fs_registry()` (fs-only) and `build_full_registry()` (fs+power_tools). Workflow system uses full registry.
+- `src/workflow.rs` [598..650] — Extended `infer_input_type()` with Repo, File(Json), File(Yaml), File(Csv) types
+- `tests/power_tools_tests.rs` — 20 integration tests (ops, facts, composition)
+- `PLAYBOOK.md` — Added Section 0 (Audit Existing Packs), Section 3a (Fact Pack Composition), Section 6 (Power Tools Worked Example)
+- **Total: 298 tests** (200 unit + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 workflow), all passing, zero warnings

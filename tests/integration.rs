@@ -5,7 +5,7 @@ fn putin_stalin_goal() -> Goal {
     Goal {
         description: "Produce a structured comparison of Putin and Stalin as autocrats".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_path: "data/putin_stalin.yaml".into(),
+        fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
     }
 }
 
@@ -17,7 +17,7 @@ fn tiramisu_cheesecake_goal() -> Goal {
     Goal {
         description: "Compare tiramisu and cheesecake as desserts".into(),
         entities: vec!["tiramisu".into(), "cheesecake".into()],
-        fact_pack_path: "data/tiramisu_cheesecake.yaml".into(),
+        fact_pack_paths: vec!["data/tiramisu_cheesecake.yaml".into()],
     }
 }
 
@@ -315,7 +315,7 @@ fn test_missing_fact_pack_returns_error() {
     let goal = Goal {
         description: "test".into(),
         entities: vec!["a".into()],
-        fact_pack_path: "data/does_not_exist.yaml".into(),
+        fact_pack_paths: vec!["data/does_not_exist.yaml".into()],
     };
     let result = pipeline::run(&goal);
     assert!(result.is_err(), "should fail with missing fact pack");

@@ -254,7 +254,7 @@ mod tests {
         Goal {
             description: "Compare Putin and Stalin as autocrats".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_path: "data/putin_stalin.yaml".into(),
+            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
         }
     }
 
@@ -333,7 +333,7 @@ uncertainties: []
         let goal = Goal {
             description: "Compare A and B".into(),
             entities: vec!["a".into(), "b".into()],
-            fact_pack_path: "test".into(),
+            fact_pack_paths: vec!["test".into()],
         };
         let plan = plan(&goal, &idx, &theory).unwrap();
 

@@ -119,12 +119,12 @@ fn run_demo_mode() {
     let goal = Goal {
         description: "Produce a structured comparison of Putin and Stalin as autocrats".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_path: "data/putin_stalin.yaml".into(),
+        fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
     };
 
     println!("Goal: {}", goal.description);
     println!("Entities: {}", goal.entities.join(", "));
-    println!("Fact pack: {}", goal.fact_pack_path);
+    println!("Fact packs: {}", goal.fact_pack_paths.join(", "));
     println!();
 
     match pipeline::run(&goal) {

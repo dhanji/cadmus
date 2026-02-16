@@ -185,7 +185,12 @@ pub struct ComparisonStrategy {
 
 impl ComparisonStrategy {
     pub fn new(goal: Goal) -> Result<Self> {
-        let index = fact_pack::load_fact_pack(std::path::Path::new(&goal.fact_pack_path))?;
+        let paths: Vec<std::path::PathBuf> = goal
+            .fact_pack_paths
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect();
+        let index = fact_pack::load_fact_packs(&paths)?;
         let theory = theory::build_theory_context(&index);
         Ok(Self { goal, index, theory })
     }
@@ -808,7 +813,7 @@ mod tests {
         let goal = Goal {
             description: "Compare Putin and Stalin".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_path: "data/putin_stalin.yaml".into(),
+            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
         };
         let output = run_comparison(&goal).unwrap();
         assert_eq!(output.axes.len(), 7);
@@ -820,7 +825,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_path: "data/putin_stalin.yaml".into(),
+            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
         };
         let strategy = ComparisonStrategy::new(goal).unwrap();
         let registry = strategy.build_registry();
@@ -838,7 +843,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_path: "data/putin_stalin.yaml".into(),
+            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
         };
         let strategy = ComparisonStrategy::new(goal).unwrap();
         let literals = strategy.available_literals();
@@ -856,7 +861,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_path: "data/putin_stalin.yaml".into(),
+            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
         };
         // We can't easily make ComparisonStrategy have an empty registry,
         // but we can test run_strategy with a minimal strategy that has no ops.
@@ -870,7 +875,7 @@ mod tests {
         let goal = Goal {
             description: "Produce a structured comparison of Putin and Stalin as autocrats".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_path: "data/putin_stalin.yaml".into(),
+            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
         };
 
         let output = run_comparison(&goal).unwrap();

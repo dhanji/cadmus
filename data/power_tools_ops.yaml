@@ -1,0 +1,412 @@
+# Power Tools Operations Pack
+# ============================
+# Developer power tools: version control, terminal multiplexers,
+# structured data processing, advanced text processing, process/system
+# management, networking, and compression/crypto.
+#
+# Designed to compose with fs_ops.yaml — no name collisions.
+# Loaded at runtime by the ops pack loader — no Rust recompilation needed.
+
+name: power_tools
+description: "Developer power tools: git, tmux, screen, jq, awk, and more"
+
+ops:
+
+  # =========================================================================
+  # 1. Version Control — Git (~17 ops)
+  # =========================================================================
+
+  - name: git_init
+    inputs: ["Path"]
+    output: "Repo"
+    description: "git init — initialize a new repository"
+
+  - name: git_clone
+    inputs: ["URL"]
+    output: "Repo"
+    description: "git clone — clone a remote repository"
+
+  - name: git_add
+    type_params: [a]
+    inputs: ["Repo", "Seq(Entry(Name, a))"]
+    output: "StagingArea"
+    description: "git add — stage files for commit"
+
+  - name: git_commit
+    inputs: ["Repo", "StagingArea", "Message"]
+    output: "Commit"
+    description: "git commit — create a commit from staged changes"
+
+  - name: git_log
+    inputs: ["Repo"]
+    output: "Seq(Commit)"
+    properties:
+      idempotent: true
+    description: "git log — list commit history"
+
+  - name: git_log_range
+    inputs: ["Repo", "CommitRef", "CommitRef"]
+    output: "Seq(Commit)"
+    properties:
+      idempotent: true
+    description: "git log A..B — list commits in a range"
+
+  - name: git_diff
+    inputs: ["Repo"]
+    output: "Diff"
+    properties:
+      idempotent: true
+    description: "git diff — show unstaged changes"
+
+  - name: git_diff_commits
+    inputs: ["Commit", "Commit"]
+    output: "Diff"
+    properties:
+      idempotent: true
+    description: "git diff A B — show diff between two commits"
+
+  - name: git_branch
+    inputs: ["Repo", "Name"]
+    output: "Branch"
+    description: "git branch — create a new branch"
+
+  - name: git_checkout
+    inputs: ["Repo", "Branch"]
+    output: "Repo"
+    description: "git checkout — switch to a branch"
+
+  - name: git_merge
+    inputs: ["Repo", "Branch", "MergeStrategy"]
+    output: "MergeResult"
+    description: "git merge — merge a branch with strategy (recursive, ours, theirs)"
+
+  - name: git_rebase
+    inputs: ["Repo", "Branch"]
+    output: "Repo"
+    description: "git rebase — rebase current branch onto target"
+
+  - name: git_stash
+    inputs: ["Repo"]
+    output: "Stash"
+    description: "git stash — stash working directory changes"
+
+  - name: git_stash_pop
+    inputs: ["Repo", "Stash"]
+    output: "Repo"
+    description: "git stash pop — apply and remove top stash entry"
+
+  - name: git_push
+    inputs: ["Repo", "Remote", "Branch"]
+    output: "Unit"
+    description: "git push — push commits to remote"
+
+  - name: git_pull
+    inputs: ["Repo", "Remote", "Branch"]
+    output: "Repo"
+    description: "git pull — fetch and merge from remote"
+
+  - name: git_blame
+    inputs: ["Repo", "Path"]
+    output: "Seq(BlameLine)"
+    properties:
+      idempotent: true
+    description: "git blame — show per-line commit attribution"
+
+  - name: git_bisect
+    inputs: ["Repo", "Commit", "Commit"]
+    output: "Commit"
+    description: "git bisect — binary search for a bad commit"
+
+  - name: git_tag
+    inputs: ["Repo", "Name", "Commit"]
+    output: "Tag"
+    description: "git tag — create a tag at a commit"
+
+  - name: git_status
+    inputs: ["Repo"]
+    output: "GitStatus"
+    properties:
+      idempotent: true
+    description: "git status — show working tree status"
+
+  # =========================================================================
+  # 2. Terminal Multiplexers (~6 ops)
+  # =========================================================================
+
+  - name: tmux_new_session
+    inputs: ["Name"]
+    output: "Session"
+    description: "tmux new-session -s — create a named tmux session"
+
+  - name: tmux_attach
+    inputs: ["Name"]
+    output: "Session"
+    description: "tmux attach -t — attach to an existing session"
+
+  - name: tmux_split
+    inputs: ["Session", "SplitDirection"]
+    output: "Pane"
+    description: "tmux split-window — split pane horizontally or vertically"
+
+  - name: tmux_send_keys
+    inputs: ["Pane", "Text"]
+    output: "Unit"
+    description: "tmux send-keys — send keystrokes to a pane"
+
+  - name: screen_new_session
+    inputs: ["Name"]
+    output: "Session"
+    description: "screen -S — create a named screen session"
+
+  - name: screen_attach
+    inputs: ["Name"]
+    output: "Session"
+    description: "screen -r — reattach to a detached session"
+
+  # =========================================================================
+  # 3. Structured Data Processing (~8 ops)
+  # =========================================================================
+
+  - name: jq_query
+    inputs: ["File(Json)", "JqFilter"]
+    output: "Json"
+    properties:
+      idempotent: true
+    description: "jq <filter> — query JSON with jq expression"
+
+  - name: jq_filter_seq
+    inputs: ["File(Json)", "JqFilter"]
+    output: "Seq(Json)"
+    properties:
+      idempotent: true
+    description: "jq '.[] | <filter>' — extract array elements from JSON"
+
+  - name: jq_transform
+    inputs: ["Json", "JqFilter"]
+    output: "Json"
+    description: "jq <filter> — transform JSON value with jq expression"
+
+  - name: yq_query
+    inputs: ["File(Yaml)", "YqFilter"]
+    output: "Yaml"
+    properties:
+      idempotent: true
+    description: "yq <filter> — query YAML with yq expression"
+
+  - name: yq_convert
+    inputs: ["File(Yaml)"]
+    output: "File(Json)"
+    properties:
+      idempotent: true
+    description: "yq -o=json — convert YAML to JSON"
+
+  - name: csv_cut
+    inputs: ["File(Csv)", "ColumnList"]
+    output: "File(Csv)"
+    properties:
+      idempotent: true
+    description: "csvcut / cut -d, — select columns from CSV"
+
+  - name: csv_join
+    inputs: ["File(Csv)", "File(Csv)", "ColumnList"]
+    output: "File(Csv)"
+    description: "csvjoin — join two CSV files on columns"
+
+  - name: csv_sort
+    inputs: ["File(Csv)", "ColumnList"]
+    output: "File(Csv)"
+    properties:
+      idempotent: true
+    description: "csvsort — sort CSV by columns"
+
+  # =========================================================================
+  # 4. Advanced Text Processing (~8 ops)
+  # =========================================================================
+
+  - name: awk_extract
+    inputs: ["File(Text)", "AwkProgram"]
+    output: "File(Text)"
+    description: "awk '{print $N}' — extract fields from text"
+
+  - name: awk_aggregate
+    inputs: ["File(Text)", "AwkProgram"]
+    output: "Text"
+    description: "awk 'END{...}' — aggregate/summarize text data"
+
+  - name: sed_script
+    inputs: ["File(Text)", "SedScript"]
+    output: "File(Text)"
+    description: "sed -f script — apply multi-command sed script"
+
+  - name: cut_fields
+    inputs: ["File(Text)", "Delimiter", "FieldList"]
+    output: "File(Text)"
+    properties:
+      idempotent: true
+    description: "cut -d -f — extract fields by delimiter"
+
+  - name: tr_replace
+    inputs: ["Text", "CharSet", "CharSet"]
+    output: "Text"
+    description: "tr SET1 SET2 — translate/replace characters"
+
+  - name: paste_merge
+    inputs: ["File(Text)", "File(Text)", "Delimiter"]
+    output: "File(Text)"
+    description: "paste -d — merge lines of two files side by side"
+
+  - name: tee_split
+    type_params: [a]
+    inputs: ["a", "Path"]
+    output: "a"
+    description: "tee — copy stdin to file while passing through"
+
+  - name: column_format
+    inputs: ["File(Text)", "Delimiter"]
+    output: "File(Text)"
+    properties:
+      idempotent: true
+    description: "column -t -s — format text into aligned columns"
+
+  # =========================================================================
+  # 5. Process & System Management (~10 ops)
+  # =========================================================================
+
+  - name: ps_list
+    output: "Seq(Process)"
+    properties:
+      idempotent: true
+    description: "ps aux — list running processes"
+
+  - name: kill_process
+    inputs: ["Pid", "Signal"]
+    output: "Unit"
+    description: "kill -<signal> <pid> — send signal to process"
+
+  - name: pkill_pattern
+    inputs: ["Pattern"]
+    output: "Count"
+    description: "pkill — kill processes matching pattern"
+
+  - name: watch_command
+    inputs: ["Command", "Interval"]
+    output: "Seq(Text)"
+    description: "watch -n — execute command repeatedly and display output"
+
+  - name: df_usage
+    output: "Seq(DiskUsage)"
+    properties:
+      idempotent: true
+    description: "df -h — show filesystem disk space usage"
+
+  - name: du_size
+    inputs: ["Path"]
+    output: "Size"
+    properties:
+      idempotent: true
+    description: "du -sh — show directory size"
+
+  - name: lsof_open
+    inputs: ["Path"]
+    output: "Seq(OpenFile)"
+    properties:
+      idempotent: true
+    description: "lsof — list open files for a path"
+
+  - name: file_type_detect
+    inputs: ["Path"]
+    output: "MimeType"
+    properties:
+      idempotent: true
+    description: "file --mime-type — detect file MIME type"
+
+  - name: uname_info
+    output: "SystemInfo"
+    properties:
+      idempotent: true
+    description: "uname -a — display system information"
+
+  - name: uptime_info
+    output: "UptimeInfo"
+    properties:
+      idempotent: true
+    description: "uptime — show system uptime and load averages"
+
+  # =========================================================================
+  # 6. Networking (~6 ops)
+  # =========================================================================
+
+  - name: ssh_exec
+    inputs: ["Host", "Command"]
+    output: "Text"
+    description: "ssh host command — execute command on remote host"
+
+  - name: scp_transfer
+    type_params: [a]
+    inputs: ["File(a)", "Host", "Path"]
+    output: "Unit"
+    description: "scp file host:path — copy file to remote host"
+
+  - name: wget_download
+    inputs: ["URL"]
+    output: "File(Bytes)"
+    description: "wget — download file from URL (with retry/resume)"
+
+  - name: nc_connect
+    inputs: ["Host", "Port"]
+    output: "Connection"
+    description: "nc host port — open TCP connection"
+
+  - name: ping_host
+    inputs: ["Host", "Count"]
+    output: "Seq(PingResult)"
+    description: "ping -c N host — send ICMP echo requests"
+
+  - name: dig_lookup
+    inputs: ["Hostname", "RecordType"]
+    output: "Seq(DnsRecord)"
+    properties:
+      idempotent: true
+    description: "dig hostname TYPE — DNS lookup"
+
+  # =========================================================================
+  # 7. Compression & Crypto (~6 ops)
+  # =========================================================================
+
+  - name: gzip_compress
+    type_params: [a]
+    inputs: ["File(a)"]
+    output: "File(Gzip(a))"
+    description: "gzip — compress file with gzip"
+
+  - name: gzip_decompress
+    type_params: [a]
+    inputs: ["File(Gzip(a))"]
+    output: "File(a)"
+    description: "gunzip — decompress gzip file"
+
+  - name: xz_compress
+    type_params: [a]
+    inputs: ["File(a)"]
+    output: "File(Xz(a))"
+    description: "xz — compress file with xz/LZMA"
+
+  - name: base64_encode
+    inputs: ["Bytes"]
+    output: "Text"
+    properties:
+      idempotent: false
+    description: "base64 — encode bytes to base64 text"
+
+  - name: base64_decode
+    inputs: ["Text"]
+    output: "Bytes"
+    description: "base64 -d — decode base64 text to bytes"
+
+  - name: openssl_hash
+    type_params: [a]
+    inputs: ["File(a)", "HashAlgorithm"]
+    output: "Hash"
+    properties:
+      idempotent: true
+    description: "openssl dgst — compute cryptographic hash (md5, sha256, sha512)"

@@ -4,6 +4,71 @@ Step-by-step recipes for extending the reasoning engine with new domains.
 
 ---
 
+## 0. Before You Start: Audit Existing Packs
+
+**Do this first, every time.** Before writing any YAML, audit what already
+exists to avoid duplication and identify composition opportunities.
+
+### Step 1: List all existing ops
+
+```bash
+# Show all op names across all packs
+for f in data/*_ops.yaml; do
+  echo "=== $f ==="
+  grep "^  - name:" "$f" | sed 's/.*name: //'
+done
+```
+
+Current packs and their coverage:
+
+| Pack | Ops | Domain |
+|------|-----|--------|
+| `fs_ops.yaml` | 49 | Filesystem: ls, cat, mv, find, grep, sort, zip, tar, chmod, curl, rsync, macOS tools |
+| `power_tools_ops.yaml` | 64 | Dev tools: git, tmux, screen, jq, yq, awk, sed, ps, ssh, gzip, base64 |
+| `comparison_ops.yaml` | 6 | Reasoning: retrieve_evidence, compare_claims, summarize |
+| `coding_ops.yaml` | 6 | Code analysis: parse_source, detect_smells, generate_tests |
+
+### Step 2: Check for overlaps
+
+```bash
+# Find op name collisions between two packs
+comm -12 \
+  <(grep "^  - name:" data/fs_ops.yaml | sed 's/.*name: //' | sort) \
+  <(grep "^  - name:" data/power_tools_ops.yaml | sed 's/.*name: //' | sort)
+```
+
+If there are collisions, decide:
+- **Rename** one of them (e.g. `replace` in fs_ops vs `sed_replace` in power_tools)
+- **Move** the op to the pack where it fits best
+- **Keep both** if they have genuinely different type signatures
+
+### Step 3: Identify gaps
+
+Ask yourself:
+- What tools/operations does my domain need that don't exist yet?
+- Which existing ops can I reuse? (e.g. `filter`, `sort_by` from fs_ops)
+- Do I need new type primitives, or can I reuse existing ones?
+
+### Step 4: Plan entity groupings (for fact packs)
+
+For meaningful comparison, group entities by category:
+- **Two-way**: tmux vs screen, jq vs yq, awk vs sed
+- **Three-way**: ripgrep vs grep vs ag
+- **Solo**: git (no direct peer, but rich axis coverage)
+
+Each group should share axes where comparison makes sense.
+
+### Step 5: Check composability needs
+
+Will your fact pack need to be merged with existing packs? If so:
+- Use **different entity ids** from existing packs (or accept first-wins dedup)
+- Shared axis ids will have their sub_axes **unioned** automatically
+- Claims, evidence, and properties are always concatenated
+
+See [Section 3a: Fact Pack Composition](#3a-fact-pack-composition) for details.
+
+---
+
 ## 1. Adding an Ops Pack (Pure YAML — No Rust)
 
 This is the most common extension. You define typed operations in YAML and
@@ -296,23 +361,89 @@ let evidence = idx.evidence_by_claim.get("pg_perf_oltp");
 
 ### Step 4: Use with a strategy
 
-To use a fact pack with the comparison strategy, pass its path as the
-`fact_pack_path` in a `Goal`:
+To use a fact pack with the comparison strategy, pass its path in a `Goal`:
 
 ```rust
 let goal = Goal {
     description: "Compare PostgreSQL and MySQL".into(),
     entities: vec!["postgres".into(), "mysql".into()],
-    fact_pack_path: "data/db_facts.yaml".into(),
+    fact_pack_paths: vec!["data/db_facts.yaml".into()],
 };
 let output = pipeline::run(&goal)?;
 ```
 
 ---
 
+## 3a. Fact Pack Composition
+
+Fact packs compose — you can merge multiple packs into a single index for
+cross-domain reasoning.
+
+### When to compose
+
+- **"How do I set up tmux to manage my macOS files?"** — needs facts from
+  both `power_tools.yaml` (tmux) and `macos_fs.yaml` (filesystem)
+- **"Compare git's ecosystem to PostgreSQL's"** — needs facts from
+  `power_tools.yaml` and `db_facts.yaml`
+
+### How merging works
+
+```rust
+use reasoning_engine::fact_pack::{load_fact_packs, FactPack};
+
+// Option A: Load and merge from file paths
+let idx = load_fact_packs(&["data/power_tools.yaml", "data/db_facts.yaml"])?;
+
+// Option B: Merge FactPack structs directly
+let merged = pack_a.merge(pack_b);
+let idx = FactPackIndex::build(merged);
+
+// Option C: Merge many packs
+let merged = FactPack::merge_all(vec![pack_a, pack_b, pack_c]);
+```
+
+### Deduplication rules
+
+Packs are merged left-to-right. When ids collide:
+
+| Section | Rule | Example |
+|---------|------|---------|
+| **Entities** | First wins (later duplicates skipped) | If both define `git`, first pack's description kept |
+| **Axes** | First wins, but sub_axes are **unioned** | If both define `performance`, sub_axes from both appear |
+| **Relations** | First wins (dedup by id) | Duplicate `rel_perf_hierarchy` kept from first pack |
+| **Claims** | Concatenated (no dedup) | All claims from all packs appear |
+| **Evidence** | Concatenated (no dedup) | All evidence from all packs appear |
+| **Properties** | Concatenated (no dedup) | All properties from all packs appear |
+| **Uncertainties** | Concatenated (no dedup) | All uncertainties from all packs appear |
+
+### Using composed packs with a Goal
+
+```rust
+let goal = Goal {
+    description: "Compare tools across domains".into(),
+    entities: vec!["git".into(), "postgres".into()],
+    fact_pack_paths: vec![
+        "data/power_tools.yaml".into(),
+        "data/db_facts.yaml".into(),
+    ],
+};
+let output = pipeline::run(&goal)?;
+```
+
+### When to split vs merge
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Entities are in the same domain | **One pack** (e.g. tmux + screen in `power_tools.yaml`) |
+| Entities are in different domains | **Separate packs**, compose at query time |
+| Shared axes (e.g. `performance`) | Fine — sub_axes are unioned on merge |
+| Shared entity ids across packs | Avoid if possible; first pack wins on conflict |
+
+---
+
 ## 4. Adding a Workflow
 
-Workflows are linear pipelines of filesystem operations defined in YAML.
+Workflows are linear pipelines of operations defined in YAML.
 
 ### Step 1: Create the YAML file
 
@@ -341,7 +472,24 @@ steps:
 
 Variable expansion: `$name` references a key from `inputs`.
 
-### Step 3: Run it
+### Step 3: Type inference for inputs
+
+The workflow compiler infers types from input names and values:
+
+| Input pattern | Inferred type | Example |
+|---------------|---------------|---------|
+| `.cbz` extension | `File(Archive(File(Image), Cbz))` | `archive: "comics.cbz"` |
+| `.zip` extension | `File(Archive(Bytes, Zip))` | `archive: "data.zip"` |
+| `.json` extension | `File(Json)` | `config: "settings.json"` |
+| `.yaml`/`.yml` | `File(Yaml)` | `config: "values.yaml"` |
+| `.csv` extension | `File(Csv)` | `data: "report.csv"` |
+| `.log`/`.txt`/`.rs`/etc | `File(Text)` | `logfile: "app.log"` |
+| `http://`/`https://` | `URL` | `url: "https://example.com"` |
+| Name contains `dir`/`path`, or `/` prefix | `Dir(Bytes)` | `path: "~/Downloads"` |
+| Name is `repo` or `.git` suffix | `Repo` | `repo: "my-project.git"` |
+| Name contains `pattern`/`keyword` | `Pattern` | `pattern: "*.pdf"` |
+
+### Step 4: Run it
 
 ```bash
 cargo run -- --workflow data/workflows/my_workflow.yaml
@@ -354,14 +502,14 @@ let trace = workflow::load_and_run(Path::new("data/workflows/my_workflow.yaml"))
 println!("{}", trace);
 ```
 
-### Step 4: Test it
+### Step 5: Test it
 
 ```rust
 #[test]
 fn test_my_workflow() {
     let yaml = include_str!("../data/workflows/my_workflow.yaml");
     let def: WorkflowDef = serde_yaml::from_str(yaml).unwrap();
-    let compiled = compile_workflow(&def, &build_fs_registry()).unwrap();
+    let compiled = compile_workflow(&def, &build_full_registry()).unwrap();
     let trace = execute_workflow(&compiled).unwrap();
     assert!(trace.to_string().contains("walk_tree"));
 }
@@ -541,7 +689,88 @@ uncertainties:
 
 ---
 
-## 6. Common Mistakes
+## 6. Complete Worked Example: Power Tools Pack
+
+This is a real example from the codebase — a comprehensive pack covering
+developer power tools (git, tmux, jq, awk, etc.).
+
+### 6a. Audit phase (Section 0)
+
+Before writing any YAML, we audited existing packs:
+
+**Already covered by `fs_ops.yaml`:**
+- File I/O (ls, cat, mv, find, cp, rm, mkdir)
+- Basic text processing (sed s///, head, tail, sort, grep, diff)
+- Archives (zip, tar, extract, pack)
+- macOS tools (mdfind, xattr, open, pbcopy)
+- Network basics (curl/download, rsync/sync)
+
+**Gaps identified:**
+- Version control (git) — nothing VCS-related
+- Terminal multiplexers (tmux, screen)
+- Structured data (jq, yq, csv tools)
+- Advanced text (awk, cut, tr, paste, tee)
+- Process management (ps, kill, df, du)
+- Networking (ssh, scp, ping, dig)
+- Compression (gzip, xz, base64)
+
+**Overlap decisions:**
+- `sed` → fs_ops has `replace` (simple s///). Power tools adds `sed_script` (multi-command)
+- `grep` → fs_ops has `search_content` and `filter`. Power tools doesn't duplicate
+- `sort` → fs_ops has `sort_by`. Power tools doesn't duplicate
+
+### 6b. Ops pack (`data/power_tools_ops.yaml`)
+
+64 ops across 7 categories. Key design decisions:
+- **Git ops** use domain types: `Repo`, `Commit`, `Branch`, `StagingArea`, `Diff`
+- **Polymorphic ops** where appropriate: `tee_split(a, Path) → a`, `gzip_compress(File(a)) → File(Gzip(a))`
+- **Leaf ops** (no inputs): `ps_list`, `df_usage`, `uname_info`, `uptime_info`
+- **3-input ops**: `git_merge(Repo, Branch, MergeStrategy)`, `git_push(Repo, Remote, Branch)`
+
+### 6c. Fact pack (`data/power_tools.yaml`)
+
+10 entities, 5 axes, 80 claims. Entity groupings:
+- **tmux vs screen** — terminal multiplexers
+- **ripgrep vs grep vs ag** — three-way text search comparison
+- **jq vs yq** — structured data query
+- **awk vs sed** — stream processing
+- **git** — solo entity with rich axis coverage
+
+### 6d. Composition
+
+The power tools fact pack composes with other packs:
+
+```rust
+let goal = Goal {
+    description: "Compare tools across domains".into(),
+    entities: vec!["git".into(), "postgres".into()],
+    fact_pack_paths: vec![
+        "data/power_tools.yaml".into(),
+        "data/db_facts.yaml".into(),
+    ],
+};
+```
+
+### 6e. Registry wiring
+
+Power tools ops are merged into the workflow registry via `build_full_registry()`:
+
+```rust
+// src/fs_types.rs
+pub fn build_full_registry() -> OperationRegistry {
+    let mut reg = build_fs_registry();  // fs_ops only
+    load_ops_pack_str_into(POWER_TOOLS_OPS_YAML, &mut reg);
+    reg
+}
+```
+
+The fs_strategy planner uses `build_fs_registry()` (fs-only) to keep the
+search space manageable. The workflow system uses `build_full_registry()`
+for the complete op set.
+
+---
+
+## 7. Common Mistakes
 
 ### Malformed type expressions
 
@@ -630,6 +859,28 @@ ops:
 The planner trusts your property declarations. Wrong properties lead to
 incorrect plan optimizations.
 
+### Fact pack entity contamination
+
+```yaml
+# ❌ Wrong — claim references another entity
+claims:
+  - id: pg_faster_than_mysql
+    entity: postgres
+    axis: performance
+    text: "PostgreSQL is faster than MySQL for OLAP"
+    #      ^^^^^^^^^^^^^^^^^^^^^^^^^ references mysql!
+
+# ✅ Correct — claim is self-contained
+claims:
+  - id: pg_olap_perf
+    entity: postgres
+    axis: performance
+    text: "PostgreSQL excels at OLAP workloads with parallel query execution"
+```
+
+The theory layer derives comparisons. Your claims should never mention
+other entities.
+
 ---
 
 ## Quick Reference
@@ -700,6 +951,13 @@ let reg = load_ops_pack("data/my_ops.yaml")?;
 // Merge into existing registry
 load_ops_pack_str_into(yaml, &mut reg)?;
 
-// Load fact pack
+// Load single fact pack
 let idx = load_fact_pack(Path::new("data/my_facts.yaml"))?;
+
+// Load and merge multiple fact packs
+let idx = load_fact_packs(&["data/pack_a.yaml", "data/pack_b.yaml"])?;
+
+// Merge FactPack structs directly
+let merged = pack_a.merge(pack_b);
+let idx = FactPackIndex::build(merged);
 ```

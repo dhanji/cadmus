@@ -141,8 +141,28 @@ pub struct Goal {
     pub description: String,
     /// The entities to compare
     pub entities: Vec<String>,
-    /// Path to the fact pack file
-    pub fact_pack_path: String,
+    /// Paths to fact pack files (loaded and merged in order).
+    /// Use `fact_pack_paths` for multiple packs, or the convenience
+    /// `fact_pack_path` alias for a single pack.
+    #[serde(default)]
+    pub fact_pack_paths: Vec<String>,
+}
+
+impl Goal {
+    /// Convenience: create a Goal with a single fact pack path.
+    /// This is the backward-compatible constructor matching the old
+    /// `fact_pack_path: String` field.
+    pub fn with_single_fact_pack(
+        description: impl Into<String>,
+        entities: Vec<String>,
+        fact_pack_path: impl Into<String>,
+    ) -> Self {
+        Self {
+            description: description.into(),
+            entities,
+            fact_pack_paths: vec![fact_pack_path.into()],
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

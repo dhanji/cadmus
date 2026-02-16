@@ -1,4 +1,30 @@
-use reasoning_engine::workflow::{
+
+// ---------------------------------------------------------------------------
+// Power Tools Workflow Tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_workflow_git_log_search() {
+    let path = PathBuf::from("data/workflows/git_log_search.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("git_log"), "should have git_log step: {}", display);
+    assert!(display.contains("filter"), "should have filter step: {}", display);
+    assert!(display.contains("sort_by"), "should have sort_by step: {}", display);
+    // Variable expansion
+    assert!(display.contains("fix(auth)"), "should expand $pattern: {}", display);
+}
+
+#[test]
+fn test_workflow_process_logs() {
+    let path = PathBuf::from("data/workflows/process_logs.yaml");
+    let trace = run_workflow(&path).unwrap();
+    let display = trace.to_string();
+
+    assert!(display.contains("awk_extract"), "should have awk_extract step: {}", display);
+    assert!(display.contains("sed_script"), "should have sed_script step: {}", display);
+}use reasoning_engine::workflow::{
     parse_workflow, compile_workflow, execute_workflow, run_workflow,
     WorkflowError,
 };
