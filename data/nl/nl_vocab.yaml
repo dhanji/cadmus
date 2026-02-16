@@ -1,0 +1,986 @@
+# NL Vocabulary Pack
+# ==================
+# Consolidated word lists for the Natural Language UX layer.
+# Loaded at runtime — no Rust recompilation needed to extend.
+#
+# Sections:
+#   synonyms      — natural language phrases → canonical op names
+#   contractions  — English contractions → expansions
+#   ordinals      — ordinal words → numeric values
+#   approvals     — words/phrases that signal user approval
+#   rejections    — words/phrases that signal user rejection
+#   stopwords     — words filtered out during slot extraction
+#   filler_phrases — approval tail phrases ("why not", "that works", etc.)
+#   filler_prefixes — edit-command prefixes to skip ("also", "and", "then", etc.)
+
+# ---------------------------------------------------------------------------
+# Synonyms: natural language phrases → canonical op names
+# ---------------------------------------------------------------------------
+# Each entry: { phrase: [token, ...], op: canonical_op_name }
+# Sorted by phrase length (longest first) for greedy matching.
+
+synonyms:
+  # --- Multi-word phrases (3+ words) ---
+  - phrase: [zip, up, everything]
+    op: pack_archive
+  - phrase: [zip, up, all]
+    op: pack_archive
+  - phrase: [zip, up, files]
+    op: pack_archive
+  - phrase: [compress, all, files]
+    op: pack_archive
+  - phrase: [make, a, zip]
+    op: pack_archive
+  - phrase: [make, an, archive]
+    op: pack_archive
+  - phrase: [create, a, zip]
+    op: pack_archive
+  - phrase: [create, an, archive]
+    op: pack_archive
+  - phrase: [create, a, directory]
+    op: create_dir
+  - phrase: [make, a, directory]
+    op: create_dir
+  - phrase: [make, a, folder]
+    op: create_dir
+  - phrase: [create, a, folder]
+    op: create_dir
+  - phrase: [create, a, link]
+    op: create_link
+  - phrase: [make, a, link]
+    op: create_link
+  - phrase: [walk, the, directory]
+    op: walk_tree
+  - phrase: [walk, the, tree]
+    op: walk_tree
+  - phrase: [walk, the, dirtree]
+    op: walk_tree
+  - phrase: [walk, dir, tree]
+    op: walk_tree
+  - phrase: [walk, directory, tree]
+    op: walk_tree
+  - phrase: [search, for, files]
+    op: find_matching
+  - phrase: [search, for, text]
+    op: search_content
+  - phrase: [search, for, content]
+    op: search_content
+  - phrase: [look, for, files]
+    op: find_matching
+  - phrase: [look, for, text]
+    op: search_content
+  - phrase: [sort, by, name]
+    op: sort_by
+  - phrase: [sort, by, date]
+    op: sort_by
+  - phrase: [sort, by, size]
+    op: sort_by
+  - phrase: [sort, by, time]
+    op: sort_by
+  - phrase: [read, the, file]
+    op: read_file
+  - phrase: [open, the, file]
+    op: open_file
+  - phrase: [show, the, file]
+    op: read_file
+  - phrase: [show, me, the]
+    op: read_file
+  - phrase: [get, file, info]
+    op: stat
+  - phrase: [get, file, size]
+    op: get_size
+  - phrase: [get, file, type]
+    op: get_file_type
+  - phrase: [file, type, of]
+    op: get_file_type
+  - phrase: [check, disk, space]
+    op: df_usage
+  - phrase: [check, disk, usage]
+    op: du_size
+  - phrase: [disk, usage, of]
+    op: du_size
+  - phrase: [list, open, files]
+    op: lsof_open
+  - phrase: [list, all, processes]
+    op: ps_list
+  - phrase: [kill, the, process]
+    op: kill_process
+  - phrase: [git, log, search]
+    op: git_log
+  - phrase: [git, commit, history]
+    op: git_log
+  - phrase: [copy, to, clipboard]
+    op: clipboard_copy
+  - phrase: [paste, from, clipboard]
+    op: clipboard_paste
+  - phrase: [remove, the, quarantine]
+    op: remove_quarantine
+
+  # --- Two-word phrases ---
+  - phrase: [zip, up]
+    op: pack_archive
+  - phrase: [zip, everything]
+    op: pack_archive
+  - phrase: [zip, files]
+    op: pack_archive
+  - phrase: [unzip, files]
+    op: extract_archive
+  - phrase: [unzip, archive]
+    op: extract_archive
+  - phrase: [extract, archive]
+    op: extract_archive
+  - phrase: [extract, files]
+    op: extract_archive
+  - phrase: [extract, images]
+    op: extract_archive
+  - phrase: [uncompress, files]
+    op: extract_archive
+  - phrase: [decompress, files]
+    op: extract_archive
+  - phrase: [pack, files]
+    op: pack_archive
+  - phrase: [pack, archive]
+    op: pack_archive
+  - phrase: [compress, files]
+    op: pack_archive
+  - phrase: [archive, files]
+    op: pack_archive
+  - phrase: [list, files]
+    op: list_dir
+  - phrase: [list, directory]
+    op: list_dir
+  - phrase: [list, folder]
+    op: list_dir
+  - phrase: [list, dir]
+    op: list_dir
+  - phrase: [list, contents]
+    op: list_dir
+  - phrase: [show, files]
+    op: list_dir
+  - phrase: [show, directory]
+    op: list_dir
+  - phrase: [show, contents]
+    op: list_dir
+  - phrase: [read, file]
+    op: read_file
+  - phrase: [cat, file]
+    op: read_file
+  - phrase: [view, file]
+    op: read_file
+  - phrase: [open, file]
+    op: open_file
+  - phrase: [write, file]
+    op: write_file
+  - phrase: [save, file]
+    op: write_file
+  - phrase: [walk, tree]
+    op: walk_tree
+  - phrase: [walk, directory]
+    op: walk_tree
+  - phrase: [walk, dir]
+    op: walk_tree
+  - phrase: [walk, recursively]
+    op: walk_tree
+  - phrase: [find, files]
+    op: find_matching
+  - phrase: [find, matching]
+    op: find_matching
+  - phrase: [search, files]
+    op: find_matching
+  - phrase: [search, content]
+    op: search_content
+  - phrase: [search, text]
+    op: search_content
+  - phrase: [grep, for]
+    op: search_content
+  - phrase: [filter, files]
+    op: filter
+  - phrase: [filter, by]
+    op: filter
+  - phrase: [filter, out]
+    op: filter
+  - phrase: [sort, files]
+    op: sort_by
+  - phrase: [sort, entries]
+    op: sort_by
+  - phrase: [sort, results]
+    op: sort_by
+  - phrase: [rename, file]
+    op: rename
+  - phrase: [rename, files]
+    op: rename
+  - phrase: [move, file]
+    op: move_entry
+  - phrase: [move, files]
+    op: move_entry
+  - phrase: [move, entry]
+    op: move_entry
+  - phrase: [copy, file]
+    op: copy
+  - phrase: [copy, files]
+    op: copy
+  - phrase: [delete, file]
+    op: delete
+  - phrase: [delete, files]
+    op: delete
+  - phrase: [remove, file]
+    op: delete
+  - phrase: [remove, files]
+    op: delete
+  - phrase: [make, dir]
+    op: create_dir
+  - phrase: [make, directory]
+    op: create_dir
+  - phrase: [make, folder]
+    op: create_dir
+  - phrase: [create, dir]
+    op: create_dir
+  - phrase: [create, directory]
+    op: create_dir
+  - phrase: [create, folder]
+    op: create_dir
+  - phrase: [create, link]
+    op: create_link
+  - phrase: [make, link]
+    op: create_link
+  - phrase: [symlink, to]
+    op: create_link
+  - phrase: [file, info]
+    op: stat
+  - phrase: [file, metadata]
+    op: stat
+  - phrase: [file, stats]
+    op: stat
+  - phrase: [file, size]
+    op: get_size
+  - phrase: [file, type]
+    op: get_file_type
+  - phrase: [file, permissions]
+    op: get_permissions
+  - phrase: [set, permissions]
+    op: set_permissions
+  - phrase: [change, permissions]
+    op: set_permissions
+  - phrase: [change, owner]
+    op: set_owner
+  - phrase: [set, owner]
+    op: set_owner
+  - phrase: [find, replace]
+    op: replace
+  - phrase: [search, replace]
+    op: replace
+  - phrase: [head, of]
+    op: head
+  - phrase: [tail, of]
+    op: tail
+  - phrase: [first, lines]
+    op: head
+  - phrase: [last, lines]
+    op: tail
+  - phrase: [unique, lines]
+    op: unique
+  - phrase: [count, lines]
+    op: count
+  - phrase: [count, files]
+    op: count
+  - phrase: [diff, files]
+    op: diff
+  - phrase: [compare, files]
+    op: diff
+  - phrase: [compute, checksum]
+    op: checksum
+  - phrase: [file, checksum]
+    op: checksum
+  - phrase: [spotlight, search]
+    op: spotlight_search
+  - phrase: [spotlight, find]
+    op: spotlight_search
+  - phrase: [open, with]
+    op: open_with
+  - phrase: [reveal, in]
+    op: reveal
+  - phrase: [show, in]
+    op: reveal
+  - phrase: [read, plist]
+    op: read_plist
+  - phrase: [write, plist]
+    op: write_plist
+  - phrase: [download, file]
+    op: download
+  - phrase: [download, from]
+    op: download
+  - phrase: [upload, file]
+    op: upload
+  - phrase: [upload, to]
+    op: upload
+  - phrase: [sync, files]
+    op: sync
+  - phrase: [sync, directories]
+    op: sync
+  # Git
+  - phrase: [git, init]
+    op: git_init
+  - phrase: [git, clone]
+    op: git_clone
+  - phrase: [git, add]
+    op: git_add
+  - phrase: [git, commit]
+    op: git_commit
+  - phrase: [git, log]
+    op: git_log
+  - phrase: [git, diff]
+    op: git_diff
+  - phrase: [git, branch]
+    op: git_branch
+  - phrase: [git, checkout]
+    op: git_checkout
+  - phrase: [git, merge]
+    op: git_merge
+  - phrase: [git, rebase]
+    op: git_rebase
+  - phrase: [git, stash]
+    op: git_stash
+  - phrase: [git, push]
+    op: git_push
+  - phrase: [git, pull]
+    op: git_pull
+  - phrase: [git, blame]
+    op: git_blame
+  - phrase: [git, bisect]
+    op: git_bisect
+  - phrase: [git, tag]
+    op: git_tag
+  - phrase: [git, status]
+    op: git_status
+  # Tmux/screen
+  - phrase: [tmux, session]
+    op: tmux_new_session
+  - phrase: [tmux, attach]
+    op: tmux_attach
+  - phrase: [tmux, split]
+    op: tmux_split
+  - phrase: [screen, session]
+    op: screen_new_session
+  - phrase: [screen, attach]
+    op: screen_attach
+  # JSON/YAML/CSV
+  - phrase: [jq, query]
+    op: jq_query
+  - phrase: [jq, filter]
+    op: jq_filter_seq
+  - phrase: [jq, transform]
+    op: jq_transform
+  - phrase: [yq, query]
+    op: yq_query
+  - phrase: [yq, convert]
+    op: yq_convert
+  - phrase: [csv, cut]
+    op: csv_cut
+  - phrase: [csv, join]
+    op: csv_join
+  - phrase: [csv, sort]
+    op: csv_sort
+  # Text processing
+  - phrase: [awk, extract]
+    op: awk_extract
+  - phrase: [awk, aggregate]
+    op: awk_aggregate
+  - phrase: [sed, script]
+    op: sed_script
+  - phrase: [cut, fields]
+    op: cut_fields
+  # System
+  - phrase: [disk, space]
+    op: df_usage
+  - phrase: [disk, usage]
+    op: du_size
+  - phrase: [process, list]
+    op: ps_list
+  - phrase: [kill, process]
+    op: kill_process
+  - phrase: [open, files]
+    op: lsof_open
+  - phrase: [system, info]
+    op: uname_info
+  # Network
+  - phrase: [ssh, exec]
+    op: ssh_exec
+  - phrase: [scp, transfer]
+    op: scp_transfer
+  - phrase: [wget, download]
+    op: wget_download
+  - phrase: [ping, host]
+    op: ping_host
+  - phrase: [dns, lookup]
+    op: dig_lookup
+  # Compression
+  - phrase: [gzip, compress]
+    op: gzip_compress
+  - phrase: [gzip, decompress]
+    op: gzip_decompress
+  - phrase: [xz, compress]
+    op: xz_compress
+  - phrase: [base64, encode]
+    op: base64_encode
+  - phrase: [base64, decode]
+    op: base64_decode
+
+  # --- Single-word synonyms ---
+  - phrase: [ls]
+    op: list_dir
+  - phrase: [dir]
+    op: list_dir
+  - phrase: [list]
+    op: list_dir
+  - phrase: [cat]
+    op: read_file
+  - phrase: [less]
+    op: read_file
+  - phrase: [more]
+    op: read_file
+  - phrase: [type]
+    op: read_file
+  - phrase: [find]
+    op: find_matching
+  - phrase: [grep]
+    op: search_content
+  - phrase: [rg]
+    op: search_content
+  - phrase: [ag]
+    op: search_content
+  - phrase: [ack]
+    op: search_content
+  - phrase: [mv]
+    op: move_entry
+  - phrase: [cp]
+    op: copy
+  - phrase: [rm]
+    op: delete
+  - phrase: [del]
+    op: delete
+  - phrase: [erase]
+    op: delete
+  - phrase: [trash]
+    op: delete
+  - phrase: [mkdir]
+    op: create_dir
+  - phrase: [mkd]
+    op: create_dir
+  - phrase: [ln]
+    op: create_link
+  - phrase: [link]
+    op: create_link
+  - phrase: [symlink]
+    op: create_link
+  - phrase: [zip]
+    op: pack_archive
+  - phrase: [unzip]
+    op: extract_archive
+  - phrase: [tar]
+    op: pack_archive
+  - phrase: [untar]
+    op: extract_archive
+  - phrase: [extract]
+    op: extract_archive
+  - phrase: [compress]
+    op: gzip_compress
+  - phrase: [decompress]
+    op: gzip_decompress
+  - phrase: [uncompress]
+    op: gzip_decompress
+  - phrase: [pack]
+    op: pack_archive
+  - phrase: [unpack]
+    op: extract_archive
+  - phrase: [archive]
+    op: pack_archive
+  - phrase: [walk]
+    op: walk_tree
+  - phrase: [traverse]
+    op: walk_tree
+  - phrase: [recurse]
+    op: walk_tree
+  - phrase: [recursive]
+    op: walk_tree
+  - phrase: [tree]
+    op: walk_tree
+  - phrase: [sort]
+    op: sort_by
+  - phrase: [order]
+    op: sort_by
+  - phrase: [arrange]
+    op: sort_by
+  - phrase: [filter]
+    op: filter
+  - phrase: [sift]
+    op: filter
+  - phrase: [narrow]
+    op: filter
+  - phrase: [search]
+    op: search_content
+  - phrase: [rename]
+    op: rename
+  - phrase: [move]
+    op: move_entry
+  - phrase: [copy]
+    op: copy
+  - phrase: [duplicate]
+    op: copy
+  - phrase: [delete]
+    op: delete
+  - phrase: [remove]
+    op: delete
+  - phrase: [stat]
+    op: stat
+  - phrase: [info]
+    op: stat
+  - phrase: [metadata]
+    op: stat
+  - phrase: [head]
+    op: head
+  - phrase: [tail]
+    op: tail
+  - phrase: [unique]
+    op: unique
+  - phrase: [uniq]
+    op: unique
+  - phrase: [dedup]
+    op: unique
+  - phrase: [deduplicate]
+    op: unique
+  - phrase: [count]
+    op: count
+  - phrase: [wc]
+    op: count
+  - phrase: [diff]
+    op: diff
+  - phrase: [checksum]
+    op: checksum
+  - phrase: [md5]
+    op: checksum
+  - phrase: [sha256]
+    op: checksum
+  - phrase: [hash]
+    op: openssl_hash
+  - phrase: [download]
+    op: download
+  - phrase: [upload]
+    op: upload
+  - phrase: [sync]
+    op: sync
+  - phrase: [rsync]
+    op: sync
+  - phrase: [reveal]
+    op: reveal
+  - phrase: [spotlight]
+    op: spotlight_search
+  - phrase: [mdfind]
+    op: spotlight_search
+  - phrase: [replace]
+    op: replace
+  - phrase: [sed]
+    op: sed_script
+  - phrase: [awk]
+    op: awk_extract
+  - phrase: [cut]
+    op: cut_fields
+  - phrase: [paste]
+    op: paste_merge
+  - phrase: [tee]
+    op: tee_split
+  - phrase: [column]
+    op: column_format
+  - phrase: [tr]
+    op: tr_replace
+  - phrase: [ps]
+    op: ps_list
+  - phrase: [kill]
+    op: kill_process
+  - phrase: [pkill]
+    op: pkill_pattern
+  - phrase: [lsof]
+    op: lsof_open
+  - phrase: [df]
+    op: df_usage
+  - phrase: [du]
+    op: du_size
+  - phrase: [file]
+    op: file_type_detect
+  - phrase: [uname]
+    op: uname_info
+  - phrase: [uptime]
+    op: uptime_info
+  - phrase: [ssh]
+    op: ssh_exec
+  - phrase: [scp]
+    op: scp_transfer
+  - phrase: [wget]
+    op: wget_download
+  - phrase: [curl]
+    op: wget_download
+  - phrase: [nc]
+    op: nc_connect
+  - phrase: [netcat]
+    op: nc_connect
+  - phrase: [ping]
+    op: ping_host
+  - phrase: [dig]
+    op: dig_lookup
+  - phrase: [nslookup]
+    op: dig_lookup
+  - phrase: [gzip]
+    op: gzip_compress
+  - phrase: [gunzip]
+    op: gzip_decompress
+  - phrase: [xz]
+    op: xz_compress
+  - phrase: [base64]
+    op: base64_encode
+  - phrase: [openssl]
+    op: openssl_hash
+  - phrase: [jq]
+    op: jq_query
+  - phrase: [yq]
+    op: yq_query
+  - phrase: [watch]
+    op: watch_command
+  # Single-word git shortcuts
+  - phrase: [clone]
+    op: git_clone
+  - phrase: [commit]
+    op: git_commit
+  - phrase: [checkout]
+    op: git_checkout
+  - phrase: [merge]
+    op: git_merge
+  - phrase: [fetch]
+    op: git_fetch
+  - phrase: [pull]
+    op: git_pull
+  - phrase: [push]
+    op: git_push
+
+# ---------------------------------------------------------------------------
+# Contractions: contraction → expansion
+# ---------------------------------------------------------------------------
+# Order matters: longer patterns first (won't before don't).
+
+contractions:
+  "won't": "will not"
+  "can't": "cannot"
+  "couldn't": "could not"
+  "shouldn't": "should not"
+  "wouldn't": "would not"
+  "didn't": "did not"
+  "doesn't": "does not"
+  "don't": "do not"
+  "isn't": "is not"
+  "aren't": "are not"
+  "wasn't": "was not"
+  "weren't": "were not"
+  "hasn't": "has not"
+  "haven't": "have not"
+  "hadn't": "had not"
+  "i'm": "i am"
+  "i've": "i have"
+  "i'll": "i will"
+  "i'd": "i would"
+  "you're": "you are"
+  "you've": "you have"
+  "you'll": "you will"
+  "you'd": "you would"
+  "he's": "he is"
+  "she's": "she is"
+  "it's": "it is"
+  "we're": "we are"
+  "we've": "we have"
+  "we'll": "we will"
+  "they're": "they are"
+  "they've": "they have"
+  "they'll": "they will"
+  "that's": "that is"
+  "there's": "there is"
+  "here's": "here is"
+  "what's": "what is"
+  "who's": "who is"
+  "let's": "let us"
+
+# ---------------------------------------------------------------------------
+# Ordinals: ordinal word → numeric value
+# ---------------------------------------------------------------------------
+
+ordinals:
+  first: 1
+  second: 2
+  third: 3
+  fourth: 4
+  fifth: 5
+  sixth: 6
+  seventh: 7
+  eighth: 8
+  ninth: 9
+  tenth: 10
+  eleventh: 11
+  twelfth: 12
+
+# ---------------------------------------------------------------------------
+# Approvals: words/phrases that signal user approval
+# ---------------------------------------------------------------------------
+
+approvals:
+  single:
+    - lgtm
+    - "yes"
+    - yep
+    - yeah
+    - yea
+    - ok
+    - okay
+    - sure
+    - approve
+    - approved
+    - confirm
+    - confirmed
+    - go
+    - proceed
+    - accept
+    - accepted
+    - fine
+    - great
+    - perfect
+    - nice
+    - cool
+    - awesome
+    - excellent
+    - good
+    - agreed
+    - aye
+    - affirmative
+    - absolutely
+    - definitely
+    - totally
+    - done
+    - "y"
+  multi:
+    - sounds good
+    - looks good
+    - looks great
+    - looks fine
+    - sounds great
+    - sounds fine
+    - sounds right
+    - sounds correct
+    - that is good
+    - that is great
+    - that is fine
+    - that is correct
+    - that is right
+    - that is perfect
+    - that works
+    - go ahead
+    - go for it
+    - do it
+    - ship it
+    - send it
+    - let us go
+    - let us do it
+    - make it so
+    - run it
+    - i approve
+    - i accept
+    - i agree
+    - i confirm
+    - yes please
+    - yes do it
+    - yes go ahead
+    - ok do it
+    - ok go ahead
+    - ok sounds good
+    - all good
+    - all set
+    - we are good
+
+# ---------------------------------------------------------------------------
+# Rejections: words/phrases that signal user rejection
+# ---------------------------------------------------------------------------
+
+rejections:
+  single:
+    - "no"
+    - nope
+    - nah
+    - cancel
+    - stop
+    - abort
+    - quit
+    - reject
+    - rejected
+    - undo
+    - reset
+    - restart
+    - "n"
+    - negative
+    - never
+    - refuse
+    - declined
+  multi:
+    - start over
+    - start again
+    - try again
+    - do over
+    - no thanks
+    - no thank you
+    - not that
+    - not this
+    - scratch that
+    - forget it
+    - forget that
+    - never mind
+    - scrap that
+    - scrap it
+    - scrap the plan
+    - nah scrap
+    - nah forget
+    - nah scratch
+    - nah never
+    - nevermind
+    - i do not want
+    - i do not like
+    - actually no
+    - actually nah
+    - actually never mind
+    - wait no
+    - wait stop
+    - wait cancel
+    - nah i am good
+    - nah i am fine
+    - no i am good
+    - no i am fine
+    - forget about it
+    - forget about that
+    - that is wrong
+    - that is not right
+    - that is not what i want
+    - undo that
+    - undo it
+    - take it back
+    - go back
+    - back up
+    - step back
+
+# ---------------------------------------------------------------------------
+# Stopwords: filtered out during slot extraction
+# ---------------------------------------------------------------------------
+
+stopwords:
+  - the
+  - a
+  - an
+  - in
+  - on
+  - at
+  - to
+  - for
+  - of
+  - from
+  - with
+  - by
+  - is
+  - are
+  - was
+  - were
+  - be
+  - been
+  - being
+  - my
+  - your
+  - its
+  - their
+  - our
+  - this
+  - that
+  - these
+  - those
+  - it
+  - i
+  - me
+  - we
+  - you
+  - he
+  - she
+  - they
+  - do
+  - does
+  - did
+  - will
+  - would
+  - could
+  - should
+  - can
+  - may
+  - might
+  - shall
+  - and
+  - or
+  - but
+  - not
+  - up
+  - everything
+  - all
+  - any
+  - every
+  - some
+  - please
+  - just
+  - also
+  - then
+  - so
+  - if
+  # Conversational fillers — must not become keywords
+  - ok
+  - okay
+  - sure
+  - "yes"
+  - yeah
+  - yep
+  - yea
+  - alright
+  - right
+  - well
+  - hmm
+  - um
+  - uh
+  - hey
+  - oh
+
+# ---------------------------------------------------------------------------
+# Filler phrases: approval tails ("sure why not", "yeah that works")
+# ---------------------------------------------------------------------------
+
+filler_phrases:
+  - why not
+  - that works
+  - works for me
+  - i think
+  - let us do it
+  - go for it
+  - of course
+
+# ---------------------------------------------------------------------------
+# Filler prefixes: skipped at start of edit commands
+# ---------------------------------------------------------------------------
+
+filler_prefixes:
+  - also
+  - and
+  - then
+  - now
+  - plus
+  - additionally
+  - but
+  - oh
+  - hey
+  - ok
+  - okay
+  - so
+  - well

@@ -1017,3 +1017,296 @@ fn test_redteam_transposed_letters() {
         "transposed letters should still create plan: {:?}", r);
     assert_yaml_compiles(&r);
 }
+
+// ===========================================================================
+// Phase 5: File Type Dictionary integration tests
+// ===========================================================================
+
+// --- New file types detected as paths ---
+
+#[test]
+fn test_filetype_heic_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("copy photo.heic to ~/backup/", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "photo.heic should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_filetype_webm_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("copy video.webm to ~/backup/", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "video.webm should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_filetype_rkt_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("search for define in code.rkt", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "code.rkt should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_filetype_scm_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("search for lambda in program.scm", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "program.scm should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_filetype_flac_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("copy song.flac to ~/music/", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "song.flac should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_filetype_wasm_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("checksum app.wasm", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "app.wasm should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_filetype_epub_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("copy book.epub to ~/library/", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "book.epub should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+#[test]
+fn test_filetype_plist_detected_as_path() {
+    let mut state = DialogueState::new();
+    let r = process_input("copy config.plist to ~/backup/", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "config.plist should be detected as a file path: {:?}", r);
+    assert_yaml_compiles(&r);
+}
+
+// --- Workflow type inference with new extensions ---
+
+#[test]
+fn test_filetype_flac_infers_audio_type() {
+    let mut state = DialogueState::new();
+    let r = process_input("copy song.flac to ~/backup/", &mut state);
+    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
+        // Should compile — the dictionary gives File(Audio) for .flac
+        let def: reasoning_engine::workflow::WorkflowDef =
+            serde_yaml::from_str(workflow_yaml).unwrap();
+        let reg = reasoning_engine::fs_types::build_full_registry();
+        let compiled = reasoning_engine::workflow::compile_workflow(&def, &reg);
+        assert!(compiled.is_ok(), "flac workflow should compile: {:?}", compiled.err());
+    }
+}
+
+#[test]
+fn test_filetype_scheme_infers_text_type() {
+    let mut state = DialogueState::new();
+    let r = process_input("search for define in program.scm", &mut state);
+    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
+        let def: reasoning_engine::workflow::WorkflowDef =
+            serde_yaml::from_str(workflow_yaml).unwrap();
+        let reg = reasoning_engine::fs_types::build_full_registry();
+        let compiled = reasoning_engine::workflow::compile_workflow(&def, &reg);
+        assert!(compiled.is_ok(), "scheme workflow should compile: {:?}", compiled.err());
+    }
+}
+
+// --- Dictionary query API ---
+
+#[test]
+fn test_filetype_dictionary_describe() {
+    let dict = reasoning_engine::filetypes::dictionary();
+    let desc = dict.describe_file_type("mp4");
+    assert!(desc.contains("MP4"), "should mention MP4: {}", desc);
+    assert!(desc.contains("ffmpeg"), "should mention ffmpeg tool: {}", desc);
+}
+
+#[test]
+fn test_filetype_dictionary_category_query() {
+    let dict = reasoning_engine::filetypes::dictionary();
+    let source_exts = dict.extensions_for_category(
+        &reasoning_engine::filetypes::FileTypeCategory::SourceCode
+    );
+    assert!(source_exts.contains(&"scm"), "source code should include .scm");
+    assert!(source_exts.contains(&"ss"), "source code should include .ss");
+    assert!(source_exts.contains(&"rkt"), "source code should include .rkt");
+    assert!(source_exts.contains(&"rs"), "source code should include .rs");
+    assert!(source_exts.len() >= 35, "should have 35+ source code exts, got {}", source_exts.len());
+}
+
+#[test]
+fn test_filetype_dictionary_compound_ext_lookup() {
+    let dict = reasoning_engine::filetypes::dictionary();
+    // lookup_by_path should prefer tar.gz over gz
+    let entry = dict.lookup_by_path("backup.tar.gz").unwrap();
+    assert_eq!(entry.ext, "tar.gz");
+    // But plain .gz should still work
+    let entry2 = dict.lookup_by_path("data.gz").unwrap();
+    assert_eq!(entry2.ext, "gz");
+}
+
+#[test]
+fn test_filetype_dictionary_unknown_returns_none() {
+    let dict = reasoning_engine::filetypes::dictionary();
+    assert!(dict.lookup("xyzzy").is_none());
+    assert!(dict.lookup_by_path("noext").is_none());
+    assert!(dict.lookup_by_path("file.").is_none());
+}
+
+#[test]
+fn test_filetype_dictionary_size() {
+    let dict = reasoning_engine::filetypes::dictionary();
+    assert!(dict.len() >= 170, "dictionary should have 170+ entries, got {}", dict.len());
+}
+
+// =========================================================================
+// Phase 6: YAML externalization integration tests
+// =========================================================================
+
+// -- Vocab YAML loading --
+
+#[test]
+fn test_yaml_vocab_synonyms_loaded() {
+    // Verify synonyms load from YAML and work end-to-end
+    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
+    let r = reasoning_engine::nl::process_input("zip up everything in ~/Downloads", &mut state);
+    match r {
+        reasoning_engine::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("pack_archive"),
+                "should have pack_archive in YAML from synonym, got: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_yaml_vocab_contractions_loaded() {
+    // "don't" should expand to "do not" via YAML contractions
+    let result = reasoning_engine::nl::normalize::normalize("don't walk the tree");
+    assert!(result.tokens.contains(&"do".to_string()), "should expand don't: {:?}", result.tokens);
+    assert!(result.tokens.contains(&"not".to_string()), "should expand don't: {:?}", result.tokens);
+}
+
+#[test]
+fn test_yaml_vocab_ordinals_loaded() {
+    let result = reasoning_engine::nl::normalize::normalize("move first step");
+    assert!(result.canonical_tokens.contains(&"1".to_string()),
+        "should canonicalize 'first' to '1': {:?}", result.canonical_tokens);
+}
+
+#[test]
+fn test_yaml_vocab_approvals_loaded() {
+    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
+    let _ = reasoning_engine::nl::process_input("list ~/Desktop", &mut state);
+    let r = reasoning_engine::nl::process_input("lgtm", &mut state);
+    assert!(matches!(r, reasoning_engine::nl::NlResponse::Approved),
+        "lgtm should approve via YAML-loaded approval list: {:?}", r);
+}
+
+#[test]
+fn test_yaml_vocab_rejections_loaded() {
+    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
+    let _ = reasoning_engine::nl::process_input("list ~/Desktop", &mut state);
+    let r = reasoning_engine::nl::process_input("nah forget it", &mut state);
+    assert!(matches!(r, reasoning_engine::nl::NlResponse::Rejected),
+        "nah forget it should reject via YAML-loaded rejection list: {:?}", r);
+}
+
+// -- Dictionary YAML loading --
+
+#[test]
+fn test_yaml_dictionary_typo_correction() {
+    // "extrct" should correct to "extract" via YAML-loaded dictionary
+    let dict = reasoning_engine::nl::typo::build_domain_dict();
+    let corrected = dict.correct("extrct");
+    assert_eq!(corrected, "extract", "should correct typo via YAML dictionary");
+}
+
+#[test]
+fn test_yaml_dictionary_unknown_passthrough() {
+    let dict = reasoning_engine::nl::typo::build_domain_dict();
+    let result = dict.correct("xyzzyplugh");
+    assert_eq!(result, "xyzzyplugh", "unknown word should pass through unchanged");
+}
+
+// -- Op descriptions from YAML packs --
+
+#[test]
+fn test_yaml_op_description_from_registry() {
+    let desc = reasoning_engine::fs_types::get_op_description("walk_tree");
+    assert!(desc.is_some(), "walk_tree should have a description from fs_ops.yaml");
+    assert!(desc.unwrap().contains("walk"), "description should mention walking: {}", desc.unwrap());
+}
+
+#[test]
+fn test_yaml_op_description_power_tools() {
+    let desc = reasoning_engine::fs_types::get_op_description("git_log");
+    assert!(desc.is_some(), "git_log should have a description from power_tools_ops.yaml");
+    assert!(desc.unwrap().contains("git"), "description should mention git: {}", desc.unwrap());
+}
+
+#[test]
+fn test_yaml_op_description_unknown_returns_none() {
+    let desc = reasoning_engine::fs_types::get_op_description("nonexistent_op_xyz");
+    assert!(desc.is_none(), "unknown op should return None");
+}
+
+// -- CANONICAL_OPS derived from registry --
+
+#[test]
+fn test_yaml_canonical_ops_derived() {
+    assert!(reasoning_engine::nl::normalize::is_canonical_op("list_dir"),
+        "list_dir should be canonical (from fs_ops.yaml)");
+    assert!(reasoning_engine::nl::normalize::is_canonical_op("git_log"),
+        "git_log should be canonical (from power_tools_ops.yaml)");
+    assert!(!reasoning_engine::nl::normalize::is_canonical_op("nonexistent_xyz"),
+        "nonexistent op should not be canonical");
+}
+
+#[test]
+fn test_yaml_canonical_ops_count() {
+    let ops = reasoning_engine::nl::normalize::canonical_ops();
+    assert!(ops.len() >= 113, "should have at least 113 canonical ops, got {}", ops.len());
+}
+
+// -- End-to-end: full pipeline with YAML data --
+
+#[test]
+fn test_yaml_full_pipeline_walk_tree() {
+    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
+    let r = reasoning_engine::nl::process_input("walk the directory tree in ~/Documents", &mut state);
+    match r {
+        reasoning_engine::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("walk_tree"),
+                "should have walk_tree from YAML synonyms: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_yaml_full_pipeline_explain_op() {
+    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
+    let r = reasoning_engine::nl::process_input("what is walk_tree", &mut state);
+    match r {
+        reasoning_engine::nl::NlResponse::Explanation { text, .. } => {
+            // Description should come from fs_ops.yaml
+            assert!(!text.is_empty(), "explanation should not be empty");
+        }
+        other => panic!("expected Explanation, got: {:?}", other),
+    }
+}

@@ -551,137 +551,33 @@ fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
     }
 }
 
-/// Check if a value string ends with a known file extension.
-/// Used to prevent the directory heuristic from misclassifying files like
-/// ~/backup/database.sql as Dir(Bytes).
-fn has_known_file_extension(value: &str) -> bool {
-    if let Some(dot_pos) = value.rfind('.') {
-        let ext = &value[dot_pos + 1..];
-        if ext.is_empty() {
-            return false;
-        }
-        matches!(ext,
-            // Text/code
-            "txt" | "md" | "rs" | "py" | "js" | "ts" | "go" | "java" | "c" | "cpp" | "h"
-            | "json" | "yaml" | "yml" | "toml" | "xml" | "html" | "css" | "csv"
-            | "log" | "sh" | "bash" | "zsh" | "fish"
-            // Archives
-            | "tar" | "gz" | "tgz" | "zip" | "bz2" | "xz" | "7z" | "rar"
-            | "cbz" | "cbr"
-            // Documents
-            | "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx"
-            // Images
-            | "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "bmp" | "ico"
-            // Media
-            | "mp3" | "mp4" | "wav" | "avi" | "mkv" | "mov"
-            // Data
-            | "db" | "sql" | "sqlite"
-            // Config
-            | "cfg" | "conf" | "ini" | "env"
-            | "plist" | "lock" | "bak" | "tmp" | "swp"
-        )
-    } else {
-        false
-    }
-}
-
 /// Infer the TypeExpr for a workflow input based on its name and value.
 ///
 /// Heuristics:
-///   - name contains "path" or "dir" or value ends with "/" → Dir(Bytes)
-///   - name contains "file" or value has a known extension → File(content)
-///   - name contains "pattern" or "keyword" → Pattern
-///   - otherwise → Bytes (generic)
+///   1. URL check (before file extensions, since URLs may end in .zip)
+///   2. File extension lookup via data/filetypes.yaml dictionary
+///   3. Directory heuristic (name hint, trailing slash, ~/ prefix)
+///   4. Power tools types (repo, pattern, size)
+///   5. Generic fallback → Bytes
 fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> {
     let name_lower = name.to_lowercase();
-    let value_lower = value.to_lowercase();
 
-    // URL (check before archive extensions since URLs may end in .zip)
+    // 1. URL (check before file extensions since URLs may end in .zip)
     if name_lower == "url" || name_lower.contains("url")
-        || value_lower.starts_with("http://") || value_lower.starts_with("https://")
-        || value_lower.starts_with("ftp://")
+        || value.starts_with("http://") || value.starts_with("https://")
+        || value.starts_with("ftp://") || value.starts_with("HTTP://")
+        || value.starts_with("HTTPS://")
     {
         return Ok(TypeExpr::prim("URL"));
     }
 
-    // Archive files
-    if value_lower.ends_with(".cbz") {
-        return Ok(TypeExpr::file(TypeExpr::archive(
-            TypeExpr::file(TypeExpr::prim("Image")),
-            TypeExpr::prim("Cbz"),
-        )));
-    }
-    if value_lower.ends_with(".zip") {
-        return Ok(TypeExpr::file(TypeExpr::archive(
-            TypeExpr::prim("Bytes"),
-            TypeExpr::prim("Zip"),
-        )));
-    }
-    if value_lower.ends_with(".tar.gz") || value_lower.ends_with(".tgz") {
-        return Ok(TypeExpr::file(TypeExpr::archive(
-            TypeExpr::prim("Bytes"),
-            TypeExpr::prim("TarGz"),
-        )));
-    }
-    if value_lower.ends_with(".tar") {
-        return Ok(TypeExpr::file(TypeExpr::archive(
-            TypeExpr::prim("Bytes"),
-            TypeExpr::prim("Tar"),
-        )));
+    // 2. File extension lookup via YAML dictionary (handles compound exts like .tar.gz)
+    if let Some(entry) = crate::filetypes::dictionary().lookup_by_path(value) {
+        return Ok(entry.type_expr.clone());
     }
 
-    // JSON files (before generic text — structured data)
-    if value_lower.ends_with(".json") {
-        return Ok(TypeExpr::file(TypeExpr::prim("Json")));
-    }
-
-    // YAML files (before generic text — structured data)
-    if value_lower.ends_with(".yaml") || value_lower.ends_with(".yml") {
-        return Ok(TypeExpr::file(TypeExpr::prim("Yaml")));
-    }
-
-    // CSV files (before generic text — structured data)
-    if value_lower.ends_with(".csv") {
-        return Ok(TypeExpr::file(TypeExpr::prim("Csv")));
-    }
-
-    // Text files (generic — after structured formats)
-    if value_lower.ends_with(".txt") || value_lower.ends_with(".md")
-        || value_lower.ends_with(".rs") || value_lower.ends_with(".py")
-        || value_lower.ends_with(".js") || value_lower.ends_with(".ts")
-        || value_lower.ends_with(".log")
-        || value_lower.ends_with(".toml")
-        || value_lower.ends_with(".xml") || value_lower.ends_with(".html")
-        || value_lower.ends_with(".css") || value_lower.ends_with(".sh")
-    {
-        return Ok(TypeExpr::file(TypeExpr::prim("Text")));
-    }
-
-    // PDF files
-    if value_lower.ends_with(".pdf") {
-        return Ok(TypeExpr::file(TypeExpr::prim("PDF")));
-    }
-
-    // Image files
-    if value_lower.ends_with(".png") || value_lower.ends_with(".jpg")
-        || value_lower.ends_with(".jpeg") || value_lower.ends_with(".gif")
-        || value_lower.ends_with(".svg") || value_lower.ends_with(".webp")
-        || value_lower.ends_with(".bmp") || value_lower.ends_with(".ico")
-    {
-        return Ok(TypeExpr::file(TypeExpr::prim("Image")));
-    }
-
-    // Other known file extensions — catch-all before directory heuristic
-    // This prevents ~/path/file.sql from being typed as Dir(Bytes)
-    if has_known_file_extension(&value_lower) {
-        // Generic file with bytes content — the specific type isn't known
-        // but it's definitely a file, not a directory
-        return Ok(TypeExpr::file(TypeExpr::prim("Bytes")));
-    }
-
-    // Directory (by name hint or trailing slash)
+    // 3. Directory (by name hint or trailing slash)
     if name_lower == "textdir" || name_lower == "text_dir" {
-        // Directory containing text files — used by search_content pipelines
         return Ok(TypeExpr::dir(TypeExpr::file(TypeExpr::prim("Text"))));
     }
 
@@ -692,11 +588,11 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
         return Ok(TypeExpr::dir(TypeExpr::prim("Bytes")));
     }
 
-    // --- Power tools types ---
+    // 4. Power tools types
 
     // Git repository
     if name_lower == "repo" || name_lower.contains("repository")
-        || value_lower.ends_with(".git")
+        || value.ends_with(".git")
     {
         return Ok(TypeExpr::prim("Repo"));
     }
@@ -713,7 +609,7 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
         return Ok(TypeExpr::prim("Size"));
     }
 
-    // Generic fallback
+    // 5. Generic fallback
     Ok(TypeExpr::prim("Bytes"))
 }
 

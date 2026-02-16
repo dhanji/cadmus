@@ -62,6 +62,37 @@ pub fn build_full_registry() -> OperationRegistry {
 }
 
 // ---------------------------------------------------------------------------
+// Op description lookup (cached)
+// ---------------------------------------------------------------------------
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+static OP_DESCRIPTIONS: OnceLock<HashMap<String, String>> = OnceLock::new();
+
+/// Get the description map for all registered ops (cached singleton).
+///
+/// Built from the full registry (fs_ops + power_tools + coding + comparison).
+/// Returns a map of op_name → description string.
+fn op_descriptions() -> &'static HashMap<String, String> {
+    OP_DESCRIPTIONS.get_or_init(|| {
+        let reg = build_full_registry();
+        let mut map = HashMap::new();
+        for name in reg.poly_op_names() {
+            if let Some(op) = reg.get_poly(name) {
+                map.insert(name.to_string(), op.description.clone());
+            }
+        }
+        map
+    })
+}
+
+/// Get the description for a specific op, or None if not found.
+pub fn get_op_description(op_name: &str) -> Option<&'static str> {
+    op_descriptions().get(op_name).map(|s| s.as_str())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

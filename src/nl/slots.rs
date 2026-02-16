@@ -116,19 +116,7 @@ impl ExtractedSlots {
 pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
     let mut result = ExtractedSlots::new();
 
-    let stopwords = [
-        "the", "a", "an", "in", "on", "at", "to", "for", "of", "from",
-        "with", "by", "is", "are", "was", "were", "be", "been", "being",
-        "my", "your", "its", "their", "our", "this", "that", "these",
-        "those", "it", "i", "me", "we", "you", "he", "she", "they",
-        "do", "does", "did", "will", "would", "could", "should",
-        "can", "may", "might", "shall", "and", "or", "but", "not",
-        "up", "everything", "all", "any", "every", "some",
-        "please", "just", "also", "then", "so", "if",
-        // Conversational fillers — must not become keywords
-        "ok", "okay", "sure", "yes", "yeah", "yep", "yea",
-        "alright", "right", "well", "hmm", "um", "uh", "hey", "oh",
-    ];
+    let stopwords = &super::vocab::vocab().stopwords;
 
     let mut i = 0;
     while i < tokens.len() {
@@ -243,7 +231,7 @@ pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
         }
 
         // 11. Skip stopwords, keep meaningful keywords
-        if !stopwords.contains(&token.as_str()) && !token.is_empty() {
+        if !stopwords.contains(token.as_str()) && !token.is_empty() {
             result.slots.push(SlotValue::Keyword(token.clone()));
             result.keywords.push(token.clone());
         }
@@ -306,19 +294,7 @@ fn is_path(token: &str) -> bool {
 
 /// Check if a string looks like a known file extension.
 fn is_file_extension(ext: &str) -> bool {
-    matches!(ext,
-        "txt" | "md" | "rs" | "py" | "js" | "ts" | "go" | "java" | "c" | "cpp" | "h"
-        | "json" | "yaml" | "yml" | "toml" | "xml" | "html" | "css" | "csv"
-        | "log" | "sh" | "bash" | "zsh" | "fish"
-        | "tar" | "gz" | "tgz" | "zip" | "bz2" | "xz" | "7z" | "rar"
-        | "cbz" | "cbr"
-        | "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx"
-        | "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "bmp" | "ico"
-        | "mp3" | "mp4" | "wav" | "avi" | "mkv" | "mov"
-        | "db" | "sql" | "sqlite"
-        | "cfg" | "conf" | "ini" | "env"
-        | "plist" | "lock" | "bak" | "tmp" | "swp"
-    )
+    crate::filetypes::dictionary().is_known_extension(ext)
 }
 
 /// Check if a token looks like a glob/pattern.
@@ -391,11 +367,11 @@ pub fn fuzzy_match_op(token: &str) -> Option<String> {
         return None;
     }
 
-    let ops = crate::nl::normalize::CANONICAL_OPS;
+    let ops = crate::nl::normalize::canonical_ops();
     let mut best: Option<(String, usize)> = None;
 
-    for op in ops {
-        let dist = edit_distance_bounded(token, op, 2);
+    for op in ops.iter() {
+        let dist = edit_distance_bounded(token, op.as_str(), 2);
         if let Some(d) = dist {
             match &best {
                 Some((_, best_d)) if d < *best_d => {

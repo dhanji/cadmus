@@ -1,0 +1,1485 @@
+# File Type Dictionary
+# ====================
+# Single source of truth for file type knowledge in the reasoning engine.
+# Loaded at runtime by src/filetypes.rs — no Rust recompilation needed.
+#
+# To add a new file type: just add an entry below. That's it.
+# The NL layer, workflow compiler, and type inference all read from here.
+#
+# Schema:
+#   ext          — file extension without dot (e.g. "rs", "tar.gz")
+#   category     — one of: image, video, audio, document, archive, source_code,
+#                  data, config, markup, database, font, executable, disk_image, ebook
+#   description  — human-readable description
+#   type_expr    — TypeExpr string (parsed via TypeExpr::parse)
+#   relevant_ops — ops from fs_ops.yaml / power_tools_ops.yaml that work on this type
+#   tools        — external CLI tools useful for this type (not engine ops)
+
+categories:
+  - image
+  - video
+  - audio
+  - document
+  - archive
+  - source_code
+  - data
+  - config
+  - markup
+  - database
+  - font
+  - executable
+  - disk_image
+  - ebook
+
+filetypes:
+
+  # ===========================================================================
+  # Images (~18 extensions)
+  # ===========================================================================
+
+  - ext: png
+    category: image
+    description: "PNG image (lossless)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [imagemagick, sips, exiftool]
+
+  - ext: jpg
+    category: image
+    description: "JPEG image (lossy)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [imagemagick, sips, exiftool, jpegoptim]
+
+  - ext: jpeg
+    category: image
+    description: "JPEG image (lossy)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [imagemagick, sips, exiftool, jpegoptim]
+
+  - ext: gif
+    category: image
+    description: "GIF image (animated or static)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [imagemagick, gifsicle]
+
+  - ext: svg
+    category: image
+    description: "SVG vector image (XML-based)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, read_file, search_content, replace, copy, checksum, stat, reveal]
+    tools: [imagemagick, inkscape, svgo]
+
+  - ext: webp
+    category: image
+    description: "WebP image (modern web format)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [imagemagick, cwebp, dwebp]
+
+  - ext: bmp
+    category: image
+    description: "BMP bitmap image (uncompressed)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [imagemagick, sips]
+
+  - ext: ico
+    category: image
+    description: "ICO icon file"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [imagemagick]
+
+  - ext: tiff
+    category: image
+    description: "TIFF image (high quality)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [imagemagick, sips, exiftool]
+
+  - ext: tif
+    category: image
+    description: "TIFF image (high quality)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [imagemagick, sips, exiftool]
+
+  - ext: heic
+    category: image
+    description: "HEIC image (Apple high-efficiency)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [sips, imagemagick, exiftool]
+
+  - ext: heif
+    category: image
+    description: "HEIF image (high-efficiency)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [sips, imagemagick, exiftool]
+
+  - ext: avif
+    category: image
+    description: "AVIF image (AV1-based)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [imagemagick, cavif]
+
+  - ext: raw
+    category: image
+    description: "RAW camera image"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [sips, dcraw, exiftool]
+
+  - ext: psd
+    category: image
+    description: "Adobe Photoshop document"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [imagemagick, sips]
+
+  - ext: xcf
+    category: image
+    description: "GIMP image"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [gimp]
+
+  - ext: ai
+    category: image
+    description: "Adobe Illustrator document"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [inkscape]
+
+  - ext: eps
+    category: image
+    description: "Encapsulated PostScript"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [imagemagick, ghostscript]
+
+  # ===========================================================================
+  # Video (~14 extensions)
+  # ===========================================================================
+
+  - ext: mp4
+    category: video
+    description: "MP4 video (H.264/H.265)"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: mkv
+    category: video
+    description: "Matroska video container"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mkvtoolnix, mediainfo]
+
+  - ext: avi
+    category: video
+    description: "AVI video (legacy)"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: mov
+    category: video
+    description: "QuickTime video (Apple)"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: wmv
+    category: video
+    description: "Windows Media Video"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: flv
+    category: video
+    description: "Flash video"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe]
+
+  - ext: webm
+    category: video
+    description: "WebM video (VP8/VP9)"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: m4v
+    category: video
+    description: "M4V video (Apple iTunes)"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: mpg
+    category: video
+    description: "MPEG video"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: mpeg
+    category: video
+    description: "MPEG video"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe, mediainfo]
+
+  - ext: ogv
+    category: video
+    description: "Ogg Theora video"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe]
+
+  - ext: 3gp
+    category: video
+    description: "3GPP mobile video"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe]
+
+  - ext: ts
+    category: source_code
+    description: "TypeScript source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [tsc, node, deno, prettier, eslint]
+
+  - ext: m2ts
+    category: video
+    description: "MPEG-2 transport stream"
+    type_expr: "File(Video)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, ffprobe]
+
+  # ===========================================================================
+  # Audio (~14 extensions)
+  # ===========================================================================
+
+  - ext: mp3
+    category: audio
+    description: "MP3 audio (lossy)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, sox, lame, mediainfo, exiftool]
+
+  - ext: wav
+    category: audio
+    description: "WAV audio (uncompressed PCM)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, sox, mediainfo]
+
+  - ext: flac
+    category: audio
+    description: "FLAC audio (lossless)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, sox, flac, metaflac, mediainfo]
+
+  - ext: aac
+    category: audio
+    description: "AAC audio (lossy)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, mediainfo]
+
+  - ext: ogg
+    category: audio
+    description: "Ogg Vorbis audio"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, sox, oggenc, oggdec]
+
+  - ext: wma
+    category: audio
+    description: "Windows Media Audio"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, mediainfo]
+
+  - ext: m4a
+    category: audio
+    description: "M4A audio (AAC in MP4 container)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, sox, mediainfo, exiftool]
+
+  - ext: opus
+    category: audio
+    description: "Opus audio (modern lossy/lossless)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, opusenc, opusdec]
+
+  - ext: aiff
+    category: audio
+    description: "AIFF audio (Apple uncompressed)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, sox, mediainfo]
+
+  - ext: alac
+    category: audio
+    description: "Apple Lossless audio"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [ffmpeg, sox]
+
+  - ext: mid
+    category: audio
+    description: "MIDI music file"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [fluidsynth, timidity]
+
+  - ext: midi
+    category: audio
+    description: "MIDI music file"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [fluidsynth, timidity]
+
+  - ext: wv
+    category: audio
+    description: "WavPack audio (lossless)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, wavpack]
+
+  - ext: ape
+    category: audio
+    description: "Monkey's Audio (lossless)"
+    type_expr: "File(Audio)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [ffmpeg, mac]
+
+  # ===========================================================================
+  # Documents (~14 extensions)
+  # ===========================================================================
+
+  - ext: pdf
+    category: document
+    description: "PDF document"
+    type_expr: "File(PDF)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [pdftotext, pdfgrep, ghostscript, qpdf, poppler]
+
+  - ext: doc
+    category: document
+    description: "Microsoft Word document (legacy)"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice, textutil, antiword]
+
+  - ext: docx
+    category: document
+    description: "Microsoft Word document"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice, textutil, pandoc]
+
+  - ext: xls
+    category: document
+    description: "Microsoft Excel spreadsheet (legacy)"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice, ssconvert]
+
+  - ext: xlsx
+    category: document
+    description: "Microsoft Excel spreadsheet"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice, ssconvert, csvkit]
+
+  - ext: ppt
+    category: document
+    description: "Microsoft PowerPoint presentation (legacy)"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice]
+
+  - ext: pptx
+    category: document
+    description: "Microsoft PowerPoint presentation"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice, pandoc]
+
+  - ext: odt
+    category: document
+    description: "OpenDocument text"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice, pandoc]
+
+  - ext: ods
+    category: document
+    description: "OpenDocument spreadsheet"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice, ssconvert]
+
+  - ext: odp
+    category: document
+    description: "OpenDocument presentation"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [libreoffice]
+
+  - ext: rtf
+    category: document
+    description: "Rich Text Format"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, read_file, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [textutil, libreoffice, pandoc]
+
+  - ext: pages
+    category: document
+    description: "Apple Pages document"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [textutil]
+
+  - ext: numbers
+    category: document
+    description: "Apple Numbers spreadsheet"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: []
+
+  - ext: keynote
+    category: document
+    description: "Apple Keynote presentation"
+    type_expr: "File(Document)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: []
+
+  # ===========================================================================
+  # Archives (~18 extensions)
+  # ===========================================================================
+
+  - ext: zip
+    category: archive
+    description: "ZIP archive"
+    type_expr: "File(Archive(Bytes, Zip))"
+    relevant_ops: [extract_archive, pack_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [unzip, zip, 7z]
+
+  - ext: tar
+    category: archive
+    description: "TAR archive (uncompressed)"
+    type_expr: "File(Archive(Bytes, Tar))"
+    relevant_ops: [extract_archive, pack_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [tar, 7z]
+
+  - ext: tar.gz
+    category: archive
+    description: "Gzipped TAR archive"
+    type_expr: "File(Archive(Bytes, TarGz))"
+    relevant_ops: [extract_archive, pack_archive, gzip_decompress, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [tar, gzip, 7z]
+
+  - ext: tgz
+    category: archive
+    description: "Gzipped TAR archive (short form)"
+    type_expr: "File(Archive(Bytes, TarGz))"
+    relevant_ops: [extract_archive, pack_archive, gzip_decompress, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [tar, gzip, 7z]
+
+  - ext: tar.bz2
+    category: archive
+    description: "Bzip2-compressed TAR archive"
+    type_expr: "File(Archive(Bytes, TarBz2))"
+    relevant_ops: [extract_archive, pack_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [tar, bzip2, 7z]
+
+  - ext: tar.xz
+    category: archive
+    description: "XZ-compressed TAR archive"
+    type_expr: "File(Archive(Bytes, TarXz))"
+    relevant_ops: [extract_archive, pack_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [tar, xz, 7z]
+
+  - ext: gz
+    category: archive
+    description: "Gzip compressed file"
+    type_expr: "File(Gzip(Bytes))"
+    relevant_ops: [gzip_decompress, gzip_compress, copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [gzip, gunzip, 7z]
+
+  - ext: bz2
+    category: archive
+    description: "Bzip2 compressed file"
+    type_expr: "File(Bzip2(Bytes))"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [bzip2, bunzip2, 7z]
+
+  - ext: xz
+    category: archive
+    description: "XZ compressed file (LZMA)"
+    type_expr: "File(Xz(Bytes))"
+    relevant_ops: [xz_compress, copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [xz, unxz, 7z]
+
+  - ext: 7z
+    category: archive
+    description: "7-Zip archive"
+    type_expr: "File(Archive(Bytes, SevenZip))"
+    relevant_ops: [extract_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [7z, 7za]
+
+  - ext: rar
+    category: archive
+    description: "RAR archive"
+    type_expr: "File(Archive(Bytes, Rar))"
+    relevant_ops: [extract_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [unrar, 7z]
+
+  - ext: cbz
+    category: archive
+    description: "Comic book archive (ZIP of images)"
+    type_expr: "File(Archive(File(Image), Cbz))"
+    relevant_ops: [extract_archive, pack_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [unzip]
+
+  - ext: cbr
+    category: archive
+    description: "Comic book archive (RAR of images)"
+    type_expr: "File(Archive(File(Image), Cbr))"
+    relevant_ops: [extract_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [unrar]
+
+  - ext: cpio
+    category: archive
+    description: "CPIO archive"
+    type_expr: "File(Archive(Bytes, Cpio))"
+    relevant_ops: [extract_archive, copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [cpio]
+
+  - ext: lz
+    category: archive
+    description: "Lzip compressed file"
+    type_expr: "File(Lzip(Bytes))"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [lzip, lunzip]
+
+  - ext: lz4
+    category: archive
+    description: "LZ4 compressed file (fast)"
+    type_expr: "File(Lz4(Bytes))"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [lz4]
+
+  - ext: zst
+    category: archive
+    description: "Zstandard compressed file"
+    type_expr: "File(Zstd(Bytes))"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [zstd, unzstd]
+
+  - ext: jar
+    category: archive
+    description: "Java archive (ZIP of .class files)"
+    type_expr: "File(Archive(Bytes, Zip))"
+    relevant_ops: [extract_archive, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [jar, unzip, 7z]
+
+  # ===========================================================================
+  # Source Code (~38 extensions)
+  # ===========================================================================
+
+  - ext: rs
+    category: source_code
+    description: "Rust source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [cargo, rustc, rustfmt, clippy]
+
+  - ext: py
+    category: source_code
+    description: "Python source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [python3, pip, black, ruff, mypy]
+
+  - ext: js
+    category: source_code
+    description: "JavaScript source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [node, npm, prettier, eslint]
+
+  - ext: jsx
+    category: source_code
+    description: "React JSX source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [node, npm, prettier, eslint]
+
+  - ext: tsx
+    category: source_code
+    description: "React TypeScript JSX source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [tsc, node, npm, prettier, eslint]
+
+  - ext: go
+    category: source_code
+    description: "Go source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [go, gofmt, golint, gopls]
+
+  - ext: java
+    category: source_code
+    description: "Java source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [javac, java, maven, gradle]
+
+  - ext: c
+    category: source_code
+    description: "C source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [gcc, clang, make, cmake]
+
+  - ext: cpp
+    category: source_code
+    description: "C++ source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [g++, clang++, make, cmake]
+
+  - ext: h
+    category: source_code
+    description: "C/C++ header file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [gcc, clang]
+
+  - ext: hpp
+    category: source_code
+    description: "C++ header file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [g++, clang++]
+
+  - ext: cs
+    category: source_code
+    description: "C# source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [dotnet, csc, msbuild]
+
+  - ext: rb
+    category: source_code
+    description: "Ruby source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [ruby, gem, rubocop, bundler]
+
+  - ext: php
+    category: source_code
+    description: "PHP source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [php, composer, phpstan]
+
+  - ext: swift
+    category: source_code
+    description: "Swift source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [swift, swiftc, xcodebuild, swift-format]
+
+  - ext: kt
+    category: source_code
+    description: "Kotlin source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [kotlinc, gradle]
+
+  - ext: scala
+    category: source_code
+    description: "Scala source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [scalac, sbt, scala]
+
+  - ext: hs
+    category: source_code
+    description: "Haskell source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [ghc, cabal, stack, hlint]
+
+  - ext: ex
+    category: source_code
+    description: "Elixir source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [elixir, mix, iex]
+
+  - ext: exs
+    category: source_code
+    description: "Elixir script"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [elixir, mix]
+
+  - ext: erl
+    category: source_code
+    description: "Erlang source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [erlc, rebar3]
+
+  - ext: zig
+    category: source_code
+    description: "Zig source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [zig]
+
+  - ext: nim
+    category: source_code
+    description: "Nim source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [nim, nimble]
+
+  - ext: lua
+    category: source_code
+    description: "Lua source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [lua, luac, luarocks]
+
+  - ext: r
+    category: source_code
+    description: "R statistical source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [Rscript, R]
+
+  - ext: pl
+    category: source_code
+    description: "Perl source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [perl, cpan]
+
+  - ext: pm
+    category: source_code
+    description: "Perl module"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [perl, cpan]
+
+  # --- Lisp family ---
+
+  - ext: scm
+    category: source_code
+    description: "Scheme source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [guile, chicken, chez, mit-scheme, racket]
+
+  - ext: ss
+    category: source_code
+    description: "Scheme source code (alternate extension)"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [chez, guile, racket]
+
+  - ext: rkt
+    category: source_code
+    description: "Racket source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [racket, raco, drracket]
+
+  - ext: clj
+    category: source_code
+    description: "Clojure source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [clj, lein, clojure]
+
+  - ext: cljs
+    category: source_code
+    description: "ClojureScript source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [cljs, shadow-cljs, lein]
+
+  - ext: el
+    category: source_code
+    description: "Emacs Lisp source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [emacs]
+
+  # --- ML family ---
+
+  - ext: ml
+    category: source_code
+    description: "OCaml source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [ocaml, opam, dune, ocamlformat]
+
+  - ext: mli
+    category: source_code
+    description: "OCaml interface file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [ocaml, opam, dune]
+
+  - ext: fs
+    category: source_code
+    description: "F# source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [dotnet, fsc]
+
+  - ext: fsx
+    category: source_code
+    description: "F# script"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [dotnet, fsi]
+
+  # --- Other languages ---
+
+  - ext: dart
+    category: source_code
+    description: "Dart source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [dart, flutter, pub]
+
+  - ext: jl
+    category: source_code
+    description: "Julia source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [julia]
+
+  - ext: v
+    category: source_code
+    description: "Verilog/V source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [iverilog, verilator]
+
+  - ext: sv
+    category: source_code
+    description: "SystemVerilog source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [verilator]
+
+  - ext: asm
+    category: source_code
+    description: "Assembly source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [nasm, as, gcc]
+
+  - ext: s
+    category: source_code
+    description: "Assembly source code (AT&T syntax)"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [as, gcc]
+
+  - ext: d
+    category: source_code
+    description: "D language source code"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [dmd, ldc, dub]
+
+  # --- Shell/scripting ---
+
+  - ext: sh
+    category: source_code
+    description: "Shell script"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [bash, sh, shellcheck]
+
+  - ext: bash
+    category: source_code
+    description: "Bash script"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame, awk_extract, sed_script]
+    tools: [bash, shellcheck]
+
+  - ext: zsh
+    category: source_code
+    description: "Zsh script"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [zsh]
+
+  - ext: fish
+    category: source_code
+    description: "Fish shell script"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, git_add, git_diff, git_blame]
+    tools: [fish]
+
+  # ===========================================================================
+  # Data formats (~8 extensions)
+  # ===========================================================================
+
+  - ext: json
+    category: data
+    description: "JSON data"
+    type_expr: "File(Json)"
+    relevant_ops: [read_file, jq_query, jq_filter_seq, jq_transform, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [jq, fx, python3]
+
+  - ext: yaml
+    category: data
+    description: "YAML data"
+    type_expr: "File(Yaml)"
+    relevant_ops: [read_file, yq_query, yq_convert, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [yq, python3]
+
+  - ext: yml
+    category: data
+    description: "YAML data (short extension)"
+    type_expr: "File(Yaml)"
+    relevant_ops: [read_file, yq_query, yq_convert, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [yq, python3]
+
+  - ext: csv
+    category: data
+    description: "Comma-separated values"
+    type_expr: "File(Csv)"
+    relevant_ops: [read_file, csv_cut, csv_join, csv_sort, search_content, head, tail, count, filter, sort_by, diff, copy, checksum, stat, awk_extract, cut_fields, column_format, git_add, git_diff]
+    tools: [csvkit, xsv, miller]
+
+  - ext: tsv
+    category: data
+    description: "Tab-separated values"
+    type_expr: "File(Csv)"
+    relevant_ops: [read_file, csv_cut, csv_join, csv_sort, search_content, head, tail, count, filter, sort_by, diff, copy, checksum, stat, awk_extract, cut_fields, column_format, git_add, git_diff]
+    tools: [csvkit, xsv, miller, awk]
+
+  - ext: xml
+    category: data
+    description: "XML data"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [xmllint, xmlstarlet, xsltproc]
+
+  - ext: ndjson
+    category: data
+    description: "Newline-delimited JSON"
+    type_expr: "File(Json)"
+    relevant_ops: [read_file, jq_query, jq_filter_seq, jq_transform, search_content, head, tail, count, filter, diff, copy, checksum, stat]
+    tools: [jq, ndjson-cli]
+
+  - ext: parquet
+    category: data
+    description: "Apache Parquet columnar data"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [parquet-tools, duckdb, pandas]
+
+  # ===========================================================================
+  # Config files (~12 extensions)
+  # ===========================================================================
+
+  - ext: toml
+    category: config
+    description: "TOML configuration"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [taplo]
+
+  - ext: ini
+    category: config
+    description: "INI configuration"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: []
+
+  - ext: cfg
+    category: config
+    description: "Configuration file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: []
+
+  - ext: conf
+    category: config
+    description: "Configuration file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: []
+
+  - ext: env
+    category: config
+    description: "Environment variables file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [direnv, dotenv]
+
+  - ext: plist
+    category: config
+    description: "Apple property list"
+    type_expr: "File(Plist)"
+    relevant_ops: [read_plist, write_plist, read_file, copy, checksum, stat, reveal, git_add, git_diff]
+    tools: [plutil, defaults]
+
+  - ext: properties
+    category: config
+    description: "Java properties file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: []
+
+  - ext: hcl
+    category: config
+    description: "HashiCorp Configuration Language"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [terraform, packer]
+
+  - ext: tf
+    category: config
+    description: "Terraform configuration"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [terraform, tflint]
+
+  - ext: nix
+    category: config
+    description: "Nix expression"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [nix, nix-build, nixfmt]
+
+  - ext: lock
+    category: config
+    description: "Lock file (dependency versions)"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: []
+
+  - ext: log
+    category: config
+    description: "Log file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, head, tail, count, filter, sort_by, unique, awk_extract, awk_aggregate, sed_script, cut_fields, column_format, diff, copy, stat]
+    tools: [less, multitail, lnav]
+
+  # ===========================================================================
+  # Markup & Web (~12 extensions)
+  # ===========================================================================
+
+  - ext: html
+    category: markup
+    description: "HTML document"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, open_file, git_add, git_diff]
+    tools: [prettier, tidy, htmlhint]
+
+  - ext: htm
+    category: markup
+    description: "HTML document (short extension)"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, open_file, git_add, git_diff]
+    tools: [prettier, tidy]
+
+  - ext: css
+    category: markup
+    description: "CSS stylesheet"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [prettier, stylelint, postcss]
+
+  - ext: scss
+    category: markup
+    description: "SCSS stylesheet (Sass)"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [sass, prettier]
+
+  - ext: sass
+    category: markup
+    description: "Sass stylesheet (indented)"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [sass]
+
+  - ext: less
+    category: markup
+    description: "Less stylesheet"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [lessc]
+
+  - ext: md
+    category: markup
+    description: "Markdown document"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, open_file, git_add, git_diff]
+    tools: [pandoc, marked, grip]
+
+  - ext: rst
+    category: markup
+    description: "reStructuredText document"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [pandoc, sphinx, rst2html]
+
+  - ext: tex
+    category: markup
+    description: "LaTeX document"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [pdflatex, xelatex, lualatex, bibtex]
+
+  - ext: latex
+    category: markup
+    description: "LaTeX document"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [pdflatex, xelatex, lualatex]
+
+  - ext: adoc
+    category: markup
+    description: "AsciiDoc document"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [asciidoctor, pandoc]
+
+  - ext: txt
+    category: markup
+    description: "Plain text file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, sort_by, unique, copy, checksum, stat, awk_extract, sed_script, cut_fields, column_format, git_add, git_diff]
+    tools: []
+
+  # ===========================================================================
+  # Database (~6 extensions)
+  # ===========================================================================
+
+  - ext: sql
+    category: database
+    description: "SQL script"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, count, filter, copy, checksum, stat, git_add, git_diff, awk_extract, sed_script]
+    tools: [sqlite3, psql, mysql, duckdb]
+
+  - ext: sqlite
+    category: database
+    description: "SQLite database"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete, reveal]
+    tools: [sqlite3, duckdb]
+
+  - ext: db
+    category: database
+    description: "Database file"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete, reveal]
+    tools: [sqlite3]
+
+  - ext: mdb
+    category: database
+    description: "Microsoft Access database"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete, reveal]
+    tools: [mdbtools]
+
+  - ext: accdb
+    category: database
+    description: "Microsoft Access database (modern)"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete, reveal]
+    tools: [mdbtools]
+
+  - ext: dbf
+    category: database
+    description: "dBASE database file"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [dbview]
+
+  # ===========================================================================
+  # Fonts (~5 extensions)
+  # ===========================================================================
+
+  - ext: ttf
+    category: font
+    description: "TrueType font"
+    type_expr: "File(Bytes)"
+    relevant_ops: [open_file, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [fc-list, fonttools]
+
+  - ext: otf
+    category: font
+    description: "OpenType font"
+    type_expr: "File(Bytes)"
+    relevant_ops: [open_file, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [fc-list, fonttools]
+
+  - ext: woff
+    category: font
+    description: "Web Open Font Format"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, rename, move_entry, delete]
+    tools: [fonttools, woff2]
+
+  - ext: woff2
+    category: font
+    description: "Web Open Font Format 2"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, rename, move_entry, delete]
+    tools: [fonttools, woff2]
+
+  - ext: eot
+    category: font
+    description: "Embedded OpenType font"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, checksum, stat, rename, move_entry, delete]
+    tools: []
+
+  # ===========================================================================
+  # Executables & Binary (~10 extensions)
+  # ===========================================================================
+
+  - ext: exe
+    category: executable
+    description: "Windows executable"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete, du_size]
+    tools: [file, strings, objdump]
+
+  - ext: dll
+    category: executable
+    description: "Windows dynamic library"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete]
+    tools: [file, strings]
+
+  - ext: so
+    category: executable
+    description: "Unix shared library"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete, lsof_open]
+    tools: [file, ldd, nm, strings, objdump]
+
+  - ext: dylib
+    category: executable
+    description: "macOS dynamic library"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete, lsof_open]
+    tools: [file, otool, nm, strings]
+
+  - ext: wasm
+    category: executable
+    description: "WebAssembly binary"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete, du_size]
+    tools: [wasm-tools, wasmtime, wasm2wat]
+
+  - ext: class
+    category: executable
+    description: "Java bytecode"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete]
+    tools: [javap, java]
+
+  - ext: pyc
+    category: executable
+    description: "Python bytecode"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete]
+    tools: [python3]
+
+  - ext: o
+    category: executable
+    description: "Object file (compiled)"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete]
+    tools: [file, nm, objdump, strings]
+
+  - ext: a
+    category: executable
+    description: "Static library archive"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete]
+    tools: [ar, nm, ranlib]
+
+  - ext: lib
+    category: executable
+    description: "Windows static library"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, checksum, file_type_detect, copy, rename, move_entry, delete]
+    tools: [file, strings]
+
+  # ===========================================================================
+  # Disk Images (~6 extensions)
+  # ===========================================================================
+
+  - ext: dmg
+    category: disk_image
+    description: "macOS disk image"
+    type_expr: "File(DiskImage)"
+    relevant_ops: [open_file, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [hdiutil]
+
+  - ext: iso
+    category: disk_image
+    description: "ISO disk image"
+    type_expr: "File(DiskImage)"
+    relevant_ops: [open_file, copy, checksum, stat, du_size, reveal, rename, move_entry, delete]
+    tools: [hdiutil, mount]
+
+  - ext: img
+    category: disk_image
+    description: "Raw disk image"
+    type_expr: "File(DiskImage)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [dd, hdiutil]
+
+  - ext: vdi
+    category: disk_image
+    description: "VirtualBox disk image"
+    type_expr: "File(DiskImage)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [VBoxManage, qemu-img]
+
+  - ext: vmdk
+    category: disk_image
+    description: "VMware disk image"
+    type_expr: "File(DiskImage)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [qemu-img, vmware-vdiskmanager]
+
+  - ext: vhd
+    category: disk_image
+    description: "Virtual Hard Disk"
+    type_expr: "File(DiskImage)"
+    relevant_ops: [copy, checksum, stat, du_size, rename, move_entry, delete]
+    tools: [qemu-img]
+
+  # ===========================================================================
+  # Ebooks (~5 extensions)
+  # ===========================================================================
+
+  - ext: epub
+    category: ebook
+    description: "EPUB ebook"
+    type_expr: "File(Ebook)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, spotlight_search, rename, move_entry, delete]
+    tools: [calibre, pandoc]
+
+  - ext: mobi
+    category: ebook
+    description: "Kindle MOBI ebook"
+    type_expr: "File(Ebook)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [calibre]
+
+  - ext: azw
+    category: ebook
+    description: "Amazon Kindle ebook"
+    type_expr: "File(Ebook)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [calibre]
+
+  - ext: azw3
+    category: ebook
+    description: "Amazon Kindle Format 8 ebook"
+    type_expr: "File(Ebook)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [calibre]
+
+  - ext: djvu
+    category: ebook
+    description: "DjVu document"
+    type_expr: "File(Ebook)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal, rename, move_entry, delete]
+    tools: [djview, djvulibre]
+
+  # ===========================================================================
+  # Build & DevOps files (source_code category — they're text you edit)
+  # ===========================================================================
+
+  - ext: dockerfile
+    category: source_code
+    description: "Dockerfile"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [docker, hadolint]
+
+  - ext: makefile
+    category: source_code
+    description: "Makefile"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff, awk_extract]
+    tools: [make, gmake]
+
+  - ext: cmake
+    category: source_code
+    description: "CMake build file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [cmake]
+
+  - ext: gradle
+    category: source_code
+    description: "Gradle build file"
+    type_expr: "File(Text)"
+    relevant_ops: [read_file, search_content, replace, head, tail, diff, copy, checksum, stat, git_add, git_diff]
+    tools: [gradle]
+
+  # ===========================================================================
+  # Misc / special files
+  # ===========================================================================
+
+  - ext: bak
+    category: config
+    description: "Backup file"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, stat, du_size, rename, move_entry, delete, checksum, diff]
+    tools: []
+
+  - ext: tmp
+    category: config
+    description: "Temporary file"
+    type_expr: "File(Bytes)"
+    relevant_ops: [copy, stat, rename, move_entry, delete]
+    tools: []
+
+  - ext: swp
+    category: config
+    description: "Vim swap file"
+    type_expr: "File(Bytes)"
+    relevant_ops: [stat, delete, rename, move_entry]
+    tools: [vim]

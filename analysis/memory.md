@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-16T20:27:05Z | Size: 16.5k chars
+> Updated: 2026-02-16T22:25:17Z | Size: 18.4k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -163,3 +163,25 @@
 - `BUGS.md` - 16 bugs total: 14 fixed, 1 deferred (BUG-009), 1 by-design (BUG-012)
 - **591 total tests**, all passing, zero warnings
   - Unit: 406, NL integration: 87, FS integration: 27, Generic planner: 14, Integration: 18, Power tools: 20, Workflow: 19
+
+### File Type Dictionary (Phase 5)
+- `data/filetypes.yaml` — 197 entries, 14 categories, YAML-driven single source of truth
+- `src/filetypes.rs` — thin loader, OnceLock singleton, `dictionary()` → `lookup()`, `lookup_by_path()`, `is_known_extension()`, `has_known_extension()`, `extensions_for_category()`, `describe_file_type()`, `all_extensions()`
+- `src/lib.rs:16` — `pub mod filetypes;`
+- `src/workflow.rs:553` — `infer_input_type()` now uses `filetypes::dictionary().lookup_by_path()` instead of hardcoded chains
+- `src/nl/slots.rs:308` — `is_file_extension()` delegates to `filetypes::dictionary().is_known_extension()`
+- `src/nl/dialogue.rs:379` — `is_file_path()` delegates to `filetypes::dictionary().has_known_extension()`
+- Three hardcoded extension lists eliminated, replaced with single YAML source
+- 637 total tests (46 new), all passing, zero warnings
+- PLAYBOOK.md updated with Section 8: Adding File Types (Pure YAML — No Rust)
+
+### Phase 6: YAML Externalization (completed)
+- `data/nl/nl_vocab.yaml` — consolidated word lists (synonyms, contractions, ordinals, approvals, rejections, stopwords, filler_phrases, filler_prefixes)
+- `data/nl/nl_dictionary.yaml` — ~2473 frequency-weighted words for SymSpell typo correction
+- `src/nl/vocab.rs` — OnceLock singleton loader, disk-first + include_str! fallback
+- `src/fs_types.rs:65-93` — `get_op_description()` cached from registry, `OP_DESCRIPTIONS` OnceLock
+- `src/nl/normalize.rs:235-260` — `canonical_ops()` derived from registry via OnceLock<HashSet<String>>
+- Key design: display names come from ops YAML `description` field, NOT a separate YAML file
+- Key design: CANONICAL_OPS derived at load time from registry, NOT hardcoded
+- 1337 lines of hardcoded data removed from Rust, 3547 lines of YAML data added
+- 670 total tests, 33 new (19 vocab unit + 14 integration), zero warnings

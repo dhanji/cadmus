@@ -17,6 +17,7 @@ pub mod typo;
 pub mod intent;
 pub mod slots;
 pub mod dialogue;
+pub mod vocab;
 
 use dialogue::{DialogueState, DialogueError, FocusEntry};
 use intent::Intent;
@@ -382,44 +383,12 @@ fn format_summary(wf: &crate::workflow::WorkflowDef) -> String {
 
 /// Get an explanation for an operation.
 fn get_op_explanation(op: &str) -> String {
-    let base_explanation = match op {
-        "walk_tree" => "Walk the directory tree — sequentially step down each directory and subdirectory, processing all their files one by one. Returns a flat sequence of all entries found.",
-        "walk_tree_hierarchy" => "Walk the directory tree preserving the hierarchy structure. Returns a tree of entries that mirrors the filesystem layout.",
-        "list_dir" => "List the contents of a directory (non-recursive). Returns entries for files and subdirectories at the top level only.",
-        "filter" => "Filter a sequence of entries, keeping only those that match a pattern or condition.",
-        "sort_by" => "Sort a sequence of entries by a key (name, size, date, etc.).",
-        "find_matching" => "Find entries matching a glob pattern (e.g., *.pdf, foo*).",
-        "search_content" => "Search the contents of files for a text pattern (like grep).",
-        "pack_archive" => "Pack files into an archive (zip, tar, etc.).",
-        "extract_archive" => "Extract files from an archive (unzip, untar, etc.).",
-        "read_file" => "Read the contents of a file.",
-        "write_file" => "Write content to a file.",
-        "copy" => "Copy a file or directory to a new location.",
-        "move_entry" => "Move a file or directory to a new location.",
-        "delete" => "Delete a file or directory.",
-        "rename" => "Rename a file or directory.",
-        "create_dir" => "Create a new directory.",
-        "stat" => "Get metadata about a file (size, permissions, modification time, etc.).",
-        "head" => "Show the first N lines of a file.",
-        "tail" => "Show the last N lines of a file.",
-        "unique" => "Remove duplicate lines from a sequence.",
-        "count" => "Count the number of entries or lines.",
-        "diff" => "Compare two files and show their differences.",
-        "checksum" => "Compute a checksum (hash) of a file for integrity verification.",
-        "download" => "Download a file from a URL.",
-        "upload" => "Upload a file to a remote location.",
-        "sync" => "Synchronize files between two locations.",
-        "git_log" => "Show the git commit history.",
-        "git_status" => "Show the current git repository status.",
-        "git_diff" => "Show changes between commits, working tree, etc.",
-        "git_commit" => "Record changes to the git repository.",
-        "git_add" => "Stage files for the next git commit.",
-        "git_push" => "Push local commits to a remote repository.",
-        "git_pull" => "Fetch and merge changes from a remote repository.",
-        _ => "An operation in the reasoning engine's filesystem toolkit.",
-    };
-
-    base_explanation.to_string()
+    // Look up the description from the ops YAML packs (fs_ops, power_tools, etc.)
+    if let Some(desc) = crate::fs_types::get_op_description(op) {
+        desc.to_string()
+    } else {
+        format!("An operation in the reasoning engine's toolkit ({}).", op)
+    }
 }
 
 // ---------------------------------------------------------------------------

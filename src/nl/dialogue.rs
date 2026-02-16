@@ -380,25 +380,7 @@ fn is_file_path(path: &str) -> bool {
     if path == "." || path.ends_with('/') {
         return false;
     }
-    if let Some(dot_pos) = path.rfind('.') {
-        let ext = &path[dot_pos + 1..];
-        let name = &path[..dot_pos];
-        !name.is_empty() && !ext.is_empty() && matches!(ext,
-            "txt" | "md" | "rs" | "py" | "js" | "ts" | "go" | "java" | "c" | "cpp" | "h"
-            | "json" | "yaml" | "yml" | "toml" | "xml" | "html" | "css" | "csv"
-            | "log" | "sh" | "bash" | "zsh" | "fish"
-            | "tar" | "gz" | "tgz" | "zip" | "bz2" | "xz" | "7z" | "rar"
-            | "cbz" | "cbr"
-            | "pdf" | "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "plist"
-            | "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "bmp" | "ico"
-            | "mp3" | "mp4" | "wav" | "avi" | "mkv" | "mov"
-            | "db" | "sql" | "sqlite"
-            | "cfg" | "conf" | "ini" | "env"
-            | "lock" | "bak" | "tmp" | "swp"
-        )
-    } else {
-        false
-    }
+    crate::filetypes::dictionary().has_known_extension(path)
 }
 
 /// Extract the directory part of a path (everything before the last /).
@@ -421,30 +403,25 @@ fn filename_of(path: &str) -> String {
 
 /// Generate a human-readable workflow name from the operation and slots.
 fn generate_workflow_name(op: &str, slots: &ExtractedSlots) -> String {
-    let op_desc = match op {
-        "pack_archive" => "Zip files",
-        "extract_archive" => "Extract archive",
-        "list_dir" => "List directory",
-        "walk_tree" => "Walk directory tree",
-        "find_matching" => "Find matching files",
-        "search_content" => "Search file contents",
-        "sort_by" => "Sort files",
-        "filter" => "Filter files",
-        "copy" => "Copy files",
-        "delete" => "Delete files",
-        "rename" => "Rename files",
-        "move_entry" => "Move files",
-        "read_file" => "Read file",
-        "write_file" => "Write file",
-        "diff" => "Compare files",
-        "checksum" => "Compute checksums",
-        "download" => "Download file",
-        "upload" => "Upload file",
-        "git_log" => "Git log",
-        "git_status" => "Git status",
-        "git_diff" => "Git diff",
-        other => other,
-    };
+    // Derive a short display name from the ops YAML description.
+    // Descriptions look like "zip/tar -c — pack entries into archive"
+    // or "find — recursively walk directory tree (flattened)".
+    // We take the part after " — " if present, otherwise the whole description,
+    // and capitalize the first letter.
+    let op_desc = crate::fs_types::get_op_description(op)
+        .map(|desc| {
+            // Take the part after " — " (the human-readable action)
+            let action = desc.split(" — ").nth(1).unwrap_or(desc);
+            // Remove parenthetical suffixes like "(flattened)"
+            let action = action.split('(').next().unwrap_or(action).trim();
+            // Capitalize first letter
+            let mut chars = action.chars();
+            match chars.next() {
+                Some(c) => format!("{}{}", c.to_uppercase(), chars.as_str()),
+                None => op.to_string(),
+            }
+        })
+        .unwrap_or_else(|| op.replace('_', " "));
 
     if let Some(path) = &slots.target_path {
         format!("{} in {}", op_desc, path)

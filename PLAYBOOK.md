@@ -961,3 +961,259 @@ let idx = load_fact_packs(&["data/pack_a.yaml", "data/pack_b.yaml"])?;
 let merged = pack_a.merge(pack_b);
 let idx = FactPackIndex::build(merged);
 ```
+
+---
+
+## 8. Adding File Types (Pure YAML — No Rust)
+
+The file type dictionary lives in `data/filetypes.yaml` and is loaded at
+runtime. Adding a new file type requires **zero Rust changes** — just edit
+the YAML file.
+
+### What the dictionary does
+
+The file type dictionary is the **single source of truth** for:
+- **NL path detection** — `slots.rs` and `dialogue.rs` use it to recognize
+  file extensions in user input (e.g. "copy photo.heic" → detects `.heic`)
+- **Workflow type inference** — `workflow.rs` uses it to infer `TypeExpr`
+  from file extensions (e.g. `.json` → `File(Json)`, `.cbz` → `File(Archive(File(Image), Cbz))`)
+- **Tool hints** — `describe_file_type()` returns ops and external tools
+  for any extension
+
+### Step 1: Add an entry to `data/filetypes.yaml`
+
+```yaml
+  - ext: webp
+    category: image
+    description: "WebP image (modern web format)"
+    type_expr: "File(Image)"
+    relevant_ops: [open_file, open_with, copy, checksum, stat, reveal]
+    tools: [imagemagick, cwebp, dwebp]
+```
+
+### Step 2: Understand the schema
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `ext` | yes | string | Extension without dot. Lowercase. Compound exts OK: `tar.gz` |
+| `category` | yes | string | One of: `image`, `video`, `audio`, `document`, `archive`, `source_code`, `data`, `config`, `markup`, `database`, `font`, `executable`, `disk_image`, `ebook` |
+| `description` | yes | string | Human-readable description |
+| `type_expr` | yes | string | TypeExpr string (parsed via `TypeExpr::parse`). See Section 1 Step 3 for grammar. |
+| `relevant_ops` | no | list | Op names from `fs_ops.yaml` / `power_tools_ops.yaml` |
+| `tools` | no | list | External CLI tools (not engine ops) |
+
+### Step 3: Choose the right `type_expr`
+
+| File kind | type_expr | Example extensions |
+|-----------|-----------|-------------------|
+| Text/code | `File(Text)` | `.rs`, `.py`, `.md`, `.sh` |
+| JSON | `File(Json)` | `.json`, `.ndjson` |
+| YAML | `File(Yaml)` | `.yaml`, `.yml` |
+| CSV | `File(Csv)` | `.csv`, `.tsv` |
+| PDF | `File(PDF)` | `.pdf` |
+| Image | `File(Image)` | `.png`, `.jpg`, `.heic` |
+| Video | `File(Video)` | `.mp4`, `.mkv`, `.webm` |
+| Audio | `File(Audio)` | `.mp3`, `.flac`, `.wav` |
+| Document | `File(Document)` | `.docx`, `.pptx`, `.odt` |
+| Ebook | `File(Ebook)` | `.epub`, `.mobi` |
+| Disk image | `File(DiskImage)` | `.dmg`, `.iso` |
+| Plist | `File(Plist)` | `.plist` |
+| ZIP archive | `File(Archive(Bytes, Zip))` | `.zip` |
+| Gzipped tar | `File(Archive(Bytes, TarGz))` | `.tar.gz`, `.tgz` |
+| Comic book | `File(Archive(File(Image), Cbz))` | `.cbz` |
+| Gzip file | `File(Gzip(Bytes))` | `.gz` |
+| XZ file | `File(Xz(Bytes))` | `.xz` |
+| Binary/opaque | `File(Bytes)` | `.exe`, `.wasm`, `.db` |
+
+**You can invent new type primitives freely.** If you write `File(Spreadsheet)`,
+the parser accepts it immediately. No Rust changes needed.
+
+### Step 4: Map relevant ops
+
+Check which ops from `data/fs_ops.yaml` and `data/power_tools_ops.yaml`
+make sense for your file type:
+
+```bash
+# List all available ops
+for f in data/*_ops.yaml; do
+  grep "^  - name:" "$f" | sed 's/.*name: //'
+done | sort
+```
+
+Common op mappings:
+
+| Category | Typical ops |
+|----------|-------------|
+| Any file | `copy`, `stat`, `checksum`, `rename`, `move_entry`, `delete` |
+| Text/code | `read_file`, `search_content`, `replace`, `head`, `tail`, `diff`, `count`, `filter`, `sort_by`, `unique`, `git_add`, `git_diff`, `git_blame` |
+| Structured data | `jq_query`, `jq_transform` (JSON), `yq_query`, `yq_convert` (YAML), `csv_cut`, `csv_join`, `csv_sort` (CSV) |
+| Archives | `extract_archive`, `pack_archive`, `gzip_decompress`, `xz_compress` |
+| macOS | `open_file`, `open_with`, `reveal`, `spotlight_search` |
+| Config | `read_plist`, `write_plist` (for `.plist`) |
+| Large files | `du_size` |
+
+### Step 5: Verify
+
+```bash
+# Validate YAML parses and all ops exist
+python3 -c "
+import yaml
+all_ops = set()
+for f in ['data/fs_ops.yaml', 'data/power_tools_ops.yaml']:
+    with open(f) as fh:
+        for op in yaml.safe_load(fh)['ops']:
+            all_ops.add(op['name'])
+with open('data/filetypes.yaml') as f:
+    data = yaml.safe_load(f)
+bad = [(e['ext'], op) for e in data['filetypes'] for op in e.get('relevant_ops', []) if op not in all_ops]
+print(f'{len(data[\"filetypes\"])} entries, {len(bad)} invalid ops')
+for ext, op in bad: print(f'  .{ext}: unknown op {op}')
+"
+```
+
+Then run the tests:
+
+```bash
+cargo test
+```
+
+All existing tests should pass. The dictionary is loaded once via `OnceLock`
+and cached for the process lifetime.
+
+### Step 6: Compound extensions
+
+For compound extensions like `.tar.gz`, `.tar.bz2`, `.tar.xz`:
+
+```yaml
+  - ext: tar.gz
+    category: archive
+    description: "Gzipped TAR archive"
+    type_expr: "File(Archive(Bytes, TarGz))"
+    relevant_ops: [extract_archive, pack_archive, gzip_decompress, copy]
+    tools: [tar, gzip, 7z]
+```
+
+The loader automatically detects compound extensions (those containing `.`)
+and tries them **longest-first** before simple extensions. So `backup.tar.gz`
+matches `tar.gz`, not `gz`.
+
+### Reference
+
+- **YAML file**: `data/filetypes.yaml` (197 entries, 14 categories)
+- **Rust loader**: `src/filetypes.rs` (thin serde loader, `OnceLock` singleton)
+- **Consumers**: `src/workflow.rs` (type inference), `src/nl/slots.rs` (path detection), `src/nl/dialogue.rs` (path detection)
+- **Query API**: `filetypes::dictionary()` → `lookup()`, `lookup_by_path()`, `is_known_extension()`, `has_known_extension()`, `extensions_for_category()`, `describe_file_type()`, `all_extensions()`
+
+---
+
+## 9. Extending the NL Layer (Pure YAML — No Rust)
+
+The Natural Language UX layer's word lists, dictionaries, and synonym tables
+are all externalized to YAML files in `data/nl/`. You can extend the NL
+layer's vocabulary without touching any Rust code.
+
+### Adding a Synonym
+
+To teach the NL layer a new phrase → op mapping, edit `data/nl/nl_vocab.yaml`:
+
+```yaml
+synonyms:
+  # ... existing entries ...
+  - phrase: [compress, everything]
+    op: pack_archive
+```
+
+**Rules:**
+- Multi-word phrases are matched greedily (longest match first)
+- The `op` must be a valid op name from the ops YAML packs
+- Phrases are lowercase tokens (the normalizer lowercases input)
+- The loader sorts by phrase length automatically
+
+### Adding a Contraction
+
+```yaml
+contractions:
+  "won't": "will not"
+  "y'all": "you all"    # ← add new ones here
+```
+
+Contractions are applied during tokenization (before synonym matching).
+Longer contractions are applied first automatically.
+
+### Adding Approval/Rejection Words
+
+```yaml
+approvals:
+  single:
+    - roger    # ← add single-word approvals
+  multi:
+    - sounds perfect    # ← add multi-word approval phrases
+
+rejections:
+  single:
+    - nix    # ← add single-word rejections
+  multi:
+    - that is terrible    # ← add multi-word rejection phrases
+```
+
+### Adding Stopwords
+
+Stopwords are filtered out during slot extraction (they don't become keywords):
+
+```yaml
+stopwords:
+  - the
+  - a
+  # ... add more here
+```
+
+### Adding Dictionary Words (Typo Correction)
+
+Edit `data/nl/nl_dictionary.yaml` to add words to the SymSpell dictionary:
+
+```yaml
+# Add a new category or extend an existing one
+my_domain_words:
+  kubernetes: 60
+  terraform: 40
+  ansible: 40
+```
+
+**Frequency guidelines:**
+- **80-100**: Core op words, must-correct targets
+- **40-60**: Domain vocabulary, moderate priority
+- **20**: Common English, low priority (prevents false corrections)
+
+### Adding a New Op (Automatic NL Recognition)
+
+When you add a new op to any ops YAML pack (`data/fs_ops.yaml`,
+`data/power_tools_ops.yaml`, etc.), it is **automatically** recognized by
+the NL layer:
+
+1. `is_canonical_op()` derives its set from the registry at load time
+2. `get_op_explanation()` reads the `description` field from the ops YAML
+3. `generate_workflow_name()` derives display names from the `description` field
+
+No separate registration step needed. Just add the op to the YAML pack.
+
+### Op Descriptions (Display Names)
+
+Op descriptions live in the ops YAML packs themselves (not in a separate file):
+
+```yaml
+# In data/fs_ops.yaml:
+- name: walk_tree
+  description: "find — recursively walk directory tree (flattened)"
+```
+
+The NL layer uses these descriptions for:
+- `get_op_explanation()` — answering "what does walk_tree mean?"
+- `generate_workflow_name()` — generating workflow display names
+
+### Reference
+
+- **Vocab YAML**: `data/nl/nl_vocab.yaml` (synonyms, contractions, ordinals, approvals, rejections, stopwords)
+- **Dictionary YAML**: `data/nl/nl_dictionary.yaml` (~2473 frequency-weighted words)
+- **Rust loader**: `src/nl/vocab.rs` (thin serde loader, `OnceLock` singleton)
+- **Op descriptions**: `data/fs_ops.yaml`, `data/power_tools_ops.yaml` (description field on each op)
+- **Consumers**: `src/nl/normalize.rs` (synonyms, contractions, ordinals), `src/nl/intent.rs` (approvals, rejections), `src/nl/slots.rs` (stopwords), `src/nl/typo.rs` (dictionary), `src/nl/mod.rs` (op explanations), `src/nl/dialogue.rs` (display names)

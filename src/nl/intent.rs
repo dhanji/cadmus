@@ -166,58 +166,34 @@ pub fn recognize(input: &str) -> Intent {
 
 /// Check if the input is an approval.
 fn is_approve(tokens: &[String]) -> bool {
-    // Single-token approvals
-    let single_approvals = [
-        "lgtm", "yes", "yep", "yeah", "yea", "ok", "okay", "sure",
-        "approve", "approved", "confirm", "confirmed", "go", "proceed",
-        "accept", "accepted", "fine", "great", "perfect", "nice",
-        "cool", "awesome", "excellent", "good", "agreed", "aye",
-        "affirmative", "absolutely", "definitely", "totally", "done",
-        "y",
-    ];
+    let vocab = super::vocab::vocab();
 
     if tokens.len() == 1 {
-        return single_approvals.contains(&tokens[0].as_str());
+        return vocab.approval_singles.contains(&tokens[0]);
     }
 
     // Multi-token approvals
     let joined = tokens.join(" ");
-    let multi_approvals = [
-        "sounds good", "looks good", "looks great", "looks fine",
-        "sounds great", "sounds fine", "sounds right", "sounds correct",
-        "that is good", "that is great", "that is fine", "that is correct",
-        "that is right", "that is perfect", "that works",
-        "go ahead", "go for it", "do it", "ship it", "send it",
-        "let us go", "let us do it", "make it so", "run it",
-        "i approve", "i accept", "i agree", "i confirm",
-        "yes please", "yes do it", "yes go ahead",
-        "ok do it", "ok go ahead", "ok sounds good",
-        "all good", "all set", "we are good",
-    ];
 
-    if multi_approvals.iter().any(|a| joined == *a || joined.starts_with(a)) {
+    if vocab.approval_multis.iter().any(|a| joined == *a || joined.starts_with(a)) {
         return true;
     }
 
     // Compound approval: single-word approval + multi-word approval tail
-    // e.g. "perfect, ship it" → tokens ["perfect", "ship", "it"]
-    // "perfect" is a single approval, "ship it" is a multi approval
     if tokens.len() >= 2 {
         let first = &tokens[0];
-        if single_approvals.contains(&first.as_str()) {
+        if vocab.approval_singles.contains(first) {
             let tail = tokens[1..].join(" ");
-            if multi_approvals.iter().any(|a| tail == *a || tail.starts_with(a)) {
+            if vocab.approval_multis.iter().any(|a| tail == *a || tail.starts_with(a)) {
                 return true;
             }
-            // Also: "sure why not", "yeah that works" — first is approval, rest is filler
-            let filler = ["why not", "that works", "works for me", "i think",
-                          "let us do it", "go for it", "of course"];
-            if filler.iter().any(|f| tail == *f || tail.starts_with(f)) {
+            // Filler phrases: "sure why not", "yeah that works"
+            if vocab.filler_phrases.iter().any(|f| tail == *f || tail.starts_with(f)) {
                 return true;
             }
-            // Also: "ok lgtm", "sure yeah", "fine ok" — first is approval, tail is single-word approval
+            // Compound: "ok lgtm", "sure yeah"
             let tail_tokens: Vec<&str> = tail.split_whitespace().collect();
-            if tail_tokens.len() == 1 && single_approvals.contains(&tail_tokens[0]) {
+            if tail_tokens.len() == 1 && vocab.approval_singles.contains(tail_tokens[0]) {
                 return true;
             }
         }
@@ -228,34 +204,14 @@ fn is_approve(tokens: &[String]) -> bool {
 
 /// Check if the input is a rejection.
 fn is_reject(tokens: &[String]) -> bool {
-    let single_rejects = [
-        "no", "nope", "nah", "cancel", "stop", "abort", "quit",
-        "reject", "rejected", "undo", "reset", "restart", "n",
-        "negative", "never", "refuse", "declined",
-    ];
+    let vocab = super::vocab::vocab();
 
     if tokens.len() == 1 {
-        return single_rejects.contains(&tokens[0].as_str());
+        return vocab.rejection_singles.contains(&tokens[0]);
     }
 
     let joined = tokens.join(" ");
-    let multi_rejects = [
-        "start over", "start again", "try again", "do over",
-        "no thanks", "no thank you", "not that", "not this",
-        "scratch that", "forget it", "forget that", "never mind",
-        "scrap that", "scrap it", "scrap the plan",
-        "nah scrap", "nah forget", "nah scratch", "nah never",
-        "nevermind", "i do not want", "i do not like",
-        "actually no", "actually nah", "actually never mind",
-        "wait no", "wait stop", "wait cancel",
-        "nah i am good", "nah i am fine", "no i am good", "no i am fine",
-        "forget about it", "forget about that",
-        "that is wrong", "that is not right", "that is not what i want",
-        "undo that", "undo it", "take it back",
-        "go back", "back up", "step back",
-    ];
-
-    multi_rejects.iter().any(|r| joined == *r || joined.starts_with(r))
+    vocab.rejection_multis.iter().any(|r| joined == *r || joined.starts_with(r))
 }
 
 // ---------------------------------------------------------------------------
@@ -435,10 +391,9 @@ fn try_edit(tokens: &[String]) -> Option<Intent> {
     ];
 
     // Skip filler prefixes so "also skip X", "and remove step 2", "then add filter" work.
-    let filler_prefixes = ["also", "and", "then", "now", "plus", "additionally",
-                           "but", "oh", "hey", "ok", "okay", "so", "well"];
+    let filler_prefixes = &super::vocab::vocab().filler_prefixes;
     let mut start = 0;
-    while start < tokens.len() && filler_prefixes.contains(&tokens[start].as_str()) {
+    while start < tokens.len() && filler_prefixes.contains(&tokens[start]) {
         start += 1;
     }
     if start >= tokens.len() {
