@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T20:19:00Z | Size: 30.0k chars
+> Updated: 2026-02-17T21:20:36Z | Size: 31.6k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -327,3 +327,30 @@
 - Discovery chain: cons anchor → remove via type-symmetric (list_elem_to_list), cdr anchor → list_reverse via type-symmetric (list_to_list)
 - 5 total discovered ops: subtract, multiply, divide (arithmetic) + remove, list_reverse (list)
 - 1020 tests, 0 failures
+
+### Comparison Op Discovery
+- `data/racket_ops.yaml` - `less_than` is comparison anchor with meta block (Number,Number→Boolean, category=comparison)
+- `data/racket_facts.yaml` - 6 new entities: op_less_than, op_greater_than, op_less_than_or_equal, op_greater_than_or_equal, op_string_upcase, op_string_downcase
+- `greater_than` discovered via op-symmetric from less_than
+- `less_than_or_equal`, `greater_than_or_equal` discovered via type-symmetric (class: comparison_binop)
+- `equal` is NOT in comparison_binop class (different input types: Any vs Number)
+
+### String Op Discovery
+- `data/racket_ops.yaml` - `string_upcase` is string anchor with meta block (String→String, category=string)
+- `string_downcase` discovered via type-symmetric from string_upcase (class: string_to_string)
+- `string_length` NOT affected (String→Number, different return type)
+
+### Current Totals
+- 47 ops in racket_ops.yaml
+- 14 entities in racket_facts.yaml
+- 9 discovered ops total: subtract, multiply, divide, remove, list_reverse, greater_than, less_than_or_equal, greater_than_or_equal, string_downcase
+- 5 anchors: add (arithmetic), cons (list), cdr (list), less_than (comparison), string_upcase (string)
+- 1031 tests passing
+- 16 complex programs in tests/complex_programs.rs
+
+### Complex Programs Test
+- `tests/complex_programs.rs` - 16 programs covering all domains
+- Programs 1-10: arithmetic, list, set, string, higher-order
+- Programs 11-13: comparison ops (anchor, op-symmetric, type-symmetric)
+- Programs 14-15: string ops (anchor, discovered + chain)
+- Program 16: multi-domain chain (arithmetic → string → upcase)
