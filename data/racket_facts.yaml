@@ -45,6 +45,28 @@ entities:
     name: "reverse"
     description: "Reverse element order of a list — (reverse lst)"
 
+  # --- Comparison operations ---
+  - id: op_less_than
+    name: "<"
+    description: "Numeric less-than comparison — (< a b)"
+  - id: op_greater_than
+    name: ">"
+    description: "Numeric greater-than comparison — (> a b)"
+  - id: op_less_than_or_equal
+    name: "<="
+    description: "Numeric less-than-or-equal comparison — (<= a b)"
+  - id: op_greater_than_or_equal
+    name: ">="
+    description: "Numeric greater-than-or-equal comparison — (>= a b)"
+
+  # --- String operations ---
+  - id: op_string_upcase
+    name: "string-upcase"
+    description: "Convert string to uppercase — (string-upcase s)"
+  - id: op_string_downcase
+    name: "string-downcase"
+    description: "Convert string to lowercase — (string-downcase s)"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -515,6 +537,140 @@ properties:
     axis: type_symmetry
     key: type_symmetry_class
     value: "list_to_list"
+
+  # =========================================================================
+  # Comparison operation properties
+  # =========================================================================
+
+  # --- Racket symbols ---
+  - entity: op_less_than
+    axis: type_signature
+    key: racket_symbol
+    value: "<"
+  - entity: op_greater_than
+    axis: type_signature
+    key: racket_symbol
+    value: ">"
+  - entity: op_less_than_or_equal
+    axis: type_signature
+    key: racket_symbol
+    value: "<="
+  - entity: op_greater_than_or_equal
+    axis: type_signature
+    key: racket_symbol
+    value: ">="
+
+  # --- Op name mapping ---
+  - entity: op_less_than
+    axis: type_signature
+    key: op_name
+    value: "less_than"
+  - entity: op_greater_than
+    axis: type_signature
+    key: op_name
+    value: "greater_than"
+  - entity: op_less_than_or_equal
+    axis: type_signature
+    key: op_name
+    value: "less_than_or_equal"
+  - entity: op_greater_than_or_equal
+    axis: type_signature
+    key: op_name
+    value: "greater_than_or_equal"
+
+  # --- Category (comparison) ---
+  - entity: op_less_than
+    axis: category
+    key: category_name
+    value: "comparison"
+  - entity: op_greater_than
+    axis: category
+    key: category_name
+    value: "comparison"
+  - entity: op_less_than_or_equal
+    axis: category
+    key: category_name
+    value: "comparison"
+  - entity: op_greater_than_or_equal
+    axis: category
+    key: category_name
+    value: "comparison"
+
+  # --- Symmetric partner (less_than ↔ greater_than) ---
+  - entity: op_less_than
+    axis: symmetry
+    key: symmetric_partner
+    value: "op_greater_than"
+  - entity: op_greater_than
+    axis: symmetry
+    key: symmetric_partner
+    value: "op_less_than"
+
+  # --- Type symmetry classes ---
+  # comparison_binop: (Number, Number) → Boolean
+  # less_than (anchor), greater_than, lte, gte
+  - entity: op_less_than
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "comparison_binop"
+  - entity: op_greater_than
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "comparison_binop"
+  - entity: op_less_than_or_equal
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "comparison_binop"
+  - entity: op_greater_than_or_equal
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "comparison_binop"
+
+  # =========================================================================
+  # String operation properties
+  # =========================================================================
+
+  # --- Racket symbols ---
+  - entity: op_string_upcase
+    axis: type_signature
+    key: racket_symbol
+    value: "string-upcase"
+  - entity: op_string_downcase
+    axis: type_signature
+    key: racket_symbol
+    value: "string-downcase"
+
+  # --- Op name mapping ---
+  - entity: op_string_upcase
+    axis: type_signature
+    key: op_name
+    value: "string_upcase"
+  - entity: op_string_downcase
+    axis: type_signature
+    key: op_name
+    value: "string_downcase"
+
+  # --- Category (string) ---
+  - entity: op_string_upcase
+    axis: category
+    key: category_name
+    value: "string"
+  - entity: op_string_downcase
+    axis: category
+    key: category_name
+    value: "string"
+
+  # --- Type symmetry classes ---
+  # string_to_string: (String) → String
+  # string_upcase (anchor), string_downcase
+  - entity: op_string_upcase
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "string_to_string"
+  - entity: op_string_downcase
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "string_to_string"
 
 # ---------------------------------------------------------------------------
 # Relations

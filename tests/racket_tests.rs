@@ -123,7 +123,7 @@ fn test_racket_subtract_not_in_ops_pack() {
 #[test]
 fn test_racket_facts_load() {
     let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
-    assert_eq!(facts.pack.entities.len(), 8);
+    assert_eq!(facts.pack.entities.len(), 14);
     assert_eq!(facts.pack.axes.len(), 6);
     assert!(facts.pack.claims.len() >= 16);
     assert!(facts.pack.evidence.len() >= 8);
@@ -597,6 +597,19 @@ fn test_full_inference_chain_all_four_ops() {
         .filter(|i| ["remove", "list_reverse"].contains(&i.op_name.as_str()))
         .collect();
     assert_eq!(list_inferred.len(), 2, "should infer exactly 2 list ops");
+
+    // Comparison: 4 inferred (greater_than, less_than_or_equal, greater_than_or_equal)
+    // greater_than via op-symmetric from less_than; lte/gte via type-symmetric
+    let cmp_inferred: Vec<_> = inferred.iter()
+        .filter(|i| ["greater_than", "less_than_or_equal", "greater_than_or_equal"].contains(&i.op_name.as_str()))
+        .collect();
+    assert_eq!(cmp_inferred.len(), 3, "should infer exactly 3 comparison ops");
+
+    // String: 1 inferred (string_downcase via type-symmetric from string_upcase)
+    let str_inferred: Vec<_> = inferred.iter()
+        .filter(|i| i.op_name == "string_downcase")
+        .collect();
+    assert_eq!(str_inferred.len(), 1, "should infer exactly 1 string op");
 }
 
 #[test]

@@ -398,12 +398,19 @@ ops:
     inputs: ["Number", "Number"]
     output: "Boolean"
     description: "(< a b) — numeric less-than"
+    meta:
+      params:
+        - { name: a, type: Number }
+        - { name: b, type: Number }
+      return_type: Boolean
+      invariants: []
+      category: comparison
+      effects: none
 
-  - name: greater_than
-    racket_symbol: ">"
-    inputs: ["Number", "Number"]
-    output: "Boolean"
-    description: "(> a b) — numeric greater-than"
+  # greater_than is NOT listed here — discovered from the fact pack
+  # and inferred via op-symmetric from less_than.
+  # less_than_or_equal and greater_than_or_equal are also discovered
+  # via type-symmetric from less_than (class: comparison_binop).
 
   # =========================================================================
   # 7. String Operations
@@ -437,3 +444,20 @@ ops:
     inputs: ["String"]
     output: "Number"
     description: "(string->number s) — parse string as number"
+
+  - name: string_upcase
+    racket_symbol: "string-upcase"
+    inputs: ["String"]
+    output: "String"
+    description: "(string-upcase s) — convert string to uppercase"
+    meta:
+      params:
+        - { name: s, type: String }
+      return_type: String
+      invariants:
+        - "idempotent: (string-upcase (string-upcase s)) = (string-upcase s)"
+      category: string
+      effects: none
+
+  # string_downcase is NOT listed here — discovered from the fact pack
+  # and inferred via type-symmetric from string_upcase (class: string_to_string).

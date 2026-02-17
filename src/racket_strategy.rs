@@ -1154,4 +1154,132 @@ mod tests {
         assert_eq!(before, after, "list_ref should not be modified by inference");
     }
 
+    // -----------------------------------------------------------------------
+    // Comparison op discovery + inference tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_greater_than_discovered_and_inferred() {
+        let (mut reg, facts) = setup();
+        // greater_than is NOT in the ops pack — discovered from fact pack
+        assert!(reg.get_poly("greater_than").is_none(),
+            "greater_than should not be in ops pack");
+
+        let inferred = promote_inferred_ops(&mut reg, &facts);
+
+        let entry = reg.get_poly("greater_than")
+            .expect("greater_than should be registered after inference");
+        assert!(entry.meta.is_some(), "greater_than should have a meta after inference");
+
+        let meta = entry.meta.as_ref().unwrap();
+        assert_eq!(meta.params.len(), 2, "greater_than takes 2 params");
+        assert_eq!(meta.params[0].type_name, "Number");
+        assert_eq!(meta.params[1].type_name, "Number");
+        assert_eq!(meta.return_type, "Boolean");
+        assert_eq!(meta.category.as_deref(), Some("comparison"));
+
+        // Verify racket symbol
+        assert_eq!(entry.racket_symbol.as_deref(), Some(">"));
+
+        // Verify inference path — op-symmetric from less_than
+        let inf = inferred.iter().find(|i| i.op_name == "greater_than").unwrap();
+        assert_eq!(inf.inference_kind, InferenceKind::OpSymmetric);
+        assert_eq!(inf.inferred_from, "less_than");
+    }
+
+    #[test]
+    fn test_less_than_or_equal_discovered_and_inferred() {
+        let (mut reg, facts) = setup();
+        assert!(reg.get_poly("less_than_or_equal").is_none(),
+            "less_than_or_equal should not be in ops pack");
+
+        let inferred = promote_inferred_ops(&mut reg, &facts);
+
+        let entry = reg.get_poly("less_than_or_equal")
+            .expect("less_than_or_equal should be registered after inference");
+        assert!(entry.meta.is_some());
+
+        let meta = entry.meta.as_ref().unwrap();
+        assert_eq!(meta.params.len(), 2);
+        assert_eq!(meta.params[0].type_name, "Number");
+        assert_eq!(meta.params[1].type_name, "Number");
+        assert_eq!(meta.return_type, "Boolean");
+        assert_eq!(meta.category.as_deref(), Some("comparison"));
+
+        assert_eq!(entry.racket_symbol.as_deref(), Some("<="));
+
+        // Inferred via type-symmetric from less_than (class: comparison_binop)
+        let inf = inferred.iter().find(|i| i.op_name == "less_than_or_equal").unwrap();
+        assert!(matches!(inf.inference_kind, InferenceKind::TypeSymmetric { ref class } if class == "comparison_binop"),
+            "lte should be inferred via type-symmetric");
+    }
+
+    #[test]
+    fn test_greater_than_or_equal_discovered_and_inferred() {
+        let (mut reg, facts) = setup();
+        assert!(reg.get_poly("greater_than_or_equal").is_none());
+
+        let _inferred = promote_inferred_ops(&mut reg, &facts);
+
+        let entry = reg.get_poly("greater_than_or_equal")
+            .expect("greater_than_or_equal should be registered after inference");
+        assert!(entry.meta.is_some());
+
+        let meta = entry.meta.as_ref().unwrap();
+        assert_eq!(meta.return_type, "Boolean");
+        assert_eq!(meta.category.as_deref(), Some("comparison"));
+        assert_eq!(entry.racket_symbol.as_deref(), Some(">="));
+    }
+
+    #[test]
+    fn test_equal_not_affected_by_comparison_inference() {
+        let (mut reg, facts) = setup();
+        // equal is in the ops pack with (Any, Any) → Boolean — NOT in comparison_binop class
+        let before_meta = reg.get_poly("equal").map(|e| e.meta.is_some());
+        promote_inferred_ops(&mut reg, &facts);
+        let after_meta = reg.get_poly("equal").map(|e| e.meta.is_some());
+        assert_eq!(before_meta, after_meta, "equal should not be modified by inference");
+    }
+
+    // -----------------------------------------------------------------------
+    // String op discovery + inference tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_string_downcase_discovered_and_inferred() {
+        let (mut reg, facts) = setup();
+        assert!(reg.get_poly("string_downcase").is_none(),
+            "string_downcase should not be in ops pack");
+
+        let inferred = promote_inferred_ops(&mut reg, &facts);
+
+        let entry = reg.get_poly("string_downcase")
+            .expect("string_downcase should be registered after inference");
+        assert!(entry.meta.is_some(), "string_downcase should have a meta after inference");
+
+        let meta = entry.meta.as_ref().unwrap();
+        assert_eq!(meta.params.len(), 1, "string_downcase takes 1 param");
+        assert_eq!(meta.params[0].type_name, "String");
+        assert_eq!(meta.return_type, "String");
+        assert_eq!(meta.category.as_deref(), Some("string"));
+
+        assert_eq!(entry.racket_symbol.as_deref(), Some("string-downcase"));
+
+        // Inferred via type-symmetric from string_upcase (class: string_to_string)
+        let inf = inferred.iter().find(|i| i.op_name == "string_downcase").unwrap();
+        assert!(matches!(inf.inference_kind, InferenceKind::TypeSymmetric { ref class } if class == "string_to_string"),
+            "string_downcase should be inferred via type-symmetric");
+        assert_eq!(inf.inferred_from, "string_upcase");
+    }
+
+    #[test]
+    fn test_string_length_not_affected_by_string_inference() {
+        let (mut reg, facts) = setup();
+        // string_length is (String) → Number — different return type, not in string_to_string
+        let before_meta = reg.get_poly("string_length").map(|e| e.meta.is_some());
+        promote_inferred_ops(&mut reg, &facts);
+        let after_meta = reg.get_poly("string_length").map(|e| e.meta.is_some());
+        assert_eq!(before_meta, after_meta, "string_length should not be modified by inference");
+    }
+
 }

@@ -780,4 +780,40 @@ mod tests {
         let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(string->number 42)");
     }
+
+    #[test]
+    fn test_less_than_or_equal_discovered_executor() {
+        let reg = make_registry();
+        let step = make_step("less_than_or_equal", vec![("x", "3"), ("y", "5")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(<= 3 5)");
+    }
+
+    #[test]
+    fn test_greater_than_or_equal_discovered_executor() {
+        let reg = make_registry();
+        let step = make_step("greater_than_or_equal", vec![("x", "7"), ("y", "2")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(>= 7 2)");
+    }
+
+    #[test]
+    fn test_string_upcase_executor() {
+        let reg = make_registry();
+        let step = make_step("string_upcase", vec![("value", "hello")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(string-upcase \"hello\")");
+    }
+
+    #[test]
+    fn test_string_downcase_discovered_executor() {
+        let reg = make_registry();
+        let step = make_step("string_downcase", vec![("value", "HELLO")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(string-downcase \"HELLO\")");
+    }
 }
