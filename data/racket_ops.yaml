@@ -49,14 +49,12 @@ ops:
       effects: none
 
   - name: subtract
-    racket_symbol: "-"
     inputs: ["Number", "Number"]
     output: "Number"
     description: "(- x y) — subtract y from x"
     # Stub: no meta. Inferred from add via symmetric_pair relation.
 
   - name: multiply
-    racket_symbol: "*"
     inputs: ["Number", "Number"]
     output: "Number"
     properties:
@@ -68,7 +66,6 @@ ops:
     # Stub: no meta. Inferred from add's category via same_category relation.
 
   - name: divide
-    racket_symbol: "/"
     inputs: ["Number", "Number"]
     output: "Number"
     description: "(/ x y) — divide x by y"

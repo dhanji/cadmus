@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T10:14:06Z | Size: 27.5k chars
+> Updated: 2026-02-17T11:10:25Z | Size: 28.2k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -299,3 +299,12 @@
 - `src/registry.rs:646-649` — `get_poly()` uses `rfind` (last registration wins after promotion)
 - `tests/trace_pipeline.rs` — annotated pipeline trace for 7 arithmetic inputs, shows inference kind
 - Three-phase inference: Phase 1 op-symmetric (subtract←add), Phase 2 type-symmetric (multiply←add via class binop), Phase 3 op-symmetric replay (divide←multiply)
+
+### Data-Driven Executor
+- `src/racket_executor.rs` — `op_to_racket()` now takes `&OperationRegistry`, looks up `racket_symbol` and arity from ops pack
+- `data/racket_ops.yaml` — all 52 ops have `racket_symbol` field (e.g., `add→"+"`, `set_member→"set-member?"`, `equal→"equal?"`)
+- `src/registry.rs` — `OpDef.racket_symbol`, `PolyOpEntry.racket_symbol`, `OperationRegistry::racket_symbol()`, `set_racket_symbol()`
+- Generic dispatch: arity 0→`(sym)`, arity 1→`(sym a)`, arity 2+→`(sym a b)`
+- 11 special-case ops remain: sort_list, format_string, printf, racket_map, racket_filter, racket_foldl, racket_foldr, racket_for_each, racket_apply, andmap, ormap
+- Adding a new op requires only a YAML entry — zero Rust code changes
+- 1012 tests, 0 failures, 0 warnings

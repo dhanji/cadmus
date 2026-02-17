@@ -449,6 +449,8 @@ pub fn promote_inferred_ops(
                 &existing.description,
                 Some(inf.meta.clone()),
             );
+            // Write the inferred Racket symbol into the registry
+            reg.set_racket_symbol(&inf.op_name, inf.racket_symbol.clone());
         }
     };
 

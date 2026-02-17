@@ -190,7 +190,9 @@ fn trace_input(input: &str) {
                 output_type: TypeExpr::prim("Number"),
             };
 
-            let racket_reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();
+            let mut racket_reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();
+            let exec_facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
+            promote_inferred_ops(&mut racket_reg, &exec_facts);
             match generate_racket_script(&compiled, &wf, &racket_reg) {
                 Ok(script) => {
                     for line in script.lines() {

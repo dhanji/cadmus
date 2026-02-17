@@ -380,9 +380,13 @@ mod tests {
     use crate::workflow::CompiledStep;
     use crate::type_expr::TypeExpr;
     use crate::registry::load_ops_pack_str;
+    use crate::racket_strategy::{load_racket_facts_from_str, promote_inferred_ops};
 
     fn make_registry() -> OperationRegistry {
-        load_ops_pack_str(include_str!("../data/racket_ops.yaml")).unwrap()
+        let mut reg = load_ops_pack_str(include_str!("../data/racket_ops.yaml")).unwrap();
+        let facts = load_racket_facts_from_str(include_str!("../data/racket_facts.yaml")).unwrap();
+        promote_inferred_ops(&mut reg, &facts);
+        reg
     }
 
     fn make_step(op: &str, params: Vec<(&str, &str)>) -> CompiledStep {
