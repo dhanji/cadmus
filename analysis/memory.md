@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T02:19:23Z | Size: 21.7k chars
+> Updated: 2026-02-17T02:45:13Z | Size: 22.3k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -244,3 +244,11 @@
 - Usage: `cadmus --workflow <path.yaml> [--execute]`
 - Generic uses of "reasoning" preserved (comparative, cross-entity, cross-domain, etc.)
 - 795 tests, zero warnings, 5 commits on main
+
+### NL Robustness: dir aliases + noun patterns (commit `bd48a06`)
+- `data/nl/nl_vocab.yaml` — `dir_aliases` (15 entries) and `noun_patterns` (22 entries) sections
+- `src/nl/vocab.rs` — `NlVocab.dir_aliases: HashMap<String, String>` and `NlVocab.noun_patterns: HashMap<String, Vec<String>>`
+- `src/nl/slots.rs` — steps 9 (dir alias) and 10 (noun pattern) in `extract_slots()`
+- Ambiguity: tokens that are both alias+noun prefer alias when no path set, noun when path exists
+- SymSpell corrects plurals→singulars, so both forms needed in YAML tables
+- 822 total tests, 6 commits on main
