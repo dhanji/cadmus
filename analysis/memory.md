@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T11:43:35Z | Size: 29.1k chars
+> Updated: 2026-02-17T20:19:00Z | Size: 30.0k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -317,3 +317,13 @@
 - Four-phase inference: Phase 0 (Discovery) → Phase 1 (Op-symmetric) → Phase 2 (Type-symmetric) → Phase 3 (Op-symmetric replay)
 - multiply/divide inference path is non-deterministic (depends on HashMap iteration order) — both type-symmetric and op-symmetric paths produce identical results
 - 1012 tests, 0 failures, 0 warnings
+
+### List Op Discovery
+- `src/registry.rs` — `MetaSignature` now has `type_params: Vec<String>` field (line ~518)
+- `src/racket_strategy.rs` — `meta_to_poly_signature()` uses `TypeExpr::parse()` instead of `TypeExpr::prim()` for polymorphic type support
+- `src/racket_strategy.rs` — `collect_type_vars()` auto-collects Var nodes from parsed TypeExprs into deduplicated sorted list
+- `data/racket_ops.yaml` — 47 ops (was 49). cons and cdr are list anchors with metasigs. remove and list_reverse removed.
+- `data/racket_facts.yaml` — 8 entities (4 arithmetic + 4 list). Type symmetry classes: list_elem_to_list (cons, remove), list_to_list (cdr, list_reverse)
+- Discovery chain: cons anchor → remove via type-symmetric (list_elem_to_list), cdr anchor → list_reverse via type-symmetric (list_to_list)
+- 5 total discovered ops: subtract, multiply, divide (arithmetic) + remove, list_reverse (list)
+- 1020 tests, 0 failures
