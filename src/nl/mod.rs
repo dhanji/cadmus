@@ -1,8 +1,8 @@
 //! Natural Language UX layer.
 //!
 //! A deterministic, low-latency adapter that converts chatty user input
-//! into structured workflow YAML / Goal DSL instructions for the reasoning
-//! engine. Operates in four stages:
+//! into structured workflow YAML / Goal DSL instructions for Cadmus.
+//! Operates in four stages:
 //!
 //! 1. **Normalization** — case fold, punctuation strip, ordinal canonicalization,
 //!    synonym mapping (`normalize`)
@@ -401,7 +401,7 @@ fn get_op_explanation(op: &str) -> String {
     if let Some(desc) = crate::fs_types::get_op_description(op) {
         desc.to_string()
     } else {
-        format!("An operation in the reasoning engine's toolkit ({}).", op)
+        format!("An operation in Cadmus's toolkit ({}).", op)
     }
 }
 

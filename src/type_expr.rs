@@ -5,7 +5,7 @@ use std::fmt;
 // TypeExpr — compositional type grammar
 // ---------------------------------------------------------------------------
 
-/// A compositional type expression for the reasoning engine.
+/// A compositional type expression for Cadmus.
 ///
 /// Unlike flat `TypeId` strings, `TypeExpr` supports constructors with
 /// arguments (e.g., `File(Archive(Bytes, Zip))`), type variables for

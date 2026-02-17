@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use reasoning_engine::fact_pack;
-use reasoning_engine::registry::{load_ops_pack_str, load_ops_pack_str_into};
-use reasoning_engine::type_expr::TypeExpr;
+use cadmus::fact_pack;
+use cadmus::registry::{load_ops_pack_str, load_ops_pack_str_into};
+use cadmus::type_expr::TypeExpr;
 
 // ===========================================================================
 // Power Tools Integration Tests
@@ -422,8 +422,8 @@ fn test_compose_cross_pack_queries() {
 
 #[test]
 fn test_compose_via_goal_paths() {
-    use reasoning_engine::types::Goal;
-    use reasoning_engine::strategy::ComparisonStrategy;
+    use cadmus::types::Goal;
+    use cadmus::strategy::ComparisonStrategy;
 
     let goal = Goal {
         description: "Compare across merged packs".into(),

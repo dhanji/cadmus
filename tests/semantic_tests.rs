@@ -11,19 +11,19 @@
 //
 // The key question: does the generated plan actually accomplish the stated goal?
 
-use reasoning_engine::nl;
-use reasoning_engine::nl::dialogue::DialogueState;
-use reasoning_engine::nl::NlResponse;
-use reasoning_engine::workflow::{
+use cadmus::nl;
+use cadmus::nl::dialogue::DialogueState;
+use cadmus::nl::NlResponse;
+use cadmus::workflow::{
     parse_workflow, compile_workflow, run_workflow, run_workflow_str,
 };
-use reasoning_engine::fs_types::build_full_registry;
-use reasoning_engine::fs_strategy::run_fs_goal;
-use reasoning_engine::generic_planner::ExprLiteral;
-use reasoning_engine::type_expr::TypeExpr;
-use reasoning_engine::pipeline;
-use reasoning_engine::types::Goal;
-use reasoning_engine::coding_strategy;
+use cadmus::fs_types::build_full_registry;
+use cadmus::fs_strategy::run_fs_goal;
+use cadmus::generic_planner::ExprLiteral;
+use cadmus::type_expr::TypeExpr;
+use cadmus::pipeline;
+use cadmus::types::Goal;
+use cadmus::coding_strategy;
 
 use std::path::PathBuf;
 

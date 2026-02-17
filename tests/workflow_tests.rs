@@ -24,12 +24,12 @@ fn test_workflow_process_logs() {
 
     assert!(display.contains("awk_extract"), "should have awk_extract step: {}", display);
     assert!(display.contains("sed_script"), "should have sed_script step: {}", display);
-}use reasoning_engine::workflow::{
+}use cadmus::workflow::{
     parse_workflow, compile_workflow, execute_workflow, run_workflow,
     WorkflowError,
 };
-use reasoning_engine::fs_types::build_fs_registry;
-use reasoning_engine::fs_strategy::StepKind;
+use cadmus::fs_types::build_fs_registry;
+use cadmus::fs_strategy::StepKind;
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ use serde::Deserialize;
 // TypeId — strategy-defined type vocabulary
 // ---------------------------------------------------------------------------
 
-/// A type identifier in the reasoning engine. Strategies define their own
+/// A type identifier in Cadmus. Strategies define their own
 /// type vocabulary (e.g., "Claim", "Evidence", "AST", "Refactoring").
 /// String-based so each strategy can introduce domain-specific types
 /// without modifying the core engine.

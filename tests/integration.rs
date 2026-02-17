@@ -1,5 +1,5 @@
-use reasoning_engine::pipeline;
-use reasoning_engine::types::{Goal, OutputType};
+use cadmus::pipeline;
+use cadmus::types::{Goal, OutputType};
 
 fn putin_stalin_goal() -> Goal {
     Goal {

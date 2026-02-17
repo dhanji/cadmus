@@ -1,6 +1,6 @@
 # Architecture
 
-A pure-Rust reasoning engine that plans typed operations using unification,
+A pure-Rust engine (Cadmus) that plans typed operations using unification,
 algebraic properties, and strategy-pattern domain specialization. No LLM —
 all derivation is mechanical.
 

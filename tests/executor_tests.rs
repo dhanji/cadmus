@@ -7,15 +7,15 @@
 
 use std::path::Path;
 
-use reasoning_engine::executor::{
+use cadmus::executor::{
     generate_script, run_script, shell_quote,
     extract_archive_format, ExecutorError,
 };
-use reasoning_engine::fs_types::build_full_registry;
-use reasoning_engine::type_expr::TypeExpr;
-use reasoning_engine::workflow::{self, CompiledStep, CompiledWorkflow, WorkflowDef};
-use reasoning_engine::nl::{self, NlResponse};
-use reasoning_engine::nl::dialogue::DialogueState;
+use cadmus::fs_types::build_full_registry;
+use cadmus::type_expr::TypeExpr;
+use cadmus::workflow::{self, CompiledStep, CompiledWorkflow, WorkflowDef};
+use cadmus::nl::{self, NlResponse};
+use cadmus::nl::dialogue::DialogueState;
 
 use std::collections::HashMap;
 

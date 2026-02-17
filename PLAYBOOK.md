@@ -1,6 +1,6 @@
 # Playbook: Adding Ops, Fact Packs, and Workflows
 
-Step-by-step recipes for extending the reasoning engine with new domains.
+Step-by-step recipes for extending Cadmus with new domains.
 
 ---
 
@@ -350,7 +350,7 @@ Key rules:
 ### Step 3: Load and index
 
 ```rust
-use reasoning_engine::fact_pack::load_fact_pack;
+use cadmus::fact_pack::load_fact_pack;
 
 let idx = load_fact_pack(Path::new("data/db_facts.yaml"))?;
 
@@ -389,7 +389,7 @@ cross-domain reasoning.
 ### How merging works
 
 ```rust
-use reasoning_engine::fact_pack::{load_fact_packs, FactPack};
+use cadmus::fact_pack::{load_fact_packs, FactPack};
 
 // Option A: Load and merge from file paths
 let idx = load_fact_packs(&["data/power_tools.yaml", "data/db_facts.yaml"])?;

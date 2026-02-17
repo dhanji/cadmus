@@ -3,7 +3,7 @@ use std::fmt;
 use std::collections::HashSet;
 
 // ---------------------------------------------------------------------------
-// Output types — the "currency" of the reasoning engine
+// Output types — the "currency" of Cadmus
 // ---------------------------------------------------------------------------
 
 /// Every obligation slot and every operation output is tagged with one of these.

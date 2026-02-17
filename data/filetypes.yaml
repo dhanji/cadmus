@@ -1,6 +1,6 @@
 # File Type Dictionary
 # ====================
-# Single source of truth for file type knowledge in the reasoning engine.
+# Single source of truth for file type knowledge in Cadmus.
 # Loaded at runtime by src/filetypes.rs — no Rust recompilation needed.
 #
 # To add a new file type: just add an entry below. That's it.

@@ -1,6 +1,6 @@
-use reasoning_engine::fs_strategy::{FilesystemStrategy, StepKind};
-use reasoning_engine::generic_planner::ExprLiteral;
-use reasoning_engine::type_expr::TypeExpr;
+use cadmus::fs_strategy::{FilesystemStrategy, StepKind};
+use cadmus::generic_planner::ExprLiteral;
+use cadmus::type_expr::TypeExpr;
 
 // ===========================================================================
 // Filesystem Integration Tests — dry-run scenarios
@@ -335,7 +335,7 @@ fn test_fs_strategy_registry_has_all_ops() {
 // Phase 1-5 Op Signature & Property Tests
 // ===========================================================================
 
-use reasoning_engine::fs_types::build_fs_registry;
+use cadmus::fs_types::build_fs_registry;
 
 // --- Phase 1: File Lifecycle ---
 

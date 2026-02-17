@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document traces the semantic fidelity of the reasoning engine's
+This document traces the semantic fidelity of Cadmus's
 **goal → plan → execution** pipeline across all four strategies. For each
 strategy, we ask: *does the generated plan actually accomplish the stated goal?*
 

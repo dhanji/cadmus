@@ -2,14 +2,14 @@ use std::env;
 use std::path::Path;
 use std::process;
 
-use reasoning_engine::coding_strategy;
-use reasoning_engine::executor;
-use reasoning_engine::fs_strategy::{FilesystemStrategy, run_fs_goal};
-use reasoning_engine::generic_planner::ExprLiteral;
-use reasoning_engine::pipeline;
-use reasoning_engine::type_expr::TypeExpr;
-use reasoning_engine::types::Goal;
-use reasoning_engine::workflow;
+use cadmus::coding_strategy;
+use cadmus::executor;
+use cadmus::fs_strategy::{FilesystemStrategy, run_fs_goal};
+use cadmus::generic_planner::ExprLiteral;
+use cadmus::pipeline;
+use cadmus::type_expr::TypeExpr;
+use cadmus::types::Goal;
+use cadmus::workflow;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -23,7 +23,7 @@ fn main() {
     // --workflow <path> mode: load and execute a workflow YAML file
     if let Some(pos) = args.iter().position(|a| a == "--workflow") {
         let path = args.get(pos + 1).unwrap_or_else(|| {
-            eprintln!("Usage: reasoning_engine --workflow <path.yaml> [--execute]");
+            eprintln!("Usage: cadmus --workflow <path.yaml> [--execute]");
             eprintln!();
             eprintln!("Example:");
             eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml");
@@ -55,11 +55,11 @@ fn main() {
 
 fn run_chat_mode() {
     use std::io::{self, BufRead, Write};
-    use reasoning_engine::nl;
-    use reasoning_engine::nl::dialogue::DialogueState;
+    use cadmus::nl;
+    use cadmus::nl::dialogue::DialogueState;
 
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              REASONING ENGINE v0.5.0                        ║");
+    println!("║              CADMUS v0.5.0                                  ║");
     println!("║    Natural Language UX                                      ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
@@ -188,7 +188,7 @@ fn run_chat_mode() {
 
 fn run_workflow_mode(path: &Path, execute: bool) {
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              REASONING ENGINE v0.6.0                        ║");
+    println!("║              CADMUS v0.6.0                                  ║");
     println!("║    Workflow DSL + Shell Executor                            ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
@@ -226,7 +226,7 @@ fn run_workflow_mode(path: &Path, execute: bool) {
     println!();
 
     // Compile
-    let registry = reasoning_engine::fs_types::build_full_registry();
+    let registry = cadmus::fs_types::build_full_registry();
     let compiled = match workflow::compile_workflow(&def, &registry) {
         Ok(c) => c,
         Err(e) => {
@@ -300,7 +300,7 @@ fn run_workflow_mode(path: &Path, execute: bool) {
 
 fn run_demo_mode() {
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              REASONING ENGINE v0.4.0                        ║");
+    println!("║              CADMUS v0.4.0                                  ║");
     println!("║    Strategy Pattern + Workflow DSL                          ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();

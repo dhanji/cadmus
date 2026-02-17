@@ -14,10 +14,10 @@ fn assert_plan_compiles(response: &NlResponse, expected_ops: &[&str]) {
                     op, workflow_yaml
                 );
             }
-            let parsed = reasoning_engine::workflow::parse_workflow(workflow_yaml)
+            let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
                 .expect("should parse");
-            let registry = reasoning_engine::fs_types::build_full_registry();
-            reasoning_engine::workflow::compile_workflow(&parsed, &registry)
+            let registry = cadmus::fs_types::build_full_registry();
+            cadmus::workflow::compile_workflow(&parsed, &registry)
                 .unwrap_or_else(|e| panic!(
                     "workflow should compile: {:?}\nYAML:\n{}", e, workflow_yaml
                 ));
@@ -167,8 +167,8 @@ fn test_bugfix_full_conversation_ambiguous_then_specific() {
 // Tests the full pipeline end-to-end with diverse phrasings, typo correction,
 // explanations, edits, approvals, rejections, and multi-turn conversations.
 
-use reasoning_engine::nl::dialogue::DialogueState;
-use reasoning_engine::nl::{NlResponse, process_input};
+use cadmus::nl::dialogue::DialogueState;
+use cadmus::nl::{NlResponse, process_input};
 
 // ---------------------------------------------------------------------------
 // Diverse phrasings → CreateWorkflow
@@ -761,20 +761,20 @@ fn assert_plan_created(response: &NlResponse, expected_ops: &[&str]) {
 
 fn assert_yaml_compiles(response: &NlResponse) {
     if let NlResponse::PlanCreated { workflow_yaml, .. } = response {
-        let parsed = reasoning_engine::workflow::parse_workflow(workflow_yaml)
+        let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
             .expect("should parse");
-        let registry = reasoning_engine::fs_types::build_full_registry();
-        reasoning_engine::workflow::compile_workflow(&parsed, &registry)
+        let registry = cadmus::fs_types::build_full_registry();
+        cadmus::workflow::compile_workflow(&parsed, &registry)
             .expect("should compile");
     }
 }
 
 fn assert_yaml_compiles_edited(response: &NlResponse) {
     if let NlResponse::PlanEdited { workflow_yaml, .. } = response {
-        let parsed = reasoning_engine::workflow::parse_workflow(workflow_yaml)
+        let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
             .expect("should parse");
-        let registry = reasoning_engine::fs_types::build_full_registry();
-        reasoning_engine::workflow::compile_workflow(&parsed, &registry)
+        let registry = cadmus::fs_types::build_full_registry();
+        cadmus::workflow::compile_workflow(&parsed, &registry)
             .expect("should compile");
     }
 }
@@ -1104,10 +1104,10 @@ fn test_filetype_flac_infers_audio_type() {
     let r = process_input("copy song.flac to ~/backup/", &mut state);
     if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
         // Should compile — the dictionary gives File(Audio) for .flac
-        let def: reasoning_engine::workflow::WorkflowDef =
+        let def: cadmus::workflow::WorkflowDef =
             serde_yaml::from_str(workflow_yaml).unwrap();
-        let reg = reasoning_engine::fs_types::build_full_registry();
-        let compiled = reasoning_engine::workflow::compile_workflow(&def, &reg);
+        let reg = cadmus::fs_types::build_full_registry();
+        let compiled = cadmus::workflow::compile_workflow(&def, &reg);
         assert!(compiled.is_ok(), "flac workflow should compile: {:?}", compiled.err());
     }
 }
@@ -1117,10 +1117,10 @@ fn test_filetype_scheme_infers_text_type() {
     let mut state = DialogueState::new();
     let r = process_input("search for define in program.scm", &mut state);
     if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
-        let def: reasoning_engine::workflow::WorkflowDef =
+        let def: cadmus::workflow::WorkflowDef =
             serde_yaml::from_str(workflow_yaml).unwrap();
-        let reg = reasoning_engine::fs_types::build_full_registry();
-        let compiled = reasoning_engine::workflow::compile_workflow(&def, &reg);
+        let reg = cadmus::fs_types::build_full_registry();
+        let compiled = cadmus::workflow::compile_workflow(&def, &reg);
         assert!(compiled.is_ok(), "scheme workflow should compile: {:?}", compiled.err());
     }
 }
@@ -1129,7 +1129,7 @@ fn test_filetype_scheme_infers_text_type() {
 
 #[test]
 fn test_filetype_dictionary_describe() {
-    let dict = reasoning_engine::filetypes::dictionary();
+    let dict = cadmus::filetypes::dictionary();
     let desc = dict.describe_file_type("mp4");
     assert!(desc.contains("MP4"), "should mention MP4: {}", desc);
     assert!(desc.contains("ffmpeg"), "should mention ffmpeg tool: {}", desc);
@@ -1137,9 +1137,9 @@ fn test_filetype_dictionary_describe() {
 
 #[test]
 fn test_filetype_dictionary_category_query() {
-    let dict = reasoning_engine::filetypes::dictionary();
+    let dict = cadmus::filetypes::dictionary();
     let source_exts = dict.extensions_for_category(
-        &reasoning_engine::filetypes::FileTypeCategory::SourceCode
+        &cadmus::filetypes::FileTypeCategory::SourceCode
     );
     assert!(source_exts.contains(&"scm"), "source code should include .scm");
     assert!(source_exts.contains(&"ss"), "source code should include .ss");
@@ -1150,7 +1150,7 @@ fn test_filetype_dictionary_category_query() {
 
 #[test]
 fn test_filetype_dictionary_compound_ext_lookup() {
-    let dict = reasoning_engine::filetypes::dictionary();
+    let dict = cadmus::filetypes::dictionary();
     // lookup_by_path should prefer tar.gz over gz
     let entry = dict.lookup_by_path("backup.tar.gz").unwrap();
     assert_eq!(entry.ext, "tar.gz");
@@ -1161,7 +1161,7 @@ fn test_filetype_dictionary_compound_ext_lookup() {
 
 #[test]
 fn test_filetype_dictionary_unknown_returns_none() {
-    let dict = reasoning_engine::filetypes::dictionary();
+    let dict = cadmus::filetypes::dictionary();
     assert!(dict.lookup("xyzzy").is_none());
     assert!(dict.lookup_by_path("noext").is_none());
     assert!(dict.lookup_by_path("file.").is_none());
@@ -1169,7 +1169,7 @@ fn test_filetype_dictionary_unknown_returns_none() {
 
 #[test]
 fn test_filetype_dictionary_size() {
-    let dict = reasoning_engine::filetypes::dictionary();
+    let dict = cadmus::filetypes::dictionary();
     assert!(dict.len() >= 170, "dictionary should have 170+ entries, got {}", dict.len());
 }
 
@@ -1182,10 +1182,10 @@ fn test_filetype_dictionary_size() {
 #[test]
 fn test_yaml_vocab_synonyms_loaded() {
     // Verify synonyms load from YAML and work end-to-end
-    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
-    let r = reasoning_engine::nl::process_input("zip up everything in ~/Downloads", &mut state);
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("zip up everything in ~/Downloads", &mut state);
     match r {
-        reasoning_engine::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
             assert!(workflow_yaml.contains("pack_archive"),
                 "should have pack_archive in YAML from synonym, got: {}", workflow_yaml);
         }
@@ -1196,33 +1196,33 @@ fn test_yaml_vocab_synonyms_loaded() {
 #[test]
 fn test_yaml_vocab_contractions_loaded() {
     // "don't" should expand to "do not" via YAML contractions
-    let result = reasoning_engine::nl::normalize::normalize("don't walk the tree");
+    let result = cadmus::nl::normalize::normalize("don't walk the tree");
     assert!(result.tokens.contains(&"do".to_string()), "should expand don't: {:?}", result.tokens);
     assert!(result.tokens.contains(&"not".to_string()), "should expand don't: {:?}", result.tokens);
 }
 
 #[test]
 fn test_yaml_vocab_ordinals_loaded() {
-    let result = reasoning_engine::nl::normalize::normalize("move first step");
+    let result = cadmus::nl::normalize::normalize("move first step");
     assert!(result.canonical_tokens.contains(&"1".to_string()),
         "should canonicalize 'first' to '1': {:?}", result.canonical_tokens);
 }
 
 #[test]
 fn test_yaml_vocab_approvals_loaded() {
-    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
-    let _ = reasoning_engine::nl::process_input("list ~/Desktop", &mut state);
-    let r = reasoning_engine::nl::process_input("lgtm", &mut state);
-    assert!(matches!(r, reasoning_engine::nl::NlResponse::Approved { .. }),
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let _ = cadmus::nl::process_input("list ~/Desktop", &mut state);
+    let r = cadmus::nl::process_input("lgtm", &mut state);
+    assert!(matches!(r, cadmus::nl::NlResponse::Approved { .. }),
         "lgtm should approve via YAML-loaded approval list: {:?}", r);
 }
 
 #[test]
 fn test_yaml_vocab_rejections_loaded() {
-    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
-    let _ = reasoning_engine::nl::process_input("list ~/Desktop", &mut state);
-    let r = reasoning_engine::nl::process_input("nah forget it", &mut state);
-    assert!(matches!(r, reasoning_engine::nl::NlResponse::Rejected),
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let _ = cadmus::nl::process_input("list ~/Desktop", &mut state);
+    let r = cadmus::nl::process_input("nah forget it", &mut state);
+    assert!(matches!(r, cadmus::nl::NlResponse::Rejected),
         "nah forget it should reject via YAML-loaded rejection list: {:?}", r);
 }
 
@@ -1231,14 +1231,14 @@ fn test_yaml_vocab_rejections_loaded() {
 #[test]
 fn test_yaml_dictionary_typo_correction() {
     // "extrct" should correct to "extract" via YAML-loaded dictionary
-    let dict = reasoning_engine::nl::typo::build_domain_dict();
+    let dict = cadmus::nl::typo::build_domain_dict();
     let corrected = dict.correct("extrct");
     assert_eq!(corrected, "extract", "should correct typo via YAML dictionary");
 }
 
 #[test]
 fn test_yaml_dictionary_unknown_passthrough() {
-    let dict = reasoning_engine::nl::typo::build_domain_dict();
+    let dict = cadmus::nl::typo::build_domain_dict();
     let result = dict.correct("xyzzyplugh");
     assert_eq!(result, "xyzzyplugh", "unknown word should pass through unchanged");
 }
@@ -1247,21 +1247,21 @@ fn test_yaml_dictionary_unknown_passthrough() {
 
 #[test]
 fn test_yaml_op_description_from_registry() {
-    let desc = reasoning_engine::fs_types::get_op_description("walk_tree");
+    let desc = cadmus::fs_types::get_op_description("walk_tree");
     assert!(desc.is_some(), "walk_tree should have a description from fs_ops.yaml");
     assert!(desc.unwrap().contains("walk"), "description should mention walking: {}", desc.unwrap());
 }
 
 #[test]
 fn test_yaml_op_description_power_tools() {
-    let desc = reasoning_engine::fs_types::get_op_description("git_log");
+    let desc = cadmus::fs_types::get_op_description("git_log");
     assert!(desc.is_some(), "git_log should have a description from power_tools_ops.yaml");
     assert!(desc.unwrap().contains("git"), "description should mention git: {}", desc.unwrap());
 }
 
 #[test]
 fn test_yaml_op_description_unknown_returns_none() {
-    let desc = reasoning_engine::fs_types::get_op_description("nonexistent_op_xyz");
+    let desc = cadmus::fs_types::get_op_description("nonexistent_op_xyz");
     assert!(desc.is_none(), "unknown op should return None");
 }
 
@@ -1269,17 +1269,17 @@ fn test_yaml_op_description_unknown_returns_none() {
 
 #[test]
 fn test_yaml_canonical_ops_derived() {
-    assert!(reasoning_engine::nl::normalize::is_canonical_op("list_dir"),
+    assert!(cadmus::nl::normalize::is_canonical_op("list_dir"),
         "list_dir should be canonical (from fs_ops.yaml)");
-    assert!(reasoning_engine::nl::normalize::is_canonical_op("git_log"),
+    assert!(cadmus::nl::normalize::is_canonical_op("git_log"),
         "git_log should be canonical (from power_tools_ops.yaml)");
-    assert!(!reasoning_engine::nl::normalize::is_canonical_op("nonexistent_xyz"),
+    assert!(!cadmus::nl::normalize::is_canonical_op("nonexistent_xyz"),
         "nonexistent op should not be canonical");
 }
 
 #[test]
 fn test_yaml_canonical_ops_count() {
-    let ops = reasoning_engine::nl::normalize::canonical_ops();
+    let ops = cadmus::nl::normalize::canonical_ops();
     assert!(ops.len() >= 113, "should have at least 113 canonical ops, got {}", ops.len());
 }
 
@@ -1287,10 +1287,10 @@ fn test_yaml_canonical_ops_count() {
 
 #[test]
 fn test_yaml_full_pipeline_walk_tree() {
-    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
-    let r = reasoning_engine::nl::process_input("walk the directory tree in ~/Documents", &mut state);
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("walk the directory tree in ~/Documents", &mut state);
     match r {
-        reasoning_engine::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
             assert!(workflow_yaml.contains("walk_tree"),
                 "should have walk_tree from YAML synonyms: {}", workflow_yaml);
         }
@@ -1300,10 +1300,10 @@ fn test_yaml_full_pipeline_walk_tree() {
 
 #[test]
 fn test_yaml_full_pipeline_explain_op() {
-    let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
-    let r = reasoning_engine::nl::process_input("what is walk_tree", &mut state);
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("what is walk_tree", &mut state);
     match r {
-        reasoning_engine::nl::NlResponse::Explanation { text, .. } => {
+        cadmus::nl::NlResponse::Explanation { text, .. } => {
             // Description should come from fs_ops.yaml
             assert!(!text.is_empty(), "explanation should not be empty");
         }

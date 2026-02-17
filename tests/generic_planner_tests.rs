@@ -1,16 +1,16 @@
-use reasoning_engine::algebra::{self, Fact, InferenceKind, InferenceRule};
-use reasoning_engine::coding_strategy::{self, CodingStrategy, EXAMPLE_LONG_FUNCTION};
-use reasoning_engine::generic_planner::{self, GenericGoal, PlanError, PlanNode};
-use reasoning_engine::registry::{
+use cadmus::algebra::{self, Fact, InferenceKind, InferenceRule};
+use cadmus::coding_strategy::{self, CodingStrategy, EXAMPLE_LONG_FUNCTION};
+use cadmus::generic_planner::{self, GenericGoal, PlanError, PlanNode};
+use cadmus::registry::{
     AlgebraicProperties, Literal, OpSignature, OperationRegistry, TypeId,
 };
-use reasoning_engine::strategy::ReasonerStrategy;
+use cadmus::strategy::ReasonerStrategy;
 
 // ---------------------------------------------------------------------------
 // Generic planner integration tests
 // ---------------------------------------------------------------------------
 
-fn noop_exec() -> reasoning_engine::registry::ExecFn {
+fn noop_exec() -> cadmus::registry::ExecFn {
     Box::new(|_| Ok("noop".into()))
 }
 
@@ -354,12 +354,12 @@ fn test_coding_strategy_no_producer_for_unknown_type() {
 #[test]
 fn test_both_strategies_use_same_registry_interface() {
     // ComparisonStrategy
-    let comp_goal = reasoning_engine::types::Goal {
+    let comp_goal = cadmus::types::Goal {
         description: "test".into(),
         entities: vec!["putin".into(), "stalin".into()],
         fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
     };
-    let comp_strategy = reasoning_engine::strategy::ComparisonStrategy::new(comp_goal).unwrap();
+    let comp_strategy = cadmus::strategy::ComparisonStrategy::new(comp_goal).unwrap();
     let comp_reg = comp_strategy.build_registry();
 
     // CodingStrategy
