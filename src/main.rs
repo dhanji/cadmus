@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process;
 
 use reasoning_engine::coding_strategy;
+use reasoning_engine::executor;
 use reasoning_engine::fs_strategy::{FilesystemStrategy, run_fs_goal};
 use reasoning_engine::generic_planner::ExprLiteral;
 use reasoning_engine::pipeline;
@@ -22,15 +23,22 @@ fn main() {
     // --workflow <path> mode: load and execute a workflow YAML file
     if let Some(pos) = args.iter().position(|a| a == "--workflow") {
         let path = args.get(pos + 1).unwrap_or_else(|| {
-            eprintln!("Usage: reasoning_engine --workflow <path.yaml>");
+            eprintln!("Usage: reasoning_engine --workflow <path.yaml> [--execute]");
             eprintln!();
             eprintln!("Example:");
             eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml");
+            eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml --execute");
             process::exit(1);
         });
 
-        run_workflow_mode(Path::new(path));
+        let execute = args.iter().any(|a| a == "--execute");
+        run_workflow_mode(Path::new(path), execute);
         return;
+    }
+
+    if args.iter().any(|a| a == "--execute") {
+        eprintln!("Error: --execute requires --workflow <path.yaml>");
+        process::exit(1);
     }
 
     // Default: run all three strategy demos
@@ -108,11 +116,46 @@ fn run_chat_mode() {
                 println!("{}", text);
                 println!();
             }
-            nl::NlResponse::Approved => {
+            nl::NlResponse::Approved { script } => {
                 println!();
                 println!("✅ Plan approved!");
-                if let Some(wf) = &state.current_workflow {
-                    println!("Workflow '{}' is ready to execute.", wf.workflow);
+                if let Some(ref s) = script {
+                    println!();
+                    println!("═══ Generated Shell Script ═══");
+                    println!();
+                    println!("{}", s);
+                    println!();
+                    print!("Run this script? (y/n) ");
+                    stdout.flush().unwrap();
+                    let mut confirm = String::new();
+                    if stdin.lock().read_line(&mut confirm).is_ok() {
+                        let answer = confirm.trim().to_lowercase();
+                        if answer == "y" || answer == "yes" {
+                            println!();
+                            match executor::run_script(s) {
+                                Ok(result) => {
+                                    if !result.stdout.is_empty() {
+                                        println!("{}", result.stdout);
+                                    }
+                                    if !result.stderr.is_empty() {
+                                        eprintln!("{}", result.stderr);
+                                    }
+                                    if result.exit_code == 0 {
+                                        println!("✅ Script completed successfully.");
+                                    } else {
+                                        println!("⚠ Script exited with code {}", result.exit_code);
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ Execution error: {}", e);
+                                }
+                            }
+                        } else {
+                            println!("Script not executed.");
+                        }
+                    }
+                } else {
+                    println!("(workflow could not be compiled to a script)");
                 }
                 println!();
             }
@@ -143,10 +186,10 @@ fn run_chat_mode() {
 }
 
 
-fn run_workflow_mode(path: &Path) {
+fn run_workflow_mode(path: &Path, execute: bool) {
     println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              REASONING ENGINE v0.4.0                        ║");
-    println!("║    Workflow DSL                                             ║");
+    println!("║              REASONING ENGINE v0.6.0                        ║");
+    println!("║    Workflow DSL + Shell Executor                            ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
 
@@ -205,6 +248,50 @@ fn run_workflow_mode(path: &Path) {
     };
 
     println!("{}", trace);
+
+    // Generate shell script
+    println!();
+    println!("═══ Generated Shell Script ═══");
+    println!();
+
+    let script = match executor::generate_script(&compiled, &def) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("SCRIPT GENERATION ERROR: {}", e);
+            process::exit(1);
+        }
+    };
+
+    println!("{}", script);
+
+    if execute {
+        println!("═══ Executing Script ═══");
+        println!();
+
+        let result = match executor::run_script(&script) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("EXECUTION ERROR: {}", e);
+                process::exit(1);
+            }
+        };
+
+        if !result.stdout.is_empty() {
+            println!("{}", result.stdout);
+        }
+        if !result.stderr.is_empty() {
+            eprintln!("{}", result.stderr);
+        }
+
+        if result.exit_code != 0 {
+            eprintln!("Script exited with code {}", result.exit_code);
+            process::exit(result.exit_code);
+        } else {
+            println!("✅ Script completed successfully.");
+        }
+    } else {
+        println!("(dry-run: use --execute to run this script)");
+    }
 }
 
 // ---------------------------------------------------------------------------

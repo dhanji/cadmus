@@ -130,7 +130,7 @@ fn test_bugfix_full_conversation_compress_approve() {
     
     // Turn 2: approve
     let r2 = process_input("looks good, go ahead", &mut state);
-    assert!(matches!(r2, NlResponse::Approved));
+    assert!(matches!(r2, NlResponse::Approved { .. }));
 }
 
 #[test]
@@ -143,7 +143,7 @@ fn test_bugfix_full_conversation_search_approve() {
     
     // Turn 2: approve
     let r2 = process_input("ship it", &mut state);
-    assert!(matches!(r2, NlResponse::Approved));
+    assert!(matches!(r2, NlResponse::Approved { .. }));
 }
 
 #[test]
@@ -160,7 +160,7 @@ fn test_bugfix_full_conversation_ambiguous_then_specific() {
     
     // Turn 3: approve
     let r3 = process_input("ok go ahead", &mut state);
-    assert!(matches!(r3, NlResponse::Approved));
+    assert!(matches!(r3, NlResponse::Approved { .. }));
 }
 // Integration tests for the NL UX layer.
 //
@@ -350,49 +350,49 @@ fn test_nl_explain_how_does_grep_work() {
 fn test_nl_approve_lgtm() {
     let mut state = DialogueState::new();
     process_input("zip up ~/Downloads", &mut state);
-    assert!(matches!(process_input("lgtm", &mut state), NlResponse::Approved));
+    assert!(matches!(process_input("lgtm", &mut state), NlResponse::Approved { .. }));
 }
 
 #[test]
 fn test_nl_approve_sounds_good() {
     let mut state = DialogueState::new();
     process_input("zip up ~/Downloads", &mut state);
-    assert!(matches!(process_input("sounds good", &mut state), NlResponse::Approved));
+    assert!(matches!(process_input("sounds good", &mut state), NlResponse::Approved { .. }));
 }
 
 #[test]
 fn test_nl_approve_yes() {
     let mut state = DialogueState::new();
     process_input("zip up ~/Downloads", &mut state);
-    assert!(matches!(process_input("yes", &mut state), NlResponse::Approved));
+    assert!(matches!(process_input("yes", &mut state), NlResponse::Approved { .. }));
 }
 
 #[test]
 fn test_nl_approve_ok() {
     let mut state = DialogueState::new();
     process_input("zip up ~/Downloads", &mut state);
-    assert!(matches!(process_input("ok", &mut state), NlResponse::Approved));
+    assert!(matches!(process_input("ok", &mut state), NlResponse::Approved { .. }));
 }
 
 #[test]
 fn test_nl_approve_ship_it() {
     let mut state = DialogueState::new();
     process_input("zip up ~/Downloads", &mut state);
-    assert!(matches!(process_input("ship it", &mut state), NlResponse::Approved));
+    assert!(matches!(process_input("ship it", &mut state), NlResponse::Approved { .. }));
 }
 
 #[test]
 fn test_nl_approve_do_it() {
     let mut state = DialogueState::new();
     process_input("zip up ~/Downloads", &mut state);
-    assert!(matches!(process_input("do it", &mut state), NlResponse::Approved));
+    assert!(matches!(process_input("do it", &mut state), NlResponse::Approved { .. }));
 }
 
 #[test]
 fn test_nl_approve_go_ahead() {
     let mut state = DialogueState::new();
     process_input("zip up ~/Downloads", &mut state);
-    assert!(matches!(process_input("go ahead", &mut state), NlResponse::Approved));
+    assert!(matches!(process_input("go ahead", &mut state), NlResponse::Approved { .. }));
 }
 
 #[test]
@@ -495,7 +495,7 @@ fn test_nl_full_conversation_zip() {
 
     // Turn 4: Approve
     let r4 = process_input("lgtm", &mut state);
-    assert!(matches!(r4, NlResponse::Approved));
+    assert!(matches!(r4, NlResponse::Approved { .. }));
 }
 
 #[test]
@@ -640,7 +640,7 @@ fn test_hardening_ok_lgtm_approves() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r = process_input("ok lgtm", &mut state);
-    assert!(matches!(r, NlResponse::Approved),
+    assert!(matches!(r, NlResponse::Approved { .. }),
         "'ok lgtm' should approve, got: {:?}", r);
 }
 
@@ -649,7 +649,7 @@ fn test_hardening_sure_yeah_approves() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r = process_input("sure yeah", &mut state);
-    assert!(matches!(r, NlResponse::Approved),
+    assert!(matches!(r, NlResponse::Approved { .. }),
         "'sure yeah' should approve, got: {:?}", r);
 }
 
@@ -658,7 +658,7 @@ fn test_hardening_fine_ok_approves() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r = process_input("fine ok", &mut state);
-    assert!(matches!(r, NlResponse::Approved),
+    assert!(matches!(r, NlResponse::Approved { .. }),
         "'fine ok' should approve, got: {:?}", r);
 }
 
@@ -830,7 +830,7 @@ fn test_redteam_perfect_comma_ship_it_approves() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r = process_input("perfect, ship it", &mut state);
-    assert!(matches!(r, NlResponse::Approved),
+    assert!(matches!(r, NlResponse::Approved { .. }),
         "perfect, ship it should approve, got: {:?}", r);
 }
 
@@ -839,7 +839,7 @@ fn test_redteam_yep_comma_run_it_approves() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r = process_input("yep, run it", &mut state);
-    assert!(matches!(r, NlResponse::Approved),
+    assert!(matches!(r, NlResponse::Approved { .. }),
         "yep, run it should approve, got: {:?}", r);
 }
 
@@ -879,7 +879,7 @@ fn test_redteam_double_approve_fails() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r1 = process_input("yes", &mut state);
-    assert!(matches!(r1, NlResponse::Approved));
+    assert!(matches!(r1, NlResponse::Approved { .. }));
     let r2 = process_input("yes", &mut state);
     assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
         "second approve should need clarification, got: {:?}", r2);
@@ -909,7 +909,7 @@ fn test_redteam_sure_why_not_approves() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r = process_input("sure why not", &mut state);
-    assert!(matches!(r, NlResponse::Approved),
+    assert!(matches!(r, NlResponse::Approved { .. }),
         "sure why not should approve, got: {:?}", r);
 }
 
@@ -918,7 +918,7 @@ fn test_redteam_yeah_that_works_approves() {
     let mut state = DialogueState::new();
     let _ = process_input("compress file.txt", &mut state);
     let r = process_input("yeah that works", &mut state);
-    assert!(matches!(r, NlResponse::Approved),
+    assert!(matches!(r, NlResponse::Approved { .. }),
         "yeah that works should approve, got: {:?}", r);
 }
 
@@ -979,7 +979,7 @@ fn test_redteam_create_reject_create_approve() {
     let r3 = process_input("list ~/Desktop", &mut state);
     assert!(matches!(r3, NlResponse::PlanCreated { .. }));
     let r4 = process_input("yes", &mut state);
-    assert!(matches!(r4, NlResponse::Approved));
+    assert!(matches!(r4, NlResponse::Approved { .. }));
 }
 
 #[test]
@@ -995,7 +995,7 @@ fn test_redteam_create_overwrite_approve() {
             "second plan should be list_dir: {}", workflow_yaml);
     }
     let r3 = process_input("yes", &mut state);
-    assert!(matches!(r3, NlResponse::Approved));
+    assert!(matches!(r3, NlResponse::Approved { .. }));
 }
 
 // -- Typo correction edge cases --
@@ -1213,7 +1213,7 @@ fn test_yaml_vocab_approvals_loaded() {
     let mut state = reasoning_engine::nl::dialogue::DialogueState::new();
     let _ = reasoning_engine::nl::process_input("list ~/Desktop", &mut state);
     let r = reasoning_engine::nl::process_input("lgtm", &mut state);
-    assert!(matches!(r, reasoning_engine::nl::NlResponse::Approved),
+    assert!(matches!(r, reasoning_engine::nl::NlResponse::Approved { .. }),
         "lgtm should approve via YAML-loaded approval list: {:?}", r);
 }
 

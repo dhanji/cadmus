@@ -282,7 +282,7 @@ fn test_semantic_multiturn_create_edit_approve() {
 
     // Turn 3: Approve
     let r3 = nl::process_input("lgtm", &mut state);
-    assert!(matches!(r3, NlResponse::Approved), "T3: expected Approved, got: {:?}", r3);
+    assert!(matches!(r3, NlResponse::Approved { .. }), "T3: expected Approved, got: {:?}", r3);
 }
 
 #[test]
@@ -786,7 +786,7 @@ fn test_semantic_double_approve() {
     let mut state = DialogueState::new();
     nl::process_input("zip up ~/Downloads", &mut state);
     let r1 = nl::process_input("yes", &mut state);
-    assert!(matches!(r1, NlResponse::Approved));
+    assert!(matches!(r1, NlResponse::Approved { .. }));
 
     // Second approve should fail — workflow was cleared
     let r2 = nl::process_input("yes", &mut state);

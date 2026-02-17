@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-16T22:25:17Z | Size: 18.4k chars
+> Updated: 2026-02-17T01:58:10Z | Size: 21.3k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -185,3 +185,53 @@
 - Key design: CANONICAL_OPS derived at load time from registry, NOT hardcoded
 - 1337 lines of hardcoded data removed from Rust, 3547 lines of YAML data added
 - 670 total tests, 33 new (19 vocab unit + 14 integration), zero warnings
+
+### Semantic Correctness Audit (Phase 7)
+- `tests/semantic_tests.rs` — 46 integration tests tracing goal→plan→execution across all 4 strategies
+- `SEMANTICS.md` — comprehensive analysis document
+- **Bug fixed**: `src/main.rs` used `build_fs_registry()` instead of `build_full_registry()` in `--workflow` CLI mode, breaking power_tools workflows (git_log_search, process_logs)
+- **Finding**: Coding strategy's `execute_plan()` in `src/strategy.rs` only returns root node result; intermediate CodeSmell/Refactoring/TypeSignature lost in `assemble()`
+- **Finding**: 3 workflow YAMLs have incomplete step sequences: find_large_files (min_size unused), find_duplicates (no dedup), copy_and_organize (no copy step)
+- **Finding**: Polymorphic type system allows `Dir(Bytes)` → `Seq(Entry(Name, File(Image)))` via variable unification — this is by design, not a bug
+- **Total tests**: 716 (all passing, zero warnings)
+- **Commit**: `8754949`
+
+### Shell Executor Module
+- `src/executor.rs` [1-2112] - Full shell executor: `op_to_command()`, `generate_script()`, `run_script()`, `shell_quote()`, `extract_archive_format()`
+  - `ShellCommand` struct: command string, reads_stdin, writes_stdout
+  - `ExecutorError` enum: UnknownOp, MissingParam, ExecFailed
+  - `ScriptResult` struct: exit_code, stdout, stderr
+  - 113 ops mapped (49 fs_ops + 64 power_tools_ops)
+  - Archive format detection from TypeExpr: `File(Archive(a, Cbz))` → "Cbz"
+  - `shell_quote()` detects `$WORK_DIR` prefix → double quotes for variable expansion
+  - `generate_script()` uses intermediate temp files: `$WORK_DIR/step_N.txt`
+  - Single-step workflows: standalone command (no temp file overhead)
+  - Multi-step: `set -e`, `mktemp -d`, cleanup trap, step comments
+  - Each-mode: `while IFS= read -r _line; do ... done < prev > next`
+  - `run_script()` executes via `/bin/sh -c`
+
+### CLI Changes
+- `src/main.rs` - Added `--execute` flag for workflow mode
+  - `--workflow <path>` always shows generated script
+  - `--workflow <path> --execute` runs the script
+  - `--execute` without `--workflow` prints error
+  - Chat mode: Approved → shows script → prompts "Run this? (y/n)"
+
+### NL Changes
+- `src/nl/mod.rs` - `NlResponse::Approved` changed from unit to struct variant
+  - Now carries `script: Option<String>`
+  - On approve: compiles workflow → generates script → returns in Approved
+  - All test assertions updated to use `NlResponse::Approved { .. }`
+
+### Test Files
+- `tests/executor_tests.rs` [1-454] - 38 integration tests
+  - 11 workflow→script tests (all YAML files)
+  - 7 script structure tests (shebang, set -e, trap, work_dir, etc.)
+  - 7 real execution tests (ls /tmp, echo, failing command, temp files)
+  - 4 NL→script integration tests
+  - 5 error/edge case tests
+  - 4 archive format detection tests
+
+### Test Counts
+- Total: 795 (was 716)
+- New: 79 (41 unit in executor.rs + 38 integration in executor_tests.rs)

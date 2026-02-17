@@ -55,7 +55,10 @@ pub enum NlResponse {
         text: String,
     },
     /// The user approved the current plan.
-    Approved,
+    Approved {
+        /// The generated shell script (if workflow was compiled successfully).
+        script: Option<String>,
+    },
     /// The user rejected the current plan.
     Rejected,
     /// The input was ambiguous — we need clarification.
@@ -128,10 +131,21 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
             handle_explain(&subject)
         }
         Intent::Approve => {
-            if state.current_workflow.is_some() {
-                // Clear the workflow so a second approve won't succeed
-                state.current_workflow = None;
-                NlResponse::Approved
+            if let Some(wf) = state.current_workflow.take() {
+                // Generate the shell script from the workflow
+                let script = {
+                    let registry = crate::fs_types::build_full_registry();
+                    match crate::workflow::compile_workflow(&wf, &registry) {
+                        Ok(compiled) => {
+                            match crate::executor::generate_script(&compiled, &wf) {
+                                Ok(s) => Some(s),
+                                Err(_) => None,
+                            }
+                        }
+                        Err(_) => None,
+                    }
+                };
+                NlResponse::Approved { script }
             } else {
                 NlResponse::NeedsClarification {
                     needs: vec![
@@ -480,7 +494,7 @@ mod tests {
         let mut state = DialogueState::new();
         process_input("zip up ~/Downloads", &mut state);
         let response = process_input("lgtm", &mut state);
-        assert!(matches!(response, NlResponse::Approved));
+        assert!(matches!(response, NlResponse::Approved { .. }));
     }
 
     #[test]
@@ -488,7 +502,7 @@ mod tests {
         let mut state = DialogueState::new();
         process_input("zip up ~/Downloads", &mut state);
         let response = process_input("sounds good", &mut state);
-        assert!(matches!(response, NlResponse::Approved));
+        assert!(matches!(response, NlResponse::Approved { .. }));
     }
 
     #[test]
@@ -573,7 +587,7 @@ mod tests {
 
         // Turn 3: Approve
         let r3 = process_input("lgtm", &mut state);
-        assert!(matches!(r3, NlResponse::Approved));
+        assert!(matches!(r3, NlResponse::Approved { .. }));
     }
 
     // -- Casual ack variation --
@@ -627,7 +641,7 @@ mod tests {
         let r1 = process_input("zip up everything in ~/Downloads", &mut state);
         assert!(matches!(r1, NlResponse::PlanCreated { .. }));
         let r2 = process_input("approve", &mut state);
-        assert!(matches!(r2, NlResponse::Approved));
+        assert!(matches!(r2, NlResponse::Approved { .. }));
     }
 
     #[test]
@@ -650,7 +664,7 @@ mod tests {
         let r1 = process_input("compress file.txt", &mut state);
         assert!(matches!(r1, NlResponse::PlanCreated { .. }));
         let r2 = process_input("yes", &mut state);
-        assert!(matches!(r2, NlResponse::Approved), "first approve should succeed: {:?}", r2);
+        assert!(matches!(r2, NlResponse::Approved { .. }), "first approve should succeed: {:?}", r2);
         // Second approve should fail — workflow was cleared
         let r3 = process_input("yes", &mut state);
         assert!(matches!(r3, NlResponse::NeedsClarification { .. }),
@@ -666,6 +680,6 @@ mod tests {
         let r = process_input("list ~/Desktop", &mut state);
         assert!(matches!(r, NlResponse::PlanCreated { .. }), "new plan after approve: {:?}", r);
         let r2 = process_input("ok", &mut state);
-        assert!(matches!(r2, NlResponse::Approved), "approve new plan: {:?}", r2);
+        assert!(matches!(r2, NlResponse::Approved { .. }), "approve new plan: {:?}", r2);
     }
 }
