@@ -417,6 +417,26 @@ mod tests {
     }
 
     #[test]
+    fn test_remove_discovered_executor() {
+        // remove is discovered from the fact pack — verify it works through the executor
+        let reg = make_registry();
+        let step = make_step("remove", vec![("x", "3"), ("y", "'(1 2 3 4)")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(remove 3 '(1 2 3 4))");
+    }
+
+    #[test]
+    fn test_list_reverse_discovered_executor() {
+        // list_reverse is discovered from the fact pack — verify it works through the executor
+        let reg = make_registry();
+        let step = make_step("list_reverse", vec![("value", "'(1 2 3)")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(reverse '(1 2 3))");
+    }
+
+    #[test]
     fn test_subtract_with_named_params() {
         let reg = make_registry();
         let step = make_step("subtract", vec![("x", "6"), ("y", "2")]);

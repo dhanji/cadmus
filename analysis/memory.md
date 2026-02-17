@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T11:10:25Z | Size: 28.2k chars
+> Updated: 2026-02-17T11:43:35Z | Size: 29.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -307,4 +307,13 @@
 - Generic dispatch: arity 0→`(sym)`, arity 1→`(sym a)`, arity 2+→`(sym a b)`
 - 11 special-case ops remain: sort_list, format_string, printf, racket_map, racket_filter, racket_foldl, racket_foldr, racket_for_each, racket_apply, andmap, ormap
 - Adding a new op requires only a YAML entry — zero Rust code changes
+- 1012 tests, 0 failures, 0 warnings
+
+### Operator Discovery (Phase 0)
+- `src/racket_strategy.rs` — `discover_ops()` scans fact pack for entities with `op_name` + `racket_symbol` not in registry, registers placeholders
+- `src/racket_strategy.rs` — `meta_to_poly_signature()` builds `PolyOpSignature` from `MetaSignature`
+- `data/racket_ops.yaml` — now 49 ops (subtract, multiply, divide removed — discovered from fact pack)
+- `src/fs_types.rs` — `build_full_registry()` now runs `promote_inferred_ops` after loading ops packs
+- Four-phase inference: Phase 0 (Discovery) → Phase 1 (Op-symmetric) → Phase 2 (Type-symmetric) → Phase 3 (Op-symmetric replay)
+- multiply/divide inference path is non-deterministic (depends on HashMap iteration order) — both type-symmetric and op-symmetric paths produce identical results
 - 1012 tests, 0 failures, 0 warnings

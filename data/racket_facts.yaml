@@ -31,6 +31,20 @@ entities:
     name: "/"
     description: "Division operator — computes quotient of numeric values"
 
+  # --- List operations ---
+  - id: op_cons
+    name: "cons"
+    description: "Prepend element to list — (cons x lst)"
+  - id: op_cdr
+    name: "cdr"
+    description: "Rest of list after first element — (cdr lst)"
+  - id: op_remove
+    name: "remove"
+    description: "Remove first occurrence of element from list — (remove v lst)"
+  - id: op_list_reverse
+    name: "reverse"
+    description: "Reverse element order of a list — (reverse lst)"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -423,6 +437,84 @@ properties:
     axis: type_symmetry
     key: type_symmetry_class
     value: "binop"
+
+  # =========================================================================
+  # List operation properties
+  # =========================================================================
+
+  # --- Racket symbols ---
+  - entity: op_cons
+    axis: type_signature
+    key: racket_symbol
+    value: "cons"
+  - entity: op_cdr
+    axis: type_signature
+    key: racket_symbol
+    value: "cdr"
+  - entity: op_remove
+    axis: type_signature
+    key: racket_symbol
+    value: "remove"
+  - entity: op_list_reverse
+    axis: type_signature
+    key: racket_symbol
+    value: "reverse"
+
+  # --- Op name mapping ---
+  - entity: op_cons
+    axis: type_signature
+    key: op_name
+    value: "cons"
+  - entity: op_cdr
+    axis: type_signature
+    key: op_name
+    value: "cdr"
+  - entity: op_remove
+    axis: type_signature
+    key: op_name
+    value: "remove"
+  - entity: op_list_reverse
+    axis: type_signature
+    key: op_name
+    value: "list_reverse"
+
+  # --- Category (list) ---
+  - entity: op_cons
+    axis: category
+    key: category_name
+    value: "list"
+  - entity: op_cdr
+    axis: category
+    key: category_name
+    value: "list"
+  - entity: op_remove
+    axis: category
+    key: category_name
+    value: "list"
+  - entity: op_list_reverse
+    axis: category
+    key: category_name
+    value: "list"
+
+  # --- Type symmetry classes ---
+  # list_elem_to_list: (a, List(a)) → List(a) — cons (anchor), remove
+  # list_to_list: (List(a)) → List(a) — cdr (anchor), list_reverse
+  - entity: op_cons
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "list_elem_to_list"
+  - entity: op_remove
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "list_elem_to_list"
+  - entity: op_cdr
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "list_to_list"
+  - entity: op_list_reverse
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "list_to_list"
 
 # ---------------------------------------------------------------------------
 # Relations

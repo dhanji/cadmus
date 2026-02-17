@@ -515,6 +515,9 @@ pub struct MetaParam {
 pub struct MetaSignature {
     /// Named, typed parameters with optional variadic flag
     pub params: Vec<MetaParam>,
+    /// Type parameter names (e.g., ["a"]). Empty for monomorphic ops.
+    #[serde(default)]
+    pub type_params: Vec<String>,
     /// Return type name
     pub return_type: String,
     /// Semantic invariants (e.g., "y>0 => x+y>x")

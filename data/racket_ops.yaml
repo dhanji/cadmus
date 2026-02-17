@@ -102,6 +102,15 @@ ops:
     inputs: ["a", "List(a)"]
     output: "List(a)"
     description: "(cons x lst) — prepend element to list"
+    meta:
+      type_params: [a]
+      params:
+        - { name: x, type: "a" }
+        - { name: lst, type: "List(a)" }
+      return_type: "List(a)"
+      invariants: []
+      category: list
+      effects: none
 
   - name: car
     racket_symbol: "car"
@@ -116,6 +125,14 @@ ops:
     inputs: ["List(a)"]
     output: "List(a)"
     description: "(cdr lst) — rest of list after first element"
+    meta:
+      type_params: [a]
+      params:
+        - { name: lst, type: "List(a)" }
+      return_type: "List(a)"
+      invariants: []
+      category: list
+      effects: none
 
   - name: list_new
     racket_symbol: "list"
@@ -143,12 +160,8 @@ ops:
       idempotent: true
     description: "(length lst) — number of elements"
 
-  - name: list_reverse
-    racket_symbol: "reverse"
-    type_params: [a]
-    inputs: ["List(a)"]
-    output: "List(a)"
-    description: "(reverse lst) — reverse element order"
+  # list_reverse is NOT listed here — discovered from the fact pack
+  # and inferred via type-symmetric from cdr (class: list_to_list).
 
   - name: list_ref
     racket_symbol: "list-ref"
@@ -164,12 +177,8 @@ ops:
     output: "Option(List(a))"
     description: "(member v lst) — sublist starting at v, or #f"
 
-  - name: remove
-    racket_symbol: "remove"
-    type_params: [a]
-    inputs: ["a", "List(a)"]
-    output: "List(a)"
-    description: "(remove v lst) — remove first occurrence of v"
+  # remove is NOT listed here — discovered from the fact pack
+  # and inferred via type-symmetric from cons (class: list_elem_to_list).
 
   - name: sort_list
     racket_symbol: "sort"

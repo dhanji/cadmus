@@ -279,6 +279,7 @@ pub fn infer_symmetric_op(
             type_name: p.type_name.clone(),
             variadic: p.variadic,
         }).collect(),
+        type_params: partner_meta.type_params.clone(),
         return_type: partner_meta.return_type.clone(),
         invariants: vec![], // Invariants do NOT transfer
         category: partner_meta.category.clone(),
@@ -391,6 +392,7 @@ pub fn infer_type_symmetric_op(
             type_name: p.type_name.clone(),
             variadic: p.variadic,
         }).collect(),
+        type_params: peer_meta.type_params.clone(),
         return_type: peer_meta.return_type.clone(),
         invariants: vec![], // Invariants do NOT transfer
         category: peer_meta.category.clone(),
@@ -415,17 +417,52 @@ pub fn infer_type_symmetric_op(
 // Promotion — upgrade stubs to full ops
 // ---------------------------------------------------------------------------
 
+/// Collect all type variable names from a set of TypeExprs.
+///
+/// Walks the input and output types, collecting any `Var` nodes into a
+/// deduplicated, sorted list.  This lets `meta_to_poly_signature` infer
+/// type_params automatically when the MetaSignature doesn't declare them.
+fn collect_type_vars(inputs: &[TypeExpr], output: &TypeExpr) -> Vec<String> {
+    let mut vars = std::collections::BTreeSet::new();
+    fn walk(expr: &TypeExpr, vars: &mut std::collections::BTreeSet<String>) {
+        match expr {
+            TypeExpr::Var(v) => { vars.insert(v.clone()); }
+            TypeExpr::Constructor(_, args) => {
+                for arg in args { walk(arg, vars); }
+            }
+            TypeExpr::Primitive(_) => {}
+        }
+    }
+    for input in inputs { walk(input, &mut vars); }
+    walk(output, &mut vars);
+    vars.into_iter().collect()
+}
+
 /// Build a PolyOpSignature from a MetaSignature.
 ///
 /// Converts the named, typed params into TypeExpr inputs and the return type
-/// into a TypeExpr output. This allows ops discovered from the fact pack
-/// (which have no ops pack entry) to get a proper type signature.
+/// into a TypeExpr output.  Parses type strings like "List(a)" into proper
+/// Constructor/Var TypeExprs (not flat Primitives).  Type parameters are
+/// taken from the MetaSignature's `type_params` field; if that field is
+/// empty, they are collected automatically from any Var nodes produced by
+/// the parser (lowercase identifiers like `a`, `b`).
 fn meta_to_poly_signature(meta: &MetaSignature) -> PolyOpSignature {
+    let parse_or_prim = |s: &str| -> TypeExpr {
+        TypeExpr::parse(s).unwrap_or_else(|_| TypeExpr::prim(s))
+    };
+
     let inputs: Vec<TypeExpr> = meta.params.iter()
-        .map(|p| TypeExpr::prim(&p.type_name))
+        .map(|p| parse_or_prim(&p.type_name))
         .collect();
-    let output = TypeExpr::prim(&meta.return_type);
-    PolyOpSignature::mono(inputs, output)
+    let output = parse_or_prim(&meta.return_type);
+
+    let type_params = if !meta.type_params.is_empty() {
+        meta.type_params.clone()
+    } else {
+        collect_type_vars(&inputs, &output)
+    };
+
+    PolyOpSignature::new(type_params, inputs, output)
 }
 
 /// Discover ops from the fact pack that are not yet in the registry.
@@ -970,4 +1007,151 @@ mod tests {
         assert!(reg.get_poly("modulo").unwrap().meta.is_none(),
             "modulo should remain a stub — no inference path");
     }
+
+    // -----------------------------------------------------------------------
+    // Polymorphic meta_to_poly_signature tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_meta_to_poly_signature_monomorphic() {
+        // Number params should produce Primitive types, no type_params
+        let meta = MetaSignature {
+            params: vec![
+                MetaParam { name: "x".into(), type_name: "Number".into(), variadic: false },
+                MetaParam { name: "y".into(), type_name: "Number".into(), variadic: false },
+            ],
+            type_params: vec![],
+            return_type: "Number".into(),
+            invariants: vec![],
+            category: Some("arithmetic".into()),
+            effects: Some("none".into()),
+        };
+        let sig = meta_to_poly_signature(&meta);
+        assert!(sig.type_params.is_empty(), "monomorphic meta should have no type_params");
+        assert_eq!(sig.inputs.len(), 2);
+        assert_eq!(sig.inputs[0], TypeExpr::prim("Number"));
+        assert_eq!(sig.output, TypeExpr::prim("Number"));
+    }
+
+    #[test]
+    fn test_meta_to_poly_signature_polymorphic_list() {
+        // List(a) params should produce Constructor + Var, with type_params=["a"]
+        let meta = MetaSignature {
+            params: vec![
+                MetaParam { name: "x".into(), type_name: "a".into(), variadic: false },
+                MetaParam { name: "lst".into(), type_name: "List(a)".into(), variadic: false },
+            ],
+            type_params: vec!["a".into()],
+            return_type: "List(a)".into(),
+            invariants: vec![],
+            category: Some("list".into()),
+            effects: Some("none".into()),
+        };
+        let sig = meta_to_poly_signature(&meta);
+        assert_eq!(sig.type_params, vec!["a".to_string()]);
+        assert_eq!(sig.inputs.len(), 2);
+        assert_eq!(sig.inputs[0], TypeExpr::var("a"));
+        assert_eq!(sig.inputs[1], TypeExpr::cons("List", vec![TypeExpr::var("a")]));
+        assert_eq!(sig.output, TypeExpr::cons("List", vec![TypeExpr::var("a")]));
+    }
+
+    #[test]
+    fn test_meta_to_poly_signature_nested_type() {
+        // List(List(a)) should parse correctly and deduplicate type_params
+        let meta = MetaSignature {
+            params: vec![
+                MetaParam { name: "lst".into(), type_name: "List(List(a))".into(), variadic: false },
+            ],
+            type_params: vec![], // auto-collect
+            return_type: "List(a)".into(),
+            invariants: vec![],
+            category: Some("list".into()),
+            effects: None,
+        };
+        let sig = meta_to_poly_signature(&meta);
+        assert_eq!(sig.type_params, vec!["a".to_string()], "should auto-collect 'a' from nested types");
+        let expected_input = TypeExpr::cons("List", vec![TypeExpr::cons("List", vec![TypeExpr::var("a")])]);
+        assert_eq!(sig.inputs[0], expected_input);
+        assert_eq!(sig.output, TypeExpr::cons("List", vec![TypeExpr::var("a")]));
+    }
+    // -----------------------------------------------------------------------
+    // List op discovery + polymorphic inference tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_list_remove_discovered_and_inferred() {
+        let (mut reg, facts) = setup();
+        // remove is NOT in the ops pack — it must be discovered from the fact pack
+        assert!(reg.get_poly("remove").is_none(),
+            "remove should not be in ops pack");
+
+        let inferred = promote_inferred_ops(&mut reg, &facts);
+
+        // remove should now be in the registry with a meta
+        let entry = reg.get_poly("remove").expect("remove should be registered after inference");
+        assert!(entry.meta.is_some(), "remove should have a meta after inference");
+
+        let meta = entry.meta.as_ref().unwrap();
+        assert_eq!(meta.params.len(), 2, "remove takes 2 params (x, lst)");
+        assert_eq!(meta.params[0].type_name, "a");
+        assert_eq!(meta.params[1].type_name, "List(a)");
+        assert_eq!(meta.return_type, "List(a)");
+        assert_eq!(meta.category.as_deref(), Some("list"));
+        assert_eq!(meta.type_params, vec!["a".to_string()]);
+
+        // Verify the PolyOpSignature is polymorphic
+        assert_eq!(entry.signature.type_params, vec!["a".to_string()]);
+        assert_eq!(entry.signature.inputs[0], TypeExpr::var("a"));
+        assert_eq!(entry.signature.inputs[1], TypeExpr::cons("List", vec![TypeExpr::var("a")]));
+        assert_eq!(entry.signature.output, TypeExpr::cons("List", vec![TypeExpr::var("a")]));
+
+        // Verify inference path
+        let inf = inferred.iter().find(|i| i.op_name == "remove").unwrap();
+        assert!(matches!(inf.inference_kind, InferenceKind::TypeSymmetric { ref class } if class == "list_elem_to_list"),
+            "remove should be inferred via type-symmetric from cons");
+        assert_eq!(inf.inferred_from, "cons");
+        assert_eq!(inf.racket_symbol, "remove");
+    }
+
+    #[test]
+    fn test_list_reverse_discovered_and_inferred() {
+        let (mut reg, facts) = setup();
+        assert!(reg.get_poly("list_reverse").is_none(),
+            "list_reverse should not be in ops pack");
+
+        let inferred = promote_inferred_ops(&mut reg, &facts);
+
+        let entry = reg.get_poly("list_reverse").expect("list_reverse should be registered after inference");
+        assert!(entry.meta.is_some(), "list_reverse should have a meta after inference");
+
+        let meta = entry.meta.as_ref().unwrap();
+        assert_eq!(meta.params.len(), 1, "list_reverse takes 1 param (lst)");
+        assert_eq!(meta.params[0].type_name, "List(a)");
+        assert_eq!(meta.return_type, "List(a)");
+        assert_eq!(meta.category.as_deref(), Some("list"));
+        assert_eq!(meta.type_params, vec!["a".to_string()]);
+
+        // Verify the PolyOpSignature is polymorphic
+        assert_eq!(entry.signature.type_params, vec!["a".to_string()]);
+        assert_eq!(entry.signature.inputs[0], TypeExpr::cons("List", vec![TypeExpr::var("a")]));
+        assert_eq!(entry.signature.output, TypeExpr::cons("List", vec![TypeExpr::var("a")]));
+
+        // Verify inference path
+        let inf = inferred.iter().find(|i| i.op_name == "list_reverse").unwrap();
+        assert!(matches!(inf.inference_kind, InferenceKind::TypeSymmetric { ref class } if class == "list_to_list"),
+            "list_reverse should be inferred via type-symmetric from cdr");
+        assert_eq!(inf.inferred_from, "cdr");
+        assert_eq!(inf.racket_symbol, "reverse");
+    }
+
+    #[test]
+    fn test_list_ref_not_affected_by_inference() {
+        let (mut reg, facts) = setup();
+        // list_ref is in the ops pack with a unique shape — inference should not touch it
+        let before = reg.get_poly("list_ref").map(|e| e.meta.is_some());
+        promote_inferred_ops(&mut reg, &facts);
+        let after = reg.get_poly("list_ref").map(|e| e.meta.is_some());
+        assert_eq!(before, after, "list_ref should not be modified by inference");
+    }
+
 }
