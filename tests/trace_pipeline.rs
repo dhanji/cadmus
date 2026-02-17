@@ -11,11 +11,13 @@ use cadmus::racket_strategy::{
     promote_inferred_ops, InferenceKind,
 };
 use cadmus::racket_executor::generate_racket_script;
+use cadmus::registry::load_ops_pack_str;
 use cadmus::workflow::{CompiledStep, CompiledWorkflow, raw_step_to_op_params};
 use cadmus::type_expr::TypeExpr;
 use std::collections::HashMap;
 
 const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
 
 fn trace_input(input: &str) {
     println!("╔══════════════════════════════════════════════════════════════╗");
@@ -188,7 +190,8 @@ fn trace_input(input: &str) {
                 output_type: TypeExpr::prim("Number"),
             };
 
-            match generate_racket_script(&compiled, &wf) {
+            let racket_reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();
+            match generate_racket_script(&compiled, &wf, &racket_reg) {
                 Ok(script) => {
                     for line in script.lines() {
                         println!("  {}", line);

@@ -257,7 +257,10 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
         println!("═══ Generated Racket Script ═══");
         println!();
 
-        let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def) {
+        let racket_reg = cadmus::registry::load_ops_pack_str(
+            include_str!("../data/racket_ops.yaml")
+        ).expect("failed to load racket_ops.yaml");
+        let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg) {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("RACKET SCRIPT GENERATION ERROR: {}", e);

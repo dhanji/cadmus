@@ -10,6 +10,9 @@
 #   - List/set and composable ops follow the same TypeExpr patterns as
 #     fs_ops.yaml (Seq, Entry, etc.)
 #   - Printing ops use a simple Value → Unit pattern
+#   - Every op carries a `racket_symbol` — the actual Racket identifier
+#     used in s-expressions. The executor reads this at codegen time
+#     instead of hardcoding op→symbol mappings.
 #
 # Type vocabulary:
 #   Primitives: Number, Boolean, String, Symbol, Char, Void, Any
@@ -27,6 +30,7 @@ ops:
   # full signatures from the symmetric_pair relations in racket_facts.yaml.
 
   - name: add
+    racket_symbol: "+"
     inputs: ["Number", "Number"]
     output: "Number"
     properties:
@@ -45,12 +49,14 @@ ops:
       effects: none
 
   - name: subtract
+    racket_symbol: "-"
     inputs: ["Number", "Number"]
     output: "Number"
     description: "(- x y) — subtract y from x"
     # Stub: no meta. Inferred from add via symmetric_pair relation.
 
   - name: multiply
+    racket_symbol: "*"
     inputs: ["Number", "Number"]
     output: "Number"
     properties:
@@ -62,22 +68,26 @@ ops:
     # Stub: no meta. Inferred from add's category via same_category relation.
 
   - name: divide
+    racket_symbol: "/"
     inputs: ["Number", "Number"]
     output: "Number"
     description: "(/ x y) — divide x by y"
     # Stub: no meta. Inferred from multiply via symmetric_pair relation.
 
   - name: modulo
+    racket_symbol: "modulo"
     inputs: ["Number", "Number"]
     output: "Number"
     description: "(modulo x y) — remainder of x divided by y"
 
   - name: expt
+    racket_symbol: "expt"
     inputs: ["Number", "Number"]
     output: "Number"
     description: "(expt base exp) — raise base to exponent"
 
   - name: abs
+    racket_symbol: "abs"
     inputs: ["Number"]
     output: "Number"
     properties:
@@ -85,6 +95,7 @@ ops:
     description: "(abs x) — absolute value"
 
   - name: min
+    racket_symbol: "min"
     inputs: ["Number", "Number"]
     output: "Number"
     properties:
@@ -94,6 +105,7 @@ ops:
     description: "(min x y) — smaller of two numbers"
 
   - name: max
+    racket_symbol: "max"
     inputs: ["Number", "Number"]
     output: "Number"
     properties:
@@ -107,30 +119,35 @@ ops:
   # =========================================================================
 
   - name: cons
+    racket_symbol: "cons"
     type_params: [a]
     inputs: ["a", "List(a)"]
     output: "List(a)"
     description: "(cons x lst) — prepend element to list"
 
   - name: car
+    racket_symbol: "car"
     type_params: [a]
     inputs: ["List(a)"]
     output: "a"
     description: "(car lst) — first element of list"
 
   - name: cdr
+    racket_symbol: "cdr"
     type_params: [a]
     inputs: ["List(a)"]
     output: "List(a)"
     description: "(cdr lst) — rest of list after first element"
 
   - name: list_new
+    racket_symbol: "list"
     type_params: [a]
     inputs: ["a"]
     output: "List(a)"
     description: "(list x ...) — create a new list from elements"
 
   - name: append
+    racket_symbol: "append"
     type_params: [a]
     inputs: ["List(a)", "List(a)"]
     output: "List(a)"
@@ -140,6 +157,7 @@ ops:
     description: "(append lst1 lst2) — concatenate two lists"
 
   - name: length
+    racket_symbol: "length"
     type_params: [a]
     inputs: ["List(a)"]
     output: "Number"
@@ -148,30 +166,35 @@ ops:
     description: "(length lst) — number of elements"
 
   - name: list_reverse
+    racket_symbol: "reverse"
     type_params: [a]
     inputs: ["List(a)"]
     output: "List(a)"
     description: "(reverse lst) — reverse element order"
 
   - name: list_ref
+    racket_symbol: "list-ref"
     type_params: [a]
     inputs: ["List(a)", "Number"]
     output: "a"
     description: "(list-ref lst idx) — element at index"
 
   - name: member
+    racket_symbol: "member"
     type_params: [a]
     inputs: ["a", "List(a)"]
     output: "Option(List(a))"
     description: "(member v lst) — sublist starting at v, or #f"
 
   - name: remove
+    racket_symbol: "remove"
     type_params: [a]
     inputs: ["a", "List(a)"]
     output: "List(a)"
     description: "(remove v lst) — remove first occurrence of v"
 
   - name: sort_list
+    racket_symbol: "sort"
     type_params: [a]
     inputs: ["List(a)"]
     output: "List(a)"
@@ -180,6 +203,7 @@ ops:
     description: "(sort lst <) — sort list by comparator"
 
   - name: flatten
+    racket_symbol: "flatten"
     type_params: [a]
     inputs: ["List(List(a))"]
     output: "List(a)"
@@ -190,24 +214,28 @@ ops:
   # =========================================================================
 
   - name: set_new
+    racket_symbol: "list->set"
     type_params: [a]
     inputs: ["List(a)"]
     output: "Set(a)"
     description: "(list->set lst) — create set from list"
 
   - name: set_add
+    racket_symbol: "set-add"
     type_params: [a]
     inputs: ["Set(a)", "a"]
     output: "Set(a)"
     description: "(set-add s v) — add element to set"
 
   - name: set_remove
+    racket_symbol: "set-remove"
     type_params: [a]
     inputs: ["Set(a)", "a"]
     output: "Set(a)"
     description: "(set-remove s v) — remove element from set"
 
   - name: set_member
+    racket_symbol: "set-member?"
     type_params: [a]
     inputs: ["Set(a)", "a"]
     output: "Boolean"
@@ -216,6 +244,7 @@ ops:
     description: "(set-member? s v) — test membership"
 
   - name: set_union
+    racket_symbol: "set-union"
     type_params: [a]
     inputs: ["Set(a)", "Set(a)"]
     output: "Set(a)"
@@ -226,6 +255,7 @@ ops:
     description: "(set-union s1 s2) — union of two sets"
 
   - name: set_intersect
+    racket_symbol: "set-intersect"
     type_params: [a]
     inputs: ["Set(a)", "Set(a)"]
     output: "Set(a)"
@@ -236,12 +266,14 @@ ops:
     description: "(set-intersect s1 s2) — intersection of two sets"
 
   - name: set_subtract
+    racket_symbol: "set-subtract"
     type_params: [a]
     inputs: ["Set(a)", "Set(a)"]
     output: "Set(a)"
     description: "(set-subtract s1 s2) — elements in s1 not in s2"
 
   - name: set_count
+    racket_symbol: "set-count"
     type_params: [a]
     inputs: ["Set(a)"]
     output: "Number"
@@ -250,6 +282,7 @@ ops:
     description: "(set-count s) — number of elements in set"
 
   - name: set_to_list
+    racket_symbol: "set->list"
     type_params: [a]
     inputs: ["Set(a)"]
     output: "List(a)"
@@ -260,29 +293,35 @@ ops:
   # =========================================================================
 
   - name: display
+    racket_symbol: "display"
     inputs: ["Any"]
     output: "Void"
     description: "(display v) — print value without newline"
 
   - name: displayln
+    racket_symbol: "displayln"
     inputs: ["Any"]
     output: "Void"
     description: "(displayln v) — print value with newline"
 
   - name: newline
+    racket_symbol: "newline"
     output: "Void"
     description: "(newline) — print a newline"
 
   - name: read_line
+    racket_symbol: "read-line"
     output: "String"
     description: "(read-line) — read a line from stdin"
 
   - name: format_string
+    racket_symbol: "format"
     inputs: ["String", "Any"]
     output: "String"
     description: "(format fmt v ...) — format string with values"
 
   - name: printf
+    racket_symbol: "printf"
     inputs: ["String", "Any"]
     output: "Void"
     description: "(printf fmt v ...) — formatted print"
@@ -292,12 +331,14 @@ ops:
   # =========================================================================
 
   - name: racket_map
+    racket_symbol: "map"
     type_params: [a, b]
     inputs: ["List(a)"]
     output: "List(b)"
     description: "(map f lst) — apply function to each element"
 
   - name: racket_filter
+    racket_symbol: "filter"
     type_params: [a]
     inputs: ["List(a)"]
     output: "List(a)"
@@ -306,36 +347,42 @@ ops:
     description: "(filter pred lst) — keep elements matching predicate"
 
   - name: racket_foldl
+    racket_symbol: "foldl"
     type_params: [a, b]
     inputs: ["b", "List(a)"]
     output: "b"
     description: "(foldl f init lst) — left fold over list"
 
   - name: racket_foldr
+    racket_symbol: "foldr"
     type_params: [a, b]
     inputs: ["b", "List(a)"]
     output: "b"
     description: "(foldr f init lst) — right fold over list"
 
   - name: racket_for_each
+    racket_symbol: "for-each"
     type_params: [a]
     inputs: ["List(a)"]
     output: "Void"
     description: "(for-each f lst) — apply side-effecting function to each element"
 
   - name: racket_apply
+    racket_symbol: "apply"
     type_params: [a, b]
     inputs: ["List(a)"]
     output: "b"
     description: "(apply f lst) — apply function to list as arguments"
 
   - name: andmap
+    racket_symbol: "andmap"
     type_params: [a]
     inputs: ["List(a)"]
     output: "Boolean"
     description: "(andmap pred lst) — true if predicate holds for all elements"
 
   - name: ormap
+    racket_symbol: "ormap"
     type_params: [a]
     inputs: ["List(a)"]
     output: "Boolean"
@@ -346,11 +393,13 @@ ops:
   # =========================================================================
 
   - name: not
+    racket_symbol: "not"
     inputs: ["Boolean"]
     output: "Boolean"
     description: "(not v) — logical negation"
 
   - name: equal
+    racket_symbol: "equal?"
     inputs: ["Any", "Any"]
     output: "Boolean"
     properties:
@@ -358,11 +407,13 @@ ops:
     description: "(equal? a b) — structural equality"
 
   - name: less_than
+    racket_symbol: "<"
     inputs: ["Number", "Number"]
     output: "Boolean"
     description: "(< a b) — numeric less-than"
 
   - name: greater_than
+    racket_symbol: ">"
     inputs: ["Number", "Number"]
     output: "Boolean"
     description: "(> a b) — numeric greater-than"
@@ -372,6 +423,7 @@ ops:
   # =========================================================================
 
   - name: string_append
+    racket_symbol: "string-append"
     inputs: ["String", "String"]
     output: "String"
     properties:
@@ -380,6 +432,7 @@ ops:
     description: "(string-append s1 s2) — concatenate strings"
 
   - name: string_length
+    racket_symbol: "string-length"
     inputs: ["String"]
     output: "Number"
     properties:
@@ -387,11 +440,13 @@ ops:
     description: "(string-length s) — length of string"
 
   - name: number_to_string
+    racket_symbol: "number->string"
     inputs: ["Number"]
     output: "String"
     description: "(number->string n) — convert number to string"
 
   - name: string_to_number
+    racket_symbol: "string->number"
     inputs: ["String"]
     output: "Number"
     description: "(string->number s) — parse string as number"

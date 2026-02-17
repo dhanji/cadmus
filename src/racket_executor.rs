@@ -25,11 +25,16 @@ fn first_value_param(params: &HashMap<String, String>) -> Option<&str> {
 //   3. Single-step workflows emit a bare expression (no let overhead)
 //   4. Multi-step workflows use (let* ([step_1 ...] [step_2 ...]) ...)
 //
-// Analogous to src/executor.rs but targets Racket instead of /bin/sh.
+// The executor is data-driven: it reads the Racket symbol and arity from
+// the OperationRegistry (populated from racket_ops.yaml) instead of
+// hardcoding op→symbol mappings. Only a handful of "special" ops that
+// need extra parameters (function, predicate, format, init) have explicit
+// match arms.
 
 use std::collections::HashMap;
 use std::fmt;
 
+use crate::registry::OperationRegistry;
 use crate::workflow::{CompiledWorkflow, CompiledStep, WorkflowDef};
 
 // ---------------------------------------------------------------------------
@@ -71,10 +76,14 @@ pub struct RacketExpr {
 }
 
 // ---------------------------------------------------------------------------
-// Op → Racket mapping
+// Op → Racket mapping (data-driven)
 // ---------------------------------------------------------------------------
 
 /// Convert a compiled step into a Racket s-expression.
+///
+/// Uses the `OperationRegistry` to look up the Racket symbol and arity for
+/// each op. Only "special" ops that need extra parameters (function, predicate,
+/// format, init, comparator) have explicit match arms.
 ///
 /// `prev_binding` is the variable name holding the previous step's result
 /// (e.g., "step_1"). For the first step, this is None and the expression
@@ -83,289 +92,88 @@ pub fn op_to_racket(
     step: &CompiledStep,
     input_values: &HashMap<String, String>,
     prev_binding: Option<&str>,
+    registry: &OperationRegistry,
 ) -> Result<RacketExpr, RacketError> {
     let op = step.op.as_str();
     let params = &step.params;
 
+    // -----------------------------------------------------------------------
+    // Special ops: these need extra parameters beyond simple operands.
+    // They can't be handled by the generic data-driven path.
+    // -----------------------------------------------------------------------
     match op {
-        // ===================================================================
-        // Arithmetic
-        // ===================================================================
-        "add" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(+ {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "subtract" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(- {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "multiply" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(* {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "divide" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(/ {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "modulo" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(modulo {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "expt" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(expt {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "abs" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(abs {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "min" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(min {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "max" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(max {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-
-        // ===================================================================
-        // List operations
-        // ===================================================================
-        "cons" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(cons {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "car" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(car {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "cdr" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(cdr {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "list_new" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(list {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "append" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(append {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "length" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(length {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "list_reverse" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(reverse {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "list_ref" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(list-ref {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "member" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(member {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "remove" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(remove {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
         "sort_list" => {
+            let sym = registry.racket_symbol(op).unwrap_or("sort");
             let a = get_one_operand(step, input_values, prev_binding)?;
             let cmp = params.get("comparator").map(|s| s.as_str()).unwrap_or("<");
-            Ok(RacketExpr { expr: format!("(sort {} {})", a, cmp), uses_prev: prev_binding.is_some() })
+            return Ok(RacketExpr { expr: format!("({} {} {})", sym, a, cmp), uses_prev: prev_binding.is_some() });
         }
-        "flatten" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(flatten {})", a), uses_prev: prev_binding.is_some() })
-        }
-
-        // ===================================================================
-        // Set operations
-        // ===================================================================
-        "set_new" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(list->set {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "set_add" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set-add {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "set_remove" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set-remove {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "set_member" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set-member? {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "set_union" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set-union {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "set_intersect" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set-intersect {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "set_subtract" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set-subtract {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "set_count" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set-count {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "set_to_list" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(set->list {})", a), uses_prev: prev_binding.is_some() })
-        }
-
-        // ===================================================================
-        // Printing / Stdio
-        // ===================================================================
-        "display" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(display {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "displayln" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(displayln {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "newline" => {
-            Ok(RacketExpr { expr: "(newline)".to_string(), uses_prev: false })
-        }
-        "read_line" => {
-            Ok(RacketExpr { expr: "(read-line)".to_string(), uses_prev: false })
-        }
-        "format_string" => {
+        "format_string" | "printf" => {
+            let sym = registry.racket_symbol(op).unwrap_or(op);
             let fmt = params.get("format").or_else(|| params.get("fmt"))
                 .ok_or_else(|| RacketError::MissingParam {
-                    op: "format_string".into(), param: "format".into()
+                    op: op.into(), param: "format".into()
                 })?;
             let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(format {} {})", racket_string(fmt), a), uses_prev: prev_binding.is_some() })
+            return Ok(RacketExpr { expr: format!("({} {} {})", sym, racket_string(fmt), a), uses_prev: prev_binding.is_some() });
         }
-        "printf" => {
-            let fmt = params.get("format").or_else(|| params.get("fmt"))
-                .ok_or_else(|| RacketError::MissingParam {
-                    op: "printf".into(), param: "format".into()
-                })?;
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(printf {} {})", racket_string(fmt), a), uses_prev: prev_binding.is_some() })
-        }
-
-        // ===================================================================
-        // Higher-order / Composable
-        // ===================================================================
-        "racket_map" => {
+        "racket_map" | "racket_for_each" | "racket_apply" => {
+            let sym = registry.racket_symbol(op).unwrap_or(op);
             let a = get_one_operand(step, input_values, prev_binding)?;
             let func = params.get("function").or_else(|| params.get("f"))
                 .ok_or_else(|| RacketError::MissingParam {
-                    op: "racket_map".into(), param: "function".into()
+                    op: op.into(), param: "function".into()
                 })?;
-            Ok(RacketExpr { expr: format!("(map {} {})", func, a), uses_prev: prev_binding.is_some() })
+            return Ok(RacketExpr { expr: format!("({} {} {})", sym, func, a), uses_prev: prev_binding.is_some() });
         }
-        "racket_filter" => {
+        "racket_filter" | "andmap" | "ormap" => {
+            let sym = registry.racket_symbol(op).unwrap_or(op);
             let a = get_one_operand(step, input_values, prev_binding)?;
             let pred = params.get("predicate").or_else(|| params.get("pred"))
                 .ok_or_else(|| RacketError::MissingParam {
-                    op: "racket_filter".into(), param: "predicate".into()
+                    op: op.into(), param: "predicate".into()
                 })?;
-            Ok(RacketExpr { expr: format!("(filter {} {})", pred, a), uses_prev: prev_binding.is_some() })
+            return Ok(RacketExpr { expr: format!("({} {} {})", sym, pred, a), uses_prev: prev_binding.is_some() });
         }
-        "racket_foldl" => {
+        "racket_foldl" | "racket_foldr" => {
+            let sym = registry.racket_symbol(op).unwrap_or(op);
             let a = get_one_operand(step, input_values, prev_binding)?;
             let func = params.get("function").or_else(|| params.get("f"))
                 .ok_or_else(|| RacketError::MissingParam {
-                    op: "racket_foldl".into(), param: "function".into()
+                    op: op.into(), param: "function".into()
                 })?;
             let init = params.get("init").unwrap_or(&"0".to_string()).clone();
-            Ok(RacketExpr { expr: format!("(foldl {} {} {})", func, init, a), uses_prev: prev_binding.is_some() })
+            return Ok(RacketExpr { expr: format!("({} {} {} {})", sym, func, init, a), uses_prev: prev_binding.is_some() });
         }
-        "racket_foldr" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            let func = params.get("function").or_else(|| params.get("f"))
-                .ok_or_else(|| RacketError::MissingParam {
-                    op: "racket_foldr".into(), param: "function".into()
-                })?;
-            let init = params.get("init").unwrap_or(&"0".to_string()).clone();
-            Ok(RacketExpr { expr: format!("(foldr {} {} {})", func, init, a), uses_prev: prev_binding.is_some() })
-        }
-        "racket_for_each" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            let func = params.get("function").or_else(|| params.get("f"))
-                .ok_or_else(|| RacketError::MissingParam {
-                    op: "racket_for_each".into(), param: "function".into()
-                })?;
-            Ok(RacketExpr { expr: format!("(for-each {} {})", func, a), uses_prev: prev_binding.is_some() })
-        }
-        "racket_apply" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            let func = params.get("function").or_else(|| params.get("f"))
-                .ok_or_else(|| RacketError::MissingParam {
-                    op: "racket_apply".into(), param: "function".into()
-                })?;
-            Ok(RacketExpr { expr: format!("(apply {} {})", func, a), uses_prev: prev_binding.is_some() })
-        }
-        "andmap" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            let pred = params.get("predicate").or_else(|| params.get("pred"))
-                .ok_or_else(|| RacketError::MissingParam {
-                    op: "andmap".into(), param: "predicate".into()
-                })?;
-            Ok(RacketExpr { expr: format!("(andmap {} {})", pred, a), uses_prev: prev_binding.is_some() })
-        }
-        "ormap" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            let pred = params.get("predicate").or_else(|| params.get("pred"))
-                .ok_or_else(|| RacketError::MissingParam {
-                    op: "ormap".into(), param: "predicate".into()
-                })?;
-            Ok(RacketExpr { expr: format!("(ormap {} {})", pred, a), uses_prev: prev_binding.is_some() })
-        }
+        _ => {}
+    }
 
-        // ===================================================================
-        // Boolean / Comparison
-        // ===================================================================
-        "not" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(not {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "equal" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(equal? {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "less_than" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(< {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "greater_than" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(> {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
+    // -----------------------------------------------------------------------
+    // Data-driven path: look up symbol and arity from the registry.
+    // -----------------------------------------------------------------------
+    let poly = registry.get_poly(op)
+        .ok_or_else(|| RacketError::UnknownOp(op.to_string()))?;
 
-        // ===================================================================
-        // String operations
-        // ===================================================================
-        "string_append" => {
-            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(string-append {} {})", a, b), uses_prev: prev_binding.is_some() })
-        }
-        "string_length" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(string-length {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "number_to_string" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(number->string {})", a), uses_prev: prev_binding.is_some() })
-        }
-        "string_to_number" => {
-            let a = get_one_operand(step, input_values, prev_binding)?;
-            Ok(RacketExpr { expr: format!("(string->number {})", a), uses_prev: prev_binding.is_some() })
-        }
+    let sym = poly.racket_symbol.as_deref()
+        .ok_or_else(|| RacketError::UnknownOp(format!("{} (no racket_symbol)", op)))?;
 
-        _ => Err(RacketError::UnknownOp(op.to_string())),
+    let arity = poly.signature.inputs.len();
+
+    match arity {
+        0 => {
+            // Nullary: (symbol)
+            Ok(RacketExpr { expr: format!("({})", sym), uses_prev: false })
+        }
+        1 => {
+            // Unary: (symbol a)
+            let a = get_one_operand(step, input_values, prev_binding)?;
+            Ok(RacketExpr { expr: format!("({} {})", sym, a), uses_prev: prev_binding.is_some() })
+        }
+        _ => {
+            // Binary (or more): (symbol a b)
+            let (a, b) = get_two_operands(step, input_values, prev_binding)?;
+            Ok(RacketExpr { expr: format!("({} {} {})", sym, a, b), uses_prev: prev_binding.is_some() })
+        }
     }
 }
 
@@ -383,6 +191,7 @@ pub fn op_to_racket(
 pub fn generate_racket_script(
     compiled: &CompiledWorkflow,
     def: &WorkflowDef,
+    registry: &OperationRegistry,
 ) -> Result<String, RacketError> {
     let mut script = String::new();
 
@@ -407,7 +216,7 @@ pub fn generate_racket_script(
     if num_steps == 1 {
         let step = &compiled.steps[0];
         script.push_str(&format!(";; Step 1: {}\n", step.op));
-        let expr = op_to_racket(step, input_values, None)?;
+        let expr = op_to_racket(step, input_values, None, registry)?;
         script.push_str(&format!("(displayln {})\n", expr.expr));
         return Ok(script);
     }
@@ -424,7 +233,7 @@ pub fn generate_racket_script(
         script.push_str(&format!("    ;; Step {}: {}{}\n", step_num, step.op,
             if step.is_each { " (each)" } else { "" }));
 
-        let expr = op_to_racket(step, input_values, prev_binding.as_deref())?;
+        let expr = op_to_racket(step, input_values, prev_binding.as_deref(), registry)?;
 
         if step.is_each {
             // Map-each: wrap in (map (lambda (_line) ...) prev)
@@ -570,6 +379,11 @@ mod tests {
     use std::collections::HashMap;
     use crate::workflow::CompiledStep;
     use crate::type_expr::TypeExpr;
+    use crate::registry::load_ops_pack_str;
+
+    fn make_registry() -> OperationRegistry {
+        load_ops_pack_str(include_str!("../data/racket_ops.yaml")).unwrap()
+    }
 
     fn make_step(op: &str, params: Vec<(&str, &str)>) -> CompiledStep {
         CompiledStep {
@@ -590,67 +404,75 @@ mod tests {
 
     #[test]
     fn test_add_with_named_params() {
+        let reg = make_registry();
         let step = make_step("add", vec![("x", "4"), ("y", "35")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(+ 4 35)");
         assert!(!expr.uses_prev);
     }
 
     #[test]
     fn test_subtract_with_named_params() {
+        let reg = make_registry();
         let step = make_step("subtract", vec![("x", "6"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(- 6 2)");
     }
 
     #[test]
     fn test_multiply_with_named_params() {
+        let reg = make_registry();
         let step = make_step("multiply", vec![("x", "3"), ("y", "7")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(* 3 7)");
     }
 
     #[test]
     fn test_divide_with_named_params() {
+        let reg = make_registry();
         let step = make_step("divide", vec![("x", "10"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(/ 10 2)");
     }
 
     #[test]
     fn test_add_with_prev_binding() {
+        let reg = make_registry();
         let step = make_step("add", vec![("y", "10")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1")).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
         assert_eq!(expr.expr, "(+ step_1 10)");
         assert!(expr.uses_prev);
     }
 
     #[test]
     fn test_display_with_prev() {
+        let reg = make_registry();
         let step = make_step("display", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1")).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
         assert_eq!(expr.expr, "(display step_1)");
     }
 
     #[test]
     fn test_displayln_with_value() {
+        let reg = make_registry();
         let step = make_step("displayln", vec![("value", "hello")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(displayln \"hello\")");
     }
 
     #[test]
     fn test_unknown_op() {
+        let reg = make_registry();
         let step = make_step("nonexistent_op", vec![]);
         let inputs = make_inputs(vec![]);
-        let result = op_to_racket(&step, &inputs, None);
+        let result = op_to_racket(&step, &inputs, None, &reg);
         assert!(result.is_err());
         match result.unwrap_err() {
             RacketError::UnknownOp(name) => assert_eq!(name, "nonexistent_op"),
@@ -660,41 +482,46 @@ mod tests {
 
     #[test]
     fn test_racket_filter_with_pred() {
+        let reg = make_registry();
         let step = make_step("racket_filter", vec![("predicate", "even?")]);
         let inputs = make_inputs(vec![("lst", "'(1 2 3 4 5)")]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(filter even? '(1 2 3 4 5))");
     }
 
     #[test]
     fn test_racket_map_with_func() {
+        let reg = make_registry();
         let step = make_step("racket_map", vec![("function", "add1")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1")).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
         assert_eq!(expr.expr, "(map add1 step_1)");
     }
 
     #[test]
     fn test_racket_foldl_with_init() {
+        let reg = make_registry();
         let step = make_step("racket_foldl", vec![("function", "+"), ("init", "0")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1")).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
         assert_eq!(expr.expr, "(foldl + 0 step_1)");
     }
 
     #[test]
     fn test_set_union() {
+        let reg = make_registry();
         let step = make_step("set_union", vec![("x", "(set 1 2 3)"), ("y", "(set 3 4 5)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(set-union (set 1 2 3) (set 3 4 5))");
     }
 
     #[test]
     fn test_cons_with_inputs() {
+        let reg = make_registry();
         let step = make_step("cons", vec![("x", "42"), ("y", "'()")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(cons 42 '())");
     }
 
@@ -721,6 +548,7 @@ mod tests {
 
     #[test]
     fn test_single_step_script() {
+        let reg = make_registry();
         let compiled = CompiledWorkflow {
             name: "add numbers".to_string(),
             input_type: TypeExpr::prim("Number"),
@@ -742,7 +570,7 @@ mod tests {
             inputs: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
             steps: vec![],
         };
-        let script = generate_racket_script(&compiled, &def).unwrap();
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
         assert!(script.contains("#lang racket"));
         assert!(script.contains("(displayln (+ 4 35))"));
         // Single-step: no let* binding
@@ -751,6 +579,7 @@ mod tests {
 
     #[test]
     fn test_multi_step_script() {
+        let reg = make_registry();
         let compiled = CompiledWorkflow {
             name: "add then display".to_string(),
             input_type: TypeExpr::prim("Number"),
@@ -780,7 +609,7 @@ mod tests {
             inputs: HashMap::new(),
             steps: vec![],
         };
-        let script = generate_racket_script(&compiled, &def).unwrap();
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
         assert!(script.contains("#lang racket"));
         assert!(script.contains("let*"));
         assert!(script.contains("[step_1 (+ 4 35)]"));
@@ -790,6 +619,7 @@ mod tests {
 
     #[test]
     fn test_empty_workflow_script() {
+        let reg = make_registry();
         let compiled = CompiledWorkflow {
             name: "empty".to_string(),
             input_type: TypeExpr::prim("Number"),
@@ -802,47 +632,128 @@ mod tests {
             inputs: HashMap::new(),
             steps: vec![],
         };
-        let script = generate_racket_script(&compiled, &def).unwrap();
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
         assert!(script.contains(";; (no steps)"));
     }
 
     #[test]
     fn test_string_operations_script() {
+        let reg = make_registry();
         let step = make_step("string_append", vec![("x", "hello"), ("y", " world")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(string-append \"hello\" \" world\")");
     }
 
     #[test]
     fn test_number_to_string() {
+        let reg = make_registry();
         let step = make_step("number_to_string", vec![("value", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(number->string 42)");
     }
 
     #[test]
     fn test_abs_operation() {
+        let reg = make_registry();
         let step = make_step("abs", vec![("value", "-5")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(abs -5)");
     }
 
     #[test]
     fn test_equal_operation() {
+        let reg = make_registry();
         let step = make_step("equal", vec![("x", "42"), ("y", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(equal? 42 42)");
     }
 
     #[test]
     fn test_less_than_operation() {
+        let reg = make_registry();
         let step = make_step("less_than", vec![("x", "1"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(< 1 2)");
+    }
+
+    // --- Data-driven specific tests ---
+
+    #[test]
+    fn test_newline_nullary() {
+        let reg = make_registry();
+        let step = make_step("newline", vec![]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(newline)");
+        assert!(!expr.uses_prev);
+    }
+
+    #[test]
+    fn test_read_line_nullary() {
+        let reg = make_registry();
+        let step = make_step("read_line", vec![]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(read-line)");
+        assert!(!expr.uses_prev);
+    }
+
+    #[test]
+    fn test_set_member_question_mark() {
+        let reg = make_registry();
+        let step = make_step("set_member", vec![("x", "(set 1 2 3)"), ("y", "2")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(set-member? (set 1 2 3) 2)");
+    }
+
+    #[test]
+    fn test_list_to_set_arrow() {
+        let reg = make_registry();
+        let step = make_step("set_new", vec![("value", "'(1 2 3)")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(list->set '(1 2 3))");
+    }
+
+    #[test]
+    fn test_list_reverse_symbol() {
+        let reg = make_registry();
+        let step = make_step("list_reverse", vec![("value", "'(1 2 3)")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(reverse '(1 2 3))");
+    }
+
+    #[test]
+    fn test_sort_list_with_comparator() {
+        let reg = make_registry();
+        let step = make_step("sort_list", vec![("value", "'(3 1 2)"), ("comparator", ">")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(sort '(3 1 2) >)");
+    }
+
+    #[test]
+    fn test_greater_than_symbol() {
+        let reg = make_registry();
+        let step = make_step("greater_than", vec![("x", "5"), ("y", "3")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(> 5 3)");
+    }
+
+    #[test]
+    fn test_string_to_number_arrow() {
+        let reg = make_registry();
+        let step = make_step("string_to_number", vec![("value", "42")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(string->number 42)");
     }
 }

@@ -25,6 +25,10 @@ use std::collections::HashMap;
 const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
 const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
 
+fn make_racket_reg() -> cadmus::registry::OperationRegistry {
+    load_ops_pack_str(RACKET_OPS_YAML).unwrap()
+}
+
 // =========================================================================
 // 1. Ops pack loading
 // =========================================================================
@@ -219,7 +223,8 @@ fn test_add_4_and_35_script() {
         inputs: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
         steps: vec![],
     };
-    let script = generate_racket_script(&compiled, &def).unwrap();
+    let racket_reg = make_racket_reg();
+    let script = generate_racket_script(&compiled, &def, &racket_reg).unwrap();
     assert!(script.contains("#lang racket"), "should have racket preamble");
     assert!(script.contains("(+ 4 35)"), "should contain (+ 4 35), got:\n{}", script);
 }
@@ -247,7 +252,8 @@ fn test_subtract_6_minus_2_script() {
         inputs: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
         steps: vec![],
     };
-    let script = generate_racket_script(&compiled, &def).unwrap();
+    let racket_reg = make_racket_reg();
+    let script = generate_racket_script(&compiled, &def, &racket_reg).unwrap();
     assert!(script.contains("(- 6 2)"), "should contain (- 6 2), got:\n{}", script);
 }
 
@@ -354,7 +360,8 @@ fn test_nl_add_produces_racket_script() {
                 output_type: TypeExpr::prim("Number"),
             };
 
-            let script = generate_racket_script(&compiled, &def).unwrap();
+            let racket_reg = make_racket_reg();
+    let script = generate_racket_script(&compiled, &def, &racket_reg).unwrap();
             assert!(script.contains("#lang racket"), "should have racket preamble");
             assert!(script.contains("(+ 4 35)") || script.contains("(+ 35 4)"),
                 "should contain (+ 4 35), got:\n{}", script);
@@ -443,7 +450,8 @@ fn test_unknown_racket_op_error() {
         params: HashMap::new(),
     };
     let inputs = HashMap::new();
-    let result = op_to_racket(&step, &inputs, None);
+    let racket_reg = make_racket_reg();
+    let result = op_to_racket(&step, &inputs, None, &racket_reg);
     assert!(result.is_err());
 }
 
@@ -511,7 +519,8 @@ fn test_full_pipeline_subtract_with_inference() {
         inputs: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
         steps: vec![],
     };
-    let script = generate_racket_script(&compiled, &def).unwrap();
+    let racket_reg = make_racket_reg();
+    let script = generate_racket_script(&compiled, &def, &racket_reg).unwrap();
     assert!(script.contains("(- 6 2)"), "should produce (- 6 2), got:\n{}", script);
 }
 

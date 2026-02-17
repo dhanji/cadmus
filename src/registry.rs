@@ -544,6 +544,8 @@ pub struct PolyOpEntry {
     pub description: String,
     /// Optional rich type metadata (metasignature)
     pub meta: Option<MetaSignature>,
+    /// The Racket symbol for this op (e.g., "+", "set-member?", "reverse").
+    pub racket_symbol: Option<String>,
 }
 
 impl fmt::Debug for PolyOpEntry {
@@ -554,6 +556,7 @@ impl fmt::Debug for PolyOpEntry {
             .field("properties", &self.properties)
             .field("description", &self.description)
             .field("meta", &self.meta)
+            .field("racket_symbol", &self.racket_symbol)
             .finish()
     }
 }
@@ -611,8 +614,22 @@ impl OperationRegistry {
             properties,
             description: description.into(),
             meta,
+            racket_symbol: None,
         });
         self
+    }
+
+    /// Set the Racket symbol for a named poly op.
+    pub fn set_racket_symbol(&mut self, name: &str, symbol: String) {
+        // Set on the last entry with this name (rfind for shadowing)
+        if let Some(entry) = self.poly_ops.iter_mut().rfind(|e| e.name == name) {
+            entry.racket_symbol = Some(symbol);
+        }
+    }
+
+    /// Look up the Racket symbol for a named poly op.
+    pub fn racket_symbol(&self, name: &str) -> Option<&str> {
+        self.get_poly(name).and_then(|e| e.racket_symbol.as_deref())
     }
 
     /// Look up all polymorphic operations whose output type unifies with the
@@ -736,6 +753,10 @@ pub struct OpDef {
     /// Optional rich type metadata (metasignature)
     #[serde(default)]
     pub meta: Option<MetaSignature>,
+    /// The Racket symbol for this op (e.g., "+", "set-member?", "reverse").
+    /// Used by the data-driven executor to emit s-expressions without hardcoding.
+    #[serde(default)]
+    pub racket_symbol: Option<String>,
 }
 
 /// YAML schema for algebraic properties.
@@ -792,7 +813,13 @@ pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> 
         let sig = PolyOpSignature::new(op_def.type_params, inputs, output);
         let props: AlgebraicProperties = op_def.properties.into();
 
-        reg.register_poly_with_meta(op_def.name, sig, props, op_def.description, op_def.meta);
+        let racket_sym = op_def.racket_symbol;
+        let op_name = op_def.name;
+        reg.register_poly_with_meta(&op_name, sig, props, op_def.description, op_def.meta);
+        // Set the racket_symbol on the just-registered entry
+        if let Some(sym) = racket_sym {
+            reg.set_racket_symbol(&op_name, sym);
+        }
     }
 
     Ok(reg)
@@ -811,6 +838,9 @@ pub fn load_ops_pack_str_into(yaml: &str, reg: &mut OperationRegistry) -> Result
     for name in loaded.poly_op_names() {
         if let Some(op) = loaded.get_poly(name) {
             reg.register_poly_with_meta(&op.name, op.signature.clone(), op.properties.clone(), &op.description, op.meta.clone());
+            if let Some(sym) = &op.racket_symbol {
+                reg.set_racket_symbol(&op.name, sym.clone());
+            }
         }
     }
     Ok(())
