@@ -123,37 +123,45 @@ fn run_chat_mode() {
                 println!("✅ Plan approved!");
                 if let Some(ref s) = script {
                     println!();
-                    println!("═══ Generated Shell Script ═══");
+                    println!("═══ Generated Racket Program ═══");
                     println!();
                     println!("{}", s);
                     println!();
-                    print!("Run this script? (y/n) ");
+                    print!("Run this program? (y/n) ");
                     stdout.flush().unwrap();
                     let mut confirm = String::new();
                     if stdin.lock().read_line(&mut confirm).is_ok() {
                         let answer = confirm.trim().to_lowercase();
                         if answer == "y" || answer == "yes" {
                             println!();
-                            match executor::run_script(s) {
-                                Ok(result) => {
-                                    if !result.stdout.is_empty() {
-                                        println!("{}", result.stdout);
+                            match std::process::Command::new("racket")
+                                .arg("-e")
+                                .arg(s)
+                                .output()
+                            {
+                                Ok(output) => {
+                                    let stdout_str = String::from_utf8_lossy(&output.stdout);
+                                    let stderr_str = String::from_utf8_lossy(&output.stderr);
+                                    if !stdout_str.is_empty() {
+                                        println!("{}", stdout_str);
                                     }
-                                    if !result.stderr.is_empty() {
-                                        eprintln!("{}", result.stderr);
+                                    if !stderr_str.is_empty() {
+                                        eprintln!("{}", stderr_str);
                                     }
-                                    if result.exit_code == 0 {
-                                        println!("✅ Script completed successfully.");
+                                    if output.status.success() {
+                                        println!("✅ Program completed successfully.");
                                     } else {
-                                        println!("⚠ Script exited with code {}", result.exit_code);
+                                        let code = output.status.code().unwrap_or(1);
+                                        println!("⚠ Program exited with code {}", code);
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("❌ Execution error: {}", e);
+                                    eprintln!("❌ Failed to run racket: {}", e);
+                                    eprintln!("   Is Racket installed? Try: brew install racket");
                                 }
                             }
                         } else {
-                            println!("Script not executed.");
+                            println!("Program not executed.");
                         }
                     }
                 } else {

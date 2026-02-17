@@ -277,14 +277,14 @@ fn test_execute_captures_stderr() {
 #[test]
 fn test_nl_approve_generates_script() {
     let mut state = DialogueState::new();
-    let _ = nl::process_input("zip up ~/Downloads", &mut state);
+    let _ = nl::process_input("add 4 and 35", &mut state);
     let response = nl::process_input("lgtm", &mut state);
     match response {
         NlResponse::Approved { script } => {
-            assert!(script.is_some(), "Approved should carry a script");
+            assert!(script.is_some(), "Approved should carry a Racket program");
             let s = script.unwrap();
-            assert!(s.starts_with("#!/bin/sh\n"));
-            assert!(s.contains("zip") || s.contains("tar"));
+            assert!(s.contains("#lang racket"), "should be a Racket program, got:\n{}", s);
+            assert!(s.contains("(+ ") || s.contains("(add "), "should contain add op, got:\n{}", s);
         }
         other => panic!("expected Approved, got: {:?}", other),
     }
@@ -305,13 +305,14 @@ fn test_nl_approve_without_plan_no_script() {
 #[test]
 fn test_nl_find_pdfs_generates_script() {
     let mut state = DialogueState::new();
-    let _ = nl::process_input("find all PDFs in ~/Documents", &mut state);
+    let _ = nl::process_input("subtract 10 and 3", &mut state);
     let response = nl::process_input("yes", &mut state);
     match response {
         NlResponse::Approved { script } => {
-            assert!(script.is_some(), "Approved should carry a script");
+            assert!(script.is_some(), "Approved should carry a Racket program");
             let s = script.unwrap();
-            assert!(s.contains("#!/bin/sh"));
+            assert!(s.contains("#lang racket"), "should be a Racket program, got:\n{}", s);
+            assert!(s.contains("(- "), "should contain subtract op, got:\n{}", s);
         }
         other => panic!("expected Approved, got: {:?}", other),
     }
@@ -320,14 +321,14 @@ fn test_nl_find_pdfs_generates_script() {
 #[test]
 fn test_nl_extract_cbz_generates_script() {
     let mut state = DialogueState::new();
-    let _ = nl::process_input("extract comic.cbz", &mut state);
+    let _ = nl::process_input("multiply 6 and 7", &mut state);
     let response = nl::process_input("ok", &mut state);
     match response {
         NlResponse::Approved { script } => {
-            assert!(script.is_some(), "Approved should carry a script");
+            assert!(script.is_some(), "Approved should carry a Racket program");
             let s = script.unwrap();
-            assert!(s.contains("unzip"));
-            assert!(s.contains("comic.cbz"));
+            assert!(s.contains("#lang racket"), "should be a Racket program, got:\n{}", s);
+            assert!(s.contains("(* "), "should contain multiply op, got:\n{}", s);
         }
         other => panic!("expected Approved, got: {:?}", other),
     }
