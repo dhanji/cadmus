@@ -183,7 +183,7 @@ fn run_workflow_mode(path: &Path) {
     println!();
 
     // Compile
-    let registry = reasoning_engine::fs_types::build_fs_registry();
+    let registry = reasoning_engine::fs_types::build_full_registry();
     let compiled = match workflow::compile_workflow(&def, &registry) {
         Ok(c) => c,
         Err(e) => {
