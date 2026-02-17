@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T03:05:37Z | Size: 23.2k chars
+> Updated: 2026-02-17T04:12:34Z | Size: 24.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -264,3 +264,13 @@
 - Called from `build_workflow()` right after extracting `target_path` from slots
 - Handles SD cards, USB drives, external volumes on macOS
 - 836 total tests, 8 commits on main
+
+### Red Team NL Pipeline (commit 0a81f50)
+- **78 new tests** added across 5 attack surfaces, **914 total** tests
+- **4 bugs fixed**:
+  1. `src/executor.rs:112-133` — `shell_quote()` $WORK_DIR injection: now validates safe ASCII chars after prefix
+  2. `src/executor.rs:112-133` — `shell_quote()` unicode bypass: `is_ascii_alphanumeric()` instead of `is_alphanumeric()`
+  3. `src/executor.rs:234-265` — filter `exclude` param: executor now handles with `grep -v`
+  4. `src/workflow.rs:562-568`, `src/nl/dialogue.rs:338-398` — type inference reordered: `pathref`→Path before extension lookup, `repo`→Repo before dir check; added `is_path_op()` and `is_seq_op()` in `build_workflow`
+- **Test categories**: shell injection (25), chaos (19), conversation flows (8), E2E ops (19), path edge cases (7)
+- Known remaining issue: `count` op expects `Seq(a)` but file types like `Csv` don't unify with `Seq(a)` — accepted as design limitation
