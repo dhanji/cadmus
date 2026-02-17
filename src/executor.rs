@@ -113,12 +113,17 @@ pub fn shell_quote(s: &str) -> String {
     if s.is_empty() {
         return "''".to_string();
     }
-    // Shell variable references need double quotes for expansion
-    if s.starts_with("$WORK_DIR") {
+    // Shell variable references need double quotes for expansion.
+    // SECURITY: only allow safe chars after $WORK_DIR to prevent injection
+    // via $(cmd) or `cmd` embedded after the variable reference.
+    if s.starts_with("$WORK_DIR") && s[9..].chars().all(|c| c.is_ascii_alphanumeric()
+        || c == '/' || c == '.' || c == '-' || c == '_')
+    {
         return format!("\"{}\"", s);
     }
-    // If the string is "safe" (no special chars), return as-is
-    if s.chars().all(|c| c.is_alphanumeric() || c == '/' || c == '.' || c == '-' || c == '_' || c == '~') {
+    // If the string is "safe" (only ASCII safe chars), return as-is.
+    // Use is_ascii_alphanumeric() to avoid treating unicode as safe.
+    if s.chars().all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '.' || c == '-' || c == '_' || c == '~') {
         return s.to_string();
     }
     // Otherwise, wrap in single quotes, escaping embedded single quotes
@@ -227,22 +232,27 @@ pub fn op_to_command(
 
         // --- Filtering & Sorting ---
         "filter" => {
-            let pattern = params.get("pattern")
+            // Check for exclude (inverted filter from skip edits) first,
+            // then pattern/extension for normal filters.
+            let exclude = params.get("exclude");
+            let pattern = exclude.or_else(|| params.get("pattern"))
                 .or_else(|| params.get("extension"))
                 .ok_or_else(|| ExecutorError::MissingParam {
                     op: op.to_string(), param: "pattern".to_string()
                 })?;
             // Convert glob-like pattern to grep regex
             let grep_pattern = glob_to_grep(pattern);
+            // Use grep -v for exclude (inverted match)
+            let grep_flag = if exclude.is_some() { " -v" } else { "" };
             if let Some(pf) = prev_file {
                 Ok(ShellCommand {
-                    command: format!("grep {} {}", shell_quote(&grep_pattern), shell_quote(pf)),
+                    command: format!("grep{} {} {}", grep_flag, shell_quote(&grep_pattern), shell_quote(pf)),
                     reads_stdin: false,
                     writes_stdout: true,
                 })
             } else {
                 Ok(ShellCommand {
-                    command: format!("grep {}", shell_quote(&grep_pattern)),
+                    command: format!("grep{} {}", grep_flag, shell_quote(&grep_pattern)),
                     reads_stdin: true,
                     writes_stdout: true,
                 })

@@ -452,3 +452,154 @@ fn test_archive_format_none_for_primitive() {
     let ty = TypeExpr::prim("Bytes");
     assert_eq!(extract_archive_format(&ty), None);
 }
+
+// ===========================================================================
+// I1: Shell injection / quoting red-team tests
+// ===========================================================================
+
+#[test]
+fn test_shell_quote_command_substitution_dollar_paren() {
+    // $(rm -rf /) must be single-quoted, NOT double-quoted
+    let quoted = shell_quote("$(rm -rf /)");
+    assert!(!quoted.contains("\"$("), "must not double-quote command substitution: {}", quoted);
+    assert!(quoted.starts_with('\''), "should single-quote: {}", quoted);
+    assert!(quoted.ends_with('\''), "should single-quote: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_backtick_injection() {
+    let quoted = shell_quote("`whoami`");
+    assert!(quoted.starts_with('\''), "should single-quote backticks: {}", quoted);
+    assert!(quoted.contains("`whoami`"), "content preserved: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_semicolon_injection() {
+    let quoted = shell_quote("; rm -rf /; echo");
+    assert!(quoted.starts_with('\''), "should single-quote: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_pipe_injection() {
+    let quoted = shell_quote("| cat /etc/passwd");
+    assert!(quoted.starts_with('\''), "should single-quote: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_newline_injection() {
+    let quoted = shell_quote("file\nrm -rf /");
+    assert!(quoted.starts_with('\''), "should single-quote newlines: {}", quoted);
+    // In single quotes, newlines are literal — safe
+    assert!(quoted.contains('\n'), "newline preserved inside quotes: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_embedded_single_quotes() {
+    let quoted = shell_quote("it's a file");
+    // Should be: 'it'\''s a file'
+    assert!(quoted.contains("'\\''"), "should escape embedded single quote: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_embedded_double_quotes() {
+    let quoted = shell_quote("file \"with\" quotes");
+    assert!(quoted.starts_with('\''), "should single-quote: {}", quoted);
+    assert!(quoted.contains('"'), "double quotes preserved inside single quotes: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_dollar_sign_not_expanded() {
+    // A regular $HOME should be single-quoted (no expansion)
+    let quoted = shell_quote("$HOME/evil");
+    assert!(quoted.starts_with('\''), "should single-quote $HOME: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_work_dir_only_exact_internal() {
+    // Only exact $WORK_DIR references (from generate_script internals) should
+    // get double quotes. Anything else with $WORK_DIR must be safe.
+    let quoted = shell_quote("$WORK_DIR/step_1.txt");
+    assert!(quoted.starts_with('"'), "$WORK_DIR internal ref uses double quotes");
+    // But a malicious payload after $WORK_DIR should NOT be double-quoted
+    let evil = shell_quote("$WORK_DIR/$(rm -rf /)");
+    // This MUST NOT allow command substitution
+    // Either single-quote it, or double-quote with escaping
+    assert!(
+        !evil.contains("\"$WORK_DIR/$(rm"),
+        "CRITICAL: $WORK_DIR injection must not allow command substitution: {}",
+        evil
+    );
+}
+
+#[test]
+fn test_shell_quote_work_dir_with_backtick_injection() {
+    let evil = shell_quote("$WORK_DIR/`whoami`");
+    assert!(
+        !evil.contains("\"$WORK_DIR/`whoami`\""),
+        "CRITICAL: $WORK_DIR backtick injection must be blocked: {}",
+        evil
+    );
+}
+
+#[test]
+fn test_shell_quote_ampersand_injection() {
+    let quoted = shell_quote("file & rm -rf /");
+    assert!(quoted.starts_with('\''), "should single-quote: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_glob_chars() {
+    let quoted = shell_quote("*.txt");
+    // Glob chars are special — should be quoted
+    assert!(quoted.starts_with('\''), "should single-quote glob: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_tab_char() {
+    let quoted = shell_quote("file\there");
+    assert!(quoted.starts_with('\''), "should single-quote tab: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_null_byte() {
+    let quoted = shell_quote("file\0here");
+    assert!(quoted.starts_with('\''), "should single-quote null byte: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_unicode_path() {
+    let quoted = shell_quote("/tmp/日本語/ファイル.txt");
+    // Unicode chars are not in the safe set, so should be quoted
+    assert!(quoted.starts_with('\''), "should single-quote unicode: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_empty_string() {
+    assert_eq!(shell_quote(""), "''");
+}
+
+#[test]
+fn test_shell_quote_only_special_chars() {
+    let quoted = shell_quote("$()`;|&<>{}!");
+    assert!(quoted.starts_with('\''), "should single-quote: {}", quoted);
+}
+
+#[test]
+fn test_shell_quote_path_traversal() {
+    let quoted = shell_quote("../../etc/passwd");
+    // Path traversal is safe (no special chars), but let's verify it's handled
+    assert_eq!(quoted, "../../etc/passwd");
+}
+
+#[test]
+fn test_shell_quote_tilde_expansion_safe() {
+    // ~/something is safe chars only
+    assert_eq!(shell_quote("~/Documents"), "~/Documents");
+}
+
+#[test]
+fn test_shell_quote_dash_prefix_safe() {
+    // Starts with - could be interpreted as flag, but shell_quote's job is quoting not flag safety
+    let quoted = shell_quote("-rf");
+    assert_eq!(quoted, "-rf");
+}

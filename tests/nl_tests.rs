@@ -26,6 +26,759 @@ fn assert_plan_compiles(response: &NlResponse, expected_ops: &[&str]) {
     }
 }
 
+// ===========================================================================
+// I1: Shell injection via NL pipeline — end-to-end tests
+// ===========================================================================
+
+/// Helper: run NL input through create → approve, return the generated script
+fn nl_to_script(input: &str) -> Option<String> {
+    use cadmus::nl::dialogue::DialogueState;
+    use cadmus::nl::{NlResponse, process_input};
+
+    let mut state = DialogueState::new();
+    let r1 = process_input(input, &mut state);
+    match r1 {
+        NlResponse::PlanCreated { .. } => {
+            let r2 = process_input("yes", &mut state);
+            match r2 {
+                NlResponse::Approved { script } => script,
+                _ => None,
+            }
+        }
+        _ => None, // NeedsClarification or other — no script
+    }
+}
+
+#[test]
+fn test_nl_injection_command_substitution_in_path() {
+    // User tries to inject via a quoted path
+    let script = nl_to_script(r#"list files in "$(rm -rf /)""#);
+    if let Some(s) = script {
+        // The path should be single-quoted in the script
+        assert!(s.contains("'$(rm -rf /)'") || !s.contains("$(rm"),
+            "command substitution must be safely quoted: {}", s);
+    }
+}
+
+#[test]
+fn test_nl_injection_semicolon_in_path() {
+    let script = nl_to_script(r#"list files in "/tmp; rm -rf /""#);
+    if let Some(s) = script {
+        assert!(s.contains("'/tmp; rm -rf /'") || !s.contains("; rm"),
+            "semicolon injection must be safely quoted: {}", s);
+    }
+}
+
+#[test]
+fn test_nl_injection_backtick_in_path() {
+    let script = nl_to_script(r#"list files in "/tmp/`whoami`""#);
+    if let Some(s) = script {
+        assert!(!s.contains("\"/tmp/`whoami`\""),
+            "backtick must not be in double quotes: {}", s);
+    }
+}
+
+#[test]
+fn test_nl_injection_pipe_in_path() {
+    let script = nl_to_script(r#"list files in "/tmp | cat /etc/passwd""#);
+    if let Some(s) = script {
+        assert!(s.contains("'/tmp | cat /etc/passwd'") || !s.contains("| cat"),
+            "pipe injection must be safely quoted: {}", s);
+    }
+}
+
+#[test]
+fn test_nl_injection_newline_in_path() {
+    // Newlines in paths should be quoted
+    let input = "list files in /tmp\nrm -rf /";
+    let script = nl_to_script(input);
+    if let Some(s) = script {
+        assert!(!s.contains("\nrm -rf"), "newline must not break script: {}", s);
+    }
+}
+
+// ===========================================================================
+// I2: Conversational chaos — stress tests for the NL pipeline
+// ===========================================================================
+
+/// Helper: process input and assert it doesn't panic, returning the response
+fn no_panic(input: &str) -> NlResponse {
+    let mut state = DialogueState::new();
+    process_input(input, &mut state)
+}
+
+// -- Slangy / casual inputs --
+
+#[test]
+fn test_chaos_slangy_find_pdfs() {
+    let r = no_panic("yo can you like find all my pdfs on the desktop real quick");
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("find_matching") || workflow_yaml.contains("walk_tree")
+                || workflow_yaml.contains("list_dir"),
+                "should produce a file-finding workflow: {}", workflow_yaml);
+        }
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected response for slangy input: {:?}", other),
+    }
+}
+
+#[test]
+fn test_chaos_rude_input() {
+    let r = no_panic("ugh just list the stupid files in /tmp already");
+    match &r {
+        NlResponse::PlanCreated { .. } => {} // good
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected response for rude input: {:?}", other),
+    }
+}
+
+#[test]
+fn test_chaos_verbose_input() {
+    let r = no_panic(
+        "hey so I was wondering if you could maybe possibly help me out with \
+         finding all the PDF files that might be somewhere in my Documents folder \
+         because I really need to find them for a project I'm working on"
+    );
+    match &r {
+        NlResponse::PlanCreated { .. } => {} // good
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected response for verbose input: {:?}", other),
+    }
+}
+
+#[test]
+fn test_chaos_terse_input() {
+    let r = no_panic("ls /tmp");
+    match &r {
+        NlResponse::PlanCreated { .. } => {} // good
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected response for terse input: {:?}", other),
+    }
+}
+
+#[test]
+fn test_chaos_multi_sentence() {
+    let r = no_panic("I need to find files. They should be PDFs. Look in ~/Documents.");
+    match &r {
+        NlResponse::PlanCreated { .. } => {} // good
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected response for multi-sentence: {:?}", other),
+    }
+}
+
+// -- Ambiguous / nonsensical inputs --
+
+#[test]
+fn test_chaos_ambiguous_no_op() {
+    let r = no_panic("just do something with files idk");
+    // Should NOT produce a broken workflow — either clarify or error
+    match &r {
+        NlResponse::NeedsClarification { .. } => {} // good
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            // If it creates a plan, it should at least compile
+            let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
+                .expect("should parse");
+            let registry = cadmus::fs_types::build_full_registry();
+            cadmus::workflow::compile_workflow(&parsed, &registry)
+                .unwrap_or_else(|e| panic!(
+                    "if plan created, it must compile: {:?}\nYAML:\n{}", e, workflow_yaml
+                ));
+        }
+        _ => {} // Error is also acceptable
+    }
+}
+
+// -- Extreme inputs --
+
+#[test]
+fn test_chaos_single_char() {
+    let _ = no_panic("x");
+}
+
+#[test]
+fn test_chaos_empty_string() {
+    let _ = no_panic("");
+}
+
+#[test]
+fn test_chaos_only_punctuation() {
+    let _ = no_panic("!!!??...,,,");
+}
+
+#[test]
+fn test_chaos_only_spaces() {
+    let _ = no_panic("     ");
+}
+
+#[test]
+fn test_chaos_unicode_emoji() {
+    let _ = no_panic("🔥 find files 🔥");
+}
+
+#[test]
+fn test_chaos_unicode_cjk() {
+    let _ = no_panic("ファイルを探す ~/Documents");
+}
+
+#[test]
+fn test_chaos_very_long_input() {
+    let garbage = "blah ".repeat(200); // 1000 chars
+    let _ = no_panic(&garbage);
+}
+
+#[test]
+fn test_chaos_very_long_single_word() {
+    let word = "a".repeat(1000);
+    let _ = no_panic(&word);
+}
+
+#[test]
+fn test_chaos_numbers_only() {
+    let _ = no_panic("12345 67890");
+}
+
+#[test]
+fn test_chaos_mixed_garbage() {
+    let _ = no_panic("@#$%^&*()_+{}|:<>?~`");
+}
+
+#[test]
+fn test_chaos_repeated_ops() {
+    let _ = no_panic("find find find list list list zip zip zip");
+}
+
+#[test]
+fn test_chaos_sql_injection_attempt() {
+    let _ = no_panic("'; DROP TABLE files; --");
+}
+
+#[test]
+fn test_chaos_html_injection() {
+    let _ = no_panic("<script>alert('xss')</script> find files");
+}
+
+// ===========================================================================
+// I4: Diverse ops end-to-end — NL → workflow → script
+// ===========================================================================
+
+/// Helper: NL input → PlanCreated → compile → generate_script, return script
+/// Panics if any step fails.
+fn nl_e2e_script(input: &str) -> String {
+    let mut state = DialogueState::new();
+    let r = process_input(input, &mut state);
+    match r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            let parsed = cadmus::workflow::parse_workflow(&workflow_yaml)
+                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
+            let registry = cadmus::fs_types::build_full_registry();
+            let compiled = cadmus::workflow::compile_workflow(&parsed, &registry)
+                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
+            cadmus::executor::generate_script(&compiled, &parsed)
+                .unwrap_or_else(|e| panic!("script gen failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml))
+        }
+        other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
+    }
+}
+
+/// Helper: NL input → PlanCreated, return workflow YAML (no script gen)
+fn nl_e2e_yaml(input: &str) -> String {
+    let mut state = DialogueState::new();
+    let r = process_input(input, &mut state);
+    match r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            // Verify it at least compiles
+            let parsed = cadmus::workflow::parse_workflow(&workflow_yaml)
+                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
+            let registry = cadmus::fs_types::build_full_registry();
+            cadmus::workflow::compile_workflow(&parsed, &registry)
+                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
+            workflow_yaml
+        }
+        other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
+    }
+}
+
+// -- Git ops --
+
+#[test]
+fn test_e2e_git_log() {
+    // Fixed in I6: repo input name now maps to Repo type before Dir check
+    let yaml = nl_e2e_yaml("git log for ~/myrepo");
+    assert!(yaml.contains("git_log"), "should have git_log op: {}", yaml);
+}
+
+#[test]
+fn test_e2e_git_diff() {
+    let yaml = nl_e2e_yaml("git diff in ~/myrepo");
+    assert!(yaml.contains("git_diff"), "should have git_diff op: {}", yaml);
+}
+
+#[test]
+fn test_e2e_git_clone() {
+    let yaml = nl_e2e_yaml("git clone https://github.com/user/repo");
+    assert!(yaml.contains("git_clone"), "should have git_clone op: {}", yaml);
+}
+
+#[test]
+fn test_e2e_git_status() {
+    let yaml = nl_e2e_yaml("git status of ~/myrepo");
+    assert!(yaml.contains("git_status"), "should have git_status op: {}", yaml);
+}
+
+// -- Search ops --
+
+#[test]
+fn test_e2e_grep_for_todo() {
+    let script = nl_e2e_script("grep for TODO in ~/src");
+    assert!(script.contains("grep"), "should have grep: {}", script);
+}
+
+#[test]
+fn test_e2e_search_content() {
+    let yaml = nl_e2e_yaml("search for text error in ~/logs");
+    assert!(yaml.contains("search_content"), "should have search_content: {}", yaml);
+}
+
+// -- Archive ops --
+
+#[test]
+fn test_e2e_zip_folder() {
+    let script = nl_e2e_script("zip up ~/Projects");
+    assert!(script.contains("zip") || script.contains("tar"),
+        "should have zip/tar command: {}", script);
+}
+
+#[test]
+fn test_e2e_extract_archive() {
+    let script = nl_e2e_script("extract ~/archive.tar.gz");
+    assert!(script.contains("tar") || script.contains("extract"),
+        "should have tar/extract command: {}", script);
+}
+
+// -- System info ops --
+
+#[test]
+fn test_e2e_disk_usage() {
+    // Fixed in I6: du_size now uses pathref input → Path type
+    let yaml = nl_e2e_yaml("check disk usage of ~/Documents");
+    assert!(yaml.contains("du_size"), "should have du_size op: {}", yaml);
+}
+
+#[test]
+fn test_e2e_file_info() {
+    // Fixed in I6: stat now uses pathref input → Path type
+    let yaml = nl_e2e_yaml("get file info for ~/test.txt");
+    assert!(yaml.contains("stat"), "should have stat op: {}", yaml);
+}
+
+// -- Download ops --
+
+#[test]
+fn test_e2e_download_url() {
+    let yaml = nl_e2e_yaml("download https://example.com/file.zip");
+    assert!(yaml.contains("download"), "should have download op: {}", yaml);
+}
+
+// -- File manipulation ops --
+
+#[test]
+fn test_e2e_list_files() {
+    let script = nl_e2e_script("list files in /tmp");
+    assert!(script.contains("ls"), "should have ls command: {}", script);
+}
+
+#[test]
+fn test_e2e_walk_tree() {
+    let script = nl_e2e_script("walk the tree at ~/src");
+    assert!(script.contains("find"), "should have find command: {}", script);
+}
+
+#[test]
+fn test_e2e_find_matching() {
+    let script = nl_e2e_script("find all *.rs files in ~/src");
+    assert!(script.contains("grep") || script.contains("find"),
+        "should have grep/find: {}", script);
+}
+
+#[test]
+fn test_e2e_sort_files() {
+    let yaml = nl_e2e_yaml("sort files in ~/Documents by name");
+    assert!(yaml.contains("sort_by") || yaml.contains("sort"),
+        "should have sort op: {}", yaml);
+}
+
+// -- Generic fallback ops --
+
+#[test]
+fn test_e2e_compress_file() {
+    let yaml = nl_e2e_yaml("compress ~/big_file.log");
+    assert!(yaml.contains("gzip_compress") || yaml.contains("compress"),
+        "should have compress op: {}", yaml);
+}
+
+#[test]
+fn test_e2e_count_lines() {
+    // count expects Seq(a) — for file targets, the seq_op handler builds
+    // a read_file → count pipeline. This may still fail for typed files
+    // like .csv where read_file produces Csv (not Seq). Accept either
+    // PlanCreated or Error as valid responses.
+    let mut state = DialogueState::new();
+    let r = process_input("count lines in ~/data.csv", &mut state);
+    match &r {
+        NlResponse::PlanCreated { .. } => {} // great — it compiled
+        NlResponse::Error { .. } => {} // type mismatch is expected for .csv
+        other => panic!("unexpected for count: {:?}", other),
+    }
+}
+
+#[test]
+fn test_e2e_checksum() {
+    let yaml = nl_e2e_yaml("checksum ~/important.zip");
+    assert!(yaml.contains("checksum") || yaml.contains("sha") || yaml.contains("md5"),
+        "should have checksum op: {}", yaml);
+}
+
+// -- Edge: unknown/nonsensical op --
+
+#[test]
+fn test_e2e_unknown_op_no_panic() {
+    // Something that doesn't map to any known op
+    let mut state = DialogueState::new();
+    let r = process_input("flibbertigibbet the whatchamacallit", &mut state);
+    // Should NOT panic — either NeedsClarification or some fallback
+    match r {
+        NlResponse::NeedsClarification { .. } => {} // good
+        NlResponse::PlanCreated { .. } => {} // acceptable if it guessed something
+        NlResponse::Error { .. } => {} // also fine
+        other => panic!("unexpected for unknown op: {:?}", other),
+    }
+}
+
+// ===========================================================================
+// I5: Path resolution, dir aliases, noun patterns edge cases
+// ===========================================================================
+
+#[test]
+fn test_path_typo_correction_preserves_tilde_path() {
+    // "findd" should be corrected to "find", but ~/Documents should survive
+    let mut state = DialogueState::new();
+    let r = process_input("findd files in ~/Documents", &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Documents"),
+                "~/Documents should survive typo correction: {}", workflow_yaml);
+        }
+        // NeedsClarification is also acceptable if "findd" wasn't corrected
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected: {:?}", other),
+    }
+}
+
+#[test]
+fn test_path_quoted_with_typo_in_context() {
+    // "findd" has a typo, but "NO NAME" should be preserved as-is
+    let mut state = DialogueState::new();
+    let r = process_input(r#"findd files in "NO NAME""#, &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            // The quoted path should survive — either as "NO NAME" or /Volumes/NO NAME
+            assert!(workflow_yaml.contains("NO NAME") || workflow_yaml.contains("no name"),
+                "quoted path should survive: {}", workflow_yaml);
+        }
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected: {:?}", other),
+    }
+}
+
+#[test]
+fn test_path_dir_alias_in_edit_context() {
+    // Create a workflow, then edit with "also skip desktop"
+    // "desktop" in skip context should NOT resolve to ~/Desktop as a path
+    let mut state = DialogueState::new();
+    let _ = process_input("walk ~/tmp", &mut state);
+
+    let r = process_input("skip desktop", &mut state);
+    match &r {
+        NlResponse::PlanEdited { workflow_yaml, .. } => {
+            // The skip should add a filter for "desktop" (the name), not ~/Desktop
+            assert!(!workflow_yaml.contains("~/Desktop"),
+                "skip should use 'desktop' as pattern, not ~/Desktop: {}", workflow_yaml);
+        }
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected for skip desktop: {:?}", other),
+    }
+}
+
+#[test]
+fn test_path_noun_pattern_with_explicit_pattern() {
+    // "find *.log files on desktop" — explicit *.log should win over noun pattern
+    let mut state = DialogueState::new();
+    let r = process_input("find *.log files on desktop", &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("*.log") || workflow_yaml.contains(".log"),
+                "explicit pattern should be present: {}", workflow_yaml);
+        }
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        other => panic!("unexpected: {:?}", other),
+    }
+}
+
+#[test]
+fn test_path_multiple_paths_in_input() {
+    // "rename ~/old.txt to ~/new.txt" — both paths should be captured
+    let mut state = DialogueState::new();
+    let r = process_input("rename ~/old.txt to ~/new.txt", &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("old.txt") || workflow_yaml.contains("new.txt"),
+                "should capture paths: {}", workflow_yaml);
+        }
+        NlResponse::NeedsClarification { .. } => {} // acceptable
+        NlResponse::Error { .. } => {} // type mismatch is a known bug
+        other => panic!("unexpected: {:?}", other),
+    }
+}
+
+#[test]
+fn test_path_url_preserved() {
+    // URLs should pass through without modification
+    let mut state = DialogueState::new();
+    let r = process_input("download https://example.com/file.tar.gz", &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("https://example.com/file.tar.gz"),
+                "URL should be preserved: {}", workflow_yaml);
+        }
+        other => panic!("unexpected: {:?}", other),
+    }
+}
+
+#[test]
+fn test_path_home_expansion_not_mangled() {
+    // ~/Documents should not be mangled by any pipeline stage
+    let mut state = DialogueState::new();
+    let r = process_input("list files in ~/Documents", &mut state);
+    match &r {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Documents"),
+                "~/Documents should be preserved: {}", workflow_yaml);
+        }
+        other => panic!("unexpected: {:?}", other),
+    }
+}
+
+// ===========================================================================
+// I3: Multi-step conversation flow tests
+// ===========================================================================
+
+#[test]
+fn test_conv_create_edit_skip_approve() {
+    let mut state = DialogueState::new();
+
+    // Step 1: Create a zip workflow
+    let r1 = process_input("zip up ~/Projects", &mut state);
+    match &r1 {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("walk_tree") || workflow_yaml.contains("pack_archive"),
+                "should have walk/pack: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+
+    // Step 2: Edit — skip .git
+    let r2 = process_input("skip .git", &mut state);
+    match &r2 {
+        NlResponse::PlanEdited { workflow_yaml, diff_description, .. } => {
+            assert!(workflow_yaml.contains("filter") || workflow_yaml.contains(".git"),
+                "should have filter for .git: {}", workflow_yaml);
+            assert!(!diff_description.is_empty(), "should describe the edit");
+        }
+        other => panic!("expected PlanEdited after skip, got: {:?}", other),
+    }
+
+    // Step 3: Edit — also skip node_modules
+    let r3 = process_input("also skip node_modules", &mut state);
+    match &r3 {
+        NlResponse::PlanEdited { workflow_yaml, .. } => {
+            // Both filters should be present
+            assert!(workflow_yaml.contains(".git") || workflow_yaml.contains("node_modules"),
+                "should have both skip patterns: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanEdited after second skip, got: {:?}", other),
+    }
+
+    // Step 4: Approve
+    let r4 = process_input("looks good", &mut state);
+    match &r4 {
+        NlResponse::Approved { script } => {
+            // Fixed in I6: executor now handles "exclude" param in filter op
+            assert!(script.is_some(), "should generate a script after skip edits");
+            let s = script.as_ref().unwrap();
+            assert!(s.contains("#!/bin/sh"), "should be a shell script");
+            assert!(s.contains("grep -v"), "skip should produce grep -v: {}", s);
+            assert!(state.current_workflow.is_none(), "approve should consume workflow");
+        }
+        other => panic!("expected Approved, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_conv_approve_without_workflow() {
+    let mut state = DialogueState::new();
+    let r = process_input("yes", &mut state);
+    match &r {
+        NlResponse::NeedsClarification { needs } => {
+            assert!(!needs.is_empty(), "should explain there's nothing to approve");
+        }
+        other => panic!("expected NeedsClarification for approve without workflow, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_conv_approve_after_reject() {
+    let mut state = DialogueState::new();
+
+    // Create workflow
+    let _ = process_input("list files in /tmp", &mut state);
+    assert!(state.current_workflow.is_some());
+
+    // Reject it
+    let r1 = process_input("nah", &mut state);
+    assert!(matches!(r1, NlResponse::Rejected));
+    assert!(state.current_workflow.is_none());
+
+    // Try to approve — should fail
+    let r2 = process_input("yes", &mut state);
+    assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
+        "approve after reject should need clarification: {:?}", r2);
+}
+
+#[test]
+fn test_conv_edit_after_approve() {
+    let mut state = DialogueState::new();
+
+    // Create and approve
+    let _ = process_input("list files in /tmp", &mut state);
+    let _ = process_input("yes", &mut state);
+    assert!(state.current_workflow.is_none(), "approve should consume workflow");
+
+    // Try to edit — should fail gracefully
+    let r = process_input("skip .git", &mut state);
+    match &r {
+        NlResponse::NeedsClarification { .. } => {} // good
+        NlResponse::PlanCreated { .. } => {} // also acceptable — might create new workflow
+        other => panic!("edit after approve should clarify or create new: {:?}", other),
+    }
+}
+
+#[test]
+fn test_conv_ten_sequential_edits() {
+    let mut state = DialogueState::new();
+
+    // Create a workflow
+    let r = process_input("find pdfs in ~/Documents", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "should create plan: {:?}", r);
+
+    // Apply 10 edits — should not corrupt state
+    let edits = [
+        "skip .git",
+        "skip .svn",
+        "skip node_modules",
+        "skip target",
+        "skip .DS_Store",
+        "also skip build",
+        "skip dist",
+        "skip vendor",
+        "skip __pycache__",
+        "skip .cache",
+    ];
+
+    for (i, edit) in edits.iter().enumerate() {
+        let r = process_input(edit, &mut state);
+        match &r {
+            NlResponse::PlanEdited { workflow_yaml, .. } => {
+                // Should still parse and compile
+                let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
+                    .unwrap_or_else(|e| panic!("edit {} should parse: {:?}\nYAML:\n{}", i, e, workflow_yaml));
+                let registry = cadmus::fs_types::build_full_registry();
+                cadmus::workflow::compile_workflow(&parsed, &registry)
+                    .unwrap_or_else(|e| panic!("edit {} should compile: {:?}\nYAML:\n{}", i, e, workflow_yaml));
+            }
+            other => {
+                // Some edits might not apply cleanly — that's ok as long as no panic
+                eprintln!("edit {} ({}) got: {:?}", i, edit, other);
+            }
+        }
+    }
+
+    // Should still be able to approve
+    if state.current_workflow.is_some() {
+        let r = process_input("approve", &mut state);
+        match &r {
+            NlResponse::Approved { script } => {
+                // Fixed in I6: executor now handles "exclude" param
+                assert!(script.is_some(), "should generate script after 10 edits");
+                let s = script.as_ref().unwrap();
+                assert!(s.contains("grep -v"), "skip edits should produce grep -v: {}", s);
+            }
+            other => panic!("should approve after edits: {:?}", other),
+        }
+    }
+}
+
+#[test]
+fn test_conv_overwrite_workflow() {
+    let mut state = DialogueState::new();
+
+    // Create first workflow
+    let r1 = process_input("list files in /tmp", &mut state);
+    assert!(matches!(r1, NlResponse::PlanCreated { .. }));
+
+    // Create second workflow — should overwrite
+    let r2 = process_input("find pdfs in ~/Documents", &mut state);
+    match &r2 {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            // Should be the new workflow, not the old one
+            assert!(workflow_yaml.contains("Documents") || workflow_yaml.contains("pdf"),
+                "should be the new workflow: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated for overwrite, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_conv_reject_then_create_new() {
+    let mut state = DialogueState::new();
+
+    // Create and reject
+    let _ = process_input("list files in /tmp", &mut state);
+    let _ = process_input("nah", &mut state);
+    assert!(state.current_workflow.is_none());
+
+    // Create new workflow — should work
+    let r = process_input("find pdfs in ~/Documents", &mut state);
+    assert!(matches!(r, NlResponse::PlanCreated { .. }),
+        "should create new plan after reject: {:?}", r);
+}
+
+#[test]
+fn test_conv_double_approve() {
+    let mut state = DialogueState::new();
+
+    // Create and approve
+    let _ = process_input("list files in /tmp", &mut state);
+    let r1 = process_input("yes", &mut state);
+    assert!(matches!(r1, NlResponse::Approved { .. }));
+
+    // Second approve — should fail gracefully
+    let r2 = process_input("yes", &mut state);
+    assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
+        "double approve should need clarification: {:?}", r2);
+}
+
 // -- Conversation: compress a file (B2+B3 fix) --
 
 #[test]

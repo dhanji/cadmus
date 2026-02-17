@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T03:00:33Z | Size: 22.8k chars
+> Updated: 2026-02-17T03:05:37Z | Size: 23.2k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -258,3 +258,9 @@
 - `src/nl/slots.rs` — `is_path()` now returns true for tokens containing spaces (from quoted input)
 - `src/nl/mod.rs` — `process_input()` re-quotes space-containing tokens when rejoining for second normalize pass
 - 830 total tests, 7 commits on main
+
+### NL: Path resolution chain (commit `86320e8`)
+- `src/nl/dialogue.rs` — `resolve_path()` function: bare names → `/Volumes/<name>` if exists, else pass through
+- Called from `build_workflow()` right after extracting `target_path` from slots
+- Handles SD cards, USB drives, external volumes on macOS
+- 836 total tests, 8 commits on main

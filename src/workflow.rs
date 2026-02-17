@@ -562,6 +562,13 @@ fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
 fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> {
     let name_lower = name.to_lowercase();
 
+    // 0. Path primitive — for ops like stat, du_size, chmod that take Path.
+    //    Must be checked BEFORE file extension lookup, otherwise ~/test.txt
+    //    would be typed as File(Text) instead of Path.
+    if name_lower == "pathref" || name_lower == "target" {
+        return Ok(TypeExpr::prim("Path"));
+    }
+
     // 1. URL (check before file extensions since URLs may end in .zip)
     if name_lower == "url" || name_lower.contains("url")
         || value.starts_with("http://") || value.starts_with("https://")
@@ -576,7 +583,17 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
         return Ok(entry.type_expr.clone());
     }
 
-    // 3. Directory (by name hint or trailing slash)
+    // 3. Power tools types (check BEFORE directory heuristic so that
+    //    "repo: ~/myrepo" maps to Repo, not Dir(Bytes))
+
+    // Git repository
+    if name_lower == "repo" || name_lower.contains("repository")
+        || value.ends_with(".git")
+    {
+        return Ok(TypeExpr::prim("Repo"));
+    }
+
+    // 4. Directory (by name hint or trailing slash)
     if name_lower == "textdir" || name_lower == "text_dir" {
         return Ok(TypeExpr::dir(TypeExpr::file(TypeExpr::prim("Text"))));
     }
@@ -588,15 +605,7 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> 
         return Ok(TypeExpr::dir(TypeExpr::prim("Bytes")));
     }
 
-    // 4. Power tools types
-
-    // Git repository
-    if name_lower == "repo" || name_lower.contains("repository")
-        || value.ends_with(".git")
-    {
-        return Ok(TypeExpr::prim("Repo"));
-    }
-
+    // 5. Other power tools types
     // Pattern/keyword
     if name_lower.contains("pattern") || name_lower.contains("keyword")
         || name_lower.contains("query") || name_lower.contains("search")

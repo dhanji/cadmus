@@ -335,6 +335,21 @@ pub fn build_workflow(
                     .map(|d| d.to_string())
                     .unwrap_or_else(|| generate_workflow_name(primary_op, &slots));
                 return Ok(WorkflowDef { workflow: workflow_name, inputs, steps });
+            } else if is_path_op(other) {
+                // Ops that take Path primitive (stat, du_size, chmod, etc.)
+                // Use "pathref" input name so type inference yields Path, not Dir(Bytes)
+                inputs.insert("pathref".to_string(), target_path.clone());
+            } else if is_seq_op(other) {
+                // Ops that take Seq(a) — need a pipeline to produce the sequence
+                if is_file_path(&target_path) {
+                    // File target: read_file → op (e.g. count lines)
+                    inputs.insert("file".to_string(), target_path.clone());
+                    steps.push(RawStep { op: "read_file".to_string(), args: StepArgs::None });
+                } else {
+                    // Directory target: list_dir → op (e.g. count files)
+                    inputs.insert("path".to_string(), target_path.clone());
+                    steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
+                }
             } else if is_file_path(&target_path) {
                 // File ops with a file target: use "file" input name
                 inputs.insert("file".to_string(), target_path.clone());
@@ -374,6 +389,19 @@ fn is_git_repo_op(op: &str) -> bool {
 /// Ops that take Entry(Name, a) as first input.
 fn is_entry_op(op: &str) -> bool {
     matches!(op, "rename" | "move_entry" | "delete")
+}
+
+/// Ops that take Path as first input (not Dir or File).
+fn is_path_op(op: &str) -> bool {
+    matches!(op, "stat" | "create_dir" | "remove_quarantine" | "open_file"
+        | "reveal" | "git_init" | "du_size" | "lsof_open" | "file_type_detect"
+        | "chmod" | "chown" | "xattr_get" | "xattr_set" | "xattr_remove"
+        | "xattr_list")
+}
+
+/// Ops that take Seq(a) as first input — need a pipeline to produce the sequence.
+fn is_seq_op(op: &str) -> bool {
+    matches!(op, "count" | "unique" | "head" | "tail" | "reverse")
 }
 
 /// Resolve a bare path name to an actual filesystem location.
