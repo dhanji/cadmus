@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T01:58:10Z | Size: 21.3k chars
+> Updated: 2026-02-17T02:19:23Z | Size: 21.7k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -235,3 +235,12 @@
 ### Test Counts
 - Total: 795 (was 716)
 - New: 79 (41 unit in executor.rs + 38 integration in executor_tests.rs)
+
+### Project Rename: reasoning_engine → cadmus (commit `a5156b3`)
+- Crate name is now `cadmus` in Cargo.toml
+- Binary: `target/release/cadmus`
+- All `use reasoning_engine::` → `use cadmus::` across src/ and tests/
+- Banners: "CADMUS v0.x.0" (3 locations in src/main.rs)
+- Usage: `cadmus --workflow <path.yaml> [--execute]`
+- Generic uses of "reasoning" preserved (comparative, cross-entity, cross-domain, etc.)
+- 795 tests, zero warnings, 5 commits on main
