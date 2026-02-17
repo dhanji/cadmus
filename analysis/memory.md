@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T02:45:13Z | Size: 22.3k chars
+> Updated: 2026-02-17T03:00:33Z | Size: 22.8k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -252,3 +252,9 @@
 - Ambiguity: tokens that are both alias+noun prefer alias when no path set, noun when path exists
 - SymSpell corrects plurals→singulars, so both forms needed in YAML tables
 - 822 total tests, 6 commits on main
+
+### NL: Quoted string support (commit `faf8338`)
+- `src/nl/normalize.rs` — `tokenize()` refactored into pre-pass (quote extraction) + `tokenize_segment()`. Only double quotes supported (single quotes conflict with contractions like `don't`).
+- `src/nl/slots.rs` — `is_path()` now returns true for tokens containing spaces (from quoted input)
+- `src/nl/mod.rs` — `process_input()` re-quotes space-containing tokens when rejoining for second normalize pass
+- 830 total tests, 7 commits on main

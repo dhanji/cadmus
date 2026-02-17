@@ -183,6 +183,7 @@ pub fn build_workflow(
     // Determine the target path
     let target_path = slots.target_path.clone()
         .unwrap_or_else(|| ".".to_string());
+    let target_path = resolve_path(&target_path);
 
     // Collect all paths from slots (for multi-path ops like rename)
     let all_paths: Vec<String> = slots.slots.iter()
@@ -373,6 +374,33 @@ fn is_git_repo_op(op: &str) -> bool {
 /// Ops that take Entry(Name, a) as first input.
 fn is_entry_op(op: &str) -> bool {
     matches!(op, "rename" | "move_entry" | "delete")
+}
+
+/// Resolve a bare path name to an actual filesystem location.
+///
+/// Fallback chain:
+/// 1. Already absolute or home-relative (`~/...`, `/...`) → use as-is
+/// 2. Current directory (`.`) → use as-is
+/// 3. Exists as a macOS volume (`/Volumes/<name>`) → use that
+/// 4. Otherwise → use as-is (let the shell report the error)
+fn resolve_path(path: &str) -> String {
+    // Already rooted — no resolution needed
+    if path == "."
+        || path.starts_with('/')
+        || path.starts_with("~/")
+        || path.starts_with("$")
+    {
+        return path.to_string();
+    }
+
+    // Check /Volumes/<name> (macOS external drives, SD cards, USB sticks)
+    let volume_path = format!("/Volumes/{}", path);
+    if std::path::Path::new(&volume_path).exists() {
+        return volume_path;
+    }
+
+    // No resolution found — return as-is
+    path.to_string()
 }
 
 /// Check if a path looks like a file (has a known extension, not a directory).
@@ -1290,5 +1318,41 @@ mod tests {
         );
         let (_edited, desc) = apply_remove(&mut wf.clone(), &remove_slots, &mut state).unwrap();
         assert!(desc.contains(&first_op), "should have removed first op '{}': {}", first_op, desc);
+    }
+
+    // -- Path resolution --
+
+    #[test]
+    fn test_resolve_path_absolute_unchanged() {
+        assert_eq!(resolve_path("/usr/local"), "/usr/local");
+    }
+
+    #[test]
+    fn test_resolve_path_home_relative_unchanged() {
+        assert_eq!(resolve_path("~/Documents"), "~/Documents");
+    }
+
+    #[test]
+    fn test_resolve_path_dot_unchanged() {
+        assert_eq!(resolve_path("."), ".");
+    }
+
+    #[test]
+    fn test_resolve_path_env_var_unchanged() {
+        assert_eq!(resolve_path("$HOME/foo"), "$HOME/foo");
+    }
+
+    #[test]
+    fn test_resolve_path_unknown_bare_name_unchanged() {
+        // A name that doesn't match any volume should pass through
+        assert_eq!(resolve_path("nonexistent_xyzzy_volume"), "nonexistent_xyzzy_volume");
+    }
+
+    #[test]
+    fn test_resolve_path_macintosh_hd_volume() {
+        // /Volumes/Macintosh HD should always exist on macOS
+        let resolved = resolve_path("Macintosh HD");
+        assert_eq!(resolved, "/Volumes/Macintosh HD",
+            "should resolve to /Volumes/Macintosh HD: {}", resolved);
     }
 }
