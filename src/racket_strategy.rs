@@ -66,6 +66,19 @@ impl std::fmt::Display for InferenceError {
 impl std::error::Error for InferenceError {}
 
 // ---------------------------------------------------------------------------
+// Inference kind — how was the signature derived?
+// ---------------------------------------------------------------------------
+
+/// How an operation's signature was inferred.
+#[derive(Debug, Clone, PartialEq)]
+pub enum InferenceKind {
+    /// Inferred from the inverse/symmetric partner (e.g., subtract from add)
+    OpSymmetric,
+    /// Inferred from a type-symmetric peer in the same class+category (e.g., multiply from add)
+    TypeSymmetric { class: String },
+}
+
+// ---------------------------------------------------------------------------
 // Inferred operation result
 // ---------------------------------------------------------------------------
 
@@ -84,6 +97,8 @@ pub struct InferredOp {
     pub inferred_from: String,
     /// Whether invariants were intentionally dropped
     pub invariants_dropped: bool,
+    /// How the inference was performed
+    pub inference_kind: InferenceKind,
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +294,118 @@ pub fn infer_symmetric_op(
         meta: inferred_meta,
         inferred_from: partner_op,
         invariants_dropped: had_invariants,
+        inference_kind: InferenceKind::OpSymmetric,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Type-symmetric inference — generalize across same-shape ops
+// ---------------------------------------------------------------------------
+
+/// Find the type_symmetry_class for an entity.
+fn entity_type_symmetry_class(entity_id: &str, facts: &FactPackIndex) -> Option<String> {
+    facts.pack.properties.iter()
+        .find(|p| p.entity == entity_id && p.key == "type_symmetry_class" && p.axis == "type_symmetry")
+        .map(|p| p.value.clone())
+}
+
+/// Find the category_name for an entity.
+fn entity_category(entity_id: &str, facts: &FactPackIndex) -> Option<String> {
+    facts.pack.properties.iter()
+        .find(|p| p.entity == entity_id && p.key == "category_name" && p.axis == "category")
+        .map(|p| p.value.clone())
+}
+
+/// Find a type-symmetric peer: another entity in the same class AND same
+/// category that has a metasignature in the registry.
+///
+/// Returns the peer's op_name (not entity id).
+pub fn find_type_symmetric_peer(
+    op_name: &str,
+    registry: &OperationRegistry,
+    facts: &FactPackIndex,
+) -> Option<String> {
+    let entity_id = op_name_to_entity(op_name, facts)?;
+    let my_class = entity_type_symmetry_class(&entity_id, facts)?;
+    let my_category = entity_category(&entity_id, facts)?;
+
+    // Find all entities in the same class + category that have a metasig
+    for prop in &facts.pack.properties {
+        if prop.key == "type_symmetry_class"
+            && prop.axis == "type_symmetry"
+            && prop.value == my_class
+            && prop.entity != entity_id
+        {
+            // Check same category
+            if entity_category(&prop.entity, facts).as_deref() != Some(&my_category) {
+                continue;
+            }
+            // Check if this entity's op has a metasig in the registry
+            if let Some(peer_op) = entity_to_op_name(&prop.entity, facts) {
+                if let Some(entry) = registry.get_poly(&peer_op) {
+                    if entry.meta.is_some() {
+                        return Some(peer_op);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Infer the metasignature of an operation from a type-symmetric peer.
+///
+/// Like `infer_symmetric_op`, but uses type_symmetry_class + category
+/// instead of symmetric_partner. The peer is any op in the same class
+/// and category that already has a metasignature.
+pub fn infer_type_symmetric_op(
+    op_name: &str,
+    registry: &OperationRegistry,
+    facts: &FactPackIndex,
+) -> Result<InferredOp, InferenceError> {
+    let entity_id = op_name_to_entity(op_name, facts)
+        .ok_or_else(|| InferenceError::UnknownEntity(op_name.to_string()))?;
+
+    let class = entity_type_symmetry_class(&entity_id, facts)
+        .ok_or_else(|| InferenceError::NoSymmetricPartner(op_name.to_string()))?;
+
+    let peer_op = find_type_symmetric_peer(op_name, registry, facts)
+        .ok_or_else(|| InferenceError::PartnerHasNoMeta {
+            op: op_name.to_string(),
+            partner: format!("(no peer with meta in class '{}')", class),
+        })?;
+
+    let peer_meta = registry.get_poly(&peer_op)
+        .and_then(|e| e.meta.as_ref())
+        .ok_or_else(|| InferenceError::PartnerHasNoMeta {
+            op: op_name.to_string(),
+            partner: peer_op.clone(),
+        })?;
+
+    let had_invariants = !peer_meta.invariants.is_empty();
+    let inferred_meta = MetaSignature {
+        params: peer_meta.params.iter().map(|p| MetaParam {
+            name: p.name.clone(),
+            type_name: p.type_name.clone(),
+            variadic: p.variadic,
+        }).collect(),
+        return_type: peer_meta.return_type.clone(),
+        invariants: vec![], // Invariants do NOT transfer
+        category: peer_meta.category.clone(),
+        effects: peer_meta.effects.clone(),
+    };
+
+    let racket_symbol = entity_to_racket_symbol(&entity_id, facts)
+        .unwrap_or_else(|| op_name.to_string());
+
+    Ok(InferredOp {
+        op_name: op_name.to_string(),
+        entity_id,
+        racket_symbol,
+        meta: inferred_meta,
+        inferred_from: peer_op,
+        invariants_dropped: had_invariants,
+        inference_kind: InferenceKind::TypeSymmetric { class },
     })
 }
 
@@ -286,48 +413,92 @@ pub fn infer_symmetric_op(
 // Promotion — upgrade stubs to full ops
 // ---------------------------------------------------------------------------
 
-/// Run inference for all ops that lack metasignatures and have symmetric
-/// partners. Promotes successful inferences to full op entries with meta.
+/// Run three-phase inference for all ops that lack metasignatures.
+///
+/// Phase 1: Op-symmetric inference (subtract from add via symmetric_partner)
+/// Phase 2: Type-symmetric inference for remaining stubs (multiply from add
+///          via same type_symmetry_class + category)
+/// Phase 3: Op-symmetric replay — picks up pairs unblocked by phase 2
+///          (divide from multiply, which now has a meta from phase 2)
 ///
 /// Returns a list of successfully inferred ops.
 pub fn promote_inferred_ops(
     registry: &mut OperationRegistry,
     facts: &FactPackIndex,
 ) -> Vec<InferredOp> {
-    // Collect ops that need inference (have no meta)
-    let stubs: Vec<String> = registry.poly_op_names()
-        .into_iter()
-        .filter(|name| {
-            registry.get_poly(name)
-                .map(|op| op.meta.is_none())
-                .unwrap_or(false)
-        })
-        .map(|s| s.to_string())
-        .collect();
-
-    // Take a snapshot of the registry for lookups (we'll mutate it)
-    let snapshot = build_racket_registry();
-
     let mut inferred = Vec::new();
+
+    // Helper: collect current stubs (ops with no meta)
+    let collect_stubs = |reg: &OperationRegistry| -> Vec<String> {
+        reg.poly_op_names()
+        .into_iter()
+        .filter(|name| reg.get_poly(name)
+                .map(|op| op.meta.is_none())
+                .unwrap_or(false))
+        .map(|s| s.to_string())
+        .collect()
+    };
+
+    // Helper: promote an inferred op into the registry
+    let promote = |inf: &InferredOp, reg: &mut OperationRegistry, snapshot: &OperationRegistry| {
+        if let Some(existing) = snapshot.get_poly(&inf.op_name) {
+            reg.register_poly_with_meta(
+                &inf.op_name,
+                existing.signature.clone(),
+                existing.properties.clone(),
+                &existing.description,
+                Some(inf.meta.clone()),
+            );
+        }
+    };
+
+    // --- Phase 1: Op-symmetric inference ---
+    let snapshot = build_racket_registry();
+    let stubs = collect_stubs(registry);
     for stub_name in &stubs {
         match infer_symmetric_op(stub_name, &snapshot, facts) {
             Ok(inf) => {
-                // Promote: update the op's meta in the registry
-                // We need to re-register with the same signature but with meta
-                if let Some(existing) = snapshot.get_poly(stub_name) {
-                    registry.register_poly_with_meta(
-                        &inf.op_name,
-                        existing.signature.clone(),
-                        existing.properties.clone(),
-                        &existing.description,
-                        Some(inf.meta.clone()),
-                    );
-                }
+                promote(&inf, registry, &snapshot);
                 inferred.push(inf);
             }
-            Err(_) => {
-                // Not all stubs have symmetric partners — that's fine
+            Err(_) => {}
+        }
+    }
+
+    // --- Phase 2: Type-symmetric inference for remaining stubs ---
+    // Use the registry (which now has phase 1 promotions) for peer lookup
+    // Only try type-symmetric for stubs that don't have a symmetric partner
+    // with a meta (those will be handled by phase 3 op-symmetric replay).
+    let remaining_stubs = collect_stubs(registry);
+    for stub_name in &remaining_stubs {
+        // If this stub has a symmetric partner that already has meta,
+        // skip it — phase 3 will handle it via op-symmetric inference.
+        if infer_symmetric_op(stub_name, registry, facts).is_ok() {
+            continue;
+        }
+        match infer_type_symmetric_op(stub_name, registry, facts) {
+            Ok(inf) => {
+                promote(&inf, registry, &snapshot);
+                inferred.push(inf);
             }
+            Err(_) => {}
+        }
+    }
+
+    // --- Phase 3: Op-symmetric replay ---
+    // Re-check stubs that might now be unblocked (e.g., divide from multiply)
+    let still_stubs = collect_stubs(registry);
+    for stub_name in &still_stubs {
+        // Skip if already inferred in an earlier phase
+        if inferred.iter().any(|i| i.op_name == *stub_name) {
+            continue;
+        }
+        match infer_symmetric_op(stub_name, registry, facts) {
+            Ok(inf) => {
+                promote(&inf, registry, &snapshot);
+                inferred.push(inf);
+            }
+            Err(_) => {}
         }
     }
 
@@ -587,5 +758,129 @@ mod tests {
         assert_eq!(entity_to_racket_symbol("op_subtract", &facts), Some("-".to_string()));
         assert_eq!(entity_to_racket_symbol("op_multiply", &facts), Some("*".to_string()));
         assert_eq!(entity_to_racket_symbol("op_divide", &facts), Some("/".to_string()));
+    }
+
+    // --- Type-symmetric inference ---
+
+    #[test]
+    fn test_entity_type_symmetry_class() {
+        let (_, facts) = setup();
+        assert_eq!(entity_type_symmetry_class("op_add", &facts), Some("binop".to_string()));
+        assert_eq!(entity_type_symmetry_class("op_multiply", &facts), Some("binop".to_string()));
+        assert_eq!(entity_type_symmetry_class("nonexistent", &facts), None);
+    }
+
+    #[test]
+    fn test_entity_category() {
+        let (_, facts) = setup();
+        assert_eq!(entity_category("op_add", &facts), Some("arithmetic".to_string()));
+        assert_eq!(entity_category("op_multiply", &facts), Some("arithmetic".to_string()));
+        assert_eq!(entity_category("nonexistent", &facts), None);
+    }
+
+    #[test]
+    fn test_find_type_symmetric_peer_multiply_finds_add() {
+        let (reg, facts) = setup();
+        // multiply is a stub, add has meta — should find add
+        let peer = find_type_symmetric_peer("multiply", &reg, &facts);
+        assert_eq!(peer, Some("add".to_string()));
+    }
+
+    #[test]
+    fn test_find_type_symmetric_peer_divide_finds_add() {
+        let (reg, facts) = setup();
+        // divide is a stub, add has meta — should find add (same class+category)
+        let peer = find_type_symmetric_peer("divide", &reg, &facts);
+        assert_eq!(peer, Some("add".to_string()));
+    }
+
+    #[test]
+    fn test_find_type_symmetric_peer_abs_returns_none() {
+        let (reg, facts) = setup();
+        // abs has no type_symmetry_class in the fact pack
+        let peer = find_type_symmetric_peer("abs", &reg, &facts);
+        assert_eq!(peer, None);
+    }
+
+    #[test]
+    fn test_find_type_symmetric_peer_nonexistent_returns_none() {
+        let (reg, facts) = setup();
+        let peer = find_type_symmetric_peer("nonexistent", &reg, &facts);
+        assert_eq!(peer, None);
+    }
+
+    #[test]
+    fn test_infer_type_symmetric_multiply_from_add() {
+        let (reg, facts) = setup();
+        let inferred = infer_type_symmetric_op("multiply", &reg, &facts).unwrap();
+
+        assert_eq!(inferred.op_name, "multiply");
+        assert_eq!(inferred.racket_symbol, "*");
+        assert_eq!(inferred.inferred_from, "add");
+        assert_eq!(inferred.meta.return_type, "Number");
+        assert_eq!(inferred.meta.params.len(), 2);
+        assert_eq!(inferred.meta.params[0].name, "x");
+        assert_eq!(inferred.meta.params[0].type_name, "Number");
+        assert_eq!(inferred.meta.category.as_deref(), Some("arithmetic"));
+        assert_eq!(inferred.meta.effects.as_deref(), Some("none"));
+
+        // Invariants dropped
+        assert!(inferred.meta.invariants.is_empty());
+        assert!(inferred.invariants_dropped);
+
+        // Inference kind
+        assert_eq!(inferred.inference_kind, InferenceKind::TypeSymmetric {
+            class: "binop".to_string(),
+        });
+    }
+
+    #[test]
+    fn test_infer_type_symmetric_abs_fails() {
+        let (reg, facts) = setup();
+        let result = infer_type_symmetric_op("abs", &reg, &facts);
+        assert!(result.is_err(), "abs has no type_symmetry_class");
+    }
+
+    #[test]
+    fn test_three_phase_promotion_all_four_ops() {
+        let (mut reg, facts) = setup();
+
+        // Before: only add has meta
+        assert!(reg.get_poly("add").unwrap().meta.is_some());
+        assert!(reg.get_poly("subtract").unwrap().meta.is_none());
+        assert!(reg.get_poly("multiply").unwrap().meta.is_none());
+        assert!(reg.get_poly("divide").unwrap().meta.is_none());
+
+        let inferred = promote_inferred_ops(&mut reg, &facts);
+
+        // After: all four should have meta
+        assert!(reg.get_poly("add").unwrap().meta.is_some(), "add should still have meta");
+        assert!(reg.get_poly("subtract").unwrap().meta.is_some(), "subtract should have meta");
+        assert!(reg.get_poly("multiply").unwrap().meta.is_some(), "multiply should have meta");
+        assert!(reg.get_poly("divide").unwrap().meta.is_some(), "divide should have meta");
+
+        // Check inference paths
+        let sub = inferred.iter().find(|i| i.op_name == "subtract").unwrap();
+        assert_eq!(sub.inference_kind, InferenceKind::OpSymmetric);
+        assert_eq!(sub.inferred_from, "add");
+
+        let mul = inferred.iter().find(|i| i.op_name == "multiply").unwrap();
+        assert_eq!(mul.inference_kind, InferenceKind::TypeSymmetric {
+            class: "binop".to_string(),
+        });
+        assert_eq!(mul.inferred_from, "add");
+
+        let div = inferred.iter().find(|i| i.op_name == "divide").unwrap();
+        assert_eq!(div.inference_kind, InferenceKind::OpSymmetric);
+        assert_eq!(div.inferred_from, "multiply");
+    }
+
+    #[test]
+    fn test_modulo_remains_stub_after_promotion() {
+        let (mut reg, facts) = setup();
+        promote_inferred_ops(&mut reg, &facts);
+        // modulo has no symmetric partner and no type_symmetry_class
+        assert!(reg.get_poly("modulo").unwrap().meta.is_none(),
+            "modulo should remain a stub — no inference path");
     }
 }

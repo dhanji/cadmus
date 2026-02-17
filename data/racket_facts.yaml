@@ -65,6 +65,12 @@ axes:
     polarity: capability
     sub_axes: []
 
+  - id: type_symmetry
+    name: "Type Symmetry"
+    description: "Groups ops with the same type shape — inference within a class is gated by category"
+    polarity: capability
+    sub_axes: []
+
 # ---------------------------------------------------------------------------
 # Claims — per-entity, per-axis assertions
 # ---------------------------------------------------------------------------
@@ -395,6 +401,29 @@ properties:
     value: "arithmetic"
     ordinal: 1
 
+  # --- Type symmetry class ---
+  # Ops in the same class AND same category share type structure.
+  # The inference engine uses this to generalize: if one member has a
+  # metasignature, stubs in the same class+category can inherit it.
+  # Class name is intentionally generic (binop = binary operator);
+  # the category gate (arithmetic) prevents cross-domain leakage.
+  - entity: op_add
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "binop"
+  - entity: op_subtract
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "binop"
+  - entity: op_multiply
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "binop"
+  - entity: op_divide
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "binop"
+
 # ---------------------------------------------------------------------------
 # Relations
 # ---------------------------------------------------------------------------
@@ -415,3 +444,5 @@ uncertainties:
     text: "Division by zero is undefined; the type signature does not capture this precondition."
   - axis: symmetry
     text: "Symmetric inference transfers type structure but not semantic invariants (e.g., y>0 => x+y>x does not hold for subtraction)."
+  - axis: type_symmetry
+    text: "Type-symmetric inference transfers type structure within a class+category group but drops all invariants. Weaker than op-symmetric inference (no inverse relationship assumed)."

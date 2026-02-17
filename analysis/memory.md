@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T04:12:34Z | Size: 24.1k chars
+> Updated: 2026-02-17T10:14:06Z | Size: 27.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -274,3 +274,28 @@
   4. `src/workflow.rs:562-568`, `src/nl/dialogue.rs:338-398` — type inference reordered: `pathref`→Path before extension lookup, `repo`→Repo before dir check; added `is_path_op()` and `is_seq_op()` in `build_workflow`
 - **Test categories**: shell injection (25), chaos (19), conversation flows (8), E2E ops (19), path edge cases (7)
 - Known remaining issue: `count` op expects `Seq(a)` but file types like `Csv` don't unify with `Seq(a)` — accepted as design limitation
+
+### Racket Programmer Feature (plan `racket-programmer`, commit `537cb3e`)
+- `data/racket_ops.yaml` — 47 ops: 9 arithmetic, 12 list, 9 set, 6 stdio, 8 higher-order, 4 boolean, 4 string. Only `add` has full metasignature template.
+- `data/racket_facts.yaml` — 4 entities (op_add/sub/mul/div), 5 axes, 20 claims, 9 evidence, 30+ properties. `symmetric_partner` properties link +/- and */÷. Keyword maps: add/addition/plus/sum/total → add, subtract/subtraction/minus/difference/deduct → subtract, etc.
+- `src/registry.rs` [437-476] — `MetaSignature` struct (params, return_type, invariants, category, effects), `MetaParam` struct. `register_poly_with_meta()` method. `OpDef.meta: Option<MetaSignature>`. Backward compatible.
+- `src/racket_executor.rs` — `op_to_racket()` maps 47 ops to Racket s-expressions. `generate_racket_script()` produces `#!/usr/bin/env racket` + `#lang racket`. Single-step: bare `(displayln ...)`. Multi-step: `let*` bindings. 24 unit tests.
+- `src/racket_strategy.rs` — `infer_symmetric_op()` derives type signature from partner's metasig (invariants NOT transferred). `promote_inferred_ops()` upgrades stubs. `load_keyword_map()` builds NL→op mapping from fact pack. `build_racket_registry()`. 17 unit tests.
+- `src/nl/dialogue.rs` [299-338] — Arithmetic handler in `build_workflow()`: extracts numbers from step_refs, builds workflow with x/y params.
+- `src/nl/intent.rs` [407-418] — Arithmetic detection in `try_edit()`: if first token is canonical op AND rest looks like numbers, falls through to CreateWorkflow.
+- `src/workflow.rs` [581-589] — Number type inference: numeric values or x/y/a/b/n/m/left/right → `TypeExpr::prim("Number")`.
+- `src/workflow.rs` [266-281] — `raw_step_to_op_params()` public helper.
+- `src/fs_types.rs` [49-72] — `build_full_registry()` now merges racket_ops.yaml alongside fs_ops and power_tools.
+- `data/nl/nl_vocab.yaml` [662-689] — Arithmetic synonyms: add/addition/plus/sum/total, subtract/subtraction/minus, multiply, divide, add together, add up, take away.
+- `data/nl/nl_dictionary.yaml` — racket_arithmetic section with 14 words for SymSpell.
+- `data/workflows/add_numbers.yaml`, `data/workflows/subtract_numbers.yaml` — Example workflow YAMLs.
+- `src/main.rs` — `--racket` flag: `cadmus --workflow path.yaml --racket` produces Racket script.
+- `tests/racket_tests.rs` — 30 integration tests: ops loading, fact pack, keyword resolution, inference, script generation, NL E2E, full pipeline.
+- **Total: 988 tests** (74 new: 44 unit + 30 integration), all passing, zero warnings.
+
+### Type-Symmetric Inference (new feature)
+- `src/racket_strategy.rs` — `InferenceKind` enum (OpSymmetric | TypeSymmetric), `find_type_symmetric_peer()`, `infer_type_symmetric_op()`, three-phase `promote_inferred_ops()`
+- `data/racket_facts.yaml` — `type_symmetry` axis with `type_symmetry_class=binop` on all 4 arithmetic ops; category gate prevents cross-domain leakage
+- `src/registry.rs:646-649` — `get_poly()` uses `rfind` (last registration wins after promotion)
+- `tests/trace_pipeline.rs` — annotated pipeline trace for 7 arithmetic inputs, shows inference kind
+- Three-phase inference: Phase 1 op-symmetric (subtract←add), Phase 2 type-symmetric (multiply←add via class binop), Phase 3 op-symmetric replay (divide←multiply)

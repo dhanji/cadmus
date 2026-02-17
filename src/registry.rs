@@ -644,7 +644,8 @@ impl OperationRegistry {
 
     /// Get a polymorphic operation by name.
     pub fn get_poly(&self, name: &str) -> Option<&PolyOpEntry> {
-        self.poly_ops.iter().find(|op| op.name == name)
+        // Last registration wins — promotion appends updated entries
+        self.poly_ops.iter().rev().find(|op| op.name == name)
     }
 
     /// Get all registered polymorphic operation names.

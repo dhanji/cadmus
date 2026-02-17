@@ -14,6 +14,7 @@ use cadmus::racket_strategy::{
     build_racket_registry, load_racket_facts_from_str,
     load_keyword_map, resolve_keyword, infer_symmetric_op,
     promote_inferred_ops,
+    InferenceKind, infer_type_symmetric_op,
 };
 use cadmus::racket_executor::{generate_racket_script, op_to_racket};
 use cadmus::workflow::{WorkflowDef, CompiledStep, CompiledWorkflow};
@@ -101,7 +102,7 @@ fn test_racket_subtract_has_no_meta_initially() {
 fn test_racket_facts_load() {
     let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
     assert_eq!(facts.pack.entities.len(), 4);
-    assert_eq!(facts.pack.axes.len(), 5);
+    assert_eq!(facts.pack.axes.len(), 6);
     assert!(facts.pack.claims.len() >= 16);
     assert!(facts.pack.evidence.len() >= 8);
 }
@@ -512,4 +513,113 @@ fn test_full_pipeline_subtract_with_inference() {
     };
     let script = generate_racket_script(&compiled, &def).unwrap();
     assert!(script.contains("(- 6 2)"), "should produce (- 6 2), got:\n{}", script);
+}
+
+// =========================================================================
+// 8. Type-symmetric inference chain
+// =========================================================================
+
+#[test]
+fn test_full_inference_chain_all_four_ops() {
+    let mut reg = build_racket_registry();
+    let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
+
+    // Before promotion: only add has meta
+    assert!(reg.get_poly("add").unwrap().meta.is_some());
+    assert!(reg.get_poly("subtract").unwrap().meta.is_none());
+    assert!(reg.get_poly("multiply").unwrap().meta.is_none());
+    assert!(reg.get_poly("divide").unwrap().meta.is_none());
+
+    let inferred = promote_inferred_ops(&mut reg, &facts);
+
+    // After promotion: all four have meta
+    for op in &["add", "subtract", "multiply", "divide"] {
+        assert!(reg.get_poly(op).unwrap().meta.is_some(),
+            "{} should have meta after promotion", op);
+    }
+
+    // Verify inference paths
+    let sub = inferred.iter().find(|i| i.op_name == "subtract").unwrap();
+    assert_eq!(sub.inference_kind, InferenceKind::OpSymmetric);
+    assert_eq!(sub.inferred_from, "add");
+
+    let mul = inferred.iter().find(|i| i.op_name == "multiply").unwrap();
+    assert_eq!(mul.inference_kind, InferenceKind::TypeSymmetric {
+        class: "binop".to_string(),
+    });
+    assert_eq!(mul.inferred_from, "add");
+
+    let div = inferred.iter().find(|i| i.op_name == "divide").unwrap();
+    assert_eq!(div.inference_kind, InferenceKind::OpSymmetric);
+    assert_eq!(div.inferred_from, "multiply");
+
+    // Total: 3 inferred (subtract, multiply, divide)
+    assert_eq!(inferred.len(), 3, "should infer exactly 3 ops");
+}
+
+#[test]
+fn test_type_symmetric_multiply_from_add() {
+    let reg = build_racket_registry();
+    let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
+
+    let inferred = infer_type_symmetric_op("multiply", &reg, &facts).unwrap();
+    assert_eq!(inferred.op_name, "multiply");
+    assert_eq!(inferred.inferred_from, "add");
+    assert_eq!(inferred.racket_symbol, "*");
+    assert_eq!(inferred.meta.return_type, "Number");
+    assert_eq!(inferred.meta.params.len(), 2);
+    assert_eq!(inferred.meta.category.as_deref(), Some("arithmetic"));
+    assert!(inferred.meta.invariants.is_empty(),
+        "invariants must not transfer across type symmetry");
+    assert!(inferred.invariants_dropped);
+    assert_eq!(inferred.inference_kind, InferenceKind::TypeSymmetric {
+        class: "binop".to_string(),
+    });
+}
+
+#[test]
+fn test_divide_unblocked_by_type_symmetric_chain() {
+    // divide's symmetric partner is multiply, which starts as a stub.
+    // After type-symmetric inference promotes multiply, op-symmetric
+    // inference can then promote divide.
+    let mut reg = build_racket_registry();
+    let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
+
+    // Direct op-symmetric fails (multiply has no meta)
+    assert!(infer_symmetric_op("divide", &reg, &facts).is_err());
+
+    // Run full promotion
+    let inferred = promote_inferred_ops(&mut reg, &facts);
+
+    // divide should now have meta, inferred from multiply
+    let div = inferred.iter().find(|i| i.op_name == "divide").unwrap();
+    assert_eq!(div.inferred_from, "multiply");
+    assert_eq!(div.inference_kind, InferenceKind::OpSymmetric);
+    assert_eq!(div.meta.return_type, "Number");
+}
+
+#[test]
+fn test_promotion_preserves_add_invariants() {
+    let mut reg = build_racket_registry();
+    let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
+
+    let add_before = reg.get_poly("add").unwrap().meta.clone().unwrap();
+    promote_inferred_ops(&mut reg, &facts);
+    let add_after = reg.get_poly("add").unwrap().meta.clone().unwrap();
+
+    assert_eq!(add_before.invariants, add_after.invariants,
+        "add's invariants must survive promotion");
+    assert_eq!(add_before.invariants, vec!["y>0 => x+y>x"]);
+}
+
+#[test]
+fn test_modulo_not_inferred() {
+    let mut reg = build_racket_registry();
+    let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
+
+    promote_inferred_ops(&mut reg, &facts);
+
+    // modulo has no symmetric partner and no type_symmetry_class
+    assert!(reg.get_poly("modulo").unwrap().meta.is_none(),
+        "modulo should remain a stub");
 }
