@@ -42,6 +42,10 @@ pub fn build_fs_registry() -> OperationRegistry {
 /// Used by the workflow system and other contexts that need the complete
 /// set of operations. The fs_strategy uses `build_fs_registry()` alone
 /// to keep the planner search space manageable.
+/// The embedded racket ops pack YAML, used as fallback when the file
+/// is not found on disk.
+const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
+
 pub fn build_full_registry() -> OperationRegistry {
     let mut reg = if let Ok(r) = load_ops_pack("data/fs_ops.yaml") {
         r
@@ -57,6 +61,13 @@ pub fn build_full_registry() -> OperationRegistry {
         &mut reg,
     );
     // If power_tools fails to parse, we still return the fs-only registry.
+
+    // Merge racket ops
+    let _ = load_ops_pack_str_into(
+        &std::fs::read_to_string("data/racket_ops.yaml")
+            .unwrap_or_else(|_| RACKET_OPS_YAML.to_string()),
+        &mut reg,
+    );
 
     reg
 }

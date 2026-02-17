@@ -1,3 +1,4 @@
+        
 //! Dialogue state, focus stack, and DSL generation for the NL UX layer.
 //!
 //! Maintains lightweight state across conversation turns:
@@ -294,6 +295,47 @@ pub fn build_workflow(
                 params.insert("pattern".to_string(), pattern.clone());
             }
             steps.push(RawStep { op: "filter".to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
+        }
+
+        // Racket arithmetic operations
+        "add" | "subtract" | "multiply" | "divide" | "modulo" | "expt"
+        | "min" | "max" => {
+            // Extract numeric operands from slots.
+            // Numbers may appear as Keywords, StepRefs, or in patterns.
+            let mut all_numbers: Vec<String> = Vec::new();
+
+            // Check keywords for numeric values
+            for s in &slots.slots {
+                match s {
+                    SlotValue::Keyword(k) if k.parse::<f64>().is_ok() => {
+                        all_numbers.push(k.clone());
+                    }
+                    _ => {}
+                }
+            }
+
+            // Check step_refs for numeric values (the slot extractor captures
+            // small numbers as StepRef::Number)
+            for sr in &slots.step_refs {
+                if let StepRef::Number(n) = sr {
+                    all_numbers.push(n.to_string());
+                }
+            }
+
+            if all_numbers.len() >= 2 {
+                inputs.insert("x".to_string(), all_numbers[0].clone());
+                inputs.insert("y".to_string(), all_numbers[1].clone());
+            } else if all_numbers.len() == 1 {
+                inputs.insert("x".to_string(), all_numbers[0].clone());
+                inputs.insert("y".to_string(), "0".to_string());
+            }
+
+            let mut params = HashMap::new();
+            if inputs.contains_key("x") {
+                params.insert("x".to_string(), format!("${}", "x"));
+                params.insert("y".to_string(), format!("${}", "y"));
+            }
+            steps.push(RawStep { op: primary_op.to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
         }
 
         // Default: just use the op directly

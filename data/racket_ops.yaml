@@ -1,0 +1,397 @@
+# Racket Operations Pack
+# ======================
+# Domain-specific typed operations for Racket language programming.
+# Loaded at runtime by the ops pack loader — no Rust recompilation needed.
+#
+# Design:
+#   - Only `add` (+) has a full template with metasignature
+#   - Other arithmetic ops are stubs — the inference engine derives their
+#     signatures from the fact pack's symmetry relations + the + metasig
+#   - List/set and composable ops follow the same TypeExpr patterns as
+#     fs_ops.yaml (Seq, Entry, etc.)
+#   - Printing ops use a simple Value → Unit pattern
+#
+# Type vocabulary:
+#   Primitives: Number, Boolean, String, Symbol, Char, Void, Any
+#   Constructors: List(a), Pair(a, b), Set(a), Seq(a), Option(a)
+
+name: racket
+description: "Racket language operations: arithmetic, lists, sets, I/O, and higher-order combinators"
+
+ops:
+
+  # =========================================================================
+  # 1. Arithmetic
+  # =========================================================================
+  # Only + is fully defined. -, *, / are stubs — the reasoner infers their
+  # full signatures from the symmetric_pair relations in racket_facts.yaml.
+
+  - name: add
+    inputs: ["Number", "Number"]
+    output: "Number"
+    properties:
+      commutative: true
+      associative: true
+      identity: "0"
+    description: "(+ x y) — add two numbers"
+    meta:
+      params:
+        - { name: x, type: Number }
+        - { name: y, type: Number, variadic: true }
+      return_type: Number
+      invariants:
+        - "y>0 => x+y>x"
+      category: arithmetic
+      effects: none
+
+  - name: subtract
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(- x y) — subtract y from x"
+    # Stub: no meta. Inferred from add via symmetric_pair relation.
+
+  - name: multiply
+    inputs: ["Number", "Number"]
+    output: "Number"
+    properties:
+      commutative: true
+      associative: true
+      identity: "1"
+      absorbing: "0"
+    description: "(* x y) — multiply two numbers"
+    # Stub: no meta. Inferred from add's category via same_category relation.
+
+  - name: divide
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(/ x y) — divide x by y"
+    # Stub: no meta. Inferred from multiply via symmetric_pair relation.
+
+  - name: modulo
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(modulo x y) — remainder of x divided by y"
+
+  - name: expt
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(expt base exp) — raise base to exponent"
+
+  - name: abs
+    inputs: ["Number"]
+    output: "Number"
+    properties:
+      idempotent: true
+    description: "(abs x) — absolute value"
+
+  - name: min
+    inputs: ["Number", "Number"]
+    output: "Number"
+    properties:
+      commutative: true
+      associative: true
+      idempotent: true
+    description: "(min x y) — smaller of two numbers"
+
+  - name: max
+    inputs: ["Number", "Number"]
+    output: "Number"
+    properties:
+      commutative: true
+      associative: true
+      idempotent: true
+    description: "(max x y) — larger of two numbers"
+
+  # =========================================================================
+  # 2. List Operations
+  # =========================================================================
+
+  - name: cons
+    type_params: [a]
+    inputs: ["a", "List(a)"]
+    output: "List(a)"
+    description: "(cons x lst) — prepend element to list"
+
+  - name: car
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "a"
+    description: "(car lst) — first element of list"
+
+  - name: cdr
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "List(a)"
+    description: "(cdr lst) — rest of list after first element"
+
+  - name: list_new
+    type_params: [a]
+    inputs: ["a"]
+    output: "List(a)"
+    description: "(list x ...) — create a new list from elements"
+
+  - name: append
+    type_params: [a]
+    inputs: ["List(a)", "List(a)"]
+    output: "List(a)"
+    properties:
+      associative: true
+      identity: "'()"
+    description: "(append lst1 lst2) — concatenate two lists"
+
+  - name: length
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "Number"
+    properties:
+      idempotent: true
+    description: "(length lst) — number of elements"
+
+  - name: list_reverse
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "List(a)"
+    description: "(reverse lst) — reverse element order"
+
+  - name: list_ref
+    type_params: [a]
+    inputs: ["List(a)", "Number"]
+    output: "a"
+    description: "(list-ref lst idx) — element at index"
+
+  - name: member
+    type_params: [a]
+    inputs: ["a", "List(a)"]
+    output: "Option(List(a))"
+    description: "(member v lst) — sublist starting at v, or #f"
+
+  - name: remove
+    type_params: [a]
+    inputs: ["a", "List(a)"]
+    output: "List(a)"
+    description: "(remove v lst) — remove first occurrence of v"
+
+  - name: sort_list
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "List(a)"
+    properties:
+      idempotent: true
+    description: "(sort lst <) — sort list by comparator"
+
+  - name: flatten
+    type_params: [a]
+    inputs: ["List(List(a))"]
+    output: "List(a)"
+    description: "(flatten lst) — flatten nested lists"
+
+  # =========================================================================
+  # 3. Set Operations
+  # =========================================================================
+
+  - name: set_new
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "Set(a)"
+    description: "(list->set lst) — create set from list"
+
+  - name: set_add
+    type_params: [a]
+    inputs: ["Set(a)", "a"]
+    output: "Set(a)"
+    description: "(set-add s v) — add element to set"
+
+  - name: set_remove
+    type_params: [a]
+    inputs: ["Set(a)", "a"]
+    output: "Set(a)"
+    description: "(set-remove s v) — remove element from set"
+
+  - name: set_member
+    type_params: [a]
+    inputs: ["Set(a)", "a"]
+    output: "Boolean"
+    properties:
+      idempotent: true
+    description: "(set-member? s v) — test membership"
+
+  - name: set_union
+    type_params: [a]
+    inputs: ["Set(a)", "Set(a)"]
+    output: "Set(a)"
+    properties:
+      commutative: true
+      associative: true
+      idempotent: true
+    description: "(set-union s1 s2) — union of two sets"
+
+  - name: set_intersect
+    type_params: [a]
+    inputs: ["Set(a)", "Set(a)"]
+    output: "Set(a)"
+    properties:
+      commutative: true
+      associative: true
+      idempotent: true
+    description: "(set-intersect s1 s2) — intersection of two sets"
+
+  - name: set_subtract
+    type_params: [a]
+    inputs: ["Set(a)", "Set(a)"]
+    output: "Set(a)"
+    description: "(set-subtract s1 s2) — elements in s1 not in s2"
+
+  - name: set_count
+    type_params: [a]
+    inputs: ["Set(a)"]
+    output: "Number"
+    properties:
+      idempotent: true
+    description: "(set-count s) — number of elements in set"
+
+  - name: set_to_list
+    type_params: [a]
+    inputs: ["Set(a)"]
+    output: "List(a)"
+    description: "(set->list s) — convert set to list"
+
+  # =========================================================================
+  # 4. Printing and Stdio (display form)
+  # =========================================================================
+
+  - name: display
+    inputs: ["Any"]
+    output: "Void"
+    description: "(display v) — print value without newline"
+
+  - name: displayln
+    inputs: ["Any"]
+    output: "Void"
+    description: "(displayln v) — print value with newline"
+
+  - name: newline
+    output: "Void"
+    description: "(newline) — print a newline"
+
+  - name: read_line
+    output: "String"
+    description: "(read-line) — read a line from stdin"
+
+  - name: format_string
+    inputs: ["String", "Any"]
+    output: "String"
+    description: "(format fmt v ...) — format string with values"
+
+  - name: printf
+    inputs: ["String", "Any"]
+    output: "Void"
+    description: "(printf fmt v ...) — formatted print"
+
+  # =========================================================================
+  # 5. Higher-Order / Composable Operations
+  # =========================================================================
+
+  - name: racket_map
+    type_params: [a, b]
+    inputs: ["List(a)"]
+    output: "List(b)"
+    description: "(map f lst) — apply function to each element"
+
+  - name: racket_filter
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "List(a)"
+    properties:
+      idempotent: true
+    description: "(filter pred lst) — keep elements matching predicate"
+
+  - name: racket_foldl
+    type_params: [a, b]
+    inputs: ["b", "List(a)"]
+    output: "b"
+    description: "(foldl f init lst) — left fold over list"
+
+  - name: racket_foldr
+    type_params: [a, b]
+    inputs: ["b", "List(a)"]
+    output: "b"
+    description: "(foldr f init lst) — right fold over list"
+
+  - name: racket_for_each
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "Void"
+    description: "(for-each f lst) — apply side-effecting function to each element"
+
+  - name: racket_apply
+    type_params: [a, b]
+    inputs: ["List(a)"]
+    output: "b"
+    description: "(apply f lst) — apply function to list as arguments"
+
+  - name: andmap
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "Boolean"
+    description: "(andmap pred lst) — true if predicate holds for all elements"
+
+  - name: ormap
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "Boolean"
+    description: "(ormap pred lst) — true if predicate holds for any element"
+
+  # =========================================================================
+  # 6. Boolean and Comparison
+  # =========================================================================
+
+  - name: not
+    inputs: ["Boolean"]
+    output: "Boolean"
+    description: "(not v) — logical negation"
+
+  - name: equal
+    inputs: ["Any", "Any"]
+    output: "Boolean"
+    properties:
+      commutative: true
+    description: "(equal? a b) — structural equality"
+
+  - name: less_than
+    inputs: ["Number", "Number"]
+    output: "Boolean"
+    description: "(< a b) — numeric less-than"
+
+  - name: greater_than
+    inputs: ["Number", "Number"]
+    output: "Boolean"
+    description: "(> a b) — numeric greater-than"
+
+  # =========================================================================
+  # 7. String Operations
+  # =========================================================================
+
+  - name: string_append
+    inputs: ["String", "String"]
+    output: "String"
+    properties:
+      associative: true
+      identity: "\"\""
+    description: "(string-append s1 s2) — concatenate strings"
+
+  - name: string_length
+    inputs: ["String"]
+    output: "Number"
+    properties:
+      idempotent: true
+    description: "(string-length s) — length of string"
+
+  - name: number_to_string
+    inputs: ["Number"]
+    output: "String"
+    description: "(number->string n) — convert number to string"
+
+  - name: string_to_number
+    inputs: ["String"]
+    output: "Number"
+    description: "(string->number s) — parse string as number"

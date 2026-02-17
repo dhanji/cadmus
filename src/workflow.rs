@@ -1,3 +1,19 @@
+/// Extract the operation name and parameters from a RawStep.
+///
+/// Returns (op_name, params_map). For bare steps, params is empty.
+pub fn raw_step_to_op_params(step: &RawStep) -> (String, HashMap<String, String>) {
+    let op = step.op.clone();
+    let params = match &step.args {
+        StepArgs::None => HashMap::new(),
+        StepArgs::Scalar(s) => {
+            let mut m = HashMap::new();
+            m.insert("value".to_string(), s.clone());
+            m
+        }
+        StepArgs::Map(m) => m.clone(),
+    };
+    (op, params)
+}
 /// Unwrap Entry(K, V) → Some((K, V)), anything else → None.
 fn unwrap_entry(ty: &TypeExpr) -> Option<(&TypeExpr, &TypeExpr)> {
     match ty {
@@ -561,6 +577,15 @@ fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
 ///   5. Generic fallback → Bytes
 fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> {
     let name_lower = name.to_lowercase();
+
+    // 0a. Numeric values — for arithmetic ops.
+    //     If the value parses as a number, or the input name is a typical
+    //     arithmetic variable (x, y, a, b, n, m, left, right), type as Number.
+    if value.parse::<f64>().is_ok()
+        || matches!(name_lower.as_str(), "x" | "y" | "a" | "b" | "n" | "m" | "left" | "right")
+    {
+        return Ok(TypeExpr::prim("Number"));
+    }
 
     // 0. Path primitive — for ops like stat, du_size, chmod that take Path.
     //    Must be checked BEFORE file extension lookup, otherwise ~/test.txt

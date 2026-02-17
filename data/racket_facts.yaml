@@ -1,0 +1,417 @@
+# Fact Pack: Racket Arithmetic Operators
+# =======================================
+# DESIGN PRINCIPLE: Zero cross-entity contamination.
+# Every claim, evidence item, property, and uncertainty is scoped to
+# exactly ONE entity on ONE axis. The engine derives all comparisons.
+#
+# Entity groups for meaningful comparison:
+#   1. + vs - (additive pair — symmetric inverses)
+#   2. * vs / (multiplicative pair — symmetric inverses)
+#   3. All four share the "arithmetic" category axis
+#
+# Special properties:
+#   - keyword_map: natural language word → operator symbol mapping
+#   - racket_symbol: the actual Racket operator symbol
+#   - symmetric_partner: the inverse operation's entity id
+#
+# The reasoner uses symmetric_partner properties + the metasignature
+# of a known op to infer the signature of its partner.
+
+entities:
+  - id: op_add
+    name: "+"
+    description: "Addition operator — sums numeric values"
+  - id: op_subtract
+    name: "-"
+    description: "Subtraction operator — computes difference of numeric values"
+  - id: op_multiply
+    name: "*"
+    description: "Multiplication operator — computes product of numeric values"
+  - id: op_divide
+    name: "/"
+    description: "Division operator — computes quotient of numeric values"
+
+# ---------------------------------------------------------------------------
+# Axes
+# ---------------------------------------------------------------------------
+axes:
+  - id: category
+    name: "Category"
+    description: "Mathematical category of the operation"
+    polarity: capability
+    sub_axes: []
+
+  - id: type_signature
+    name: "Type Signature"
+    description: "Input and output types of the operation"
+    polarity: capability
+    sub_axes: []
+
+  - id: algebraic_properties
+    name: "Algebraic Properties"
+    description: "Commutativity, associativity, identity elements"
+    polarity: capability
+    sub_axes: []
+
+  - id: keywords
+    name: "Keywords"
+    description: "Natural language words that map to this operator"
+    polarity: capability
+    sub_axes: []
+
+  - id: symmetry
+    name: "Symmetry"
+    description: "Inverse/symmetric relationships between operators"
+    polarity: capability
+    sub_axes: []
+
+# ---------------------------------------------------------------------------
+# Claims — per-entity, per-axis assertions
+# ---------------------------------------------------------------------------
+claims:
+  # --- Category claims ---
+  - id: add_category
+    entity: op_add
+    axis: category
+    text: "Addition is a fundamental arithmetic operation"
+
+  - id: sub_category
+    entity: op_subtract
+    axis: category
+    text: "Subtraction is a fundamental arithmetic operation, inverse of addition"
+
+  - id: mul_category
+    entity: op_multiply
+    axis: category
+    text: "Multiplication is a fundamental arithmetic operation"
+
+  - id: div_category
+    entity: op_divide
+    axis: category
+    text: "Division is a fundamental arithmetic operation, inverse of multiplication"
+
+  # --- Type signature claims ---
+  - id: add_type
+    entity: op_add
+    axis: type_signature
+    text: "Takes two or more Number arguments and returns a Number"
+
+  - id: sub_type
+    entity: op_subtract
+    axis: type_signature
+    text: "Takes two Number arguments and returns a Number"
+
+  - id: mul_type
+    entity: op_multiply
+    axis: type_signature
+    text: "Takes two or more Number arguments and returns a Number"
+
+  - id: div_type
+    entity: op_divide
+    axis: type_signature
+    text: "Takes two Number arguments and returns a Number"
+
+  # --- Algebraic property claims ---
+  - id: add_algebra
+    entity: op_add
+    axis: algebraic_properties
+    text: "Addition is commutative and associative with identity element 0"
+
+  - id: sub_algebra
+    entity: op_subtract
+    axis: algebraic_properties
+    text: "Subtraction is neither commutative nor associative"
+
+  - id: mul_algebra
+    entity: op_multiply
+    axis: algebraic_properties
+    text: "Multiplication is commutative and associative with identity 1 and absorbing element 0"
+
+  - id: div_algebra
+    entity: op_divide
+    axis: algebraic_properties
+    text: "Division is neither commutative nor associative"
+
+  # --- Keyword claims ---
+  - id: add_keywords
+    entity: op_add
+    axis: keywords
+    text: "Known as: add, addition, plus, sum, total, combine"
+
+  - id: sub_keywords
+    entity: op_subtract
+    axis: keywords
+    text: "Known as: subtract, subtraction, minus, difference, take away, deduct"
+
+  - id: mul_keywords
+    entity: op_multiply
+    axis: keywords
+    text: "Known as: multiply, multiplication, times, product"
+
+  - id: div_keywords
+    entity: op_divide
+    axis: keywords
+    text: "Known as: divide, division, quotient, split"
+
+  # --- Symmetry claims ---
+  - id: add_symmetry
+    entity: op_add
+    axis: symmetry
+    text: "Addition and subtraction are symmetric inverse operations"
+
+  - id: sub_symmetry
+    entity: op_subtract
+    axis: symmetry
+    text: "Subtraction is the inverse of addition"
+
+  - id: mul_symmetry
+    entity: op_multiply
+    axis: symmetry
+    text: "Multiplication and division are symmetric inverse operations"
+
+  - id: div_symmetry
+    entity: op_divide
+    axis: symmetry
+    text: "Division is the inverse of multiplication"
+
+# ---------------------------------------------------------------------------
+# Evidence
+# ---------------------------------------------------------------------------
+evidence:
+  - id: ev_add_comm
+    supports: add_algebra
+    text: "a + b = b + a for all numbers a, b"
+    source: "Peano axioms"
+
+  - id: ev_add_assoc
+    supports: add_algebra
+    text: "(a + b) + c = a + (b + c) for all numbers a, b, c"
+    source: "Peano axioms"
+
+  - id: ev_add_identity
+    supports: add_algebra
+    text: "a + 0 = a for all numbers a"
+    source: "Peano axioms"
+
+  - id: ev_mul_comm
+    supports: mul_algebra
+    text: "a * b = b * a for all numbers a, b"
+    source: "Ring axioms"
+
+  - id: ev_mul_assoc
+    supports: mul_algebra
+    text: "(a * b) * c = a * (b * c) for all numbers a, b, c"
+    source: "Ring axioms"
+
+  - id: ev_mul_identity
+    supports: mul_algebra
+    text: "a * 1 = a for all numbers a"
+    source: "Ring axioms"
+
+  - id: ev_mul_absorb
+    supports: mul_algebra
+    text: "a * 0 = 0 for all numbers a"
+    source: "Ring axioms"
+
+  - id: ev_sub_inverse
+    supports: sub_symmetry
+    text: "a - b = a + (-b); subtraction undoes addition"
+    source: "Group theory"
+
+  - id: ev_div_inverse
+    supports: div_symmetry
+    text: "a / b = a * (1/b); division undoes multiplication"
+    source: "Field theory"
+
+# ---------------------------------------------------------------------------
+# Properties — structured key-value data for the reasoner
+# ---------------------------------------------------------------------------
+properties:
+  # --- Racket symbols ---
+  - entity: op_add
+    axis: type_signature
+    key: racket_symbol
+    value: "+"
+
+  - entity: op_subtract
+    axis: type_signature
+    key: racket_symbol
+    value: "-"
+
+  - entity: op_multiply
+    axis: type_signature
+    key: racket_symbol
+    value: "*"
+
+  - entity: op_divide
+    axis: type_signature
+    key: racket_symbol
+    value: "/"
+
+  # --- Op name mapping (entity id → ops pack name) ---
+  - entity: op_add
+    axis: type_signature
+    key: op_name
+    value: "add"
+
+  - entity: op_subtract
+    axis: type_signature
+    key: op_name
+    value: "subtract"
+
+  - entity: op_multiply
+    axis: type_signature
+    key: op_name
+    value: "multiply"
+
+  - entity: op_divide
+    axis: type_signature
+    key: op_name
+    value: "divide"
+
+  # --- Symmetric partner declarations ---
+  # The reasoner reads these to know which ops are inverse pairs.
+  - entity: op_add
+    axis: symmetry
+    key: symmetric_partner
+    value: "op_subtract"
+
+  - entity: op_subtract
+    axis: symmetry
+    key: symmetric_partner
+    value: "op_add"
+
+  - entity: op_multiply
+    axis: symmetry
+    key: symmetric_partner
+    value: "op_divide"
+
+  - entity: op_divide
+    axis: symmetry
+    key: symmetric_partner
+    value: "op_multiply"
+
+  # --- Keyword → operator mappings ---
+  # Each keyword property maps a natural language word to the entity.
+  # The reasoner/NL layer reads these to resolve "add" → op_add → "+"
+  - entity: op_add
+    axis: keywords
+    key: keyword_add
+    value: "add"
+  - entity: op_add
+    axis: keywords
+    key: keyword_addition
+    value: "addition"
+  - entity: op_add
+    axis: keywords
+    key: keyword_plus
+    value: "plus"
+  - entity: op_add
+    axis: keywords
+    key: keyword_sum
+    value: "sum"
+  - entity: op_add
+    axis: keywords
+    key: keyword_total
+    value: "total"
+  - entity: op_add
+    axis: keywords
+    key: keyword_combine
+    value: "combine"
+
+  - entity: op_subtract
+    axis: keywords
+    key: keyword_subtract
+    value: "subtract"
+  - entity: op_subtract
+    axis: keywords
+    key: keyword_subtraction
+    value: "subtraction"
+  - entity: op_subtract
+    axis: keywords
+    key: keyword_minus
+    value: "minus"
+  - entity: op_subtract
+    axis: keywords
+    key: keyword_difference
+    value: "difference"
+  - entity: op_subtract
+    axis: keywords
+    key: keyword_deduct
+    value: "deduct"
+
+  - entity: op_multiply
+    axis: keywords
+    key: keyword_multiply
+    value: "multiply"
+  - entity: op_multiply
+    axis: keywords
+    key: keyword_multiplication
+    value: "multiplication"
+  - entity: op_multiply
+    axis: keywords
+    key: keyword_times
+    value: "times"
+  - entity: op_multiply
+    axis: keywords
+    key: keyword_product
+    value: "product"
+
+  - entity: op_divide
+    axis: keywords
+    key: keyword_divide
+    value: "divide"
+  - entity: op_divide
+    axis: keywords
+    key: keyword_division
+    value: "division"
+  - entity: op_divide
+    axis: keywords
+    key: keyword_quotient
+    value: "quotient"
+
+  # --- Category ordinals (all arithmetic = same ordinal) ---
+  - entity: op_add
+    axis: category
+    key: category_name
+    value: "arithmetic"
+    ordinal: 1
+
+  - entity: op_subtract
+    axis: category
+    key: category_name
+    value: "arithmetic"
+    ordinal: 1
+
+  - entity: op_multiply
+    axis: category
+    key: category_name
+    value: "arithmetic"
+    ordinal: 1
+
+  - entity: op_divide
+    axis: category
+    key: category_name
+    value: "arithmetic"
+    ordinal: 1
+
+# ---------------------------------------------------------------------------
+# Relations
+# ---------------------------------------------------------------------------
+relations:
+  # Ordinal: all four ops share the same category ordinal (arithmetic)
+  - kind: ordinal
+    id: rel_category_ordinal
+    axis: category
+    property_key: category_name
+    direction: higher_is_more
+    note: "All four operators are in the same arithmetic category"
+
+# ---------------------------------------------------------------------------
+# Uncertainties
+# ---------------------------------------------------------------------------
+uncertainties:
+  - axis: type_signature
+    text: "Division by zero is undefined; the type signature does not capture this precondition."
+  - axis: symmetry
+    text: "Symmetric inference transfers type structure but not semantic invariants (e.g., y>0 => x+y>x does not hold for subtraction)."

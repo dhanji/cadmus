@@ -1,8 +1,63 @@
-use std::collections::HashMap;
+
+    #[test]
+    fn test_load_racket_ops_pack() {
+        let yaml = include_str!("../data/racket_ops.yaml");
+        let reg = load_ops_pack_str(yaml).unwrap();
+        let names = reg.poly_op_names();
+        assert!(names.len() >= 40, "expected at least 40 racket ops, got {}", names.len());
+
+        // Spot-check ops from each category
+        assert!(reg.get_poly("add").is_some(), "missing add");
+        assert!(reg.get_poly("subtract").is_some(), "missing subtract");
+        assert!(reg.get_poly("cons").is_some(), "missing cons");
+        assert!(reg.get_poly("set_union").is_some(), "missing set_union");
+        assert!(reg.get_poly("display").is_some(), "missing display");
+        assert!(reg.get_poly("racket_map").is_some(), "missing racket_map");
+        assert!(reg.get_poly("racket_filter").is_some(), "missing racket_filter");
+        assert!(reg.get_poly("racket_foldl").is_some(), "missing racket_foldl");
+    }
+
+    #[test]
+    fn test_racket_add_has_metasignature() {
+        let yaml = include_str!("../data/racket_ops.yaml");
+        let reg = load_ops_pack_str(yaml).unwrap();
+
+        let add = reg.get_poly("add").unwrap();
+        let meta = add.meta.as_ref().expect("add should have a metasignature");
+
+        // Check params
+        assert_eq!(meta.params.len(), 2);
+        assert_eq!(meta.params[0].name, "x");
+        assert_eq!(meta.params[0].type_name, "Number");
+        assert!(!meta.params[0].variadic);
+        assert_eq!(meta.params[1].name, "y");
+        assert_eq!(meta.params[1].type_name, "Number");
+        assert!(meta.params[1].variadic);
+
+        // Check return type
+        assert_eq!(meta.return_type, "Number");
+
+        // Check invariants
+        assert_eq!(meta.invariants.len(), 1);
+        assert_eq!(meta.invariants[0], "y>0 => x+y>x");
+
+        // Check category and effects
+        assert_eq!(meta.category.as_deref(), Some("arithmetic"));
+        assert_eq!(meta.effects.as_deref(), Some("none"));
+    }
+
+    #[test]
+    fn test_ops_without_meta_have_none() {
+        // Existing packs should load fine with meta = None
+        let yaml = include_str!("../data/fs_ops.yaml");
+        let reg = load_ops_pack_str(yaml).unwrap();
+        let list_dir = reg.get_poly("list_dir").unwrap();
+        assert!(list_dir.meta.is_none(), "list_dir should not have a metasignature");
+    }use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use crate::type_expr::{TypeExpr, Substitution, unify};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
 // TypeId — strategy-defined type vocabulary
@@ -433,6 +488,47 @@ impl fmt::Display for PolyOpSignature {
 }
 
 // ---------------------------------------------------------------------------
+// MetaSignature — rich type metadata for operations
+// ---------------------------------------------------------------------------
+
+/// A named, typed parameter in a metasignature.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaParam {
+    /// Parameter name (e.g., "x", "y")
+    pub name: String,
+    /// Type name (e.g., "Number")
+    #[serde(rename = "type")]
+    pub type_name: String,
+    /// Whether this parameter accepts variadic arguments
+    #[serde(default)]
+    pub variadic: bool,
+}
+
+/// Rich type metadata for an operation — goes beyond the basic TypeExpr
+/// signature to capture invariants, categories, and effect annotations.
+///
+/// The reasoner uses metasignatures for:
+/// - Inferring signatures of symmetric partner ops (e.g., + → -)
+/// - Validating semantic constraints beyond type structure
+/// - Categorizing operations for domain reasoning
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaSignature {
+    /// Named, typed parameters with optional variadic flag
+    pub params: Vec<MetaParam>,
+    /// Return type name
+    pub return_type: String,
+    /// Semantic invariants (e.g., "y>0 => x+y>x")
+    #[serde(default)]
+    pub invariants: Vec<String>,
+    /// Operation category (e.g., "arithmetic", "io", "list")
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Effect annotation (e.g., "none", "io", "mutation")
+    #[serde(default)]
+    pub effects: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // PolyOpEntry — a registered polymorphic operation
 // ---------------------------------------------------------------------------
 
@@ -446,6 +542,8 @@ pub struct PolyOpEntry {
     pub properties: AlgebraicProperties,
     /// Human-readable description of what command/action this op represents
     pub description: String,
+    /// Optional rich type metadata (metasignature)
+    pub meta: Option<MetaSignature>,
 }
 
 impl fmt::Debug for PolyOpEntry {
@@ -455,6 +553,7 @@ impl fmt::Debug for PolyOpEntry {
             .field("signature", &self.signature)
             .field("properties", &self.properties)
             .field("description", &self.description)
+            .field("meta", &self.meta)
             .finish()
     }
 }
@@ -490,12 +589,28 @@ impl OperationRegistry {
         properties: AlgebraicProperties,
         description: impl Into<String>,
     ) -> &mut Self {
+        self.register_poly_with_meta(name, signature, properties, description, None)
+    }
+
+    /// Register a polymorphic operation with an optional metasignature.
+    ///
+    /// The metasignature carries rich type information (named params,
+    /// invariants, category, effects) used by the inference engine.
+    pub fn register_poly_with_meta(
+        &mut self,
+        name: impl Into<String>,
+        signature: PolyOpSignature,
+        properties: AlgebraicProperties,
+        description: impl Into<String>,
+        meta: Option<MetaSignature>,
+    ) -> &mut Self {
         let name = name.into();
         self.poly_ops.push(PolyOpEntry {
             name,
             signature,
             properties,
             description: description.into(),
+            meta,
         });
         self
     }
@@ -617,6 +732,9 @@ pub struct OpDef {
     /// Human-readable description / command hint for dry-run
     #[serde(default)]
     pub description: String,
+    /// Optional rich type metadata (metasignature)
+    #[serde(default)]
+    pub meta: Option<MetaSignature>,
 }
 
 /// YAML schema for algebraic properties.
@@ -673,7 +791,7 @@ pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> 
         let sig = PolyOpSignature::new(op_def.type_params, inputs, output);
         let props: AlgebraicProperties = op_def.properties.into();
 
-        reg.register_poly(op_def.name, sig, props, op_def.description);
+        reg.register_poly_with_meta(op_def.name, sig, props, op_def.description, op_def.meta);
     }
 
     Ok(reg)
@@ -691,7 +809,7 @@ pub fn load_ops_pack_str_into(yaml: &str, reg: &mut OperationRegistry) -> Result
     // Move all poly ops from loaded into reg
     for name in loaded.poly_op_names() {
         if let Some(op) = loaded.get_poly(name) {
-            reg.register_poly(&op.name, op.signature.clone(), op.properties.clone(), &op.description);
+            reg.register_poly_with_meta(&op.name, op.signature.clone(), op.properties.clone(), &op.description, op.meta.clone());
         }
     }
     Ok(())

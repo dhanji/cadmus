@@ -23,21 +23,23 @@ fn main() {
     // --workflow <path> mode: load and execute a workflow YAML file
     if let Some(pos) = args.iter().position(|a| a == "--workflow") {
         let path = args.get(pos + 1).unwrap_or_else(|| {
-            eprintln!("Usage: cadmus --workflow <path.yaml> [--execute]");
+            eprintln!("Usage: cadmus --workflow <path.yaml> [--execute] [--racket]");
             eprintln!();
             eprintln!("Example:");
             eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml");
             eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml --execute");
+            eprintln!("  cargo run -- --workflow data/workflows/add_numbers.yaml --racket");
             process::exit(1);
         });
 
         let execute = args.iter().any(|a| a == "--execute");
-        run_workflow_mode(Path::new(path), execute);
+        let racket = args.iter().any(|a| a == "--racket");
+        run_workflow_mode(Path::new(path), execute, racket);
         return;
     }
 
-    if args.iter().any(|a| a == "--execute") {
-        eprintln!("Error: --execute requires --workflow <path.yaml>");
+    if args.iter().any(|a| a == "--execute" || a == "--racket") {
+        eprintln!("Error: --execute and --racket require --workflow <path.yaml>");
         process::exit(1);
     }
 
@@ -186,7 +188,7 @@ fn run_chat_mode() {
 }
 
 
-fn run_workflow_mode(path: &Path, execute: bool) {
+fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║              CADMUS v0.6.0                                  ║");
     println!("║    Workflow DSL + Shell Executor                            ║");
@@ -249,7 +251,26 @@ fn run_workflow_mode(path: &Path, execute: bool) {
 
     println!("{}", trace);
 
-    // Generate shell script
+    // Generate script (Racket or Shell)
+    if racket {
+        println!();
+        println!("═══ Generated Racket Script ═══");
+        println!();
+
+        let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("RACKET SCRIPT GENERATION ERROR: {}", e);
+                process::exit(1);
+            }
+        };
+
+        println!("{}", script);
+        println!("(Racket script generated — use `racket <file.rkt>` to run)");
+        return;
+    }
+
+    // Default: generate shell script
     println!();
     println!("═══ Generated Shell Script ═══");
     println!();

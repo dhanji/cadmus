@@ -1,3 +1,5 @@
+
+
 # NL Dictionary — SymSpell correction dictionary
 # ================================================
 # Frequency-weighted word list for domain-bounded typo correction.
@@ -2561,3 +2563,18 @@ more_verbs:
   yield: 20
 
 # Total entries: 2473
+
+# Racket arithmetic vocabulary
+racket_arithmetic:
+  add: 80
+  subtract: 80
+  multiply: 80
+  divide: 80
+  addition: 60
+  subtraction: 60
+  multiplication: 60
+  division: 60
+  plus: 60
+  minus: 60
+  sum: 60
+  total: 60

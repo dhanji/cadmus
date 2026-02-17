@@ -404,6 +404,18 @@ fn try_edit(tokens: &[String]) -> Option<Intent> {
     // "skip" / "remove" / "add" / etc. as first token
     for (keywords, action) in action_map {
         if keywords.contains(&first.as_str()) {
+            // If the first token is also a canonical op AND the remaining tokens
+            // look like arithmetic operands (numbers, "and", "together", "from", "by"),
+            // this is a create-workflow, not an edit.
+            if is_canonical_op(first) {
+                let rest_tokens = &tokens[start + 1..];
+                let looks_arithmetic = rest_tokens.iter().all(|t|
+                    t.parse::<f64>().is_ok() || matches!(t.as_str(), "and" | "together" | "from" | "by" | "with" | "to" | "of")
+                );
+                if looks_arithmetic && rest_tokens.iter().any(|t| t.parse::<f64>().is_ok()) {
+                    return None; // Let it fall through to try_create_workflow
+                }
+            }
             // But not if it's clearly a create-workflow (e.g., "delete files in ~/tmp")
             // Heuristic: if there's a path-like token, it might be a create-workflow
             // But if there's a step reference or "step" keyword, it's definitely an edit

@@ -1,4 +1,4 @@
-# NL Vocabulary Pack
+  # NL Vocabulary Pack
 # ==================
 # Consolidated word lists for the Natural Language UX layer.
 # Loaded at runtime — no Rust recompilation needed to extend.
@@ -659,6 +659,34 @@ synonyms:
     op: git_pull
   - phrase: [push]
     op: git_push
+  # --- Racket arithmetic ---
+  - phrase: [add, together]
+    op: add
+  - phrase: [add, up]
+    op: add
+  - phrase: [take, away]
+    op: subtract
+  - phrase: [add]
+    op: add
+  - phrase: [addition]
+    op: add
+  - phrase: [plus]
+    op: add
+  - phrase: [sum]
+    op: add
+  - phrase: [total]
+    op: add
+  - phrase: [subtract]
+    op: subtract
+  - phrase: [subtraction]
+    op: subtract
+  - phrase: [minus]
+    op: subtract
+  - phrase: [multiply]
+    op: multiply
+  - phrase: [divide]
+    op: divide
+
 
 # ---------------------------------------------------------------------------
 # Contractions: contraction → expansion
