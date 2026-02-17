@@ -1310,3 +1310,137 @@ fn test_yaml_full_pipeline_explain_op() {
         other => panic!("expected Explanation, got: {:?}", other),
     }
 }
+
+// ---------------------------------------------------------------------------
+// NL Robustness: directory aliases + noun-to-filetype patterns
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_nl_find_screenshots_on_my_desktop() {
+    // The original failing input that motivated this feature
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("Find all screenshots on my desktop", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("*.png"),
+                "should have *.png pattern for screenshots: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("walk_tree"),
+                "should have walk_tree step: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("find_matching"),
+                "should have find_matching step: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_list_videos_in_my_downloads() {
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("list videos in my downloads", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Downloads"),
+                "should have ~/Downloads path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("*.mp4") || workflow_yaml.contains("*.mov"),
+                "should have video pattern: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_find_pdfs_in_documents() {
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("find PDFs in documents", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Documents"),
+                "should have ~/Documents path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("*.pdf"),
+                "should have *.pdf pattern: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_zip_up_photos_on_my_desktop() {
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("zip up photos on my desktop", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("pack_archive"),
+                "should have pack_archive step: {}", workflow_yaml);
+            // photos → *.png pattern used as filter
+            assert!(workflow_yaml.contains("*.png") || workflow_yaml.contains("filter"),
+                "should have photo filter: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_bare_desktop_resolves_path() {
+    // "list desktop" without "my" should still resolve
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("list desktop", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_find_stuff_no_noun_pattern() {
+    // "find stuff on my desktop" — "stuff" is not a noun pattern
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("find stuff on my desktop", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", workflow_yaml);
+            // "stuff" becomes a keyword, used as *stuff* pattern in find_matching
+            assert!(workflow_yaml.contains("*stuff*"),
+                "should have *stuff* keyword pattern: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_explicit_path_with_noun() {
+    // Explicit ~/Projects path should win over any alias
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("find screenshots in ~/Projects", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Projects"),
+                "should have ~/Projects path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("*.png"),
+                "should have *.png pattern: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_find_logs_on_desktop() {
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input("find logs on my desktop", &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("*.log"),
+                "should have *.log pattern: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}

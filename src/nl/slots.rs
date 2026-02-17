@@ -211,7 +211,58 @@ pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
             continue;
         }
 
-        // 9. "named X" / "called X" — extract the name as a keyword
+        // 9. Directory alias: "my desktop" → ~/Desktop, or bare "desktop" → ~/Desktop
+        {
+            let vocab = &super::vocab::vocab();
+            let dir_aliases = &vocab.dir_aliases;
+
+            // "my <alias>" — possessive + directory name
+            if token == "my" {
+                if let Some(next) = tokens.get(i + 1) {
+                    if let Some(path) = dir_aliases.get(next.as_str()) {
+                        let path = path.clone();
+                        result.slots.push(SlotValue::Path(path.clone()));
+                        if result.target_path.is_none() {
+                            result.target_path = Some(path);
+                        }
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+
+            // Bare alias: "desktop" → ~/Desktop
+            if let Some(alias_path) = dir_aliases.get(token.as_str()) {
+                // If we already have a target path and this token is also a noun
+                // pattern, prefer the noun-pattern interpretation.
+                // e.g. "find music in ~/Downloads" → music = *.mp3, not ~/Music
+                let also_noun = vocab.noun_patterns.contains_key(token.as_str());
+                if !(also_noun && result.target_path.is_some()) {
+                    let path = alias_path.clone();
+                    result.slots.push(SlotValue::Path(path.clone()));
+                    if result.target_path.is_none() {
+                        result.target_path = Some(path);
+                    }
+                    i += 1;
+                    continue;
+                }
+            }
+        }
+
+        // 10. Noun-to-filetype pattern: "screenshots" → *.png, "photos" → *.png *.jpg etc.
+        {
+            let noun_patterns = &super::vocab::vocab().noun_patterns;
+            if let Some(patterns) = noun_patterns.get(token.as_str()) {
+                for p in patterns {
+                    result.slots.push(SlotValue::Pattern(p.clone()));
+                    result.patterns.push(p.clone());
+                }
+                i += 1;
+                continue;
+            }
+        }
+
+        // 11. "named X" / "called X" — extract the name as a keyword
         if (token == "named" || token == "called" || token == "matching") && i + 1 < tokens.len() {
             let name = tokens[i + 1].clone();
             result.slots.push(SlotValue::Keyword(name.clone()));
@@ -220,7 +271,7 @@ pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
             continue;
         }
 
-        // 10. Fuzzy op name matching
+        // 12. Fuzzy op name matching
         if let Some(op) = fuzzy_match_op(token) {
             result.slots.push(SlotValue::OpName(op.clone()));
             if result.primary_op.is_none() {
@@ -230,7 +281,7 @@ pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
             continue;
         }
 
-        // 11. Skip stopwords, keep meaningful keywords
+        // 13. Skip stopwords, keep meaningful keywords
         if !stopwords.contains(token.as_str()) && !token.is_empty() {
             result.slots.push(SlotValue::Keyword(token.clone()));
             result.keywords.push(token.clone());
@@ -698,5 +749,148 @@ mod tests {
         let slots = extract_slots(&tokens(&["search_content", "yeah", "error", "~/logs"]));
         assert!(!slots.keywords.contains(&"yeah".to_string()), "keywords: {:?}", slots.keywords);
         assert!(slots.keywords.contains(&"error".to_string()), "keywords: {:?}", slots.keywords);
+    }
+
+    // -- Directory alias resolution --
+
+    #[test]
+    fn test_my_desktop_becomes_path() {
+        let slots = extract_slots(&tokens(&["find_matching", "my", "desktop"]));
+        assert_eq!(slots.target_path, Some("~/Desktop".to_string()),
+            "target_path: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_bare_desktop_becomes_path() {
+        let slots = extract_slots(&tokens(&["find_matching", "desktop"]));
+        assert_eq!(slots.target_path, Some("~/Desktop".to_string()),
+            "target_path: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_my_downloads_becomes_path() {
+        let slots = extract_slots(&tokens(&["walk_tree", "my", "downloads"]));
+        assert_eq!(slots.target_path, Some("~/Downloads".to_string()),
+            "target_path: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_bare_downloads_becomes_path() {
+        let slots = extract_slots(&tokens(&["walk_tree", "downloads"]));
+        assert_eq!(slots.target_path, Some("~/Downloads".to_string()),
+            "target_path: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_my_documents_becomes_path() {
+        let slots = extract_slots(&tokens(&["list_dir", "my", "documents"]));
+        assert_eq!(slots.target_path, Some("~/Documents".to_string()),
+            "target_path: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_unknown_dir_not_path() {
+        let slots = extract_slots(&tokens(&["find_matching", "my", "foobar"]));
+        // "my" is a stopword, "foobar" becomes a keyword — no path
+        assert!(slots.target_path.is_none(),
+            "target_path should be None, got: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_my_without_dir_alias() {
+        // "my" followed by a non-alias word should not create a path
+        let slots = extract_slots(&tokens(&["find_matching", "my", "stuff"]));
+        assert!(slots.target_path.is_none(),
+            "target_path should be None, got: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_explicit_path_wins_over_alias() {
+        // If an explicit path is given, it should be the target_path
+        let slots = extract_slots(&tokens(&["walk_tree", "~/Projects", "desktop"]));
+        assert_eq!(slots.target_path, Some("~/Projects".to_string()),
+            "explicit path should win, got: {:?}", slots.target_path);
+    }
+
+    // -- Noun-to-filetype pattern mapping --
+
+    #[test]
+    fn test_screenshots_becomes_pattern() {
+        let slots = extract_slots(&tokens(&["find_matching", "screenshots"]));
+        assert!(slots.patterns.contains(&"*.png".to_string()),
+            "patterns: {:?}", slots.patterns);
+    }
+
+    #[test]
+    fn test_photos_becomes_multiple_patterns() {
+        let slots = extract_slots(&tokens(&["find_matching", "photos"]));
+        assert!(slots.patterns.contains(&"*.png".to_string()),
+            "patterns: {:?}", slots.patterns);
+        assert!(slots.patterns.contains(&"*.jpg".to_string()),
+            "patterns: {:?}", slots.patterns);
+    }
+
+    #[test]
+    fn test_pdfs_becomes_pattern() {
+        let slots = extract_slots(&tokens(&["find_matching", "pdfs"]));
+        assert!(slots.patterns.contains(&"*.pdf".to_string()),
+            "patterns: {:?}", slots.patterns);
+    }
+
+    #[test]
+    fn test_videos_becomes_pattern() {
+        let slots = extract_slots(&tokens(&["find_matching", "videos"]));
+        assert!(slots.patterns.contains(&"*.mp4".to_string()),
+            "patterns: {:?}", slots.patterns);
+        assert!(slots.patterns.contains(&"*.mov".to_string()),
+            "patterns: {:?}", slots.patterns);
+    }
+
+    #[test]
+    fn test_unknown_noun_not_pattern() {
+        let slots = extract_slots(&tokens(&["find_matching", "widgets"]));
+        assert!(slots.patterns.is_empty(),
+            "patterns should be empty, got: {:?}", slots.patterns);
+        assert!(slots.keywords.contains(&"widgets".to_string()),
+            "keywords: {:?}", slots.keywords);
+    }
+
+    #[test]
+    fn test_explicit_pattern_not_overridden_by_noun() {
+        // Explicit glob pattern should be present alongside noun patterns
+        let slots = extract_slots(&tokens(&["find_matching", "*.txt", "screenshots"]));
+        assert!(slots.patterns.contains(&"*.txt".to_string()),
+            "patterns: {:?}", slots.patterns);
+        assert!(slots.patterns.contains(&"*.png".to_string()),
+            "patterns: {:?}", slots.patterns);
+    }
+
+    #[test]
+    fn test_dir_alias_and_noun_pattern_together() {
+        // "find screenshots on desktop" → path ~/Desktop, pattern *.png
+        let slots = extract_slots(&tokens(&["find_matching", "screenshots", "desktop"]));
+        assert_eq!(slots.target_path, Some("~/Desktop".to_string()),
+            "target_path: {:?}", slots.target_path);
+        assert!(slots.patterns.contains(&"*.png".to_string()),
+            "patterns: {:?}", slots.patterns);
+    }
+
+    #[test]
+    fn test_music_as_dir_when_no_path() {
+        // "find music" → path ~/Music (dir alias wins when no path set)
+        let slots = extract_slots(&tokens(&["find_matching", "music"]));
+        assert_eq!(slots.target_path, Some("~/Music".to_string()),
+            "target_path: {:?}", slots.target_path);
+    }
+
+    #[test]
+    fn test_music_as_noun_when_path_exists() {
+        // When an explicit path appears BEFORE an ambiguous noun, the noun
+        // becomes a pattern instead of a dir alias.
+        let slots = extract_slots(&tokens(&["find_matching", "~/Downloads", "music"]));
+        assert_eq!(slots.target_path, Some("~/Downloads".to_string()),
+            "target_path: {:?}", slots.target_path);
+        assert!(slots.patterns.contains(&"*.mp3".to_string()),
+            "patterns: {:?}", slots.patterns);
     }
 }

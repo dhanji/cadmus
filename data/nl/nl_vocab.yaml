@@ -984,3 +984,131 @@ filler_prefixes:
   - okay
   - so
   - well
+
+# ---------------------------------------------------------------------------
+# Directory aliases: common names → filesystem paths
+# Resolved during slot extraction. Both "my X" and bare "X" forms match.
+# ---------------------------------------------------------------------------
+
+dir_aliases:
+  desktop: "~/Desktop"
+  downloads: "~/Downloads"
+  download: "~/Downloads"
+  documents: "~/Documents"
+  document: "~/Documents"
+  pictures: "~/Pictures"
+  picture: "~/Pictures"
+  music: "~/Music"
+  movies: "~/Movies"
+  movie: "~/Movies"
+  home: "~"
+  tmp: "/tmp"
+  temp: "/tmp"
+  applications: "/Applications"
+  application: "/Applications"
+
+# ---------------------------------------------------------------------------
+# Noun patterns: common nouns → file glob patterns
+# When a user says "find screenshots", we map to *.png.
+# Each noun maps to one or more glob patterns.
+# ---------------------------------------------------------------------------
+
+noun_patterns:
+  screenshots:
+    - "*.png"
+  screenshot:
+    - "*.png"
+  photos:
+    - "*.png"
+    - "*.jpg"
+    - "*.jpeg"
+    - "*.heic"
+  photo:
+    - "*.png"
+    - "*.jpg"
+    - "*.jpeg"
+    - "*.heic"
+  images:
+    - "*.png"
+    - "*.jpg"
+    - "*.jpeg"
+    - "*.gif"
+    - "*.heic"
+    - "*.webp"
+  image:
+    - "*.png"
+    - "*.jpg"
+    - "*.jpeg"
+    - "*.gif"
+    - "*.heic"
+    - "*.webp"
+  videos:
+    - "*.mp4"
+    - "*.mov"
+    - "*.avi"
+    - "*.mkv"
+  video:
+    - "*.mp4"
+    - "*.mov"
+    - "*.avi"
+    - "*.mkv"
+  movies:
+    - "*.mp4"
+    - "*.mov"
+    - "*.avi"
+    - "*.mkv"
+  music:
+    - "*.mp3"
+    - "*.m4a"
+    - "*.flac"
+    - "*.wav"
+  songs:
+    - "*.mp3"
+    - "*.m4a"
+    - "*.flac"
+  song:
+    - "*.mp3"
+    - "*.m4a"
+    - "*.flac"
+  pdfs:
+    - "*.pdf"
+  pdf:
+    - "*.pdf"
+  spreadsheets:
+    - "*.xlsx"
+    - "*.xls"
+    - "*.csv"
+  spreadsheet:
+    - "*.xlsx"
+    - "*.xls"
+    - "*.csv"
+  archives:
+    - "*.zip"
+    - "*.tar.gz"
+    - "*.tgz"
+    - "*.rar"
+    - "*.7z"
+  archive:
+    - "*.zip"
+    - "*.tar.gz"
+    - "*.tgz"
+    - "*.rar"
+    - "*.7z"
+  logs:
+    - "*.log"
+  log:
+    - "*.log"
+  configs:
+    - "*.yaml"
+    - "*.yml"
+    - "*.json"
+    - "*.toml"
+    - "*.ini"
+    - "*.conf"
+  config:
+    - "*.yaml"
+    - "*.yml"
+    - "*.json"
+    - "*.toml"
+    - "*.ini"
+    - "*.conf"

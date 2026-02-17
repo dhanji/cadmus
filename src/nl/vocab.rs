@@ -30,6 +30,10 @@ struct VocabYaml {
     stopwords: Vec<String>,
     filler_phrases: Vec<String>,
     filler_prefixes: Vec<String>,
+    #[serde(default)]
+    dir_aliases: HashMap<String, String>,
+    #[serde(default)]
+    noun_patterns: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,6 +75,10 @@ pub struct NlVocab {
     pub filler_phrases: Vec<String>,
     /// Filler prefixes (edit-command prefixes like "also", "and", "then").
     pub filler_prefixes: HashSet<String>,
+    /// Directory aliases: common names → filesystem paths (e.g. "desktop" → "~/Desktop").
+    pub dir_aliases: HashMap<String, String>,
+    /// Noun-to-filetype patterns: common nouns → glob patterns (e.g. "screenshots" → ["*.png"]).
+    pub noun_patterns: HashMap<String, Vec<String>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +132,8 @@ fn parse_vocab(yaml_str: &str) -> Result<NlVocab, String> {
     let stopwords: HashSet<String> = raw.stopwords.into_iter().collect();
     let filler_phrases = raw.filler_phrases;
     let filler_prefixes: HashSet<String> = raw.filler_prefixes.into_iter().collect();
+    let dir_aliases = raw.dir_aliases;
+    let noun_patterns = raw.noun_patterns;
 
     Ok(NlVocab {
         synonyms,
@@ -136,6 +146,8 @@ fn parse_vocab(yaml_str: &str) -> Result<NlVocab, String> {
         stopwords,
         filler_phrases,
         filler_prefixes,
+        dir_aliases,
+        noun_patterns,
     })
 }
 
@@ -305,5 +317,24 @@ mod tests {
     fn test_parse_malformed_yaml_returns_error() {
         let result = parse_vocab("not: valid: yaml: [[[");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dir_aliases_loaded() {
+        let v = vocab();
+        assert!(!v.dir_aliases.is_empty(), "dir_aliases should not be empty");
+        assert_eq!(v.dir_aliases.get("desktop"), Some(&"~/Desktop".to_string()));
+        assert_eq!(v.dir_aliases.get("downloads"), Some(&"~/Downloads".to_string()));
+        assert_eq!(v.dir_aliases.get("documents"), Some(&"~/Documents".to_string()));
+    }
+
+    #[test]
+    fn test_noun_patterns_loaded() {
+        let v = vocab();
+        assert!(!v.noun_patterns.is_empty(), "noun_patterns should not be empty");
+        assert_eq!(v.noun_patterns.get("screenshots"), Some(&vec!["*.png".to_string()]));
+        let photos = v.noun_patterns.get("photos").expect("photos should exist");
+        assert!(photos.contains(&"*.png".to_string()));
+        assert!(photos.contains(&"*.jpg".to_string()));
     }
 }
