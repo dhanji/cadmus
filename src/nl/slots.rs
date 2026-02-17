@@ -299,6 +299,12 @@ pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
 
 /// Check if a token looks like a filesystem path.
 fn is_path(token: &str) -> bool {
+    // Quoted literal: tokens with spaces can only come from user-quoted strings
+    // like "NO NAME" or 'my folder' — treat as a path/name literal.
+    if token.contains(' ') {
+        return true;
+    }
+
     // Absolute or home-relative paths
     if token.starts_with("~/")
         || token.starts_with('/')
@@ -892,5 +898,16 @@ mod tests {
             "target_path: {:?}", slots.target_path);
         assert!(slots.patterns.contains(&"*.mp3".to_string()),
             "patterns: {:?}", slots.patterns);
+    }
+
+    // -- Quoted string as path --
+
+    #[test]
+    fn test_quoted_string_becomes_path() {
+        // A token with spaces (from quoted input) should be treated as a path
+        let toks = vec!["list_dir".to_string(), "NO NAME".to_string()];
+        let slots = extract_slots(&toks);
+        assert_eq!(slots.target_path, Some("NO NAME".to_string()),
+            "quoted string should become target_path: {:?}", slots.target_path);
     }
 }

@@ -104,7 +104,11 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
 
     // 3. Re-normalize the corrected tokens to apply synonym mapping
     //    We join with spaces, preserving path tokens that have original case
-    let corrected_input = corrected_tokens.join(" ");
+    //    Re-quote tokens that contain spaces (they came from quoted input)
+    let corrected_input = corrected_tokens.iter()
+        .map(|t| if t.contains(' ') { format!("\"{}\"", t) } else { t.clone() })
+        .collect::<Vec<_>>()
+        .join(" ");
     let normalized = normalize::normalize(&corrected_input);
 
     // 4. Parse intent from the fully normalized+corrected tokens

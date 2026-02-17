@@ -1444,3 +1444,35 @@ fn test_nl_find_logs_on_desktop() {
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
 }
+
+// -- Quoted string handling --
+
+#[test]
+fn test_nl_quoted_path_no_name() {
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input(r#"list all the files in "NO NAME""#, &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("NO NAME"),
+                "should have 'NO NAME' as path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("list_dir"),
+                "should have list_dir step: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_nl_quoted_path_with_find() {
+    let mut state = cadmus::nl::dialogue::DialogueState::new();
+    let r = cadmus::nl::process_input(r#"find PDFs in "My Backup Drive""#, &mut state);
+    match r {
+        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("My Backup Drive"),
+                "should have 'My Backup Drive' as path: {}", workflow_yaml);
+            assert!(workflow_yaml.contains("*.pdf"),
+                "should have *.pdf pattern: {}", workflow_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}

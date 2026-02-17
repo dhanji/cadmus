@@ -53,18 +53,53 @@ pub fn normalize(input: &str) -> NormalizedInput {
 /// Tokenize input: lowercase, strip punctuation, expand contractions,
 /// canonicalize ordinals.
 fn tokenize(input: &str) -> Vec<String> {
-    // We need to preserve original case for paths, so we work with
-    // the original input for path detection, then lowercase the rest.
+    // Pre-pass: extract quoted strings as literal tokens (preserving case
+    // and spaces). "NO NAME" or 'my folder' become single tokens.
+    // Everything outside quotes goes through normal tokenization.
+    let mut result = Vec::new();
+    let mut segment = String::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '"' {
+            // Tokenize the accumulated unquoted segment
+            if !segment.is_empty() {
+                result.extend(tokenize_segment(&segment));
+                segment.clear();
+            }
+            // Collect until matching close quote
+            let mut quoted = String::new();
+            for qc in chars.by_ref() {
+                if qc == c {
+                    break;
+                }
+                quoted.push(qc);
+            }
+            // Emit the quoted content as a single literal token
+            if !quoted.is_empty() {
+                result.push(quoted);
+            }
+        } else {
+            segment.push(c);
+        }
+    }
+    // Tokenize any remaining unquoted text
+    if !segment.is_empty() {
+        result.extend(tokenize_segment(&segment));
+    }
+
+    result
+}
+
+/// Tokenize a segment of input that contains no quoted strings.
+/// Lowercases, strips punctuation, expands contractions, canonicalizes ordinals.
+fn tokenize_segment(input: &str) -> Vec<String> {
     let lower = input.to_lowercase();
     let expanded = expand_contractions(&lower);
 
-    // Build a map from lowercased words to their original-case equivalents
-    // for path-like tokens. We split both original and lowered in parallel.
     let orig_words: Vec<&str> = input.split_whitespace().collect();
 
     let mut tokens = Vec::new();
-    // The expanded form may have more words than original (contractions expand),
-    // so we track position in the original separately.
     let mut orig_idx = 0;
     for word in expanded.split_whitespace() {
         let stripped = strip_punctuation(word);
@@ -72,7 +107,6 @@ fn tokenize(input: &str) -> Vec<String> {
             continue;
         }
 
-        // Check if this is a path-like token — if so, use original case
         let is_path = stripped.starts_with("~/")
             || stripped.starts_with('/')
             || stripped.starts_with('$')
@@ -80,7 +114,6 @@ fn tokenize(input: &str) -> Vec<String> {
             || stripped.contains("://");
 
         if is_path {
-            // Find the corresponding original token
             let orig = find_original_path(&orig_words, &mut orig_idx, &stripped);
             tokens.push(orig);
         } else if let Some(num) = canonicalize_ordinal(&stripped) {
@@ -519,5 +552,44 @@ mod tests {
         let result = normalize("commit the files");
         assert!(result.canonical_tokens.contains(&"git_commit".to_string()),
             "should contain git_commit: {:?}", result.canonical_tokens);
+    }
+
+    // -- Quoted string handling --
+
+    #[test]
+    fn test_quoted_string_preserved_as_single_token() {
+        let result = normalize(r#"list files in "NO NAME""#);
+        assert!(result.tokens.contains(&"NO NAME".to_string()),
+            "quoted string should be a single token: {:?}", result.tokens);
+    }
+
+    #[test]
+    fn test_quoted_string_with_spaces() {
+        let result = normalize(r#"find "my important folder""#);
+        assert!(result.tokens.contains(&"my important folder".to_string()),
+            "quoted string should preserve spaces: {:?}", result.tokens);
+    }
+
+    #[test]
+    fn test_quoted_string_preserves_case() {
+        let result = normalize(r#"list "My Documents""#);
+        assert!(result.tokens.contains(&"My Documents".to_string()),
+            "quoted string should preserve case: {:?}", result.tokens);
+    }
+
+    #[test]
+    fn test_no_quotes_normal_tokenization() {
+        // Without quotes, normal tokenization applies
+        let result = normalize("list all the files");
+        assert_eq!(result.tokens, vec!["list", "all", "the", "files"]);
+    }
+
+    #[test]
+    fn test_contractions_still_work_with_quotes() {
+        // Contractions with apostrophes should still expand
+        let result = normalize(r#"don't walk "NO NAME""#);
+        assert!(result.tokens.contains(&"do".to_string()), "tokens: {:?}", result.tokens);
+        assert!(result.tokens.contains(&"not".to_string()), "tokens: {:?}", result.tokens);
+        assert!(result.tokens.contains(&"NO NAME".to_string()), "tokens: {:?}", result.tokens);
     }
 }
