@@ -45,6 +45,7 @@ pub fn build_fs_registry() -> OperationRegistry {
 /// The embedded racket ops pack YAML, used as fallback when the file
 /// is not found on disk.
 const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
 
 pub fn build_full_registry() -> OperationRegistry {
     let mut reg = if let Ok(r) = load_ops_pack("data/fs_ops.yaml") {
@@ -68,6 +69,15 @@ pub fn build_full_registry() -> OperationRegistry {
             .unwrap_or_else(|_| RACKET_OPS_YAML.to_string()),
         &mut reg,
     );
+
+    // Run inference to discover and promote ops from the fact pack
+    // (e.g., subtract, multiply, divide are discovered from racket_facts.yaml)
+    if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(
+        &std::fs::read_to_string("data/racket_facts.yaml")
+            .unwrap_or_else(|_| RACKET_FACTS_YAML.to_string()),
+    ) {
+        crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);
+    }
 
     reg
 }

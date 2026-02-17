@@ -8,7 +8,7 @@
 
         // Spot-check ops from each category
         assert!(reg.get_poly("add").is_some(), "missing add");
-        assert!(reg.get_poly("subtract").is_some(), "missing subtract");
+        // subtract, multiply, divide are discovered from fact pack, not in ops pack
         assert!(reg.get_poly("cons").is_some(), "missing cons");
         assert!(reg.get_poly("set_union").is_some(), "missing set_union");
         assert!(reg.get_poly("display").is_some(), "missing display");

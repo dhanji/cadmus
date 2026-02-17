@@ -4,9 +4,10 @@
 # Loaded at runtime by the ops pack loader — no Rust recompilation needed.
 #
 # Design:
-#   - Only `add` (+) has a full template with metasignature
-#   - Other arithmetic ops are stubs — the inference engine derives their
-#     signatures from the fact pack's symmetry relations + the + metasig
+#   - Only `add` (+) is listed here with a full metasignature
+#   - subtract, multiply, divide are NOT listed — the inference engine
+#     discovers them from the fact pack (phase 0) and derives their
+#     signatures via symmetry/type-symmetry relations from add's metasig
 #   - List/set and composable ops follow the same TypeExpr patterns as
 #     fs_ops.yaml (Seq, Entry, etc.)
 #   - Printing ops use a simple Value → Unit pattern
@@ -48,28 +49,8 @@ ops:
       category: arithmetic
       effects: none
 
-  - name: subtract
-    inputs: ["Number", "Number"]
-    output: "Number"
-    description: "(- x y) — subtract y from x"
-    # Stub: no meta. Inferred from add via symmetric_pair relation.
-
-  - name: multiply
-    inputs: ["Number", "Number"]
-    output: "Number"
-    properties:
-      commutative: true
-      associative: true
-      identity: "1"
-      absorbing: "0"
-    description: "(* x y) — multiply two numbers"
-    # Stub: no meta. Inferred from add's category via same_category relation.
-
-  - name: divide
-    inputs: ["Number", "Number"]
-    output: "Number"
-    description: "(/ x y) — divide x by y"
-    # Stub: no meta. Inferred from multiply via symmetric_pair relation.
+  # subtract, multiply, divide are NOT listed here — they are discovered
+  # from the fact pack by the inference engine (phase 0: discovery).
 
   - name: modulo
     racket_symbol: "modulo"
