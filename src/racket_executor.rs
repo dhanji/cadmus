@@ -816,4 +816,40 @@ mod tests {
         let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
         assert_eq!(expr.expr, "(string-downcase \"HELLO\")");
     }
+
+    #[test]
+    fn test_file_read_executor() {
+        let reg = make_registry();
+        let step = make_step("file_read", vec![("value", "data.txt")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(file->string \"data.txt\")");
+    }
+
+    #[test]
+    fn test_file_read_lines_executor() {
+        let reg = make_registry();
+        let step = make_step("file_read_lines", vec![("value", "data.txt")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(file->lines \"data.txt\")");
+    }
+
+    #[test]
+    fn test_file_write_executor() {
+        let reg = make_registry();
+        let step = make_step("file_write", vec![("x", "hello world"), ("y", "output.txt")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(display-to-file \"hello world\" \"output.txt\")");
+    }
+
+    #[test]
+    fn test_file_exists_executor() {
+        let reg = make_registry();
+        let step = make_step("file_exists", vec![("value", "data.txt")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        assert_eq!(expr.expr, "(file-exists? \"data.txt\")");
+    }
 }

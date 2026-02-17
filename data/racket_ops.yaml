@@ -314,6 +314,40 @@ ops:
     description: "(printf fmt v ...) — formatted print"
 
   # =========================================================================
+  # 4b. File I/O
+  # =========================================================================
+
+  - name: file_read
+    racket_symbol: "file->string"
+    inputs: ["String"]
+    output: "String"
+    description: "(file->string path) — read entire file as string"
+
+  - name: file_read_lines
+    racket_symbol: "file->lines"
+    inputs: ["String"]
+    output: "List(String)"
+    description: "(file->lines path) — read file as list of lines"
+
+  - name: file_write
+    racket_symbol: "display-to-file"
+    inputs: ["String", "String"]
+    output: "Void"
+    description: "(display-to-file content path) — write string to file"
+
+  - name: file_exists
+    racket_symbol: "file-exists?"
+    inputs: ["String"]
+    output: "Boolean"
+    description: "(file-exists? path) — check if file exists"
+
+  - name: file_delete
+    racket_symbol: "delete-file"
+    inputs: ["String"]
+    output: "Void"
+    description: "(delete-file path) — delete a file"
+
+  # =========================================================================
   # 5. Higher-Order / Composable Operations
   # =========================================================================
 

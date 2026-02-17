@@ -392,4 +392,134 @@ fn generate_complex_programs() {
             &script,
         );
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FILE I/O PROGRAMS
+    // ════════════════════════════════════════════════════════════════════
+
+    // ── Program 17: Read a file and count its length ──
+    {
+        let steps = vec![
+            make_step(0, "file_read", vec![("value", "input.txt")]),
+            make_step(1, "string_length", vec![]),
+        ];
+        let (compiled, def) = make_workflow(
+            "File size in chars",
+            vec![("path", "input.txt")],
+            steps,
+        );
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
+        print_program(
+            "Program 17: Read File → String Length",
+            "How many characters are in input.txt?",
+            "Reads entire file as string, then measures length.",
+            &script,
+        );
+    }
+
+    // ── Program 18: Read file, uppercase it, write to new file ──
+    {
+        let steps = vec![
+            make_step(0, "file_read", vec![("value", "input.txt")]),
+            make_step(1, "string_upcase", vec![]),
+            make_step(2, "file_write", vec![("y", "output.txt")]),
+        ];
+        let (compiled, def) = make_workflow(
+            "Uppercase file contents",
+            vec![("src", "input.txt"), ("dst", "output.txt")],
+            steps,
+        );
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
+        print_program(
+            "Program 18: Read → Upcase → Write",
+            "Read input.txt, convert to uppercase, save as output.txt",
+            "file_read → string_upcase (ANCHOR) → file_write.\n                Full file transformation pipeline.",
+            &script,
+        );
+    }
+
+    // ── Program 19: Read file as lines, count lines ──
+    {
+        let steps = vec![
+            make_step(0, "file_read_lines", vec![("value", "data.csv")]),
+            make_step(1, "length", vec![]),
+        ];
+        let (compiled, def) = make_workflow(
+            "Count lines in file",
+            vec![("path", "data.csv")],
+            steps,
+        );
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
+        print_program(
+            "Program 19: Read Lines → Count",
+            "How many lines are in data.csv?",
+            "Reads file as list of lines, then counts with length.",
+            &script,
+        );
+    }
+
+    // ── Program 20: Read lines, filter, count ──
+    {
+        let steps = vec![
+            make_step(0, "file_read_lines", vec![("value", "log.txt")]),
+            make_step(1, "racket_filter", vec![("predicate", "(lambda (line) (string-contains? line \"ERROR\"))")]),
+            make_step(2, "length", vec![]),
+        ];
+        let (compiled, def) = make_workflow(
+            "Count error lines",
+            vec![("path", "log.txt")],
+            steps,
+        );
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
+        print_program(
+            "Program 20: Read Log → Filter ERRORs → Count",
+            "How many ERROR lines are in log.txt?",
+            "Reads file as lines, filters for ERROR, counts matches.\n                Combines file I/O with higher-order ops.",
+            &script,
+        );
+    }
+
+    // ── Program 21: Read file, transform, write — full ETL ──
+    {
+        let steps = vec![
+            make_step(0, "file_read_lines", vec![("value", "names.txt")]),
+            make_step(1, "racket_map", vec![("function", "string-upcase")]),
+            make_step(2, "racket_foldl", vec![("function", "(lambda (line acc) (string-append acc line \"\\n\"))"), ("init", "\"\"")]),
+            make_step(3, "file_write", vec![("y", "names_upper.txt")]),
+        ];
+        let (compiled, def) = make_workflow(
+            "Uppercase all names",
+            vec![("src", "names.txt"), ("dst", "names_upper.txt")],
+            steps,
+        );
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
+        print_program(
+            "Program 21: File ETL — Read Lines → Map Upcase → Fold → Write",
+            "Read names.txt, uppercase every line, save to names_upper.txt",
+            "Full ETL pipeline: file→lines → map string-upcase →\n                fold into single string → write to file.\n                4 steps across file I/O + higher-order + string domains.",
+            &script,
+        );
+    }
+
+    // ── Program 22: Check file exists, read, get length ──
+    {
+        let steps = vec![
+            make_step(0, "file_read", vec![("value", "config.yaml")]),
+            make_step(1, "string_length", vec![]),
+            make_step(2, "number_to_string", vec![]),
+            make_step(3, "string_append", vec![("x", "Config size: ")]),
+        ];
+        let (compiled, def) = make_workflow(
+            "Report config size",
+            vec![("path", "config.yaml")],
+            steps,
+        );
+        let script = generate_racket_script(&compiled, &def, &reg).unwrap();
+        print_program(
+            "Program 22: Read Config → Measure → Format Message",
+            "How big is config.yaml? Format as 'Config size: N'",
+            "file_read → string_length → number_to_string → string_append.\n                File I/O → string → arithmetic → string. Four domains!",
+            &script,
+        );
+    }
 }
