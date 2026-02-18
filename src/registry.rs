@@ -48,9 +48,9 @@
 
     #[test]
     fn test_ops_without_meta_have_none() {
-        // Legacy ops registered programmatically should have meta = None
-        let mut reg = OperationRegistry::new();
-        crate::type_lowering::register_fs_legacy_ops(&mut reg);
+        // Existing packs should load fine with meta = None
+        let yaml = include_str!("../data/compat/fs_ops.yaml");
+        let reg = load_ops_pack_str(yaml).unwrap();
         let list_dir = reg.get_poly("list_dir").unwrap();
         assert!(list_dir.meta.is_none(), "list_dir should not have a metasignature");
     }use std::collections::HashMap;
@@ -1365,9 +1365,8 @@ ops:
 
     #[test]
     fn test_load_power_tools_ops_pack() {
-        // Power tools ops registered programmatically
-        let mut reg = OperationRegistry::new();
-        crate::type_lowering::register_power_tools_legacy_ops(&mut reg);
+        let yaml = include_str!("../data/compat/power_tools_ops.yaml");
+        let reg = load_ops_pack_str(yaml).unwrap();
         let names = reg.poly_op_names();
         assert!(names.len() >= 55, "expected at least 55 ops, got {}", names.len());
 

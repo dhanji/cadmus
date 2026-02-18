@@ -1,4 +1,4 @@
-use crate::registry::{OperationRegistry, load_ops_pack_str_into};
+use crate::registry::{OperationRegistry, load_ops_pack_str, load_ops_pack_str_into};
 
 // ---------------------------------------------------------------------------
 // Filesystem type vocabulary
@@ -10,6 +10,19 @@ use crate::registry::{OperationRegistry, load_ops_pack_str_into};
 //               Option(inner)
 // Format tags:  Zip, Cbz, Tar, TarGz
 
+/// The embedded filesystem ops pack YAML.
+///
+/// Phase 3 migration: the on-disk `data/fs_ops.yaml` file has been deleted.
+/// These ops are now registered as compatibility aliases — the actual
+/// execution is routed through the shell-callable subsumption map in
+/// `src/type_lowering.rs`. The YAML is kept embedded so that old op names
+/// (list_dir, walk_tree, etc.) remain resolvable by the workflow compiler
+/// and NL layer.
+const FS_OPS_YAML: &str = include_str!("../data/compat/fs_ops.yaml");
+
+/// The embedded power tools ops pack YAML (compatibility aliases).
+const POWER_TOOLS_OPS_YAML: &str = include_str!("../data/compat/power_tools_ops.yaml");
+
 // ---------------------------------------------------------------------------
 // Registry builders
 // ---------------------------------------------------------------------------
@@ -17,13 +30,12 @@ use crate::registry::{OperationRegistry, load_ops_pack_str_into};
 /// Build and return an OperationRegistry populated with the filesystem
 /// type vocabulary from the ops pack YAML.
 ///
-/// Registers all 49 legacy filesystem ops programmatically (formerly
-/// loaded from fs_ops.yaml). These ops serve as compatibility aliases —
-/// execution is routed through the subsumption map.
+/// Uses the embedded copy of fs_ops.yaml (the on-disk file has been deleted
+/// as part of the Phase 3 shell migration). These ops serve as compatibility
+/// aliases — execution is routed through the subsumption map.
 pub fn build_fs_registry() -> OperationRegistry {
-    let mut reg = OperationRegistry::new();
-    crate::type_lowering::register_fs_legacy_ops(&mut reg);
-    reg
+    load_ops_pack_str(FS_OPS_YAML)
+        .expect("embedded fs_ops.yaml should always parse")
 }
 
 /// Build a full registry with both filesystem and power tools ops.
@@ -31,6 +43,8 @@ pub fn build_fs_registry() -> OperationRegistry {
 /// Used by the workflow system and other contexts that need the complete
 /// set of operations. Loads embedded compatibility aliases from the old
 /// YAML packs, then runs inference to discover shell-callable forms.
+/// The embedded racket ops pack YAML, used as fallback when the file
+/// is not found on disk.
 const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
 const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
 
@@ -38,12 +52,12 @@ const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
 const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/macos_cli_facts.yaml");
 
 pub fn build_full_registry() -> OperationRegistry {
-    // Start with legacy fs_ops (programmatic registration)
-    let mut reg = OperationRegistry::new();
-    crate::type_lowering::register_fs_legacy_ops(&mut reg);
+    // Start with embedded fs_ops (compatibility aliases)
+    let mut reg = load_ops_pack_str(FS_OPS_YAML)
+        .expect("embedded fs_ops.yaml should always parse");
 
-    // Merge legacy power tools ops (programmatic registration)
-    crate::type_lowering::register_power_tools_legacy_ops(&mut reg);
+    // Merge embedded power tools ops (compatibility aliases)
+    let _ = load_ops_pack_str_into(POWER_TOOLS_OPS_YAML, &mut reg);
 
     // Merge racket ops
     let _ = load_ops_pack_str_into(

@@ -2,29 +2,23 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use cadmus::fact_pack;
-use cadmus::registry::OperationRegistry;
+use cadmus::registry::{load_ops_pack_str, load_ops_pack_str_into};
 use cadmus::type_expr::TypeExpr;
-use cadmus::type_lowering;
 
 // ===========================================================================
 // Power Tools Integration Tests
 // ===========================================================================
 
-fn build_power_tools_reg() -> OperationRegistry {
-    let mut reg = OperationRegistry::new();
-    type_lowering::register_power_tools_legacy_ops(&mut reg);
-    reg
-}
+const POWER_TOOLS_OPS: &str = include_str!("../data/compat/power_tools_ops.yaml");
+const FS_OPS: &str = include_str!("../data/compat/fs_ops.yaml");
 
-fn build_fs_reg() -> OperationRegistry {
-    let mut reg = OperationRegistry::new();
-    type_lowering::register_fs_legacy_ops(&mut reg);
-    reg
-}
+// ---------------------------------------------------------------------------
+// 1. Ops Pack Tests
+// ---------------------------------------------------------------------------
 
 #[test]
 fn test_power_tools_ops_load_count() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
     let names = reg.poly_op_names();
     assert!(
         names.len() >= 55,
@@ -35,7 +29,7 @@ fn test_power_tools_ops_load_count() {
 
 #[test]
 fn test_power_tools_ops_all_categories_present() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
 
     // Git
     assert!(reg.get_poly("git_init").is_some());
@@ -80,7 +74,7 @@ fn test_power_tools_ops_all_categories_present() {
 
 #[test]
 fn test_power_tools_ops_git_commit_signature() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
     let op = reg.get_poly("git_commit").unwrap();
 
     // git_commit: Repo, StagingArea, Message → Commit
@@ -90,7 +84,7 @@ fn test_power_tools_ops_git_commit_signature() {
 
 #[test]
 fn test_power_tools_ops_git_merge_3_inputs() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
     let op = reg.get_poly("git_merge").unwrap();
 
     // git_merge: Repo, Branch, MergeStrategy → MergeResult
@@ -100,7 +94,7 @@ fn test_power_tools_ops_git_merge_3_inputs() {
 
 #[test]
 fn test_power_tools_ops_leaf_ops_no_inputs() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
 
     // ps_list, df_usage, uname_info, uptime_info have no inputs
     for name in &["ps_list", "df_usage", "uname_info", "uptime_info"] {
@@ -116,7 +110,7 @@ fn test_power_tools_ops_leaf_ops_no_inputs() {
 
 #[test]
 fn test_power_tools_ops_polymorphic_ops() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
 
     // tee_split: a, Path → a (polymorphic)
     let tee = reg.get_poly("tee_split").unwrap();
@@ -142,7 +136,7 @@ fn test_power_tools_ops_polymorphic_ops() {
 
 #[test]
 fn test_power_tools_ops_nonexistent_returns_none() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
     assert!(reg.get_poly("nonexistent_op").is_none());
     assert!(reg.get_poly("docker_run").is_none());
     assert!(reg.get_poly("cargo_build").is_none());
@@ -150,8 +144,8 @@ fn test_power_tools_ops_nonexistent_returns_none() {
 
 #[test]
 fn test_power_tools_ops_no_collisions_with_fs_ops() {
-    let pt_reg = build_power_tools_reg();
-    let fs_reg = build_fs_reg();
+    let pt_reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
+    let fs_reg = load_ops_pack_str(FS_OPS).unwrap();
 
     let pt_names: HashSet<&str> = pt_reg.poly_op_names().into_iter().collect();
     let fs_names: HashSet<&str> = fs_reg.poly_op_names().into_iter().collect();
@@ -166,9 +160,8 @@ fn test_power_tools_ops_no_collisions_with_fs_ops() {
 
 #[test]
 fn test_power_tools_ops_merged_registry() {
-    let mut reg = OperationRegistry::new();
-    type_lowering::register_fs_legacy_ops(&mut reg);
-    type_lowering::register_power_tools_legacy_ops(&mut reg);
+    let mut reg = load_ops_pack_str(FS_OPS).unwrap();
+    load_ops_pack_str_into(POWER_TOOLS_OPS, &mut reg).unwrap();
 
     // Should have ops from both packs
     assert!(reg.get_poly("list_dir").is_some(), "missing fs op list_dir");
@@ -178,7 +171,7 @@ fn test_power_tools_ops_merged_registry() {
 
 #[test]
 fn test_power_tools_ops_unification_lookup() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
 
     // Looking for ops that produce Seq(Commit)
     let target = TypeExpr::seq(TypeExpr::prim("Commit"));
@@ -193,7 +186,7 @@ fn test_power_tools_ops_unification_lookup() {
 
 #[test]
 fn test_power_tools_ops_unification_no_match() {
-    let reg = build_power_tools_reg();
+    let reg = load_ops_pack_str(POWER_TOOLS_OPS).unwrap();
 
     // Looking for ops that produce a type not in the pack.
     // Note: polymorphic ops like tee_split (a → a) match any type,

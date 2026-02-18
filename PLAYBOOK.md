@@ -23,18 +23,18 @@ Current packs and their coverage:
 
 | Pack | Ops | Domain |
 |------|-----|--------|
-| `src/type_lowering.rs` (fs) | 49 | Filesystem: ls, cat, mv, find, grep, sort, zip, tar, chmod, curl, rsync, macOS tools |
-| `src/type_lowering.rs` (pt) | 64 | Dev tools: git, tmux, screen, jq, yq, awk, sed, ps, ssh, gzip, base64 |
+| `data/compat/fs_ops.yaml` | 49 | Filesystem: ls, cat, mv, find, grep, sort, zip, tar, chmod, curl, rsync, macOS tools |
+| `data/compat/power_tools_ops.yaml` | 64 | Dev tools: git, tmux, screen, jq, yq, awk, sed, ps, ssh, gzip, base64 |
 | `comparison_ops.yaml` | 6 | Reasoning: retrieve_evidence, compare_claims, summarize |
 | `coding_ops.yaml` | 6 | Code analysis: parse_source, detect_smells, generate_tests |
 
 ### Step 2: Check for overlaps
 
 ```bash
-# Verify no name collisions between fs_ops and power_tools legacy ops
-# (Legacy ops are now registered programmatically in src/type_lowering.rs
-#  via register_fs_legacy_ops() and register_power_tools_legacy_ops())
-cargo test test_power_tools_ops_no_collisions_with_fs_ops
+# Find op name collisions between two packs
+comm -12 \
+  <(grep "^  - name:" data/compat/fs_ops.yaml | sed 's/.*name: //' | sort) \
+  <(grep "^  - name:" data/compat/power_tools_ops.yaml | sed 's/.*name: //' | sort)
 ```
 
 If there are collisions, decide:
@@ -698,7 +698,7 @@ developer power tools (git, tmux, jq, awk, etc.).
 
 Before writing any YAML, we audited existing packs:
 
-**Already covered by `src/type_lowering.rs`:**
+**Already covered by `data/compat/fs_ops.yaml`:**
 - File I/O (ls, cat, mv, find, cp, rm, mkdir)
 - Basic text processing (sed s///, head, tail, sort, grep, diff)
 - Archives (zip, tar, extract, pack)
@@ -719,7 +719,7 @@ Before writing any YAML, we audited existing packs:
 - `grep` → fs_ops has `search_content` and `filter`. Power tools doesn't duplicate
 - `sort` → fs_ops has `sort_by`. Power tools doesn't duplicate
 
-### 6b. Ops pack (`src/type_lowering.rs`)
+### 6b. Ops pack (`data/compat/power_tools_ops.yaml`)
 
 64 ops across 7 categories. Key design decisions:
 - **Git ops** use domain types: `Repo`, `Commit`, `Branch`, `StagingArea`, `Diff`
@@ -999,7 +999,7 @@ The file type dictionary is the **single source of truth** for:
 | `category` | yes | string | One of: `image`, `video`, `audio`, `document`, `archive`, `source_code`, `data`, `config`, `markup`, `database`, `font`, `executable`, `disk_image`, `ebook` |
 | `description` | yes | string | Human-readable description |
 | `type_expr` | yes | string | TypeExpr string (parsed via `TypeExpr::parse`). See Section 1 Step 3 for grammar. |
-| `relevant_ops` | no | list | Op names from `src/type_lowering.rs` / `src/type_lowering.rs` |
+| `relevant_ops` | no | list | Op names from `data/compat/fs_ops.yaml` / `data/compat/power_tools_ops.yaml` |
 | `tools` | no | list | External CLI tools (not engine ops) |
 
 ### Step 3: Choose the right `type_expr`
@@ -1030,7 +1030,7 @@ the parser accepts it immediately. No Rust changes needed.
 
 ### Step 4: Map relevant ops
 
-Check which ops from `src/type_lowering.rs` and `src/type_lowering.rs`
+Check which ops from `data/compat/fs_ops.yaml` and `data/compat/power_tools_ops.yaml`
 make sense for your file type:
 
 ```bash
@@ -1059,9 +1059,10 @@ Common op mappings:
 python3 -c "
 import yaml
 all_ops = set()
-# Legacy ops are now registered programmatically in src/type_lowering.rs.
-# Use `cargo test test_power_tools_ops_merged_registry` to verify all ops
-# are registered. The op names can be extracted from the test output.
+for f in ['data/compat/fs_ops.yaml', 'data/compat/power_tools_ops.yaml']:
+    with open(f) as fh:
+        for op in yaml.safe_load(fh)['ops']:
+            all_ops.add(op['name'])
 with open('data/filetypes.yaml') as f:
     data = yaml.safe_load(f)
 bad = [(e['ext'], op) for e in data['filetypes'] for op in e.get('relevant_ops', []) if op not in all_ops]
@@ -1185,9 +1186,9 @@ my_domain_words:
 
 ### Adding a New Op (Automatic NL Recognition)
 
-When you add a new op (either in `src/type_lowering.rs` for legacy ops
-or in `data/racket_ops.yaml` for shell/Racket ops), it is **automatically**
-recognized by the NL layer:
+When you add a new op to any ops YAML pack (`data/compat/fs_ops.yaml`,
+`data/compat/power_tools_ops.yaml`, etc.), it is **automatically** recognized by
+the NL layer:
 
 1. `is_canonical_op()` derives its set from the registry at load time
 2. `get_op_explanation()` reads the `description` field from the ops YAML
@@ -1197,12 +1198,12 @@ No separate registration step needed. Just add the op to the YAML pack.
 
 ### Op Descriptions (Display Names)
 
-Op descriptions are embedded in the programmatic registration functions in `src/type_lowering.rs`:
+Op descriptions live in the ops YAML packs themselves (not in a separate file):
 
-```rust
-// In src/type_lowering.rs — register_fs_legacy_ops():
-reg.register_poly("walk_tree", ...,
-    "find — recursively walk directory tree (flattened)");
+```yaml
+# In data/compat/fs_ops.yaml:
+- name: walk_tree
+  description: "find — recursively walk directory tree (flattened)"
 ```
 
 The NL layer uses these descriptions for:
@@ -1214,7 +1215,7 @@ The NL layer uses these descriptions for:
 - **Vocab YAML**: `data/nl/nl_vocab.yaml` (synonyms, contractions, ordinals, approvals, rejections, stopwords)
 - **Dictionary YAML**: `data/nl/nl_dictionary.yaml` (~2473 frequency-weighted words)
 - **Rust loader**: `src/nl/vocab.rs` (thin serde loader, `OnceLock` singleton)
-- **Op descriptions**: `src/type_lowering.rs` (description strings in `register_fs_legacy_ops()` and `register_power_tools_legacy_ops()`)
+- **Op descriptions**: `data/compat/fs_ops.yaml`, `data/compat/power_tools_ops.yaml` (description field on each op)
 - **Consumers**: `src/nl/normalize.rs` (synonyms, contractions, ordinals), `src/nl/intent.rs` (approvals, rejections), `src/nl/slots.rs` (stopwords), `src/nl/typo.rs` (dictionary), `src/nl/mod.rs` (op explanations), `src/nl/dialogue.rs` (display names)
 
 ---
@@ -1406,8 +1407,8 @@ power_tools_ops).
 
 ### Relationship to Existing Ops
 
-Shell-callable forms **coexist** with the legacy ops registered in `src/type_lowering.rs`.
-There are zero name collisions (e.g. `shell_ls` vs `list_dir`). See
+Shell-callable forms **coexist** with `data/compat/fs_ops.yaml` and `data/compat/power_tools_ops.yaml`.
+There are zero name collisions (`shell_ls` vs `list_dir`). See
 [SUBSUMPTION.md](SUBSUMPTION.md) for the full mapping and migration roadmap.
 
 **10 of 49 fs_ops** and **4 of 64 power_tools_ops** are subsumed today.
