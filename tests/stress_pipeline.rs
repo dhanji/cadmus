@@ -1461,12 +1461,12 @@ fn stress_subsumption_nonexistent_returns_none() {
 }
 
 #[test]
-fn stress_residual_not_for_racket_native() {
-    // filter is a racket-native op, not a residual
-    assert!(!type_lowering::is_residual_fs_op("filter"),
-        "filter should not be a residual fs op");
-    assert!(!type_lowering::is_residual_fs_op("add"),
-        "add should not be a residual fs op");
+fn stress_racket_native_not_subsumed() {
+    // filter is a racket-native op, not subsumed by a shell op
+    assert!(!type_lowering::is_subsumed("filter"),
+        "filter should not be subsumed");
+    assert!(!type_lowering::is_subsumed("add"),
+        "add should not be subsumed");
 }
 
 // --- Boundary: dual-behavior ops, no duplicates ---
@@ -1507,7 +1507,7 @@ fn stress_subsumption_all_shell_ops_nonempty() {
 
 #[test]
 fn stress_has_lowering_covers_all_paths() {
-    // has_lowering should return true for subsumed, racket-native, dual, and residual ops
+    // has_lowering should return true for subsumed, racket-native, and dual ops
     let entries = type_lowering::all_subsumptions();
     for entry in entries {
         assert!(type_lowering::has_lowering(entry.fs_op),

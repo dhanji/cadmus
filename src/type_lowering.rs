@@ -380,43 +380,6 @@ pub fn has_lowering(op: &str) -> bool {
     is_subsumed(op)
         || lookup_racket_native(op).is_some()
         || lookup_dual_behavior(op).is_some()
-        || is_residual_fs_op(op)
-}
-
-// ---------------------------------------------------------------------------
-// Residual fs_ops — world-touching ops not yet in the CLI fact pack
-// ---------------------------------------------------------------------------
-//
-// These ops can be expressed as shell commands but don't have formal
-// shell-callable ops in the registry yet. They use direct shell command
-// strings rather than routing through the shell-op infrastructure.
-
-/// A residual fs_op that maps directly to a shell command string.
-#[derive(Debug, Clone)]
-pub struct ResidualFsOp {
-    /// The fs_ops.yaml operation name
-    pub fs_op: &'static str,
-    /// The shell command template (e.g., "stat", "open", "shasum -a 256")
-    pub shell_cmd: &'static str,
-    /// Whether this is an exec (no output capture) vs lines (capture output)
-    pub is_exec: bool,
-    /// Human-readable note
-    pub note: &'static str,
-}
-
-/// Phase 3 migration complete: all residual ops are now fully subsumed.
-/// This array is kept empty for backward compatibility with any code that
-/// checks `is_residual_fs_op()`.
-const RESIDUAL_FS_OPS: &[ResidualFsOp] = &[];
-
-/// Check if an op is a residual fs_op (world-touching, not yet in CLI fact pack).
-pub fn is_residual_fs_op(op: &str) -> bool {
-    RESIDUAL_FS_OPS.iter().any(|e| e.fs_op == op)
-}
-
-/// Look up a residual fs_op.
-pub fn lookup_residual(fs_op: &str) -> Option<&'static ResidualFsOp> {
-    RESIDUAL_FS_OPS.iter().find(|e| e.fs_op == fs_op)
 }
 
 // ---------------------------------------------------------------------------

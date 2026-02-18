@@ -32,7 +32,7 @@ fn first_value_param(params: &HashMap<String, String>) -> Option<&str> {
 // match arms.
 
 use std::collections::HashMap;
-use std::fmt;
+
 
 use crate::registry::OperationRegistry;
 use crate::workflow::{CompiledWorkflow, CompiledStep, WorkflowDef};
@@ -99,13 +99,12 @@ fn extract_shell_meta(op: &str, registry: &OperationRegistry) -> Option<(String,
     base_command.map(|cmd| (cmd, flags))
 }
 
-/// Check if any step in a compiled workflow uses a shell op, subsumed fs_op,
-/// or residual fs_op (all of which need the shell preamble).
+/// Check if any step in a compiled workflow uses a shell op or subsumed fs_op
+/// (all of which need the shell preamble).
 fn has_shell_ops(compiled: &CompiledWorkflow, registry: &OperationRegistry) -> bool {
     compiled.steps.iter().any(|s| {
         is_shell_op(&s.op, registry)
             || crate::type_lowering::is_subsumed(&s.op)
-            || crate::type_lowering::is_residual_fs_op(&s.op)
     })
 }
 
@@ -372,43 +371,14 @@ fn fs_path_operand(prev: Option<&str>, inputs: &HashMap<String, String>) -> Stri
 }
 
 
-/// Convert a glob pattern to a grep-compatible regex (for Racket filter).
-fn glob_to_grep(pattern: &str) -> String {
-    if pattern.starts_with("*.") {
-        let ext = &pattern[1..]; // ".ext"
-        format!("{}$", ext.replace('.', "\\."))
-    } else if pattern.starts_with('.') {
-        format!("{}$", pattern.replace('.', "\\."))
-    } else {
-        pattern.to_string()
-    }
-}
-
+use crate::shell_helpers::glob_to_grep;
 
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
-pub enum RacketError {
-    /// Op is not recognized / has no Racket mapping
-    UnknownOp(String),
-    /// A required parameter is missing
-    MissingParam { op: String, param: String },
-}
-
-impl fmt::Display for RacketError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RacketError::UnknownOp(op) =>
-                write!(f, "unknown op '{}': no Racket expression mapping", op),
-            RacketError::MissingParam { op, param } =>
-                write!(f, "op '{}' requires param '{}' but it was not provided", op, param),
-        }
-    }
-}
-
-impl std::error::Error for RacketError {}
+/// Backward-compatible alias for the shared codegen error type.
+pub type RacketError = crate::shell_helpers::CodegenError;
 
 // ---------------------------------------------------------------------------
 // RacketExpr — one step's Racket expression
@@ -567,47 +537,6 @@ pub fn op_to_racket(
     // -----------------------------------------------------------------------
     if let Some(native) = crate::type_lowering::lookup_racket_native(op) {
         return racket_native_op_to_racket(step, &native.kind, input_values, prev_binding);
-    }
-
-    // -----------------------------------------------------------------------
-    // Residual fs_ops: world-touching ops not yet in the CLI fact pack.
-    // These use direct shell command strings.
-    // -----------------------------------------------------------------------
-    if let Some(residual) = crate::type_lowering::lookup_residual(op) {
-        let helper = if residual.is_exec { "shell-exec" } else { "shell-lines" };
-
-        // Seq→String bridge: when the previous step produced a list and this
-        // residual op expects a string path, we need to bridge the types.
-        if prev_is_seq && prev_binding.is_some() {
-            let prev = prev_binding.unwrap();
-            if residual.is_exec {
-                // Exec ops (pack_archive, copy, delete, etc.): pass all files
-                // at once using string-join. E.g.:
-                //   (shell-exec (string-append "tar cf archive.tar " (string-join step_1 " ")))
-                let expr = format!(
-                    "({} (string-append \"{} \" (string-join (map shell-quote {}) \" \")))",
-                    helper, residual.shell_cmd, prev
-                );
-                return Ok(RacketExpr { expr, uses_prev: true });
-            } else {
-                // Lines ops (diff, stat, etc.): iterate over each file and
-                // collect output. E.g.:
-                //   (append-map (lambda (f) (shell-lines (string-append "stat " (shell-quote f)))) step_1)
-                let expr = format!(
-                    "(append-map (lambda (_f) ({} (string-append \"{} \" (shell-quote _f)))) {})",
-                    helper, residual.shell_cmd, prev
-                );
-                return Ok(RacketExpr { expr, uses_prev: true });
-            }
-        }
-
-        // Normal path: prev is a scalar string or no prev at all
-        let path = fs_path_operand(prev_binding, input_values);
-        let expr = format!(
-            "({} (string-append \"{} \" (shell-quote {})))",
-            helper, residual.shell_cmd, path
-        );
-        return Ok(RacketExpr { expr, uses_prev: prev_binding.is_some() });
     }
 
     // -----------------------------------------------------------------------
@@ -1399,7 +1328,7 @@ mod tests {
     // --- Seq→String bridge tests ---
 
     #[test]
-    fn test_residual_bridge_pack_archive_with_seq_prev() {
+    fn test_subsumed_bridge_pack_archive_with_seq_prev() {
         let reg = make_full_registry();
         let step = CompiledStep {
             index: 1,
@@ -1421,7 +1350,7 @@ mod tests {
     }
 
     #[test]
-    fn test_residual_no_bridge_stat_single_step() {
+    fn test_subsumed_stat_single_step() {
         let reg = make_full_registry();
         let step = CompiledStep {
             index: 0,

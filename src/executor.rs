@@ -1,5 +1,32 @@
 // ---------------------------------------------------------------------------
+/// Choose the effective source: previous step's output file if in a pipeline,
+/// otherwise the workflow's input path.
+fn source<'a>(prev_file: Option<&'a str>, input_path: &'a str) -> &'a str {
+    prev_file.unwrap_or(input_path)
+}
+
+impl ShellCommand {
+    /// A command that writes to stdout (the most common pattern).
+    fn stdout(command: String) -> Self {
+        ShellCommand { command, reads_stdin: false, writes_stdout: true }
+    }
+    /// A command that reads from stdin and writes to stdout.
+    fn pipe(command: String) -> Self {
+        ShellCommand { command, reads_stdin: true, writes_stdout: true }
+    }
+    /// A command that produces no captured output (side-effect only).
+    fn exec(command: String) -> Self {
+        ShellCommand { command, reads_stdin: false, writes_stdout: false }
+    }
+}
 // Shell Executor
+/// Require a parameter from the step's params map, returning MissingParam error if absent.
+fn require_param<'a>(params: &'a std::collections::HashMap<String, String>, op: &str, key: &str) -> Result<&'a str, ExecutorError> {
+    params.get(key)
+        .map(|s| s.as_str())
+        .ok_or_else(|| ExecutorError::MissingParam { op: op.to_string(), param: key.to_string() })
+}
+
 // ---------------------------------------------------------------------------
 //
 // Converts a CompiledWorkflow into a runnable shell script.
@@ -14,39 +41,17 @@
 //   - Default: generate and print the script (dry-run)
 //   - --execute flag or second confirmation: actually run it
 
-use std::fmt;
-
 use crate::type_expr::TypeExpr;
+use crate::shell_helpers::{glob_to_grep, sed_escape, primary_input, CodegenError};
+pub use crate::shell_helpers::shell_quote;
 use crate::workflow::{CompiledWorkflow, CompiledStep, WorkflowDef};
 
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
-pub enum ExecutorError {
-    /// Op is not recognized / has no shell mapping
-    UnknownOp(String),
-    /// A required parameter is missing
-    MissingParam { op: String, param: String },
-    /// Script execution failed
-    ExecFailed { exit_code: Option<i32>, stderr: String },
-}
-
-impl fmt::Display for ExecutorError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ExecutorError::UnknownOp(op) =>
-                write!(f, "unknown op '{}': no shell command mapping", op),
-            ExecutorError::MissingParam { op, param } =>
-                write!(f, "op '{}' requires param '{}' but it was not provided", op, param),
-            ExecutorError::ExecFailed { exit_code, stderr } =>
-                write!(f, "script failed (exit {:?}): {}", exit_code, stderr),
-        }
-    }
-}
-
-impl std::error::Error for ExecutorError {}
+/// Backward-compatible alias for the shared codegen error type.
+pub type ExecutorError = CodegenError;
 
 // ---------------------------------------------------------------------------
 // ShellCommand — one step's shell command
@@ -105,35 +110,14 @@ fn format_name(ty: &TypeExpr) -> Option<&str> {
 // Shell quoting
 // ---------------------------------------------------------------------------
 
-/// Quote a string for safe use in a shell command.
-/// Uses single quotes, escaping any embedded single quotes.
-/// If the string contains `$` (shell variable), wraps in double quotes
-/// to allow variable expansion.
-pub fn shell_quote(s: &str) -> String {
-    if s.is_empty() {
-        return "''".to_string();
-    }
-    // Shell variable references need double quotes for expansion.
-    // SECURITY: only allow safe chars after $WORK_DIR to prevent injection
-    // via $(cmd) or `cmd` embedded after the variable reference.
-    if s.starts_with("$WORK_DIR") && s[9..].chars().all(|c| c.is_ascii_alphanumeric()
-        || c == '/' || c == '.' || c == '-' || c == '_')
-    {
-        return format!("\"{}\"", s);
-    }
-    // If the string is "safe" (only ASCII safe chars), return as-is.
-    // Use is_ascii_alphanumeric() to avoid treating unicode as safe.
-    if s.chars().all(|c| c.is_ascii_alphanumeric() || c == '/' || c == '.' || c == '-' || c == '_' || c == '~') {
-        return s.to_string();
-    }
-    // Otherwise, wrap in single quotes, escaping embedded single quotes
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
-
 // ---------------------------------------------------------------------------
 // Op → Shell Command mapping
 // ---------------------------------------------------------------------------
 
+/// Convert a compiled step into a shell command.
+///
+/// Arguments:
+///   - `step`: the compiled step (op name, params, types)
 /// Convert a compiled step into a shell command.
 ///
 /// Arguments:
@@ -149,116 +133,90 @@ pub fn op_to_command(
 ) -> Result<ShellCommand, ExecutorError> {
     let op = step.op.as_str();
     let params = &step.params;
+    let src = source(prev_file, input_path);
 
+    if let Some(r) = cmd_directory_file_io(op, params, input_path, prev_file, step) { return r; }
+    if let Some(r) = cmd_filter_sort(op, params, prev_file) { return r; }
+    if let Some(r) = cmd_archive(op, params, prev_file, input_path, step) { return r; }
+    if let Some(r) = cmd_search(op, params, input_path, prev_file) { return r; }
+    if let Some(r) = cmd_file_lifecycle(op, params, input_path, prev_file) { return r; }
+    if let Some(r) = cmd_content_transform(op, params, prev_file, src) { return r; }
+    if let Some(r) = cmd_metadata(op, input_path) { return r; }
+    if let Some(r) = cmd_macos(op, params, input_path, prev_file, src) { return r; }
+    if let Some(r) = cmd_network(op, params, input_path) { return r; }
+    if let Some(r) = cmd_git(op, params, input_path) { return r; }
+    if let Some(r) = cmd_terminal_mux(op, params, input_path) { return r; }
+    if let Some(r) = cmd_structured_data(op, params, prev_file, input_path, src) { return r; }
+    if let Some(r) = cmd_text_processing(op, params, input_path, prev_file, src) { return r; }
+    if let Some(r) = cmd_process_system(op, params, input_path) { return r; }
+    if let Some(r) = cmd_networking(op, params, input_path) { return r; }
+    if let Some(r) = cmd_compression_crypto(op, params, prev_file, src) { return r; }
+
+    Err(ExecutorError::UnknownOp(op.to_string()))
+}
+
+// ---------------------------------------------------------------------------
+// Category: Directory & File I/O
+// ---------------------------------------------------------------------------
+
+fn cmd_directory_file_io(
+    op: &str, _params: &std::collections::HashMap<String, String>,
+    input_path: &str, prev_file: Option<&str>, step: &CompiledStep,
+) -> Option<Result<ShellCommand, ExecutorError>> {
     match op {
-        // --- Directory & File I/O ---
-        "list_dir" => Ok(ShellCommand {
-            command: format!("ls {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "read_file" => {
-            if let Some(pf) = prev_file {
-                // In a pipeline: cat each file listed in prev output
-                Ok(ShellCommand {
-                    command: format!("cat {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("cat {}", shell_quote(input_path)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            }
-        }
-
+        "list_dir" => Some(Ok(ShellCommand::stdout(format!("ls {}", shell_quote(input_path))))),
+        "read_file" => Some(Ok(ShellCommand::stdout(
+            format!("cat {}", shell_quote(source(prev_file, input_path)))))),
         "write_file" => {
-            let dest = params.get("path")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "path".to_string()
-                })?;
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("cp {} {}", shell_quote(pf), shell_quote(dest)),
-                    reads_stdin: false,
-                    writes_stdout: false,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("cp {} {}", shell_quote(input_path), shell_quote(dest)),
-                    reads_stdin: false,
-                    writes_stdout: false,
-                })
-            }
+            let dest = match require_param(&step.params, op, "path") {
+                Ok(d) => d,
+                Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::exec(
+                format!("cp {} {}", shell_quote(source(prev_file, input_path)), shell_quote(dest)))))
         }
-
-        "stat" => Ok(ShellCommand {
-            command: format!("stat {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "walk_tree" => Ok(ShellCommand {
-            command: format!("find {} -type f", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "walk_tree_hierarchy" => Ok(ShellCommand {
-            command: format!("find {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "flatten_tree" => {
-            // Already flat in shell (find output is flat lines)
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("cat {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "cat".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
+        "stat" => Some(Ok(ShellCommand::stdout(format!("stat {}", shell_quote(input_path))))),
+        "walk_tree" => Some(Ok(ShellCommand::stdout(format!("find {} -type f", shell_quote(input_path))))),
+        "walk_tree_hierarchy" => Some(Ok(ShellCommand::stdout(format!("find {}", shell_quote(input_path))))),
+        "flatten_tree" | "concat_seq" | "map_entries" => {
+            // Pass-through: already flat in shell
+            Some(Ok(match prev_file {
+                Some(pf) => ShellCommand::stdout(format!("cat {}", shell_quote(pf))),
+                None => ShellCommand::pipe("cat".to_string()),
+            }))
         }
+        _ => None,
+    }
+}
 
-        // --- Filtering & Sorting ---
+// ---------------------------------------------------------------------------
+// Category: Filtering & Sorting
+// ---------------------------------------------------------------------------
+
+fn cmd_filter_sort(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    prev_file: Option<&str>,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
         "filter" => {
-            // Check for exclude (inverted filter from skip edits) first,
-            // then pattern/extension for normal filters.
             let exclude = params.get("exclude");
-            let pattern = exclude.or_else(|| params.get("pattern"))
+            let pattern = match exclude.or_else(|| params.get("pattern"))
                 .or_else(|| params.get("extension"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+            {
+                Some(p) => p,
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "pattern".to_string()
-                })?;
-            // Convert glob-like pattern to grep regex
+                })),
+            };
             let grep_pattern = glob_to_grep(pattern);
-            // Use grep -v for exclude (inverted match)
             let grep_flag = if exclude.is_some() { " -v" } else { "" };
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("grep{} {} {}", grep_flag, shell_quote(&grep_pattern), shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("grep{} {}", grep_flag, shell_quote(&grep_pattern)),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
+            Some(Ok(match prev_file {
+                Some(pf) => ShellCommand::stdout(
+                    format!("grep{} {} {}", grep_flag, shell_quote(&grep_pattern), shell_quote(pf))),
+                None => ShellCommand::pipe(
+                    format!("grep{} {}", grep_flag, shell_quote(&grep_pattern))),
+            }))
         }
-
         "sort_by" => {
             let flag = match params.get("field").map(|s| s.as_str())
                 .or_else(|| params.get("mode").map(|s| s.as_str()))
@@ -267,26 +225,27 @@ pub fn op_to_command(
                 Some("date") | Some("time") | Some("mtime") => " -t",
                 Some("name") | Some(_) | None => "",
             };
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("sort{} {}", flag, shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("sort{}", flag),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
+            Some(Ok(match prev_file {
+                Some(pf) => ShellCommand::stdout(format!("sort{} {}", flag, shell_quote(pf))),
+                None => ShellCommand::pipe(format!("sort{}", flag)),
+            }))
         }
+        _ => None,
+    }
+}
 
-        // --- Archive Operations ---
+// ---------------------------------------------------------------------------
+// Category: Archive Operations
+// ---------------------------------------------------------------------------
+
+fn cmd_archive(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    prev_file: Option<&str>, input_path: &str, step: &CompiledStep,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
         "extract_archive" => {
-            let fmt = extract_archive_format(&step.input_type)
-                .unwrap_or("Zip"); // default to zip
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
+            let fmt = extract_archive_format(&step.input_type).unwrap_or("Zip");
+            let src = source(prev_file, input_path);
             let cmd = match fmt {
                 "Zip" | "Cbz" | "Cbr" | "Jar" | "Epub" =>
                     format!("unzip -o {} -d \"$WORK_DIR/extracted\"", shell_quote(src)),
@@ -311,24 +270,14 @@ pub fn op_to_command(
                 _ =>
                     format!("unzip -o {} -d \"$WORK_DIR/extracted\"", shell_quote(src)),
             };
-            Ok(ShellCommand {
-                // mkdir + extract + list
-                command: format!(
-                    "mkdir -p \"$WORK_DIR/extracted\" && {} && find \"$WORK_DIR/extracted\" -type f",
-                    cmd
-                ),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            Some(Ok(ShellCommand::stdout(format!(
+                "mkdir -p \"$WORK_DIR/extracted\" && {} && find \"$WORK_DIR/extracted\" -type f", cmd
+            ))))
         }
-
         "pack_archive" => {
-            let fmt = extract_archive_format(&step.output_type)
-                .unwrap_or("Zip");
-            let output_name = params.get("output")
-                .map(|s| s.as_str())
-                .unwrap_or("archive");
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
+            let fmt = extract_archive_format(&step.output_type).unwrap_or("Zip");
+            let output_name = params.get("output").map(|s| s.as_str()).unwrap_or("archive");
+            let src = source(prev_file, input_path);
             let cmd = match fmt {
                 "Zip" | "Cbz" =>
                     format!("cat {} | while IFS= read -r f; do zip -g {} \"$f\"; done",
@@ -344,1177 +293,607 @@ pub fn op_to_command(
                 _ =>
                     format!("tar czf {} -T {}", shell_quote(output_name), shell_quote(src)),
             };
-            Ok(ShellCommand {
-                command: cmd,
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            Some(Ok(ShellCommand::exec(cmd)))
         }
+        _ => None,
+    }
+}
 
-        // --- Sequence Operations ---
-        "concat_seq" => {
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("cat {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "cat".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
-        }
+// ---------------------------------------------------------------------------
+// Category: Search
+// ---------------------------------------------------------------------------
 
-        // --- Entry Operations ---
-        "rename" => {
-            let new_name = params.get("name")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "name".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("mv {} {}", shell_quote(input_path), shell_quote(new_name)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
-        }
-
-        "move_entry" => {
-            let dest = params.get("path").or_else(|| params.get("dest"))
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "path".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("mv {} {}", shell_quote(input_path), shell_quote(dest)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
-        }
-
-        // --- Search ---
+fn cmd_search(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str, prev_file: Option<&str>,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
         "search_content" => {
-            let pattern = params.get("pattern")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "pattern".to_string()
-                })?;
+            let pattern = match require_param(params, op, "pattern") {
+                Ok(p) => p,
+                Err(e) => return Some(Err(e)),
+            };
             let case_flag = match params.get("mode").map(|s| s.as_str()) {
                 Some("case-insensitive") | Some("ci") => "-i ",
                 _ => "",
             };
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("grep -rn {}{} {}", case_flag, shell_quote(pattern), shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("grep -rn {}{} {}", case_flag, shell_quote(pattern), shell_quote(input_path)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            }
+            let target = source(prev_file, input_path);
+            Some(Ok(ShellCommand::stdout(
+                format!("grep -rn {}{} {}", case_flag, shell_quote(pattern), shell_quote(target)))))
         }
-
         "find_matching" => {
-            let pattern = params.get("pattern")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "pattern".to_string()
-                })?;
-            let grep_pattern = glob_to_grep(pattern);
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("grep {} {}", shell_quote(&grep_pattern), shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("find {} -name {}", shell_quote(input_path), shell_quote(pattern)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            }
+            let pattern = match require_param(params, op, "pattern") {
+                Ok(p) => p,
+                Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(match prev_file {
+                Some(pf) => ShellCommand::stdout(
+                    format!("grep {} {}", shell_quote(&glob_to_grep(pattern)), shell_quote(pf))),
+                None => ShellCommand::stdout(
+                    format!("find {} -name {}", shell_quote(input_path), shell_quote(pattern))),
+            }))
         }
+        _ => None,
+    }
+}
 
-        "map_entries" => {
-            // Generic map — in shell, this is a pass-through or xargs
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("cat {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "cat".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
+// ---------------------------------------------------------------------------
+// Category: File Lifecycle
+// ---------------------------------------------------------------------------
+
+fn cmd_file_lifecycle(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str, prev_file: Option<&str>,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
+        "rename" => {
+            let name = match require_param(params, op, "name") {
+                Ok(n) => n, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::exec(format!("mv {} {}", shell_quote(input_path), shell_quote(name)))))
         }
-
-        // --- File Lifecycle ---
-        "copy" => {
-            let dest = params.get("path").or_else(|| params.get("dest"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+        "move_entry" => {
+            let dest = match params.get("path").or_else(|| params.get("dest")) {
+                Some(d) => d.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "path".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cp {} {}", shell_quote(input_path), shell_quote(dest)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+                })),
+            };
+            Some(Ok(ShellCommand::exec(format!("mv {} {}", shell_quote(input_path), shell_quote(dest)))))
         }
-
-        "delete" => {
-            if let Some(pf) = prev_file {
-                // Delete files listed in prev output
-                Ok(ShellCommand {
-                    command: format!("xargs rm -f < {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: false,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("rm -rf {}", shell_quote(input_path)),
-                    reads_stdin: false,
-                    writes_stdout: false,
-                })
-            }
+        "copy" => {
+            let dest = match params.get("path").or_else(|| params.get("dest")) {
+                Some(d) => d.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
+                    op: op.to_string(), param: "path".to_string()
+                })),
+            };
+            Some(Ok(ShellCommand::exec(format!("cp {} {}", shell_quote(input_path), shell_quote(dest)))))
         }
-
-        "create_dir" => Ok(ShellCommand {
-            command: format!("mkdir -p {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
+        "delete" => Some(Ok(match prev_file {
+            Some(pf) => ShellCommand::exec(format!("xargs rm -f < {}", shell_quote(pf))),
+            None => ShellCommand::exec(format!("rm -rf {}", shell_quote(input_path))),
+        })),
+        "create_dir" => Some(Ok(ShellCommand::exec(format!("mkdir -p {}", shell_quote(input_path))))),
         "create_link" => {
-            let link_name = params.get("link_name").or_else(|| params.get("name"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+            let name = match params.get("link_name").or_else(|| params.get("name")) {
+                Some(n) => n.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "link_name".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("ln -s {} {}", shell_quote(input_path), shell_quote(link_name)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+                })),
+            };
+            Some(Ok(ShellCommand::exec(format!("ln -s {} {}", shell_quote(input_path), shell_quote(name)))))
         }
-
         "set_permissions" => {
-            let mode = params.get("mode").or_else(|| params.get("permissions"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+            let mode = match params.get("mode").or_else(|| params.get("permissions")) {
+                Some(m) => m.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "mode".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("chmod {} {}", shell_quote(mode), shell_quote(input_path)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+                })),
+            };
+            Some(Ok(ShellCommand::exec(format!("chmod {} {}", shell_quote(mode), shell_quote(input_path)))))
         }
-
         "set_owner" => {
-            let owner = params.get("owner")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "owner".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("chown {} {}", shell_quote(owner), shell_quote(input_path)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let owner = match require_param(params, op, "owner") {
+                Ok(o) => o, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::exec(format!("chown {} {}", shell_quote(owner), shell_quote(input_path)))))
         }
+        _ => None,
+    }
+}
 
-        // --- Content Transformation ---
+// ---------------------------------------------------------------------------
+// Category: Content Transformation
+// ---------------------------------------------------------------------------
+
+fn cmd_content_transform(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    prev_file: Option<&str>, src: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
         "replace" => {
-            let pattern = params.get("pattern")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "pattern".to_string()
-                })?;
+            let pattern = match require_param(params, op, "pattern") {
+                Ok(p) => p, Err(e) => return Some(Err(e)),
+            };
             let replacement = params.get("replacement").or_else(|| params.get("text"))
-                .unwrap_or(&String::new())
-                .clone();
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("sed 's/{}/{}/g' {}", sed_escape(pattern), sed_escape(&replacement), shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+                .map(|s| s.as_str()).unwrap_or("");
+            Some(Ok(ShellCommand::stdout(
+                format!("sed 's/{}/{}/g' {}", sed_escape(pattern), sed_escape(replacement), shell_quote(src)))))
         }
-
         "head" => {
             let n = params.get("count").or_else(|| params.get("n"))
-                .unwrap_or(&"10".to_string())
-                .clone();
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("head -n {} {}", n, shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+                .map(|s| s.as_str()).unwrap_or("10");
+            Some(Ok(ShellCommand::stdout(format!("head -n {} {}", n, shell_quote(src)))))
         }
-
         "tail" => {
             let n = params.get("count").or_else(|| params.get("n"))
-                .unwrap_or(&"10".to_string())
-                .clone();
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("tail -n {} {}", n, shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+                .map(|s| s.as_str()).unwrap_or("10");
+            Some(Ok(ShellCommand::stdout(format!("tail -n {} {}", n, shell_quote(src)))))
         }
-
-        "unique" => {
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("sort -u {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "sort -u".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
-        }
-
-        "count" => {
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("wc -l < {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "wc -l".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
-        }
-
+        "unique" => Some(Ok(match prev_file {
+            Some(pf) => ShellCommand::stdout(format!("sort -u {}", shell_quote(pf))),
+            None => ShellCommand::pipe("sort -u".to_string()),
+        })),
+        "count" => Some(Ok(match prev_file {
+            Some(pf) => ShellCommand::stdout(format!("wc -l < {}", shell_quote(pf))),
+            None => ShellCommand::pipe("wc -l".to_string()),
+        })),
         "diff" => {
-            let file2 = params.get("file2").or_else(|| params.get("other"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+            let file2 = match params.get("file2").or_else(|| params.get("other")) {
+                Some(f) => f.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "file2".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("diff {} {}", shell_quote(input_path), shell_quote(file2)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+                })),
+            };
+            // diff always uses input_path (first arg), not src
+            Some(Ok(ShellCommand::stdout(format!("diff {} {}", shell_quote(src), shell_quote(file2)))))
         }
+        "checksum" => Some(Ok(ShellCommand::stdout(format!("shasum -a 256 {}", shell_quote(src))))),
+        _ => None,
+    }
+}
 
-        "checksum" => {
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("shasum -a 256 {}", shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
-        }
+// ---------------------------------------------------------------------------
+// Category: Metadata Accessors
+// ---------------------------------------------------------------------------
 
-        // --- Metadata Accessors ---
-        "get_size" => Ok(ShellCommand {
-            command: format!("stat -f %z {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
+fn cmd_metadata(op: &str, input_path: &str) -> Option<Result<ShellCommand, ExecutorError>> {
+    let ip = shell_quote(input_path);
+    match op {
+        "get_size" => Some(Ok(ShellCommand::stdout(format!("stat -f %z {}", ip)))),
+        "get_mtime" => Some(Ok(ShellCommand::stdout(format!("stat -f %m {}", ip)))),
+        "get_permissions" => Some(Ok(ShellCommand::stdout(format!("stat -f %p {}", ip)))),
+        "get_file_type" => Some(Ok(ShellCommand::stdout(format!("stat -f %T {}", ip)))),
+        _ => None,
+    }
+}
 
-        "get_mtime" => Ok(ShellCommand {
-            command: format!("stat -f %m {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
+// ---------------------------------------------------------------------------
+// Category: macOS-Specific
+// ---------------------------------------------------------------------------
 
-        "get_permissions" => Ok(ShellCommand {
-            command: format!("stat -f %p {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "get_file_type" => Ok(ShellCommand {
-            command: format!("stat -f %T {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        // --- macOS-Specific ---
+fn cmd_macos(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str, prev_file: Option<&str>, src: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    let ip = shell_quote(input_path);
+    match op {
         "spotlight_search" => {
-            let query = params.get("query")
-                .map(|s| s.as_str())
-                .unwrap_or(input_path);
-            Ok(ShellCommand {
-                command: format!("mdfind {}", shell_quote(query)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let query = params.get("query").map(|s| s.as_str()).unwrap_or(input_path);
+            Some(Ok(ShellCommand::stdout(format!("mdfind {}", shell_quote(query)))))
         }
-
         "get_xattr" => {
-            let key = params.get("key")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "key".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("xattr -p {} {}", shell_quote(key), shell_quote(input_path)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let key = match require_param(params, op, "key") {
+                Ok(k) => k, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::stdout(format!("xattr -p {} {}", shell_quote(key), ip))))
         }
-
         "set_xattr" => {
-            let key = params.get("key")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "key".to_string()
-                })?;
-            let value = params.get("value")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "value".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("xattr -w {} {} {}", shell_quote(key), shell_quote(value), shell_quote(input_path)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let key = match require_param(params, op, "key") {
+                Ok(k) => k, Err(e) => return Some(Err(e)),
+            };
+            let value = match require_param(params, op, "value") {
+                Ok(v) => v, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::exec(format!("xattr -w {} {} {}", shell_quote(key), shell_quote(value), ip))))
         }
-
         "remove_xattr" => {
-            let key = params.get("key")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "key".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("xattr -d {} {}", shell_quote(key), shell_quote(input_path)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let key = match require_param(params, op, "key") {
+                Ok(k) => k, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::exec(format!("xattr -d {} {}", shell_quote(key), ip))))
         }
-
-        "remove_quarantine" => Ok(ShellCommand {
-            command: format!("xattr -d com.apple.quarantine {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
-        "open_file" => Ok(ShellCommand {
-            command: format!("open {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
+        "remove_quarantine" => Some(Ok(ShellCommand::exec(
+            format!("xattr -d com.apple.quarantine {}", ip)))),
+        "open_file" => Some(Ok(ShellCommand::exec(format!("open {}", ip)))),
         "open_with" => {
-            let app = params.get("app")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "app".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("open -a {} {}", shell_quote(app), shell_quote(input_path)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let app = match require_param(params, op, "app") {
+                Ok(a) => a, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::exec(format!("open -a {} {}", shell_quote(app), ip))))
         }
-
-        "reveal" => Ok(ShellCommand {
-            command: format!("open -R {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
-        "clipboard_copy" => {
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("pbcopy < {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: false,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "pbcopy".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: false,
-                })
-            }
-        }
-
-        "clipboard_paste" => Ok(ShellCommand {
-            command: "pbpaste".to_string(),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "read_plist" => {
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("plutil -p {}", shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
-        }
-
+        "reveal" => Some(Ok(ShellCommand::exec(format!("open -R {}", ip)))),
+        "clipboard_copy" => Some(Ok(match prev_file {
+            Some(pf) => ShellCommand::exec(format!("pbcopy < {}", shell_quote(pf))),
+            None => ShellCommand { command: "pbcopy".to_string(), reads_stdin: true, writes_stdout: false },
+        })),
+        "clipboard_paste" => Some(Ok(ShellCommand::stdout("pbpaste".to_string()))),
+        "read_plist" => Some(Ok(ShellCommand::stdout(format!("plutil -p {}", shell_quote(src))))),
         "write_plist" => {
-            let dest = params.get("path")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "path".to_string()
-                })?;
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("plutil -convert xml1 -o {} {}", shell_quote(dest), shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: false,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("plutil -convert xml1 -o {} {}", shell_quote(dest), shell_quote(input_path)),
-                    reads_stdin: false,
-                    writes_stdout: false,
-                })
-            }
+            let dest = match require_param(params, op, "path") {
+                Ok(d) => d, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::exec(
+                format!("plutil -convert xml1 -o {} {}", shell_quote(dest), shell_quote(source(prev_file, input_path))))))
         }
+        _ => None,
+    }
+}
 
-        // --- Network & Download ---
-        "download" => Ok(ShellCommand {
-            command: format!("curl -fsSL -O {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
+// ---------------------------------------------------------------------------
+// Category: Network & Download
+// ---------------------------------------------------------------------------
 
+fn cmd_network(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    let ip = shell_quote(input_path);
+    match op {
+        "download" => Some(Ok(ShellCommand::exec(format!("curl -fsSL -O {}", ip)))),
         "upload" => {
-            let url = params.get("url")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "url".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("curl -T {} {}", shell_quote(input_path), shell_quote(url)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let url = match require_param(params, op, "url") {
+                Ok(u) => u, Err(e) => return Some(Err(e)),
+            };
+            Some(Ok(ShellCommand::stdout(format!("curl -T {} {}", ip, shell_quote(url)))))
         }
-
         "sync" => {
-            let dest = params.get("path").or_else(|| params.get("dest"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+            let dest = match params.get("path").or_else(|| params.get("dest")) {
+                Some(d) => d.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "path".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("rsync -a {} {}", shell_quote(input_path), shell_quote(dest)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+                })),
+            };
+            Some(Ok(ShellCommand::stdout(format!("rsync -a {} {}", ip, shell_quote(dest)))))
         }
+        _ => None,
+    }
+}
 
-        // =====================================================================
-        // Power Tools Operations
-        // =====================================================================
+// ---------------------------------------------------------------------------
+// Category: Git
+// ---------------------------------------------------------------------------
 
-        // --- Git ---
-        "git_init" => Ok(ShellCommand {
-            command: format!("git init {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "git_clone" => Ok(ShellCommand {
-            command: format!("git clone {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
+fn cmd_git(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    let ip = shell_quote(input_path);
+    let cd = format!("cd {}", ip);
+    match op {
+        "git_init" => Some(Ok(ShellCommand::stdout(format!("git init {}", ip)))),
+        "git_clone" => Some(Ok(ShellCommand::stdout(format!("git clone {}", ip)))),
         "git_add" => {
-            let files = params.get("files").unwrap_or(&".".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("cd {} && git add {}", shell_quote(input_path), shell_quote(&files)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let files = params.get("files").map(|s| s.as_str()).unwrap_or(".");
+            Some(Ok(ShellCommand::exec(format!("{} && git add {}", cd, shell_quote(files)))))
         }
-
         "git_commit" => {
-            let msg = params.get("message").or_else(|| params.get("msg"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+            let msg = match params.get("message").or_else(|| params.get("msg")) {
+                Some(m) => m.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "message".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git commit -m {}", shell_quote(input_path), shell_quote(msg)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+                })),
+            };
+            Some(Ok(ShellCommand::stdout(format!("{} && git commit -m {}", cd, shell_quote(msg)))))
         }
-
-        "git_log" => Ok(ShellCommand {
-            command: format!("cd {} && git log --oneline", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
+        "git_log" => Some(Ok(ShellCommand::stdout(format!("{} && git log --oneline", cd)))),
         "git_log_range" => {
-            let from = params.get("from")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "from".to_string()
-                })?;
-            let to = params.get("to")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "to".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git log --oneline {}..{}", shell_quote(input_path), from, to),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let from = match require_param(params, op, "from") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let to = match require_param(params, op, "to") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("{} && git log --oneline {}..{}", cd, from, to))))
         }
-
-        "git_diff" => Ok(ShellCommand {
-            command: format!("cd {} && git diff", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
+        "git_diff" => Some(Ok(ShellCommand::stdout(format!("{} && git diff", cd)))),
         "git_diff_commits" => {
-            let a = params.get("a").or_else(|| params.get("from"))
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "a".to_string()
-                })?;
-            let b = params.get("b").or_else(|| params.get("to"))
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "b".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git diff {} {}", shell_quote(input_path), a, b),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let a = match params.get("a").or_else(|| params.get("from")) {
+                Some(v) => v.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam { op: op.to_string(), param: "a".to_string() })),
+            };
+            let b = match params.get("b").or_else(|| params.get("to")) {
+                Some(v) => v.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam { op: op.to_string(), param: "b".to_string() })),
+            };
+            Some(Ok(ShellCommand::stdout(format!("{} && git diff {} {}", cd, a, b))))
         }
-
         "git_branch" => {
-            let name = params.get("name")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "name".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git branch {}", shell_quote(input_path), shell_quote(name)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let name = match require_param(params, op, "name") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::exec(format!("{} && git branch {}", cd, shell_quote(name)))))
         }
-
         "git_checkout" => {
-            let branch = params.get("branch")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "branch".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git checkout {}", shell_quote(input_path), shell_quote(branch)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let branch = match require_param(params, op, "branch") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("{} && git checkout {}", cd, shell_quote(branch)))))
         }
-
         "git_merge" => {
-            let branch = params.get("branch")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "branch".to_string()
-                })?;
+            let branch = match require_param(params, op, "branch") { Ok(v) => v, Err(e) => return Some(Err(e)) };
             let strategy = params.get("strategy")
                 .map(|s| format!(" --strategy={}", s))
                 .unwrap_or_default();
-            Ok(ShellCommand {
-                command: format!("cd {} && git merge{} {}", shell_quote(input_path), strategy, shell_quote(branch)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            Some(Ok(ShellCommand::stdout(format!("{} && git merge{} {}", cd, strategy, shell_quote(branch)))))
         }
-
         "git_rebase" => {
-            let branch = params.get("branch")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "branch".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git rebase {}", shell_quote(input_path), shell_quote(branch)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let branch = match require_param(params, op, "branch") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("{} && git rebase {}", cd, shell_quote(branch)))))
         }
-
-        "git_stash" => Ok(ShellCommand {
-            command: format!("cd {} && git stash", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "git_stash_pop" => Ok(ShellCommand {
-            command: format!("cd {} && git stash pop", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
+        "git_stash" => Some(Ok(ShellCommand::stdout(format!("{} && git stash", cd)))),
+        "git_stash_pop" => Some(Ok(ShellCommand::stdout(format!("{} && git stash pop", cd)))),
         "git_push" => {
-            let remote = params.get("remote").unwrap_or(&"origin".to_string()).clone();
-            let branch = params.get("branch").unwrap_or(&"HEAD".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("cd {} && git push {} {}", shell_quote(input_path), remote, branch),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let remote = params.get("remote").map(|s| s.as_str()).unwrap_or("origin");
+            let branch = params.get("branch").map(|s| s.as_str()).unwrap_or("HEAD");
+            Some(Ok(ShellCommand::stdout(format!("{} && git push {} {}", cd, remote, branch))))
         }
-
         "git_pull" => {
-            let remote = params.get("remote").unwrap_or(&"origin".to_string()).clone();
-            let branch = params.get("branch").unwrap_or(&"HEAD".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("cd {} && git pull {} {}", shell_quote(input_path), remote, branch),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let remote = params.get("remote").map(|s| s.as_str()).unwrap_or("origin");
+            let branch = params.get("branch").map(|s| s.as_str()).unwrap_or("HEAD");
+            Some(Ok(ShellCommand::stdout(format!("{} && git pull {} {}", cd, remote, branch))))
         }
-
         "git_blame" => {
-            let file = params.get("file").or_else(|| params.get("path"))
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "file".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git blame {}", shell_quote(input_path), shell_quote(file)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let file = match params.get("file").or_else(|| params.get("path")) {
+                Some(f) => f.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam { op: op.to_string(), param: "file".to_string() })),
+            };
+            Some(Ok(ShellCommand::stdout(format!("{} && git blame {}", cd, shell_quote(file)))))
         }
-
         "git_bisect" => {
-            let good = params.get("good")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "good".to_string()
-                })?;
-            let bad = params.get("bad")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "bad".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("cd {} && git bisect start {} {}", shell_quote(input_path), bad, good),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let good = match require_param(params, op, "good") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let bad = match require_param(params, op, "bad") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("{} && git bisect start {} {}", cd, bad, good))))
         }
-
         "git_tag" => {
-            let name = params.get("name")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "name".to_string()
-                })?;
-            let commit = params.get("commit").unwrap_or(&"HEAD".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("cd {} && git tag {} {}", shell_quote(input_path), shell_quote(name), commit),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let name = match require_param(params, op, "name") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let commit = params.get("commit").map(|s| s.as_str()).unwrap_or("HEAD");
+            Some(Ok(ShellCommand::exec(format!("{} && git tag {} {}", cd, shell_quote(name), commit))))
         }
+        "git_status" => Some(Ok(ShellCommand::stdout(format!("{} && git status --short", cd)))),
+        _ => None,
+    }
+}
 
-        "git_status" => Ok(ShellCommand {
-            command: format!("cd {} && git status --short", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
+// ---------------------------------------------------------------------------
+// Category: Terminal Multiplexers
+// ---------------------------------------------------------------------------
 
-        // --- Terminal Multiplexers ---
-        "tmux_new_session" => Ok(ShellCommand {
-            command: format!("tmux new-session -d -s {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
-        "tmux_attach" => Ok(ShellCommand {
-            command: format!("tmux attach -t {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
+fn cmd_terminal_mux(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    let ip = shell_quote(input_path);
+    match op {
+        "tmux_new_session" => Some(Ok(ShellCommand::exec(format!("tmux new-session -d -s {}", ip)))),
+        "tmux_attach" => Some(Ok(ShellCommand::exec(format!("tmux attach -t {}", ip)))),
         "tmux_split" => {
             let dir = params.get("direction")
                 .map(|d| if d == "vertical" { "-v" } else { "-h" })
                 .unwrap_or("-h");
-            Ok(ShellCommand {
-                command: format!("tmux split-window {}", dir),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            Some(Ok(ShellCommand::exec(format!("tmux split-window {}", dir))))
         }
-
         "tmux_send_keys" => {
-            let keys = params.get("keys").or_else(|| params.get("text"))
-                .ok_or_else(|| ExecutorError::MissingParam {
+            let keys = match params.get("keys").or_else(|| params.get("text")) {
+                Some(k) => k.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam {
                     op: op.to_string(), param: "keys".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("tmux send-keys {} Enter", shell_quote(keys)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+                })),
+            };
+            Some(Ok(ShellCommand::exec(format!("tmux send-keys {} Enter", shell_quote(keys)))))
         }
+        "screen_new_session" => Some(Ok(ShellCommand::exec(format!("screen -dmS {}", ip)))),
+        "screen_attach" => Some(Ok(ShellCommand::exec(format!("screen -r {}", ip)))),
+        _ => None,
+    }
+}
 
-        "screen_new_session" => Ok(ShellCommand {
-            command: format!("screen -dmS {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
+// ---------------------------------------------------------------------------
+// Category: Structured Data Processing
+// ---------------------------------------------------------------------------
 
-        "screen_attach" => Ok(ShellCommand {
-            command: format!("screen -r {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
-        // --- Structured Data Processing ---
+fn cmd_structured_data(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    prev_file: Option<&str>, input_path: &str, src: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
         "jq_query" => {
-            let filter = params.get("filter")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "filter".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("jq {} {}", shell_quote(filter), shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let filter = match require_param(params, op, "filter") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("jq {} {}", shell_quote(filter), shell_quote(src)))))
         }
-
         "jq_filter_seq" => {
-            let filter = params.get("filter")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "filter".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("jq '.[] | {}' {}", filter, shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let filter = match require_param(params, op, "filter") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("jq '.[] | {}' {}", filter, shell_quote(src)))))
         }
-
         "jq_transform" => {
-            let filter = params.get("filter")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "filter".to_string()
-                })?;
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("jq {} {}", shell_quote(filter), shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("jq {}", shell_quote(filter)),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
+            let filter = match require_param(params, op, "filter") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(match prev_file {
+                Some(pf) => ShellCommand::stdout(format!("jq {} {}", shell_quote(filter), shell_quote(pf))),
+                None => ShellCommand::pipe(format!("jq {}", shell_quote(filter))),
+            }))
         }
-
         "yq_query" => {
-            let filter = params.get("filter")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "filter".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("yq {} {}", shell_quote(filter), shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let filter = match require_param(params, op, "filter") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("yq {} {}", shell_quote(filter), shell_quote(src)))))
         }
-
-        "yq_convert" => {
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("yq -o=json {}", shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
-        }
-
+        "yq_convert" => Some(Ok(ShellCommand::stdout(format!("yq -o=json {}", shell_quote(src))))),
         "csv_cut" => {
-            let cols = params.get("columns")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "columns".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("cut -d, -f{} {}", cols, shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let cols = match require_param(params, op, "columns") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("cut -d, -f{} {}", cols, shell_quote(src)))))
         }
-
         "csv_join" => {
-            let file2 = params.get("file2")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "file2".to_string()
-                })?;
-            let cols = params.get("columns").unwrap_or(&"1".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("join -t, -j {} {} {}", cols, shell_quote(input_path), shell_quote(file2)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let file2 = match require_param(params, op, "file2") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let cols = params.get("columns").map(|s| s.as_str()).unwrap_or("1");
+            Some(Ok(ShellCommand::stdout(
+                format!("join -t, -j {} {} {}", cols, shell_quote(input_path), shell_quote(file2)))))
         }
-
         "csv_sort" => {
-            let cols = params.get("columns").unwrap_or(&"1".to_string()).clone();
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("sort -t, -k{} {}", cols, shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let cols = params.get("columns").map(|s| s.as_str()).unwrap_or("1");
+            Some(Ok(ShellCommand::stdout(format!("sort -t, -k{} {}", cols, shell_quote(src)))))
         }
+        _ => None,
+    }
+}
 
-        // --- Advanced Text Processing ---
-        "awk_extract" => {
-            let program = params.get("program")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "program".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("awk {} {}", shell_quote(program), shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+// ---------------------------------------------------------------------------
+// Category: Advanced Text Processing
+// ---------------------------------------------------------------------------
+
+fn cmd_text_processing(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str, prev_file: Option<&str>, src: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
+        "awk_extract" | "awk_aggregate" => {
+            let program = match require_param(params, op, "program") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("awk {} {}", shell_quote(program), shell_quote(src)))))
         }
-
-        "awk_aggregate" => {
-            let program = params.get("program")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "program".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("awk {} {}", shell_quote(program), shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
-        }
-
         "sed_script" => {
-            let script = params.get("script")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "script".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("sed {} {}", shell_quote(script), shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let script = match require_param(params, op, "script") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("sed {} {}", shell_quote(script), shell_quote(src)))))
         }
-
         "cut_fields" => {
-            let delim = params.get("delimiter").unwrap_or(&"\t".to_string()).clone();
-            let fields = params.get("fields")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "fields".to_string()
-                })?;
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("cut -d{} -f{} {}", shell_quote(&delim), fields, shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let delim = params.get("delimiter").map(|s| s.as_str()).unwrap_or("\t");
+            let fields = match require_param(params, op, "fields") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("cut -d{} -f{} {}", shell_quote(delim), fields, shell_quote(src)))))
         }
-
         "tr_replace" => {
-            let set1 = params.get("set1").or_else(|| params.get("from"))
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "set1".to_string()
-                })?;
-            let set2 = params.get("set2").or_else(|| params.get("to"))
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "set2".to_string()
-                })?;
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("tr {} {} < {}", shell_quote(set1), shell_quote(set2), shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("tr {} {}", shell_quote(set1), shell_quote(set2)),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
+            let set1 = match params.get("set1").or_else(|| params.get("from")) {
+                Some(s) => s.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam { op: op.to_string(), param: "set1".to_string() })),
+            };
+            let set2 = match params.get("set2").or_else(|| params.get("to")) {
+                Some(s) => s.as_str(),
+                None => return Some(Err(ExecutorError::MissingParam { op: op.to_string(), param: "set2".to_string() })),
+            };
+            Some(Ok(match prev_file {
+                Some(pf) => ShellCommand::stdout(
+                    format!("tr {} {} < {}", shell_quote(set1), shell_quote(set2), shell_quote(pf))),
+                None => ShellCommand::pipe(format!("tr {} {}", shell_quote(set1), shell_quote(set2))),
+            }))
         }
-
         "paste_merge" => {
-            let file2 = params.get("file2")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "file2".to_string()
-                })?;
-            let delim = params.get("delimiter").unwrap_or(&"\t".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("paste -d{} {} {}", shell_quote(&delim), shell_quote(input_path), shell_quote(file2)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let file2 = match require_param(params, op, "file2") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let delim = params.get("delimiter").map(|s| s.as_str()).unwrap_or("\t");
+            Some(Ok(ShellCommand::stdout(
+                format!("paste -d{} {} {}", shell_quote(delim), shell_quote(input_path), shell_quote(file2)))))
         }
-
         "tee_split" => {
-            let dest = params.get("path")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "path".to_string()
-                })?;
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("tee {} < {}", shell_quote(dest), shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: format!("tee {}", shell_quote(dest)),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
+            let dest = match require_param(params, op, "path") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(match prev_file {
+                Some(pf) => ShellCommand::stdout(format!("tee {} < {}", shell_quote(dest), shell_quote(pf))),
+                None => ShellCommand::pipe(format!("tee {}", shell_quote(dest))),
+            }))
         }
-
         "column_format" => {
-            let delim = params.get("delimiter").unwrap_or(&"\t".to_string()).clone();
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("column -t -s {} {}", shell_quote(&delim), shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let delim = params.get("delimiter").map(|s| s.as_str()).unwrap_or("\t");
+            Some(Ok(ShellCommand::stdout(
+                format!("column -t -s {} {}", shell_quote(delim), shell_quote(src)))))
         }
+        _ => None,
+    }
+}
 
-        // --- Process & System Management ---
-        "ps_list" => Ok(ShellCommand {
-            command: "ps aux".to_string(),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
+// ---------------------------------------------------------------------------
+// Category: Process & System Management
+// ---------------------------------------------------------------------------
 
+fn cmd_process_system(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    let ip = shell_quote(input_path);
+    match op {
+        "ps_list" => Some(Ok(ShellCommand::stdout("ps aux".to_string()))),
         "kill_process" => {
-            let signal = params.get("signal").unwrap_or(&"TERM".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("kill -{} {}", signal, input_path),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let signal = params.get("signal").map(|s| s.as_str()).unwrap_or("TERM");
+            Some(Ok(ShellCommand::exec(format!("kill -{} {}", signal, input_path))))
         }
-
         "pkill_pattern" => {
-            let pattern = params.get("pattern")
-                .map(|s| s.as_str())
-                .unwrap_or(input_path);
-            Ok(ShellCommand {
-                command: format!("pkill {}", shell_quote(pattern)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let pattern = params.get("pattern").map(|s| s.as_str()).unwrap_or(input_path);
+            Some(Ok(ShellCommand::exec(format!("pkill {}", shell_quote(pattern)))))
         }
-
         "watch_command" => {
-            let cmd = params.get("command")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "command".to_string()
-                })?;
-            let interval = params.get("interval").unwrap_or(&"2".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("watch -n {} {}", interval, shell_quote(cmd)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let cmd = match require_param(params, op, "command") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let interval = params.get("interval").map(|s| s.as_str()).unwrap_or("2");
+            Some(Ok(ShellCommand::stdout(format!("watch -n {} {}", interval, shell_quote(cmd)))))
         }
+        "df_usage" => Some(Ok(ShellCommand::stdout("df -h".to_string()))),
+        "du_size" => Some(Ok(ShellCommand::stdout(format!("du -sh {}", ip)))),
+        "lsof_open" => Some(Ok(ShellCommand::stdout(format!("lsof {}", ip)))),
+        "file_type_detect" => Some(Ok(ShellCommand::stdout(format!("file --mime-type {}", ip)))),
+        "uname_info" => Some(Ok(ShellCommand::stdout("uname -a".to_string()))),
+        "uptime_info" => Some(Ok(ShellCommand::stdout("uptime".to_string()))),
+        _ => None,
+    }
+}
 
-        "df_usage" => Ok(ShellCommand {
-            command: "df -h".to_string(),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
+// ---------------------------------------------------------------------------
+// Category: Networking (remote)
+// ---------------------------------------------------------------------------
 
-        "du_size" => Ok(ShellCommand {
-            command: format!("du -sh {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "lsof_open" => Ok(ShellCommand {
-            command: format!("lsof {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "file_type_detect" => Ok(ShellCommand {
-            command: format!("file --mime-type {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "uname_info" => Ok(ShellCommand {
-            command: "uname -a".to_string(),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        "uptime_info" => Ok(ShellCommand {
-            command: "uptime".to_string(),
-            reads_stdin: false,
-            writes_stdout: true,
-        }),
-
-        // --- Networking ---
+fn cmd_networking(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    input_path: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    let ip = shell_quote(input_path);
+    match op {
         "ssh_exec" => {
-            let host = params.get("host")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "host".to_string()
-                })?;
-            let cmd = params.get("command")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "command".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("ssh {} {}", shell_quote(host), shell_quote(cmd)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let host = match require_param(params, op, "host") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let cmd = match require_param(params, op, "command") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("ssh {} {}", shell_quote(host), shell_quote(cmd)))))
         }
-
         "scp_transfer" => {
-            let host = params.get("host")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "host".to_string()
-                })?;
-            let dest = params.get("path").unwrap_or(&"~".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("scp {} {}:{}", shell_quote(input_path), shell_quote(host), shell_quote(&dest)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
+            let host = match require_param(params, op, "host") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let dest = params.get("path").map(|s| s.as_str()).unwrap_or("~");
+            Some(Ok(ShellCommand::exec(format!("scp {} {}:{}", ip, shell_quote(host), shell_quote(dest)))))
         }
-
-        "wget_download" => Ok(ShellCommand {
-            command: format!("wget {}", shell_quote(input_path)),
-            reads_stdin: false,
-            writes_stdout: false,
-        }),
-
+        "wget_download" => Some(Ok(ShellCommand::exec(format!("wget {}", ip)))),
         "nc_connect" => {
-            let host = params.get("host")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "host".to_string()
-                })?;
-            let port = params.get("port")
-                .ok_or_else(|| ExecutorError::MissingParam {
-                    op: op.to_string(), param: "port".to_string()
-                })?;
-            Ok(ShellCommand {
-                command: format!("nc {} {}", shell_quote(host), port),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let host = match require_param(params, op, "host") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            let port = match require_param(params, op, "port") { Ok(v) => v, Err(e) => return Some(Err(e)) };
+            Some(Ok(ShellCommand::stdout(format!("nc {} {}", shell_quote(host), port))))
         }
-
         "ping_host" => {
-            let count = params.get("count").unwrap_or(&"4".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("ping -c {} {}", count, shell_quote(input_path)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let count = params.get("count").map(|s| s.as_str()).unwrap_or("4");
+            Some(Ok(ShellCommand::stdout(format!("ping -c {} {}", count, ip))))
         }
-
         "dig_lookup" => {
-            let record_type = params.get("type").unwrap_or(&"A".to_string()).clone();
-            Ok(ShellCommand {
-                command: format!("dig {} {}", shell_quote(input_path), record_type),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let record_type = params.get("type").map(|s| s.as_str()).unwrap_or("A");
+            Some(Ok(ShellCommand::stdout(format!("dig {} {}", ip, record_type))))
         }
+        _ => None,
+    }
+}
 
-        // --- Compression & Crypto ---
-        "gzip_compress" => {
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("gzip -k {}", shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
-        }
+// ---------------------------------------------------------------------------
+// Category: Compression & Crypto
+// ---------------------------------------------------------------------------
 
-        "gzip_decompress" => {
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("gunzip -k {}", shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
-        }
-
-        "xz_compress" => {
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("xz -k {}", shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: false,
-            })
-        }
-
-        "base64_encode" => {
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("base64 < {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "base64".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
-        }
-
-        "base64_decode" => {
-            if let Some(pf) = prev_file {
-                Ok(ShellCommand {
-                    command: format!("base64 -d < {}", shell_quote(pf)),
-                    reads_stdin: false,
-                    writes_stdout: true,
-                })
-            } else {
-                Ok(ShellCommand {
-                    command: "base64 -d".to_string(),
-                    reads_stdin: true,
-                    writes_stdout: true,
-                })
-            }
-        }
-
+fn cmd_compression_crypto(
+    op: &str, params: &std::collections::HashMap<String, String>,
+    prev_file: Option<&str>, src: &str,
+) -> Option<Result<ShellCommand, ExecutorError>> {
+    match op {
+        "gzip_compress" => Some(Ok(ShellCommand::exec(format!("gzip -k {}", shell_quote(src))))),
+        "gzip_decompress" => Some(Ok(ShellCommand::exec(format!("gunzip -k {}", shell_quote(src))))),
+        "xz_compress" => Some(Ok(ShellCommand::exec(format!("xz -k {}", shell_quote(src))))),
+        "base64_encode" => Some(Ok(match prev_file {
+            Some(pf) => ShellCommand::stdout(format!("base64 < {}", shell_quote(pf))),
+            None => ShellCommand::pipe("base64".to_string()),
+        })),
+        "base64_decode" => Some(Ok(match prev_file {
+            Some(pf) => ShellCommand::stdout(format!("base64 -d < {}", shell_quote(pf))),
+            None => ShellCommand::pipe("base64 -d".to_string()),
+        })),
         "openssl_hash" => {
-            let algo = params.get("algorithm").unwrap_or(&"sha256".to_string()).clone();
-            let src = if let Some(pf) = prev_file { pf } else { input_path };
-            Ok(ShellCommand {
-                command: format!("openssl dgst -{} {}", algo, shell_quote(src)),
-                reads_stdin: false,
-                writes_stdout: true,
-            })
+            let algo = params.get("algorithm").map(|s| s.as_str()).unwrap_or("sha256");
+            Some(Ok(ShellCommand::stdout(format!("openssl dgst -{} {}", algo, shell_quote(src)))))
         }
-
-        // --- Unknown op ---
-        _ => Err(ExecutorError::UnknownOp(op.to_string())),
+        _ => None,
     }
 }
 
@@ -1562,7 +941,7 @@ pub fn generate_script(
     script.push_str("\n");
 
     // Determine the primary input path
-    let input_path = primary_input(def);
+    let input_path = primary_input(&def.inputs);
 
     let num_steps = compiled.steps.len();
 
@@ -1694,56 +1073,6 @@ pub fn run_script(script: &str) -> Result<ScriptResult, ExecutorError> {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Extract the primary input path from a WorkflowDef.
-/// Looks for common input keys: path, archive, logfile, repo, source, query, url.
-fn primary_input(def: &WorkflowDef) -> String {
-    // Try common keys in priority order
-    for key in &["path", "archive", "logfile", "repo", "source", "query", "url"] {
-        if let Some(v) = def.inputs.get(*key) {
-            return v.clone();
-        }
-    }
-    // Fall back to first input value
-    def.inputs.values().next()
-        .cloned()
-        .unwrap_or_else(|| ".".to_string())
-}
-
-/// Convert a glob-like pattern to a grep-compatible regex.
-/// e.g., "*.pdf" → "\\.pdf$", "*.tmp" → "\\.tmp$"
-fn glob_to_grep(pattern: &str) -> String {
-    if pattern.starts_with("*.") {
-        // *.ext → match lines ending with .ext
-        let ext = &pattern[1..]; // ".ext"
-        format!("{}$", ext.replace('.', "\\."))
-    } else if pattern.starts_with('.') {
-        // .ext → match lines ending with .ext
-        format!("{}$", pattern.replace('.', "\\."))
-    } else {
-        // Use as-is (it's already a regex or literal)
-        pattern.to_string()
-    }
-}
-
-/// Escape special characters for use inside a sed s/.../ expression.
-fn sed_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '/' | '\\' | '&' | '.' | '*' | '[' | ']' | '^' | '$' => {
-                out.push('\\');
-                out.push(c);
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1771,37 +1100,6 @@ mod tests {
             output_type,
             params: params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
         }
-    }
-
-    // --- Shell quoting ---
-
-    #[test]
-    fn test_shell_quote_simple() {
-        assert_eq!(shell_quote("hello"), "hello");
-        assert_eq!(shell_quote("/usr/bin/ls"), "/usr/bin/ls");
-        assert_eq!(shell_quote("~/Downloads"), "~/Downloads");
-    }
-
-    #[test]
-    fn test_shell_quote_spaces() {
-        assert_eq!(shell_quote("my file.txt"), "'my file.txt'");
-        assert_eq!(shell_quote("/path/to/my dir"), "'/path/to/my dir'");
-    }
-
-    #[test]
-    fn test_shell_quote_special_chars() {
-        assert_eq!(shell_quote("hello world; rm -rf /"), "'hello world; rm -rf /'");
-        assert_eq!(shell_quote("$(whoami)"), "'$(whoami)'");
-    }
-
-    #[test]
-    fn test_shell_quote_single_quotes() {
-        assert_eq!(shell_quote("it's"), "'it'\\''s'");
-    }
-
-    #[test]
-    fn test_shell_quote_empty() {
-        assert_eq!(shell_quote(""), "''");
     }
 
     // --- Archive format detection ---
@@ -1986,24 +1284,6 @@ mod tests {
         let step = make_step("list_dir", &[]);
         let cmd = op_to_command(&step, "/path/to/my dir", None).unwrap();
         assert_eq!(cmd.command, "ls '/path/to/my dir'");
-    }
-
-    // --- Glob to grep ---
-
-    #[test]
-    fn test_glob_to_grep_star_ext() {
-        assert_eq!(glob_to_grep("*.pdf"), "\\.pdf$");
-        assert_eq!(glob_to_grep("*.tmp"), "\\.tmp$");
-    }
-
-    #[test]
-    fn test_glob_to_grep_dot_ext() {
-        assert_eq!(glob_to_grep(".log"), "\\.log$");
-    }
-
-    #[test]
-    fn test_glob_to_grep_literal() {
-        assert_eq!(glob_to_grep("error"), "error");
     }
 
     // --- Power tools ---
