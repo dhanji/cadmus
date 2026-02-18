@@ -521,6 +521,92 @@ ops:
       category: shell
       effects: io
 
+  # --- shell_exec anchor: mv (fire-and-forget ops) ---
+  - name: shell_mv
+    racket_symbol: "shell-mv"
+    inputs: ["String", "String"]
+    output: "String"
+    description: "(shell-mv src dst) — move/rename files"
+    meta:
+      params:
+        - { name: src, type: String }
+        - { name: dst, type: String }
+      return_type: String
+      invariants: []
+      category: shell
+      effects: io
+
+  # cp, rm, mkdir, ln, chmod, chown, tar, rsync, open, pbcopy, kill, pkill,
+  # gzip, xz are NOT listed here — discovered via type-symmetric from mv
+  # (class: shell_exec).
+
+  # --- shell_vcs anchor: git ---
+  - name: shell_git
+    racket_symbol: "shell-git"
+    inputs: ["String"]
+    output: "List(String)"
+    description: "(shell-git args) — run git subcommand"
+    meta:
+      params:
+        - { name: args, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  # --- shell_structured anchor: jq ---
+  - name: shell_jq
+    racket_symbol: "shell-jq"
+    inputs: ["String", "String"]
+    output: "List(String)"
+    description: "(shell-jq filter file) — process JSON with jq"
+    meta:
+      params:
+        - { name: filter, type: String }
+        - { name: file, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  # yq is NOT listed here — discovered via type-symmetric from jq
+  # (class: shell_structured).
+
+  # --- shell_session anchor: tmux ---
+  - name: shell_tmux
+    racket_symbol: "shell-tmux"
+    inputs: ["String"]
+    output: "String"
+    description: "(shell-tmux args) — run tmux subcommand"
+    meta:
+      params:
+        - { name: args, type: String }
+      return_type: String
+      invariants: []
+      category: shell
+      effects: io
+
+  # screen is NOT listed here — discovered via type-symmetric from tmux
+  # (class: shell_session).
+
+  # --- shell_network anchor: ssh ---
+  - name: shell_ssh
+    racket_symbol: "shell-ssh"
+    inputs: ["String", "String"]
+    output: "List(String)"
+    description: "(shell-ssh host command) — execute command on remote host"
+    meta:
+      params:
+        - { name: host, type: String }
+        - { name: command, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  # scp, nc are NOT listed here — discovered via type-symmetric from ssh
+  # (class: shell_network).
+
   # cat, head, tail, sort are NOT listed here — discovered from the fact
   # pack via type-symmetric inference (class: shell_text_lines).
 

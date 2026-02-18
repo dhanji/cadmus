@@ -9,8 +9,8 @@ use cadmus::type_expr::TypeExpr;
 // Power Tools Integration Tests
 // ===========================================================================
 
-const POWER_TOOLS_OPS: &str = include_str!("../data/power_tools_ops.yaml");
-const FS_OPS: &str = include_str!("../data/fs_ops.yaml");
+const POWER_TOOLS_OPS: &str = include_str!("../data/compat/power_tools_ops.yaml");
+const FS_OPS: &str = include_str!("../data/compat/fs_ops.yaml");
 
 // ---------------------------------------------------------------------------
 // 1. Ops Pack Tests

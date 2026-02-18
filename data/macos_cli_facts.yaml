@@ -78,6 +78,166 @@ entities:
     name: "curl"
     description: "Transfer data from or to a server"
 
+  # --- File lifecycle tools (fire-and-forget, exit status) ---
+  - id: cli_mv
+    name: "mv"
+    description: "Move or rename files and directories"
+  - id: cli_cp
+    name: "cp"
+    description: "Copy files and directories"
+  - id: cli_rm
+    name: "rm"
+    description: "Remove files or directories"
+  - id: cli_mkdir
+    name: "mkdir"
+    description: "Create directories"
+  - id: cli_ln
+    name: "ln"
+    description: "Create hard or symbolic links"
+  - id: cli_chmod
+    name: "chmod"
+    description: "Change file mode bits (permissions)"
+  - id: cli_chown
+    name: "chown"
+    description: "Change file owner and group"
+  - id: cli_tar
+    name: "tar"
+    description: "Archive and extract files"
+  - id: cli_rsync
+    name: "rsync"
+    description: "Fast, versatile file copying/synchronization"
+  - id: cli_open
+    name: "open"
+    description: "Open files and directories with default or specified application (macOS)"
+  - id: cli_tee
+    name: "tee"
+    description: "Read stdin and write to stdout and files"
+
+  # --- Single-value / metadata tools ---
+  - id: cli_stat
+    name: "stat"
+    description: "Display file status and metadata"
+  - id: cli_shasum
+    name: "shasum"
+    description: "Compute SHA message digests"
+  - id: cli_file
+    name: "file"
+    description: "Determine file type via magic bytes"
+  - id: cli_uname
+    name: "uname"
+    description: "Print system information"
+  - id: cli_uptime
+    name: "uptime"
+    description: "Show system uptime and load averages"
+
+  # --- Text-lines tools (additional) ---
+  - id: cli_diff
+    name: "diff"
+    description: "Compare files line by line"
+  - id: cli_sed
+    name: "sed"
+    description: "Stream editor for filtering and transforming text"
+  - id: cli_awk
+    name: "awk"
+    description: "Pattern scanning and text processing language"
+  - id: cli_cut
+    name: "cut"
+    description: "Remove sections from each line of files"
+  - id: cli_tr
+    name: "tr"
+    description: "Translate or delete characters"
+  - id: cli_paste
+    name: "paste"
+    description: "Merge lines of files side by side"
+  - id: cli_column
+    name: "column"
+    description: "Format text into aligned columns"
+  - id: cli_base64
+    name: "base64"
+    description: "Encode and decode base64"
+
+  # --- Tree / search tools (additional) ---
+  - id: cli_mdfind
+    name: "mdfind"
+    description: "Spotlight search from command line (macOS)"
+
+  # --- macOS-specific tools ---
+  - id: cli_xattr
+    name: "xattr"
+    description: "Display and manipulate extended attributes (macOS)"
+  - id: cli_pbcopy
+    name: "pbcopy"
+    description: "Copy stdin to clipboard (macOS)"
+  - id: cli_pbpaste
+    name: "pbpaste"
+    description: "Paste clipboard to stdout (macOS)"
+  - id: cli_plutil
+    name: "plutil"
+    description: "Property list utility — read/write plist files (macOS)"
+
+  # --- Tabular / process tools (additional) ---
+  - id: cli_lsof
+    name: "lsof"
+    description: "List open files"
+  - id: cli_kill
+    name: "kill"
+    description: "Send signals to processes"
+  - id: cli_pkill
+    name: "pkill"
+    description: "Kill processes by name pattern"
+  - id: cli_watch
+    name: "watch"
+    description: "Execute a program periodically, showing output"
+
+  # --- Version control ---
+  - id: cli_git
+    name: "git"
+    description: "Distributed version control system"
+
+  # --- Structured data tools ---
+  - id: cli_jq
+    name: "jq"
+    description: "Command-line JSON processor"
+  - id: cli_yq
+    name: "yq"
+    description: "Command-line YAML/JSON/XML processor"
+
+  # --- Session / multiplexer tools ---
+  - id: cli_tmux
+    name: "tmux"
+    description: "Terminal multiplexer"
+  - id: cli_screen
+    name: "screen"
+    description: "Terminal multiplexer (GNU Screen)"
+
+  # --- Network tools ---
+  - id: cli_ssh
+    name: "ssh"
+    description: "Secure shell remote login"
+  - id: cli_scp
+    name: "scp"
+    description: "Secure copy over SSH"
+  - id: cli_nc
+    name: "nc"
+    description: "Netcat — TCP/UDP connections and listeners"
+  - id: cli_ping
+    name: "ping"
+    description: "Send ICMP echo requests to network hosts"
+  - id: cli_dig
+    name: "dig"
+    description: "DNS lookup utility"
+
+  # --- Compression / crypto tools ---
+  - id: cli_gzip
+    name: "gzip"
+    description: "Compress or decompress files with gzip/gunzip"
+  - id: cli_xz
+    name: "xz"
+    description: "Compress or decompress files with LZMA"
+  - id: cli_openssl
+    name: "openssl"
+    description: "Cryptographic toolkit — hashing, encryption, certificates"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -232,6 +392,396 @@ claims:
     entity: cli_curl
     axis: shell_submodes
     text: "curl supports flags: -s (silent), -L (follow redirects), -o FILE (output to file), -I (headers only), -X METHOD (HTTP method), -d DATA (POST data), -H HEADER (custom header)"
+
+  # --- mv ---
+  - id: cli_mv_base
+    entity: cli_mv
+    axis: shell_output_format
+    text: "mv moves or renames files. Returns exit status 0 on success. No stdout output."
+  - id: cli_mv_flags
+    entity: cli_mv
+    axis: shell_submodes
+    text: "mv supports flags: -i (interactive, prompt before overwrite), -n (no clobber), -v (verbose)"
+
+  # --- cp ---
+  - id: cli_cp_base
+    entity: cli_cp
+    axis: shell_output_format
+    text: "cp copies files and directories. Returns exit status 0 on success. No stdout output."
+  - id: cli_cp_flags
+    entity: cli_cp
+    axis: shell_submodes
+    text: "cp supports flags: -r (recursive), -a (archive, preserve attributes), -v (verbose), -n (no clobber)"
+
+  # --- rm ---
+  - id: cli_rm_base
+    entity: cli_rm
+    axis: shell_output_format
+    text: "rm removes files and directories. Returns exit status 0 on success. No stdout output."
+  - id: cli_rm_flags
+    entity: cli_rm
+    axis: shell_submodes
+    text: "rm supports flags: -r (recursive), -f (force, no prompt), -i (interactive), -v (verbose)"
+
+  # --- mkdir ---
+  - id: cli_mkdir_base
+    entity: cli_mkdir
+    axis: shell_output_format
+    text: "mkdir creates directories. Returns exit status 0 on success. No stdout output."
+  - id: cli_mkdir_flags
+    entity: cli_mkdir
+    axis: shell_submodes
+    text: "mkdir supports flags: -p (create parents), -v (verbose)"
+
+  # --- ln ---
+  - id: cli_ln_base
+    entity: cli_ln
+    axis: shell_output_format
+    text: "ln creates links. Returns exit status 0 on success. No stdout output."
+  - id: cli_ln_flags
+    entity: cli_ln
+    axis: shell_submodes
+    text: "ln supports flags: -s (symbolic link), -f (force, remove existing)"
+
+  # --- chmod ---
+  - id: cli_chmod_base
+    entity: cli_chmod
+    axis: shell_output_format
+    text: "chmod changes file permissions. Returns exit status 0 on success. No stdout output."
+  - id: cli_chmod_flags
+    entity: cli_chmod
+    axis: shell_submodes
+    text: "chmod supports flags: -R (recursive), -v (verbose)"
+
+  # --- chown ---
+  - id: cli_chown_base
+    entity: cli_chown
+    axis: shell_output_format
+    text: "chown changes file owner/group. Returns exit status 0 on success. No stdout output."
+  - id: cli_chown_flags
+    entity: cli_chown
+    axis: shell_submodes
+    text: "chown supports flags: -R (recursive), -v (verbose)"
+
+  # --- tar ---
+  - id: cli_tar_base
+    entity: cli_tar
+    axis: shell_output_format
+    text: "tar creates and extracts archives. With -t, lists contents (text lines). With -c/-x, returns exit status."
+  - id: cli_tar_flags
+    entity: cli_tar
+    axis: shell_submodes
+    text: "tar supports flags: -c (create), -x (extract), -t (list), -z (gzip), -j (bzip2), -J (xz), -f FILE (archive file), -v (verbose), -C DIR (change directory)"
+
+  # --- rsync ---
+  - id: cli_rsync_base
+    entity: cli_rsync
+    axis: shell_output_format
+    text: "rsync synchronizes files between locations. Returns exit status 0 on success."
+  - id: cli_rsync_flags
+    entity: cli_rsync
+    axis: shell_submodes
+    text: "rsync supports flags: -a (archive), -v (verbose), -z (compress), --delete (remove extra files), -n (dry-run), --progress (show progress)"
+
+  # --- open ---
+  - id: cli_open_base
+    entity: cli_open
+    axis: shell_output_format
+    text: "open opens files with default or specified application (macOS). Returns exit status."
+  - id: cli_open_flags
+    entity: cli_open
+    axis: shell_submodes
+    text: "open supports flags: -a APP (open with application), -R (reveal in Finder), -e (open in TextEdit), -t (open in default text editor)"
+
+  # --- tee ---
+  - id: cli_tee_base
+    entity: cli_tee
+    axis: shell_output_format
+    text: "tee reads stdin and writes to stdout and files simultaneously. Output is text lines."
+  - id: cli_tee_flags
+    entity: cli_tee
+    axis: shell_submodes
+    text: "tee supports flags: -a (append to files instead of overwriting)"
+
+  # --- stat ---
+  - id: cli_stat_base
+    entity: cli_stat
+    axis: shell_output_format
+    text: "stat displays file status: size, permissions, timestamps, inode. Output is key-value pairs."
+
+  # --- shasum ---
+  - id: cli_shasum_base
+    entity: cli_shasum
+    axis: shell_output_format
+    text: "shasum computes SHA digests. Output is a single hash value followed by filename."
+  - id: cli_shasum_flags
+    entity: cli_shasum
+    axis: shell_submodes
+    text: "shasum supports flags: -a 256 (SHA-256), -a 512 (SHA-512), -a 1 (SHA-1)"
+
+  # --- file ---
+  - id: cli_file_base
+    entity: cli_file
+    axis: shell_output_format
+    text: "file determines file type via magic bytes. Output is a single line: filename: type description."
+  - id: cli_file_flags
+    entity: cli_file
+    axis: shell_submodes
+    text: "file supports flags: --mime-type (output MIME type), -b (brief, no filename prefix)"
+
+  # --- uname ---
+  - id: cli_uname_base
+    entity: cli_uname
+    axis: shell_output_format
+    text: "uname prints system information. Output is a single line of system details."
+
+  # --- uptime ---
+  - id: cli_uptime_base
+    entity: cli_uptime
+    axis: shell_output_format
+    text: "uptime shows system uptime and load averages. Output is a single line."
+
+  # --- diff ---
+  - id: cli_diff_base
+    entity: cli_diff
+    axis: shell_output_format
+    text: "diff compares files line by line. Output is text lines showing differences."
+  - id: cli_diff_flags
+    entity: cli_diff
+    axis: shell_submodes
+    text: "diff supports flags: -u (unified format), -r (recursive), -q (brief, report only whether files differ), --color (colorize output)"
+
+  # --- sed ---
+  - id: cli_sed_base
+    entity: cli_sed
+    axis: shell_output_format
+    text: "sed is a stream editor. Output is transformed text lines."
+  - id: cli_sed_flags
+    entity: cli_sed
+    axis: shell_submodes
+    text: "sed supports flags: -i (in-place edit), -E (extended regex), -n (suppress default output), -e SCRIPT (add script)"
+
+  # --- awk ---
+  - id: cli_awk_base
+    entity: cli_awk
+    axis: shell_output_format
+    text: "awk is a pattern scanning and text processing language. Output is text lines."
+
+  # --- cut ---
+  - id: cli_cut_base
+    entity: cli_cut
+    axis: shell_output_format
+    text: "cut removes sections from each line. Output is text lines with selected fields."
+
+  # --- tr ---
+  - id: cli_tr_base
+    entity: cli_tr
+    axis: shell_output_format
+    text: "tr translates or deletes characters. Output is transformed text."
+  - id: cli_tr_flags
+    entity: cli_tr
+    axis: shell_submodes
+    text: "tr supports flags: -d (delete characters), -s (squeeze repeats), -c (complement set)"
+
+  # --- paste ---
+  - id: cli_paste_base
+    entity: cli_paste
+    axis: shell_output_format
+    text: "paste merges lines of files side by side. Output is text lines."
+
+  # --- column ---
+  - id: cli_column_base
+    entity: cli_column
+    axis: shell_output_format
+    text: "column formats text into aligned columns. Output is text lines."
+
+  # --- base64 ---
+  - id: cli_base64_base
+    entity: cli_base64
+    axis: shell_output_format
+    text: "base64 encodes or decodes base64. Output is encoded/decoded text."
+  - id: cli_base64_flags
+    entity: cli_base64
+    axis: shell_submodes
+    text: "base64 supports flags: -d (decode), -D (decode, macOS variant)"
+
+  # --- mdfind ---
+  - id: cli_mdfind_base
+    entity: cli_mdfind
+    axis: shell_output_format
+    text: "mdfind searches Spotlight metadata. Output is one file path per line."
+  - id: cli_mdfind_flags
+    entity: cli_mdfind
+    axis: shell_submodes
+    text: "mdfind supports flags: -name (search by filename), -onlyin DIR (limit to directory)"
+
+  # --- xattr ---
+  - id: cli_xattr_base
+    entity: cli_xattr
+    axis: shell_output_format
+    text: "xattr displays and manipulates extended attributes. Output varies by operation."
+  - id: cli_xattr_flags
+    entity: cli_xattr
+    axis: shell_submodes
+    text: "xattr supports flags: -l (list all), -p KEY (print value), -w KEY VALUE (write), -d KEY (delete), -c (clear all)"
+
+  # --- pbcopy / pbpaste ---
+  - id: cli_pbcopy_base
+    entity: cli_pbcopy
+    axis: shell_output_format
+    text: "pbcopy copies stdin to the macOS clipboard. No stdout output."
+  - id: cli_pbpaste_base
+    entity: cli_pbpaste
+    axis: shell_output_format
+    text: "pbpaste outputs clipboard contents to stdout. Output is text."
+
+  # --- plutil ---
+  - id: cli_plutil_base
+    entity: cli_plutil
+    axis: shell_output_format
+    text: "plutil reads and writes property list files. Output varies by operation."
+  - id: cli_plutil_flags
+    entity: cli_plutil
+    axis: shell_submodes
+    text: "plutil supports flags: -p (print human-readable), -convert FORMAT (xml1, binary1, json), -extract KEY TYPE (extract value)"
+
+  # --- lsof ---
+  - id: cli_lsof_base
+    entity: cli_lsof
+    axis: shell_output_format
+    text: "lsof lists open files. Output is tabular: COMMAND, PID, USER, FD, TYPE, DEVICE, SIZE, NODE, NAME."
+
+  # --- kill ---
+  - id: cli_kill_base
+    entity: cli_kill
+    axis: shell_output_format
+    text: "kill sends signals to processes. Returns exit status. No stdout output."
+
+  # --- pkill ---
+  - id: cli_pkill_base
+    entity: cli_pkill
+    axis: shell_output_format
+    text: "pkill kills processes by name pattern. Returns exit status."
+
+  # --- watch ---
+  - id: cli_watch_base
+    entity: cli_watch
+    axis: shell_output_format
+    text: "watch executes a command periodically and displays output. Output is text lines."
+
+  # --- git ---
+  - id: cli_git_base
+    entity: cli_git
+    axis: shell_output_format
+    text: "git is a distributed VCS. Output varies by subcommand: text lines (log, status, diff, blame), exit status (add, commit, push, pull, checkout, merge, rebase, stash, tag, init, clone, branch)."
+  - id: cli_git_flags
+    entity: cli_git
+    axis: shell_submodes
+    text: "git subcommands: init, clone URL, add FILES, commit -m MSG, log, log A..B, diff, diff A B, branch NAME, checkout BRANCH, merge BRANCH, rebase BRANCH, stash, stash pop, push REMOTE BRANCH, pull REMOTE BRANCH, blame FILE, bisect start GOOD BAD, tag NAME COMMIT, status"
+
+  # --- jq ---
+  - id: cli_jq_base
+    entity: cli_jq
+    axis: shell_output_format
+    text: "jq processes JSON. Output is JSON text (pretty-printed by default)."
+  - id: cli_jq_flags
+    entity: cli_jq
+    axis: shell_submodes
+    text: "jq supports flags: -r (raw output, no quotes), -c (compact output), -e (exit status reflects value), -s (slurp all inputs into array)"
+
+  # --- yq ---
+  - id: cli_yq_base
+    entity: cli_yq
+    axis: shell_output_format
+    text: "yq processes YAML/JSON/XML. Output is YAML or JSON text."
+  - id: cli_yq_flags
+    entity: cli_yq
+    axis: shell_submodes
+    text: "yq supports flags: -o=json (output as JSON), -o=yaml (output as YAML), -r (raw output), -i (in-place edit)"
+
+  # --- tmux ---
+  - id: cli_tmux_base
+    entity: cli_tmux
+    axis: shell_output_format
+    text: "tmux is a terminal multiplexer. Output varies by subcommand."
+  - id: cli_tmux_flags
+    entity: cli_tmux
+    axis: shell_submodes
+    text: "tmux subcommands: new-session -s NAME, attach -t NAME, split-window -h/-v, send-keys TEXT, list-sessions, kill-session -t NAME"
+
+  # --- screen ---
+  - id: cli_screen_base
+    entity: cli_screen
+    axis: shell_output_format
+    text: "screen is a terminal multiplexer (GNU Screen). Output varies by subcommand."
+  - id: cli_screen_flags
+    entity: cli_screen
+    axis: shell_submodes
+    text: "screen subcommands: -S NAME (new session), -r NAME (reattach), -ls (list sessions)"
+
+  # --- ssh ---
+  - id: cli_ssh_base
+    entity: cli_ssh
+    axis: shell_output_format
+    text: "ssh executes commands on remote hosts. Output is the remote command's stdout."
+
+  # --- scp ---
+  - id: cli_scp_base
+    entity: cli_scp
+    axis: shell_output_format
+    text: "scp copies files over SSH. Returns exit status. Progress shown on stderr."
+  - id: cli_scp_flags
+    entity: cli_scp
+    axis: shell_submodes
+    text: "scp supports flags: -r (recursive), -P PORT (port), -q (quiet)"
+
+  # --- nc ---
+  - id: cli_nc_base
+    entity: cli_nc
+    axis: shell_output_format
+    text: "nc (netcat) opens TCP/UDP connections. Output is received data."
+
+  # --- ping ---
+  - id: cli_ping_base
+    entity: cli_ping
+    axis: shell_output_format
+    text: "ping sends ICMP echo requests. Output is text lines with round-trip times."
+
+  # --- dig ---
+  - id: cli_dig_base
+    entity: cli_dig
+    axis: shell_output_format
+    text: "dig performs DNS lookups. Output is text lines with DNS records."
+
+  # --- gzip ---
+  - id: cli_gzip_base
+    entity: cli_gzip
+    axis: shell_output_format
+    text: "gzip compresses or decompresses files. Returns exit status."
+  - id: cli_gzip_flags
+    entity: cli_gzip
+    axis: shell_submodes
+    text: "gzip supports flags: -d (decompress), -k (keep original), -v (verbose), -9 (best compression), -1 (fastest)"
+
+  # --- xz ---
+  - id: cli_xz_base
+    entity: cli_xz
+    axis: shell_output_format
+    text: "xz compresses or decompresses files with LZMA. Returns exit status."
+  - id: cli_xz_flags
+    entity: cli_xz
+    axis: shell_submodes
+    text: "xz supports flags: -d (decompress), -k (keep original), -v (verbose), -9 (best compression)"
+
+  # --- openssl ---
+  - id: cli_openssl_base
+    entity: cli_openssl
+    axis: shell_output_format
+    text: "openssl is a cryptographic toolkit. Output varies by subcommand (hash digests, certificates, etc.)."
+  - id: cli_openssl_flags
+    entity: cli_openssl
+    axis: shell_submodes
+    text: "openssl subcommands: dgst -sha256 (hash), dgst -md5 (MD5 hash), enc -aes-256-cbc (encrypt), x509 (certificate operations)"
 
 # ---------------------------------------------------------------------------
 # Evidence
@@ -757,6 +1307,1526 @@ properties:
     axis: shell_submodes
     key: submode_download
     value: "-sLO"
+
+  # =========================================================================
+  # mv — shell_exec (fire-and-forget anchor)
+  # =========================================================================
+  - entity: cli_mv
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_mv"
+  - entity: cli_mv
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-mv"
+  - entity: cli_mv
+    axis: shell_type_signature
+    key: base_command
+    value: "mv"
+  - entity: cli_mv
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_mv
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # mv submodes
+  - entity: cli_mv
+    axis: shell_submodes
+    key: submode_interactive
+    value: "-i"
+  - entity: cli_mv
+    axis: shell_submodes
+    key: submode_no_clobber
+    value: "-n"
+  - entity: cli_mv
+    axis: shell_submodes
+    key: submode_verbose
+    value: "-v"
+
+  # =========================================================================
+  # cp — shell_exec (discovered via type-symmetric from mv)
+  # =========================================================================
+  - entity: cli_cp
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_cp"
+  - entity: cli_cp
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-cp"
+  - entity: cli_cp
+    axis: shell_type_signature
+    key: base_command
+    value: "cp"
+  - entity: cli_cp
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_cp
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # cp submodes
+  - entity: cli_cp
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-r"
+  - entity: cli_cp
+    axis: shell_submodes
+    key: submode_archive
+    value: "-a"
+  - entity: cli_cp
+    axis: shell_submodes
+    key: submode_verbose
+    value: "-v"
+  - entity: cli_cp
+    axis: shell_submodes
+    key: submode_no_clobber
+    value: "-n"
+
+  # =========================================================================
+  # rm — shell_exec
+  # =========================================================================
+  - entity: cli_rm
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_rm"
+  - entity: cli_rm
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-rm"
+  - entity: cli_rm
+    axis: shell_type_signature
+    key: base_command
+    value: "rm"
+  - entity: cli_rm
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_rm
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # rm submodes
+  - entity: cli_rm
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-r"
+  - entity: cli_rm
+    axis: shell_submodes
+    key: submode_force
+    value: "-rf"
+  - entity: cli_rm
+    axis: shell_submodes
+    key: submode_interactive
+    value: "-i"
+
+  # =========================================================================
+  # mkdir — shell_exec
+  # =========================================================================
+  - entity: cli_mkdir
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_mkdir"
+  - entity: cli_mkdir
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-mkdir"
+  - entity: cli_mkdir
+    axis: shell_type_signature
+    key: base_command
+    value: "mkdir"
+  - entity: cli_mkdir
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_mkdir
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # mkdir submodes
+  - entity: cli_mkdir
+    axis: shell_submodes
+    key: submode_parents
+    value: "-p"
+
+  # =========================================================================
+  # ln — shell_exec
+  # =========================================================================
+  - entity: cli_ln
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_ln"
+  - entity: cli_ln
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-ln"
+  - entity: cli_ln
+    axis: shell_type_signature
+    key: base_command
+    value: "ln"
+  - entity: cli_ln
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_ln
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # ln submodes
+  - entity: cli_ln
+    axis: shell_submodes
+    key: submode_symbolic
+    value: "-s"
+  - entity: cli_ln
+    axis: shell_submodes
+    key: submode_force
+    value: "-sf"
+
+  # =========================================================================
+  # chmod — shell_exec
+  # =========================================================================
+  - entity: cli_chmod
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_chmod"
+  - entity: cli_chmod
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-chmod"
+  - entity: cli_chmod
+    axis: shell_type_signature
+    key: base_command
+    value: "chmod"
+  - entity: cli_chmod
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_chmod
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # chmod submodes
+  - entity: cli_chmod
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-R"
+
+  # =========================================================================
+  # chown — shell_exec
+  # =========================================================================
+  - entity: cli_chown
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_chown"
+  - entity: cli_chown
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-chown"
+  - entity: cli_chown
+    axis: shell_type_signature
+    key: base_command
+    value: "chown"
+  - entity: cli_chown
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_chown
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # chown submodes
+  - entity: cli_chown
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-R"
+
+  # =========================================================================
+  # tar — shell_exec
+  # =========================================================================
+  - entity: cli_tar
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_tar"
+  - entity: cli_tar
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-tar"
+  - entity: cli_tar
+    axis: shell_type_signature
+    key: base_command
+    value: "tar"
+  - entity: cli_tar
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_tar
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # tar submodes
+  - entity: cli_tar
+    axis: shell_submodes
+    key: submode_create
+    value: "-cf"
+  - entity: cli_tar
+    axis: shell_submodes
+    key: submode_extract
+    value: "-xf"
+  - entity: cli_tar
+    axis: shell_submodes
+    key: submode_list
+    value: "-tf"
+  - entity: cli_tar
+    axis: shell_submodes
+    key: submode_create_gz
+    value: "-czf"
+  - entity: cli_tar
+    axis: shell_submodes
+    key: submode_extract_gz
+    value: "-xzf"
+
+  # =========================================================================
+  # rsync — shell_exec
+  # =========================================================================
+  - entity: cli_rsync
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_rsync"
+  - entity: cli_rsync
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-rsync"
+  - entity: cli_rsync
+    axis: shell_type_signature
+    key: base_command
+    value: "rsync"
+  - entity: cli_rsync
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_rsync
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # rsync submodes
+  - entity: cli_rsync
+    axis: shell_submodes
+    key: submode_archive
+    value: "-a"
+  - entity: cli_rsync
+    axis: shell_submodes
+    key: submode_archive_verbose
+    value: "-av"
+  - entity: cli_rsync
+    axis: shell_submodes
+    key: submode_dry_run
+    value: "-avn"
+
+  # =========================================================================
+  # open — shell_exec (macOS)
+  # =========================================================================
+  - entity: cli_open
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_open"
+  - entity: cli_open
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-open"
+  - entity: cli_open
+    axis: shell_type_signature
+    key: base_command
+    value: "open"
+  - entity: cli_open
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_open
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # open submodes
+  - entity: cli_open
+    axis: shell_submodes
+    key: submode_with_app
+    value: "-a"
+  - entity: cli_open
+    axis: shell_submodes
+    key: submode_reveal
+    value: "-R"
+  - entity: cli_open
+    axis: shell_submodes
+    key: submode_textedit
+    value: "-e"
+
+  # =========================================================================
+  # tee — shell_text_lines
+  # =========================================================================
+  - entity: cli_tee
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_tee"
+  - entity: cli_tee
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-tee"
+  - entity: cli_tee
+    axis: shell_type_signature
+    key: base_command
+    value: "tee"
+  - entity: cli_tee
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_tee
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # tee submodes
+  - entity: cli_tee
+    axis: shell_submodes
+    key: submode_append
+    value: "-a"
+
+  # =========================================================================
+  # stat — shell_single_value
+  # =========================================================================
+  - entity: cli_stat
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_stat"
+  - entity: cli_stat
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-stat"
+  - entity: cli_stat
+    axis: shell_type_signature
+    key: base_command
+    value: "stat"
+  - entity: cli_stat
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_stat
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+  # stat submodes (macOS stat format strings)
+  - entity: cli_stat
+    axis: shell_submodes
+    key: submode_size
+    value: "-f %z"
+  - entity: cli_stat
+    axis: shell_submodes
+    key: submode_mtime
+    value: "-f %m"
+  - entity: cli_stat
+    axis: shell_submodes
+    key: submode_permissions
+    value: "-f %p"
+  - entity: cli_stat
+    axis: shell_submodes
+    key: submode_type
+    value: "-f %T"
+
+  # =========================================================================
+  # shasum — shell_single_value
+  # =========================================================================
+  - entity: cli_shasum
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_shasum"
+  - entity: cli_shasum
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-shasum"
+  - entity: cli_shasum
+    axis: shell_type_signature
+    key: base_command
+    value: "shasum"
+  - entity: cli_shasum
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_shasum
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+  # shasum submodes
+  - entity: cli_shasum
+    axis: shell_submodes
+    key: submode_sha256
+    value: "-a 256"
+  - entity: cli_shasum
+    axis: shell_submodes
+    key: submode_sha512
+    value: "-a 512"
+
+  # =========================================================================
+  # file — shell_single_value
+  # =========================================================================
+  - entity: cli_file
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_file"
+  - entity: cli_file
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-file"
+  - entity: cli_file
+    axis: shell_type_signature
+    key: base_command
+    value: "file"
+  - entity: cli_file
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_file
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+  # file submodes
+  - entity: cli_file
+    axis: shell_submodes
+    key: submode_mime
+    value: "--mime-type"
+  - entity: cli_file
+    axis: shell_submodes
+    key: submode_brief
+    value: "-b"
+
+  # =========================================================================
+  # uname — shell_single_value
+  # =========================================================================
+  - entity: cli_uname
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_uname"
+  - entity: cli_uname
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-uname"
+  - entity: cli_uname
+    axis: shell_type_signature
+    key: base_command
+    value: "uname"
+  - entity: cli_uname
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_uname
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+  # uname submodes
+  - entity: cli_uname
+    axis: shell_submodes
+    key: submode_all
+    value: "-a"
+
+  # =========================================================================
+  # uptime — shell_single_value
+  # =========================================================================
+  - entity: cli_uptime
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_uptime"
+  - entity: cli_uptime
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-uptime"
+  - entity: cli_uptime
+    axis: shell_type_signature
+    key: base_command
+    value: "uptime"
+  - entity: cli_uptime
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_uptime
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # =========================================================================
+  # diff — shell_text_lines
+  # =========================================================================
+  - entity: cli_diff
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_diff"
+  - entity: cli_diff
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-diff"
+  - entity: cli_diff
+    axis: shell_type_signature
+    key: base_command
+    value: "diff"
+  - entity: cli_diff
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_diff
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # diff submodes
+  - entity: cli_diff
+    axis: shell_submodes
+    key: submode_unified
+    value: "-u"
+  - entity: cli_diff
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-r"
+  - entity: cli_diff
+    axis: shell_submodes
+    key: submode_brief
+    value: "-q"
+
+  # =========================================================================
+  # sed — shell_text_lines
+  # =========================================================================
+  - entity: cli_sed
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_sed"
+  - entity: cli_sed
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-sed"
+  - entity: cli_sed
+    axis: shell_type_signature
+    key: base_command
+    value: "sed"
+  - entity: cli_sed
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_sed
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # sed submodes
+  - entity: cli_sed
+    axis: shell_submodes
+    key: submode_in_place
+    value: "-i ''"
+  - entity: cli_sed
+    axis: shell_submodes
+    key: submode_extended
+    value: "-E"
+
+  # =========================================================================
+  # awk — shell_text_lines
+  # =========================================================================
+  - entity: cli_awk
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_awk"
+  - entity: cli_awk
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-awk"
+  - entity: cli_awk
+    axis: shell_type_signature
+    key: base_command
+    value: "awk"
+  - entity: cli_awk
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_awk
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # =========================================================================
+  # cut — shell_text_lines
+  # =========================================================================
+  - entity: cli_cut
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_cut"
+  - entity: cli_cut
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-cut"
+  - entity: cli_cut
+    axis: shell_type_signature
+    key: base_command
+    value: "cut"
+  - entity: cli_cut
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_cut
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # =========================================================================
+  # tr — shell_text_lines
+  # =========================================================================
+  - entity: cli_tr
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_tr"
+  - entity: cli_tr
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-tr"
+  - entity: cli_tr
+    axis: shell_type_signature
+    key: base_command
+    value: "tr"
+  - entity: cli_tr
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_tr
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # tr submodes
+  - entity: cli_tr
+    axis: shell_submodes
+    key: submode_delete
+    value: "-d"
+  - entity: cli_tr
+    axis: shell_submodes
+    key: submode_squeeze
+    value: "-s"
+
+  # =========================================================================
+  # paste — shell_text_lines
+  # =========================================================================
+  - entity: cli_paste
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_paste"
+  - entity: cli_paste
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-paste"
+  - entity: cli_paste
+    axis: shell_type_signature
+    key: base_command
+    value: "paste"
+  - entity: cli_paste
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_paste
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # =========================================================================
+  # column — shell_text_lines
+  # =========================================================================
+  - entity: cli_column
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_column"
+  - entity: cli_column
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-column"
+  - entity: cli_column
+    axis: shell_type_signature
+    key: base_command
+    value: "column"
+  - entity: cli_column
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_column
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # column submodes
+  - entity: cli_column
+    axis: shell_submodes
+    key: submode_table
+    value: "-t"
+
+  # =========================================================================
+  # base64 — shell_text_lines
+  # =========================================================================
+  - entity: cli_base64
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_base64"
+  - entity: cli_base64
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-base64"
+  - entity: cli_base64
+    axis: shell_type_signature
+    key: base_command
+    value: "base64"
+  - entity: cli_base64
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_base64
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # base64 submodes
+  - entity: cli_base64
+    axis: shell_submodes
+    key: submode_decode
+    value: "-D"
+
+  # =========================================================================
+  # mdfind — shell_tree (macOS Spotlight)
+  # =========================================================================
+  - entity: cli_mdfind
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_mdfind"
+  - entity: cli_mdfind
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-mdfind"
+  - entity: cli_mdfind
+    axis: shell_type_signature
+    key: base_command
+    value: "mdfind"
+  - entity: cli_mdfind
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_mdfind
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_tree"
+  # mdfind submodes
+  - entity: cli_mdfind
+    axis: shell_submodes
+    key: submode_name
+    value: "-name"
+  - entity: cli_mdfind
+    axis: shell_submodes
+    key: submode_onlyin
+    value: "-onlyin"
+
+  # =========================================================================
+  # xattr — shell_text_lines (macOS)
+  # =========================================================================
+  - entity: cli_xattr
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_xattr"
+  - entity: cli_xattr
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-xattr"
+  - entity: cli_xattr
+    axis: shell_type_signature
+    key: base_command
+    value: "xattr"
+  - entity: cli_xattr
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_xattr
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # xattr submodes
+  - entity: cli_xattr
+    axis: shell_submodes
+    key: submode_list
+    value: "-l"
+  - entity: cli_xattr
+    axis: shell_submodes
+    key: submode_print
+    value: "-p"
+  - entity: cli_xattr
+    axis: shell_submodes
+    key: submode_write
+    value: "-w"
+  - entity: cli_xattr
+    axis: shell_submodes
+    key: submode_delete
+    value: "-d"
+  - entity: cli_xattr
+    axis: shell_submodes
+    key: submode_clear
+    value: "-c"
+
+  # =========================================================================
+  # pbcopy — shell_exec (macOS clipboard)
+  # =========================================================================
+  - entity: cli_pbcopy
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_pbcopy"
+  - entity: cli_pbcopy
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-pbcopy"
+  - entity: cli_pbcopy
+    axis: shell_type_signature
+    key: base_command
+    value: "pbcopy"
+  - entity: cli_pbcopy
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_pbcopy
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # =========================================================================
+  # pbpaste — shell_text_lines (macOS clipboard)
+  # =========================================================================
+  - entity: cli_pbpaste
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_pbpaste"
+  - entity: cli_pbpaste
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-pbpaste"
+  - entity: cli_pbpaste
+    axis: shell_type_signature
+    key: base_command
+    value: "pbpaste"
+  - entity: cli_pbpaste
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_pbpaste
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # =========================================================================
+  # plutil — shell_text_lines (macOS plist)
+  # =========================================================================
+  - entity: cli_plutil
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_plutil"
+  - entity: cli_plutil
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-plutil"
+  - entity: cli_plutil
+    axis: shell_type_signature
+    key: base_command
+    value: "plutil"
+  - entity: cli_plutil
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_plutil
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # plutil submodes
+  - entity: cli_plutil
+    axis: shell_submodes
+    key: submode_print
+    value: "-p"
+  - entity: cli_plutil
+    axis: shell_submodes
+    key: submode_convert_json
+    value: "-convert json"
+  - entity: cli_plutil
+    axis: shell_submodes
+    key: submode_convert_xml
+    value: "-convert xml1"
+
+  # =========================================================================
+  # lsof — shell_tabular
+  # =========================================================================
+  - entity: cli_lsof
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_lsof"
+  - entity: cli_lsof
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-lsof"
+  - entity: cli_lsof
+    axis: shell_type_signature
+    key: base_command
+    value: "lsof"
+  - entity: cli_lsof
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_lsof
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_tabular"
+
+  # =========================================================================
+  # kill — shell_exec
+  # =========================================================================
+  - entity: cli_kill
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_kill"
+  - entity: cli_kill
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-kill"
+  - entity: cli_kill
+    axis: shell_type_signature
+    key: base_command
+    value: "kill"
+  - entity: cli_kill
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_kill
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # =========================================================================
+  # pkill — shell_exec
+  # =========================================================================
+  - entity: cli_pkill
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_pkill"
+  - entity: cli_pkill
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-pkill"
+  - entity: cli_pkill
+    axis: shell_type_signature
+    key: base_command
+    value: "pkill"
+  - entity: cli_pkill
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_pkill
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # =========================================================================
+  # watch — shell_text_lines
+  # =========================================================================
+  - entity: cli_watch
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_watch"
+  - entity: cli_watch
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-watch"
+  - entity: cli_watch
+    axis: shell_type_signature
+    key: base_command
+    value: "watch"
+  - entity: cli_watch
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_watch
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # =========================================================================
+  # git — shell_vcs (new class, anchor)
+  # =========================================================================
+  - entity: cli_git
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_git"
+  - entity: cli_git
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-git"
+  - entity: cli_git
+    axis: shell_type_signature
+    key: base_command
+    value: "git"
+  - entity: cli_git
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_git
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_vcs"
+  # git submodes (each subcommand is a submode)
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_init
+    value: "init"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_clone
+    value: "clone"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_add
+    value: "add"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_commit
+    value: "commit"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_log
+    value: "log"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_log_oneline
+    value: "log --oneline"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_diff
+    value: "diff"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_status
+    value: "status"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_branch
+    value: "branch"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_checkout
+    value: "checkout"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_merge
+    value: "merge"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_rebase
+    value: "rebase"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_stash
+    value: "stash"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_stash_pop
+    value: "stash pop"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_push
+    value: "push"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_pull
+    value: "pull"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_blame
+    value: "blame"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_bisect
+    value: "bisect"
+  - entity: cli_git
+    axis: shell_submodes
+    key: submode_tag
+    value: "tag"
+
+  # =========================================================================
+  # jq — shell_structured (new class, anchor)
+  # =========================================================================
+  - entity: cli_jq
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_jq"
+  - entity: cli_jq
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-jq"
+  - entity: cli_jq
+    axis: shell_type_signature
+    key: base_command
+    value: "jq"
+  - entity: cli_jq
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_jq
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_structured"
+  # jq submodes
+  - entity: cli_jq
+    axis: shell_submodes
+    key: submode_raw
+    value: "-r"
+  - entity: cli_jq
+    axis: shell_submodes
+    key: submode_compact
+    value: "-c"
+  - entity: cli_jq
+    axis: shell_submodes
+    key: submode_slurp
+    value: "-s"
+
+  # =========================================================================
+  # yq — shell_structured (discovered via type-symmetric from jq)
+  # =========================================================================
+  - entity: cli_yq
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_yq"
+  - entity: cli_yq
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-yq"
+  - entity: cli_yq
+    axis: shell_type_signature
+    key: base_command
+    value: "yq"
+  - entity: cli_yq
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_yq
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_structured"
+  # yq submodes
+  - entity: cli_yq
+    axis: shell_submodes
+    key: submode_json_out
+    value: "-o=json"
+  - entity: cli_yq
+    axis: shell_submodes
+    key: submode_raw
+    value: "-r"
+
+  # =========================================================================
+  # tmux — shell_session (new class, anchor)
+  # =========================================================================
+  - entity: cli_tmux
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_tmux"
+  - entity: cli_tmux
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-tmux"
+  - entity: cli_tmux
+    axis: shell_type_signature
+    key: base_command
+    value: "tmux"
+  - entity: cli_tmux
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_tmux
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_session"
+  # tmux submodes
+  - entity: cli_tmux
+    axis: shell_submodes
+    key: submode_new_session
+    value: "new-session -s"
+  - entity: cli_tmux
+    axis: shell_submodes
+    key: submode_attach
+    value: "attach -t"
+  - entity: cli_tmux
+    axis: shell_submodes
+    key: submode_split_h
+    value: "split-window -h"
+  - entity: cli_tmux
+    axis: shell_submodes
+    key: submode_split_v
+    value: "split-window -v"
+  - entity: cli_tmux
+    axis: shell_submodes
+    key: submode_send_keys
+    value: "send-keys"
+  - entity: cli_tmux
+    axis: shell_submodes
+    key: submode_list_sessions
+    value: "list-sessions"
+
+  # =========================================================================
+  # screen — shell_session (discovered via type-symmetric from tmux)
+  # =========================================================================
+  - entity: cli_screen
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_screen"
+  - entity: cli_screen
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-screen"
+  - entity: cli_screen
+    axis: shell_type_signature
+    key: base_command
+    value: "screen"
+  - entity: cli_screen
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_screen
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_session"
+  # screen submodes
+  - entity: cli_screen
+    axis: shell_submodes
+    key: submode_new_session
+    value: "-S"
+  - entity: cli_screen
+    axis: shell_submodes
+    key: submode_reattach
+    value: "-r"
+  - entity: cli_screen
+    axis: shell_submodes
+    key: submode_list
+    value: "-ls"
+
+  # =========================================================================
+  # ssh — shell_network (new class, anchor)
+  # =========================================================================
+  - entity: cli_ssh
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_ssh"
+  - entity: cli_ssh
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-ssh"
+  - entity: cli_ssh
+    axis: shell_type_signature
+    key: base_command
+    value: "ssh"
+  - entity: cli_ssh
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_ssh
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_network"
+
+  # =========================================================================
+  # scp — shell_network
+  # =========================================================================
+  - entity: cli_scp
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_scp"
+  - entity: cli_scp
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-scp"
+  - entity: cli_scp
+    axis: shell_type_signature
+    key: base_command
+    value: "scp"
+  - entity: cli_scp
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_scp
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_network"
+  # scp submodes
+  - entity: cli_scp
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-r"
+
+  # =========================================================================
+  # nc — shell_network
+  # =========================================================================
+  - entity: cli_nc
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_nc"
+  - entity: cli_nc
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-nc"
+  - entity: cli_nc
+    axis: shell_type_signature
+    key: base_command
+    value: "nc"
+  - entity: cli_nc
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_nc
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_network"
+
+  # =========================================================================
+  # ping — shell_text_lines
+  # =========================================================================
+  - entity: cli_ping
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_ping"
+  - entity: cli_ping
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-ping"
+  - entity: cli_ping
+    axis: shell_type_signature
+    key: base_command
+    value: "ping"
+  - entity: cli_ping
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_ping
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # =========================================================================
+  # dig — shell_text_lines
+  # =========================================================================
+  - entity: cli_dig
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_dig"
+  - entity: cli_dig
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-dig"
+  - entity: cli_dig
+    axis: shell_type_signature
+    key: base_command
+    value: "dig"
+  - entity: cli_dig
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_dig
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # =========================================================================
+  # gzip — shell_exec (compression)
+  # =========================================================================
+  - entity: cli_gzip
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_gzip"
+  - entity: cli_gzip
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-gzip"
+  - entity: cli_gzip
+    axis: shell_type_signature
+    key: base_command
+    value: "gzip"
+  - entity: cli_gzip
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_gzip
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # gzip submodes
+  - entity: cli_gzip
+    axis: shell_submodes
+    key: submode_decompress
+    value: "-d"
+  - entity: cli_gzip
+    axis: shell_submodes
+    key: submode_keep
+    value: "-k"
+  - entity: cli_gzip
+    axis: shell_submodes
+    key: submode_best
+    value: "-9"
+
+  # =========================================================================
+  # xz — shell_exec (compression)
+  # =========================================================================
+  - entity: cli_xz
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_xz"
+  - entity: cli_xz
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-xz"
+  - entity: cli_xz
+    axis: shell_type_signature
+    key: base_command
+    value: "xz"
+  - entity: cli_xz
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_xz
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # xz submodes
+  - entity: cli_xz
+    axis: shell_submodes
+    key: submode_decompress
+    value: "-d"
+  - entity: cli_xz
+    axis: shell_submodes
+    key: submode_keep
+    value: "-k"
+
+  # =========================================================================
+  # openssl — shell_text_lines (crypto)
+  # =========================================================================
+  - entity: cli_openssl
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_openssl"
+  - entity: cli_openssl
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-openssl"
+  - entity: cli_openssl
+    axis: shell_type_signature
+    key: base_command
+    value: "openssl"
+  - entity: cli_openssl
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_openssl
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # openssl submodes
+  - entity: cli_openssl
+    axis: shell_submodes
+    key: submode_sha256
+    value: "dgst -sha256"
+  - entity: cli_openssl
+    axis: shell_submodes
+    key: submode_md5
+    value: "dgst -md5"
 
 # ---------------------------------------------------------------------------
 # Relations

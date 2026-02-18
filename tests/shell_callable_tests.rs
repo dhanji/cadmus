@@ -63,9 +63,9 @@ fn make_inputs(pairs: Vec<(&str, &str)>) -> HashMap<String, String> {
 #[test]
 fn test_cli_facts_load() {
     let pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
-    assert_eq!(pack.entities.len(), 12, "expected 12 CLI tool entities");
+    assert_eq!(pack.entities.len(), 58, "expected 58 CLI tool entities");
     assert_eq!(pack.axes.len(), 5);
-    assert!(pack.claims.len() >= 20);
+    assert!(pack.claims.len() >= 60);
     assert!(pack.evidence.len() >= 5);
 }
 
@@ -85,7 +85,7 @@ fn test_cli_facts_submodes_count() {
     let submodes: Vec<_> = pack.properties.iter()
         .filter(|p| p.key.starts_with("submode_"))
         .collect();
-    assert_eq!(submodes.len(), 45, "expected 45 submode properties");
+    assert_eq!(submodes.len(), 141, "expected 141 submode properties");
 }
 
 #[test]
@@ -106,10 +106,10 @@ fn test_cli_facts_type_symmetry_classes() {
             classes.entry(p.value.clone()).or_default().push(p.entity.clone());
         }
     }
-    assert_eq!(classes.len(), 6, "expected 6 type symmetry classes");
-    assert_eq!(classes["shell_text_lines"].len(), 5, "text_lines should have 5 tools");
-    assert_eq!(classes["shell_tabular"].len(), 2, "tabular should have 2 tools");
-    assert_eq!(classes["shell_tree"].len(), 1, "tree should have 1 tool");
+    assert_eq!(classes.len(), 11, "expected 11 type symmetry classes");
+    assert_eq!(classes["shell_text_lines"].len(), 21, "text_lines should have 21 tools");
+    assert_eq!(classes["shell_tabular"].len(), 3, "tabular should have 3 tools");
+    assert_eq!(classes["shell_tree"].len(), 2, "tree should have 2 tools");
 }
 
 #[test]
@@ -291,7 +291,7 @@ fn test_submode_total_count() {
     let cli_pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
     let cli_facts = FactPackIndex::build(cli_pack);
     let submodes = discover_shell_submodes(&mut reg, &facts, &cli_facts);
-    assert_eq!(submodes.len(), 45, "expected 45 submode ops");
+    assert_eq!(submodes.len(), 141, "expected 141 submode ops");
 }
 
 #[test]
@@ -566,7 +566,7 @@ fn test_submode_idempotent() {
     let second = discover_shell_submodes(&mut reg, &facts, &cli_facts2);
     let count_after_second = reg.poly_op_names().len();
 
-    assert_eq!(first.len(), 45);
+    assert_eq!(first.len(), 141);
     assert_eq!(second.len(), 0, "second run should discover 0 new ops");
     assert_eq!(count_after_first, count_after_second, "op count should not change");
 }

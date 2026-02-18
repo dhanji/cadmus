@@ -716,8 +716,8 @@ steps:
 
 #[test]
 fn test_walk_tree_pack_archive_seq_bridge() {
-    // walk_tree → pack_archive: walk_tree produces List(String),
-    // pack_archive should use string-join to pass all files to tar
+    // walk_tree → pack_archive: walk_tree produces List(String).
+    // pack_archive (now subsumed to shell_tar) should bridge the seq.
     let yaml = r#"
 workflow: "Zip up downloads"
 inputs:
@@ -727,9 +727,9 @@ steps:
   - pack_archive
 "#;
     let script = compile_to_racket(yaml).expect("should compile");
-    // The bridge should use string-join or map shell-quote, NOT raw (shell-quote step_1)
-    assert!(script.contains("string-join") || script.contains("map shell-quote"),
-        "pack_archive after walk_tree should bridge via string-join:\n{}", script);
+    // The bridge should use string-join, map shell-quote, or append-map
+    assert!(script.contains("string-join") || script.contains("map shell-quote") || script.contains("append-map"),
+        "pack_archive after walk_tree should bridge:\n{}", script);
     assert!(!script.contains("(shell-quote step_1)"),
         "should NOT raw shell-quote the list variable:\n{}", script);
     // Should still have the find command for walk_tree
@@ -776,7 +776,7 @@ steps:
 "#;
     let script = compile_to_racket(yaml).expect("should compile");
     // pack_archive (step 3) should bridge because filter (step 2) output is Seq
-    assert!(script.contains("string-join") || script.contains("map shell-quote"),
+    assert!(script.contains("string-join") || script.contains("map shell-quote") || script.contains("append-map"),
         "pack_archive after filter should still bridge:\n{}", script);
     // filter should use Racket-native filter
     assert!(script.contains("(filter (lambda"),

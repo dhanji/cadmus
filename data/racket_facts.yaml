@@ -107,6 +107,155 @@ entities:
     name: "shell-curl"
     description: "Download URL contents via curl"
 
+  # --- New shell operations (Phase 3 migration) ---
+  # Anchors: shell_mv, shell_git, shell_jq, shell_tmux, shell_ssh
+  # Discovered via type-symmetric: shell_cp, shell_rm, shell_mkdir, shell_ln,
+  #   shell_chmod, shell_chown, shell_tar, shell_rsync, shell_open, shell_tee,
+  #   shell_stat, shell_shasum, shell_file, shell_uname, shell_uptime,
+  #   shell_diff, shell_sed, shell_awk, shell_cut, shell_tr, shell_paste,
+  #   shell_column, shell_base64, shell_mdfind, shell_xattr, shell_pbcopy,
+  #   shell_pbpaste, shell_plutil, shell_lsof, shell_kill, shell_pkill,
+  #   shell_watch, shell_yq, shell_screen, shell_scp, shell_nc, shell_ping,
+  #   shell_dig, shell_gzip, shell_xz, shell_openssl
+  - id: op_shell_mv
+    name: "shell-mv"
+    description: "Move/rename files via mv"
+  - id: op_shell_cp
+    name: "shell-cp"
+    description: "Copy files via cp"
+  - id: op_shell_rm
+    name: "shell-rm"
+    description: "Remove files via rm"
+  - id: op_shell_mkdir
+    name: "shell-mkdir"
+    description: "Create directories via mkdir"
+  - id: op_shell_ln
+    name: "shell-ln"
+    description: "Create links via ln"
+  - id: op_shell_chmod
+    name: "shell-chmod"
+    description: "Change permissions via chmod"
+  - id: op_shell_chown
+    name: "shell-chown"
+    description: "Change ownership via chown"
+  - id: op_shell_tar
+    name: "shell-tar"
+    description: "Archive/extract via tar"
+  - id: op_shell_rsync
+    name: "shell-rsync"
+    description: "Sync files via rsync"
+  - id: op_shell_open
+    name: "shell-open"
+    description: "Open files via open (macOS)"
+  - id: op_shell_tee
+    name: "shell-tee"
+    description: "Tee stdin to file and stdout"
+  - id: op_shell_stat
+    name: "shell-stat"
+    description: "File metadata via stat"
+  - id: op_shell_shasum
+    name: "shell-shasum"
+    description: "SHA hash via shasum"
+  - id: op_shell_file
+    name: "shell-file"
+    description: "Detect file type via file"
+  - id: op_shell_uname
+    name: "shell-uname"
+    description: "System info via uname"
+  - id: op_shell_uptime
+    name: "shell-uptime"
+    description: "System uptime via uptime"
+  - id: op_shell_diff
+    name: "shell-diff"
+    description: "Compare files via diff"
+  - id: op_shell_sed
+    name: "shell-sed"
+    description: "Stream editing via sed"
+  - id: op_shell_awk
+    name: "shell-awk"
+    description: "Text processing via awk"
+  - id: op_shell_cut
+    name: "shell-cut"
+    description: "Extract fields via cut"
+  - id: op_shell_tr
+    name: "shell-tr"
+    description: "Translate characters via tr"
+  - id: op_shell_paste
+    name: "shell-paste"
+    description: "Merge lines via paste"
+  - id: op_shell_column
+    name: "shell-column"
+    description: "Format columns via column"
+  - id: op_shell_base64
+    name: "shell-base64"
+    description: "Base64 encode/decode"
+  - id: op_shell_mdfind
+    name: "shell-mdfind"
+    description: "Spotlight search via mdfind (macOS)"
+  - id: op_shell_xattr
+    name: "shell-xattr"
+    description: "Extended attributes via xattr (macOS)"
+  - id: op_shell_pbcopy
+    name: "shell-pbcopy"
+    description: "Copy to clipboard via pbcopy (macOS)"
+  - id: op_shell_pbpaste
+    name: "shell-pbpaste"
+    description: "Paste from clipboard via pbpaste (macOS)"
+  - id: op_shell_plutil
+    name: "shell-plutil"
+    description: "Plist operations via plutil (macOS)"
+  - id: op_shell_lsof
+    name: "shell-lsof"
+    description: "List open files via lsof"
+  - id: op_shell_kill
+    name: "shell-kill"
+    description: "Send signals via kill"
+  - id: op_shell_pkill
+    name: "shell-pkill"
+    description: "Kill by pattern via pkill"
+  - id: op_shell_watch
+    name: "shell-watch"
+    description: "Periodic execution via watch"
+  - id: op_shell_git
+    name: "shell-git"
+    description: "Version control via git"
+  - id: op_shell_jq
+    name: "shell-jq"
+    description: "JSON processing via jq"
+  - id: op_shell_yq
+    name: "shell-yq"
+    description: "YAML processing via yq"
+  - id: op_shell_tmux
+    name: "shell-tmux"
+    description: "Terminal multiplexer via tmux"
+  - id: op_shell_screen
+    name: "shell-screen"
+    description: "Terminal multiplexer via screen"
+  - id: op_shell_ssh
+    name: "shell-ssh"
+    description: "Remote execution via ssh"
+  - id: op_shell_scp
+    name: "shell-scp"
+    description: "Secure copy via scp"
+  - id: op_shell_nc
+    name: "shell-nc"
+    description: "Network connections via nc"
+  - id: op_shell_ping
+    name: "shell-ping"
+    description: "Network ping"
+  - id: op_shell_dig
+    name: "shell-dig"
+    description: "DNS lookup via dig"
+  - id: op_shell_gzip
+    name: "shell-gzip"
+    description: "Compress/decompress via gzip"
+  - id: op_shell_xz
+    name: "shell-xz"
+    description: "Compress/decompress via xz"
+  - id: op_shell_openssl
+    name: "shell-openssl"
+    description: "Cryptographic operations via openssl"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -931,6 +1080,838 @@ properties:
     axis: type_symmetry
     key: type_symmetry_class
     value: "shell_byte_stream"
+
+  # =========================================================================
+  # New shell operation properties (Phase 3 migration)
+  # =========================================================================
+
+  # --- shell_mv (anchor: shell_exec) ---
+  - entity: op_shell_mv
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-mv"
+  - entity: op_shell_mv
+    axis: type_signature
+    key: op_name
+    value: "shell_mv"
+  - entity: op_shell_mv
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_mv
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_cp ---
+  - entity: op_shell_cp
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-cp"
+  - entity: op_shell_cp
+    axis: type_signature
+    key: op_name
+    value: "shell_cp"
+  - entity: op_shell_cp
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_cp
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_rm ---
+  - entity: op_shell_rm
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-rm"
+  - entity: op_shell_rm
+    axis: type_signature
+    key: op_name
+    value: "shell_rm"
+  - entity: op_shell_rm
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_rm
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_mkdir ---
+  - entity: op_shell_mkdir
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-mkdir"
+  - entity: op_shell_mkdir
+    axis: type_signature
+    key: op_name
+    value: "shell_mkdir"
+  - entity: op_shell_mkdir
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_mkdir
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_ln ---
+  - entity: op_shell_ln
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-ln"
+  - entity: op_shell_ln
+    axis: type_signature
+    key: op_name
+    value: "shell_ln"
+  - entity: op_shell_ln
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_ln
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_chmod ---
+  - entity: op_shell_chmod
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-chmod"
+  - entity: op_shell_chmod
+    axis: type_signature
+    key: op_name
+    value: "shell_chmod"
+  - entity: op_shell_chmod
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_chmod
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_chown ---
+  - entity: op_shell_chown
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-chown"
+  - entity: op_shell_chown
+    axis: type_signature
+    key: op_name
+    value: "shell_chown"
+  - entity: op_shell_chown
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_chown
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_tar ---
+  - entity: op_shell_tar
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-tar"
+  - entity: op_shell_tar
+    axis: type_signature
+    key: op_name
+    value: "shell_tar"
+  - entity: op_shell_tar
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_tar
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_rsync ---
+  - entity: op_shell_rsync
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-rsync"
+  - entity: op_shell_rsync
+    axis: type_signature
+    key: op_name
+    value: "shell_rsync"
+  - entity: op_shell_rsync
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_rsync
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_open ---
+  - entity: op_shell_open
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-open"
+  - entity: op_shell_open
+    axis: type_signature
+    key: op_name
+    value: "shell_open"
+  - entity: op_shell_open
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_open
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_tee ---
+  - entity: op_shell_tee
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-tee"
+  - entity: op_shell_tee
+    axis: type_signature
+    key: op_name
+    value: "shell_tee"
+  - entity: op_shell_tee
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_tee
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_stat ---
+  - entity: op_shell_stat
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-stat"
+  - entity: op_shell_stat
+    axis: type_signature
+    key: op_name
+    value: "shell_stat"
+  - entity: op_shell_stat
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_stat
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # --- shell_shasum ---
+  - entity: op_shell_shasum
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-shasum"
+  - entity: op_shell_shasum
+    axis: type_signature
+    key: op_name
+    value: "shell_shasum"
+  - entity: op_shell_shasum
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_shasum
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # --- shell_file ---
+  - entity: op_shell_file
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-file"
+  - entity: op_shell_file
+    axis: type_signature
+    key: op_name
+    value: "shell_file"
+  - entity: op_shell_file
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_file
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # --- shell_uname ---
+  - entity: op_shell_uname
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-uname"
+  - entity: op_shell_uname
+    axis: type_signature
+    key: op_name
+    value: "shell_uname"
+  - entity: op_shell_uname
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_uname
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # --- shell_uptime ---
+  - entity: op_shell_uptime
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-uptime"
+  - entity: op_shell_uptime
+    axis: type_signature
+    key: op_name
+    value: "shell_uptime"
+  - entity: op_shell_uptime
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_uptime
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # --- shell_diff ---
+  - entity: op_shell_diff
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-diff"
+  - entity: op_shell_diff
+    axis: type_signature
+    key: op_name
+    value: "shell_diff"
+  - entity: op_shell_diff
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_diff
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_sed ---
+  - entity: op_shell_sed
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-sed"
+  - entity: op_shell_sed
+    axis: type_signature
+    key: op_name
+    value: "shell_sed"
+  - entity: op_shell_sed
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_sed
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_awk ---
+  - entity: op_shell_awk
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-awk"
+  - entity: op_shell_awk
+    axis: type_signature
+    key: op_name
+    value: "shell_awk"
+  - entity: op_shell_awk
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_awk
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_cut ---
+  - entity: op_shell_cut
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-cut"
+  - entity: op_shell_cut
+    axis: type_signature
+    key: op_name
+    value: "shell_cut"
+  - entity: op_shell_cut
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_cut
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_tr ---
+  - entity: op_shell_tr
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-tr"
+  - entity: op_shell_tr
+    axis: type_signature
+    key: op_name
+    value: "shell_tr"
+  - entity: op_shell_tr
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_tr
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_paste ---
+  - entity: op_shell_paste
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-paste"
+  - entity: op_shell_paste
+    axis: type_signature
+    key: op_name
+    value: "shell_paste"
+  - entity: op_shell_paste
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_paste
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_column ---
+  - entity: op_shell_column
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-column"
+  - entity: op_shell_column
+    axis: type_signature
+    key: op_name
+    value: "shell_column"
+  - entity: op_shell_column
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_column
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_base64 ---
+  - entity: op_shell_base64
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-base64"
+  - entity: op_shell_base64
+    axis: type_signature
+    key: op_name
+    value: "shell_base64"
+  - entity: op_shell_base64
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_base64
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_mdfind ---
+  - entity: op_shell_mdfind
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-mdfind"
+  - entity: op_shell_mdfind
+    axis: type_signature
+    key: op_name
+    value: "shell_mdfind"
+  - entity: op_shell_mdfind
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_mdfind
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_tree"
+
+  # --- shell_xattr ---
+  - entity: op_shell_xattr
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-xattr"
+  - entity: op_shell_xattr
+    axis: type_signature
+    key: op_name
+    value: "shell_xattr"
+  - entity: op_shell_xattr
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_xattr
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_pbcopy ---
+  - entity: op_shell_pbcopy
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-pbcopy"
+  - entity: op_shell_pbcopy
+    axis: type_signature
+    key: op_name
+    value: "shell_pbcopy"
+  - entity: op_shell_pbcopy
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_pbcopy
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_pbpaste ---
+  - entity: op_shell_pbpaste
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-pbpaste"
+  - entity: op_shell_pbpaste
+    axis: type_signature
+    key: op_name
+    value: "shell_pbpaste"
+  - entity: op_shell_pbpaste
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_pbpaste
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_plutil ---
+  - entity: op_shell_plutil
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-plutil"
+  - entity: op_shell_plutil
+    axis: type_signature
+    key: op_name
+    value: "shell_plutil"
+  - entity: op_shell_plutil
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_plutil
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_lsof ---
+  - entity: op_shell_lsof
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-lsof"
+  - entity: op_shell_lsof
+    axis: type_signature
+    key: op_name
+    value: "shell_lsof"
+  - entity: op_shell_lsof
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_lsof
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_tabular"
+
+  # --- shell_kill ---
+  - entity: op_shell_kill
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-kill"
+  - entity: op_shell_kill
+    axis: type_signature
+    key: op_name
+    value: "shell_kill"
+  - entity: op_shell_kill
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_kill
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_pkill ---
+  - entity: op_shell_pkill
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-pkill"
+  - entity: op_shell_pkill
+    axis: type_signature
+    key: op_name
+    value: "shell_pkill"
+  - entity: op_shell_pkill
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_pkill
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_watch ---
+  - entity: op_shell_watch
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-watch"
+  - entity: op_shell_watch
+    axis: type_signature
+    key: op_name
+    value: "shell_watch"
+  - entity: op_shell_watch
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_watch
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_git (anchor: shell_vcs) ---
+  - entity: op_shell_git
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-git"
+  - entity: op_shell_git
+    axis: type_signature
+    key: op_name
+    value: "shell_git"
+  - entity: op_shell_git
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_git
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_vcs"
+
+  # --- shell_jq (anchor: shell_structured) ---
+  - entity: op_shell_jq
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-jq"
+  - entity: op_shell_jq
+    axis: type_signature
+    key: op_name
+    value: "shell_jq"
+  - entity: op_shell_jq
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_jq
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_structured"
+
+  # --- shell_yq ---
+  - entity: op_shell_yq
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-yq"
+  - entity: op_shell_yq
+    axis: type_signature
+    key: op_name
+    value: "shell_yq"
+  - entity: op_shell_yq
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_yq
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_structured"
+
+  # --- shell_tmux (anchor: shell_session) ---
+  - entity: op_shell_tmux
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-tmux"
+  - entity: op_shell_tmux
+    axis: type_signature
+    key: op_name
+    value: "shell_tmux"
+  - entity: op_shell_tmux
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_tmux
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_session"
+
+  # --- shell_screen ---
+  - entity: op_shell_screen
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-screen"
+  - entity: op_shell_screen
+    axis: type_signature
+    key: op_name
+    value: "shell_screen"
+  - entity: op_shell_screen
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_screen
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_session"
+
+  # --- shell_ssh (anchor: shell_network) ---
+  - entity: op_shell_ssh
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-ssh"
+  - entity: op_shell_ssh
+    axis: type_signature
+    key: op_name
+    value: "shell_ssh"
+  - entity: op_shell_ssh
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_ssh
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_network"
+
+  # --- shell_scp ---
+  - entity: op_shell_scp
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-scp"
+  - entity: op_shell_scp
+    axis: type_signature
+    key: op_name
+    value: "shell_scp"
+  - entity: op_shell_scp
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_scp
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_network"
+
+  # --- shell_nc ---
+  - entity: op_shell_nc
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-nc"
+  - entity: op_shell_nc
+    axis: type_signature
+    key: op_name
+    value: "shell_nc"
+  - entity: op_shell_nc
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_nc
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_network"
+
+  # --- shell_ping ---
+  - entity: op_shell_ping
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-ping"
+  - entity: op_shell_ping
+    axis: type_signature
+    key: op_name
+    value: "shell_ping"
+  - entity: op_shell_ping
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_ping
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_dig ---
+  - entity: op_shell_dig
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-dig"
+  - entity: op_shell_dig
+    axis: type_signature
+    key: op_name
+    value: "shell_dig"
+  - entity: op_shell_dig
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_dig
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_gzip ---
+  - entity: op_shell_gzip
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-gzip"
+  - entity: op_shell_gzip
+    axis: type_signature
+    key: op_name
+    value: "shell_gzip"
+  - entity: op_shell_gzip
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_gzip
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_xz ---
+  - entity: op_shell_xz
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-xz"
+  - entity: op_shell_xz
+    axis: type_signature
+    key: op_name
+    value: "shell_xz"
+  - entity: op_shell_xz
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_xz
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+
+  # --- shell_openssl ---
+  - entity: op_shell_openssl
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-openssl"
+  - entity: op_shell_openssl
+    axis: type_signature
+    key: op_name
+    value: "shell_openssl"
+  - entity: op_shell_openssl
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_openssl
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
 
 # ---------------------------------------------------------------------------
 # Relations

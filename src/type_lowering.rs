@@ -49,13 +49,16 @@ pub struct SubsumptionEntry {
     pub note: &'static str,
 }
 
-/// The static subsumption map: 10 world-touching fs_ops → shell ops.
+/// The static subsumption map: world-touching fs_ops + power_tools_ops → shell ops.
 ///
-/// These are the ops from SUBSUMPTION.md that have direct shell equivalents.
+/// All world-touching ops from fs_ops.yaml and power_tools_ops.yaml that have
+/// direct shell equivalents. Phase 3 migration: complete coverage.
 /// The shell ops are anchors (or type-symmetric peers of anchors) in the
 /// inference pipeline.
 const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
-    // --- shell_text_lines class ---
+    // =====================================================================
+    // fs_ops.yaml — shell_text_lines class
+    // =====================================================================
     SubsumptionEntry {
         fs_op: "list_dir",
         shell_op: "shell_ls",
@@ -114,13 +117,138 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
         arity: 1,
         note: "sort — sort lines of text",
     },
-    // --- shell_byte_stream class ---
+    // --- shell_byte_stream class (curl) ---
     SubsumptionEntry {
         fs_op: "download",
         shell_op: "shell_curl",
         arity: 1,
         note: "curl — download URL contents",
     },
+    // =====================================================================
+    // fs_ops.yaml — formerly residual ops (now fully subsumed)
+    // =====================================================================
+    SubsumptionEntry { fs_op: "stat", shell_op: "shell_stat", arity: 1, note: "stat — file metadata" },
+    SubsumptionEntry { fs_op: "walk_tree_hierarchy", shell_op: "shell_find", arity: 1, note: "find — hierarchy walk" },
+    SubsumptionEntry { fs_op: "checksum", shell_op: "shell_shasum", arity: 1, note: "shasum — SHA hash" },
+    SubsumptionEntry { fs_op: "du_size", shell_op: "shell_du", arity: 1, note: "du -sh — disk usage" },
+    SubsumptionEntry { fs_op: "open_file", shell_op: "shell_open", arity: 1, note: "open — macOS open" },
+    SubsumptionEntry { fs_op: "reveal", shell_op: "shell_open", arity: 1, note: "open -R — Finder reveal" },
+    SubsumptionEntry { fs_op: "extract_archive", shell_op: "shell_tar", arity: 1, note: "tar xf — extract" },
+    SubsumptionEntry { fs_op: "pack_archive", shell_op: "shell_tar", arity: 1, note: "tar cf — create archive" },
+    SubsumptionEntry { fs_op: "write_file", shell_op: "shell_tee", arity: 1, note: "tee — write to file" },
+    SubsumptionEntry { fs_op: "copy", shell_op: "shell_cp", arity: 2, note: "cp — copy file/dir" },
+    SubsumptionEntry { fs_op: "delete", shell_op: "shell_rm", arity: 1, note: "rm — delete file/dir" },
+    SubsumptionEntry { fs_op: "rename", shell_op: "shell_mv", arity: 2, note: "mv — rename" },
+    SubsumptionEntry { fs_op: "move_entry", shell_op: "shell_mv", arity: 2, note: "mv — move entry" },
+    SubsumptionEntry { fs_op: "create_dir", shell_op: "shell_mkdir", arity: 1, note: "mkdir -p — create dir" },
+    SubsumptionEntry { fs_op: "diff", shell_op: "shell_diff", arity: 2, note: "diff — compare files" },
+    // =====================================================================
+    // fs_ops.yaml — remaining uncovered ops
+    // =====================================================================
+    SubsumptionEntry { fs_op: "create_link", shell_op: "shell_ln", arity: 2, note: "ln -s — symbolic link" },
+    SubsumptionEntry { fs_op: "set_permissions", shell_op: "shell_chmod", arity: 2, note: "chmod — set permissions" },
+    SubsumptionEntry { fs_op: "set_owner", shell_op: "shell_chown", arity: 2, note: "chown — set owner" },
+    SubsumptionEntry { fs_op: "replace", shell_op: "shell_sed", arity: 1, note: "sed s/// — replace content" },
+    SubsumptionEntry { fs_op: "get_mtime", shell_op: "shell_stat", arity: 1, note: "stat -f %m — modification time" },
+    SubsumptionEntry { fs_op: "get_permissions", shell_op: "shell_stat", arity: 1, note: "stat -f %p — permissions" },
+    SubsumptionEntry { fs_op: "get_file_type", shell_op: "shell_file", arity: 1, note: "file — detect type" },
+    SubsumptionEntry { fs_op: "spotlight_search", shell_op: "shell_mdfind", arity: 1, note: "mdfind — Spotlight search" },
+    SubsumptionEntry { fs_op: "get_xattr", shell_op: "shell_xattr", arity: 2, note: "xattr -p — read xattr" },
+    SubsumptionEntry { fs_op: "set_xattr", shell_op: "shell_xattr", arity: 2, note: "xattr -w — write xattr" },
+    SubsumptionEntry { fs_op: "remove_xattr", shell_op: "shell_xattr", arity: 2, note: "xattr -d — remove xattr" },
+    SubsumptionEntry { fs_op: "remove_quarantine", shell_op: "shell_xattr", arity: 1, note: "xattr -d quarantine" },
+    SubsumptionEntry { fs_op: "open_with", shell_op: "shell_open", arity: 2, note: "open -a — open with app" },
+    SubsumptionEntry { fs_op: "clipboard_copy", shell_op: "shell_pbcopy", arity: 1, note: "pbcopy — copy to clipboard" },
+    SubsumptionEntry { fs_op: "clipboard_paste", shell_op: "shell_pbpaste", arity: 0, note: "pbpaste — paste from clipboard" },
+    SubsumptionEntry { fs_op: "read_plist", shell_op: "shell_plutil", arity: 1, note: "plutil -p — read plist" },
+    SubsumptionEntry { fs_op: "write_plist", shell_op: "shell_plutil", arity: 2, note: "plutil — write plist" },
+    SubsumptionEntry { fs_op: "upload", shell_op: "shell_curl", arity: 2, note: "curl -T — upload" },
+    SubsumptionEntry { fs_op: "sync", shell_op: "shell_rsync", arity: 2, note: "rsync -a — sync dir" },
+    SubsumptionEntry { fs_op: "unique", shell_op: "shell_sort", arity: 1, note: "sort -u — deduplicate" },
+    // =====================================================================
+    // power_tools_ops.yaml — git
+    // =====================================================================
+    SubsumptionEntry { fs_op: "git_init", shell_op: "shell_git", arity: 1, note: "git init" },
+    SubsumptionEntry { fs_op: "git_clone", shell_op: "shell_git", arity: 1, note: "git clone" },
+    SubsumptionEntry { fs_op: "git_add", shell_op: "shell_git", arity: 1, note: "git add" },
+    SubsumptionEntry { fs_op: "git_commit", shell_op: "shell_git", arity: 1, note: "git commit" },
+    SubsumptionEntry { fs_op: "git_log", shell_op: "shell_git", arity: 1, note: "git log" },
+    SubsumptionEntry { fs_op: "git_log_range", shell_op: "shell_git", arity: 1, note: "git log A..B" },
+    SubsumptionEntry { fs_op: "git_diff", shell_op: "shell_git", arity: 1, note: "git diff" },
+    SubsumptionEntry { fs_op: "git_diff_commits", shell_op: "shell_git", arity: 1, note: "git diff A B" },
+    SubsumptionEntry { fs_op: "git_branch", shell_op: "shell_git", arity: 1, note: "git branch" },
+    SubsumptionEntry { fs_op: "git_checkout", shell_op: "shell_git", arity: 1, note: "git checkout" },
+    SubsumptionEntry { fs_op: "git_merge", shell_op: "shell_git", arity: 1, note: "git merge" },
+    SubsumptionEntry { fs_op: "git_rebase", shell_op: "shell_git", arity: 1, note: "git rebase" },
+    SubsumptionEntry { fs_op: "git_stash", shell_op: "shell_git", arity: 0, note: "git stash" },
+    SubsumptionEntry { fs_op: "git_stash_pop", shell_op: "shell_git", arity: 0, note: "git stash pop" },
+    SubsumptionEntry { fs_op: "git_push", shell_op: "shell_git", arity: 1, note: "git push" },
+    SubsumptionEntry { fs_op: "git_pull", shell_op: "shell_git", arity: 1, note: "git pull" },
+    SubsumptionEntry { fs_op: "git_blame", shell_op: "shell_git", arity: 1, note: "git blame" },
+    SubsumptionEntry { fs_op: "git_bisect", shell_op: "shell_git", arity: 1, note: "git bisect" },
+    SubsumptionEntry { fs_op: "git_tag", shell_op: "shell_git", arity: 1, note: "git tag" },
+    SubsumptionEntry { fs_op: "git_status", shell_op: "shell_git", arity: 1, note: "git status" },
+    // =====================================================================
+    // power_tools_ops.yaml — tmux / screen
+    // =====================================================================
+    SubsumptionEntry { fs_op: "tmux_new_session", shell_op: "shell_tmux", arity: 1, note: "tmux new-session" },
+    SubsumptionEntry { fs_op: "tmux_attach", shell_op: "shell_tmux", arity: 1, note: "tmux attach" },
+    SubsumptionEntry { fs_op: "tmux_split", shell_op: "shell_tmux", arity: 1, note: "tmux split-window" },
+    SubsumptionEntry { fs_op: "tmux_send_keys", shell_op: "shell_tmux", arity: 2, note: "tmux send-keys" },
+    SubsumptionEntry { fs_op: "screen_new_session", shell_op: "shell_screen", arity: 1, note: "screen -S" },
+    SubsumptionEntry { fs_op: "screen_attach", shell_op: "shell_screen", arity: 1, note: "screen -r" },
+    // =====================================================================
+    // power_tools_ops.yaml — jq / yq / csv
+    // =====================================================================
+    SubsumptionEntry { fs_op: "jq_query", shell_op: "shell_jq", arity: 2, note: "jq filter file" },
+    SubsumptionEntry { fs_op: "jq_filter_seq", shell_op: "shell_jq", arity: 2, note: "jq .[] filter" },
+    SubsumptionEntry { fs_op: "jq_transform", shell_op: "shell_jq", arity: 2, note: "jq transform" },
+    SubsumptionEntry { fs_op: "yq_query", shell_op: "shell_yq", arity: 2, note: "yq filter file" },
+    SubsumptionEntry { fs_op: "yq_convert", shell_op: "shell_yq", arity: 1, note: "yq -o=json" },
+    SubsumptionEntry { fs_op: "csv_cut", shell_op: "shell_cut", arity: 2, note: "cut -d, — CSV columns" },
+    SubsumptionEntry { fs_op: "csv_join", shell_op: "shell_paste", arity: 2, note: "paste — join CSV" },
+    SubsumptionEntry { fs_op: "csv_sort", shell_op: "shell_sort", arity: 1, note: "sort — CSV sort" },
+    // =====================================================================
+    // power_tools_ops.yaml — awk / sed / text processing
+    // =====================================================================
+    SubsumptionEntry { fs_op: "awk_extract", shell_op: "shell_awk", arity: 2, note: "awk extract fields" },
+    SubsumptionEntry { fs_op: "awk_aggregate", shell_op: "shell_awk", arity: 2, note: "awk aggregate" },
+    SubsumptionEntry { fs_op: "sed_script", shell_op: "shell_sed", arity: 2, note: "sed -f script" },
+    SubsumptionEntry { fs_op: "cut_fields", shell_op: "shell_cut", arity: 2, note: "cut -d -f" },
+    SubsumptionEntry { fs_op: "tr_replace", shell_op: "shell_tr", arity: 2, note: "tr SET1 SET2" },
+    SubsumptionEntry { fs_op: "paste_merge", shell_op: "shell_paste", arity: 2, note: "paste -d" },
+    SubsumptionEntry { fs_op: "tee_split", shell_op: "shell_tee", arity: 2, note: "tee — split output" },
+    SubsumptionEntry { fs_op: "column_format", shell_op: "shell_column", arity: 1, note: "column -t" },
+    // =====================================================================
+    // power_tools_ops.yaml — process / system management
+    // =====================================================================
+    SubsumptionEntry { fs_op: "ps_list", shell_op: "shell_ps", arity: 0, note: "ps aux" },
+    SubsumptionEntry { fs_op: "kill_process", shell_op: "shell_kill", arity: 2, note: "kill -SIG PID" },
+    SubsumptionEntry { fs_op: "pkill_pattern", shell_op: "shell_pkill", arity: 1, note: "pkill pattern" },
+    SubsumptionEntry { fs_op: "watch_command", shell_op: "shell_watch", arity: 2, note: "watch -n cmd" },
+    SubsumptionEntry { fs_op: "df_usage", shell_op: "shell_df", arity: 0, note: "df -h" },
+    SubsumptionEntry { fs_op: "lsof_open", shell_op: "shell_lsof", arity: 1, note: "lsof path" },
+    SubsumptionEntry { fs_op: "file_type_detect", shell_op: "shell_file", arity: 1, note: "file --mime-type" },
+    SubsumptionEntry { fs_op: "uname_info", shell_op: "shell_uname", arity: 0, note: "uname -a" },
+    SubsumptionEntry { fs_op: "uptime_info", shell_op: "shell_uptime", arity: 0, note: "uptime" },
+    // =====================================================================
+    // power_tools_ops.yaml — networking
+    // =====================================================================
+    SubsumptionEntry { fs_op: "ssh_exec", shell_op: "shell_ssh", arity: 2, note: "ssh host cmd" },
+    SubsumptionEntry { fs_op: "scp_transfer", shell_op: "shell_scp", arity: 2, note: "scp file host:path" },
+    SubsumptionEntry { fs_op: "wget_download", shell_op: "shell_curl", arity: 1, note: "curl (wget equiv)" },
+    SubsumptionEntry { fs_op: "nc_connect", shell_op: "shell_nc", arity: 2, note: "nc host port" },
+    SubsumptionEntry { fs_op: "ping_host", shell_op: "shell_ping", arity: 2, note: "ping -c N host" },
+    SubsumptionEntry { fs_op: "dig_lookup", shell_op: "shell_dig", arity: 2, note: "dig host TYPE" },
+    // =====================================================================
+    // power_tools_ops.yaml — compression / crypto
+    // =====================================================================
+    SubsumptionEntry { fs_op: "gzip_compress", shell_op: "shell_gzip", arity: 1, note: "gzip" },
+    SubsumptionEntry { fs_op: "gzip_decompress", shell_op: "shell_gzip", arity: 1, note: "gunzip" },
+    SubsumptionEntry { fs_op: "xz_compress", shell_op: "shell_xz", arity: 1, note: "xz" },
+    SubsumptionEntry { fs_op: "base64_encode", shell_op: "shell_base64", arity: 1, note: "base64 encode" },
+    SubsumptionEntry { fs_op: "base64_decode", shell_op: "shell_base64", arity: 1, note: "base64 -D decode" },
+    SubsumptionEntry { fs_op: "openssl_hash", shell_op: "shell_openssl", arity: 2, note: "openssl dgst" },
 ];
 
 /// Look up the subsumption entry for an fs_op name.
@@ -177,6 +305,10 @@ pub enum RacketNativeKind {
     TakeRight,
     /// `(flatten lst)` — identity in flat list context
     Flatten,
+    /// `(append lst1 lst2)` — concatenate two lists
+    Append,
+    /// `(map f lst)` — transform each element
+    Map,
 }
 
 /// The static Racket-native map: intermediate fs_ops → Racket primitives.
@@ -200,6 +332,16 @@ const RACKET_NATIVE_MAP: &[RacketNativeEntry] = &[
         fs_op: "flatten_tree",
         kind: RacketNativeKind::Flatten,
         note: "identity — shell output is already flat",
+    },
+    RacketNativeEntry {
+        fs_op: "concat_seq",
+        kind: RacketNativeKind::Append,
+        note: "(append lst1 lst2) — concatenate sequences",
+    },
+    RacketNativeEntry {
+        fs_op: "map_entries",
+        kind: RacketNativeKind::Map,
+        note: "(map f lst) — transform entry values",
     },
 ];
 
@@ -262,23 +404,10 @@ pub struct ResidualFsOp {
     pub note: &'static str,
 }
 
-const RESIDUAL_FS_OPS: &[ResidualFsOp] = &[
-    ResidualFsOp { fs_op: "stat", shell_cmd: "stat", is_exec: false, note: "file metadata" },
-    ResidualFsOp { fs_op: "walk_tree_hierarchy", shell_cmd: "find", is_exec: false, note: "find (hierarchy)" },
-    ResidualFsOp { fs_op: "checksum", shell_cmd: "shasum -a 256", is_exec: false, note: "SHA-256 hash" },
-    ResidualFsOp { fs_op: "du_size", shell_cmd: "du -sh", is_exec: false, note: "disk usage" },
-    ResidualFsOp { fs_op: "open_file", shell_cmd: "open", is_exec: true, note: "macOS open" },
-    ResidualFsOp { fs_op: "reveal", shell_cmd: "open -R", is_exec: true, note: "macOS reveal in Finder" },
-    ResidualFsOp { fs_op: "extract_archive", shell_cmd: "tar xf", is_exec: true, note: "extract archive" },
-    ResidualFsOp { fs_op: "pack_archive", shell_cmd: "tar cf archive.tar", is_exec: true, note: "create archive" },
-    ResidualFsOp { fs_op: "write_file", shell_cmd: "tee", is_exec: true, note: "write to file" },
-    ResidualFsOp { fs_op: "copy", shell_cmd: "cp -r", is_exec: true, note: "copy file/dir" },
-    ResidualFsOp { fs_op: "delete", shell_cmd: "rm -rf", is_exec: true, note: "delete file/dir" },
-    ResidualFsOp { fs_op: "rename", shell_cmd: "mv", is_exec: true, note: "rename/move" },
-    ResidualFsOp { fs_op: "move_entry", shell_cmd: "mv", is_exec: true, note: "move entry" },
-    ResidualFsOp { fs_op: "create_dir", shell_cmd: "mkdir -p", is_exec: true, note: "create directory" },
-    ResidualFsOp { fs_op: "diff", shell_cmd: "diff", is_exec: false, note: "file diff" },
-];
+/// Phase 3 migration complete: all residual ops are now fully subsumed.
+/// This array is kept empty for backward compatibility with any code that
+/// checks `is_residual_fs_op()`.
+const RESIDUAL_FS_OPS: &[ResidualFsOp] = &[];
 
 /// Check if an op is a residual fs_op (world-touching, not yet in CLI fact pack).
 pub fn is_residual_fs_op(op: &str) -> bool {
@@ -336,8 +465,8 @@ mod tests {
     }
 
     #[test]
-    fn test_rename_not_subsumed() {
-        assert!(lookup_subsumption("rename").is_none());
+    fn test_rename_is_subsumed() {
+        assert!(lookup_subsumption("rename").is_some());
     }
 
     #[test]
@@ -361,11 +490,13 @@ mod tests {
     }
 
     #[test]
-    fn test_all_10_entries_present() {
+    fn test_all_subsumption_entries_present() {
         let entries = all_subsumptions();
-        assert_eq!(entries.len(), 10);
+        // Phase 3: complete migration — all fs_ops + power_tools ops
+        assert!(entries.len() >= 100, "expected at least 100 subsumption entries, got {}", entries.len());
 
         let fs_ops: Vec<&str> = entries.iter().map(|e| e.fs_op).collect();
+        // Original 10
         assert!(fs_ops.contains(&"list_dir"));
         assert!(fs_ops.contains(&"walk_tree"));
         assert!(fs_ops.contains(&"search_content"));
@@ -376,6 +507,18 @@ mod tests {
         assert!(fs_ops.contains(&"get_size"));
         assert!(fs_ops.contains(&"download"));
         assert!(fs_ops.contains(&"read_file"));
+        // Formerly residual
+        assert!(fs_ops.contains(&"stat"));
+        assert!(fs_ops.contains(&"copy"));
+        assert!(fs_ops.contains(&"delete"));
+        assert!(fs_ops.contains(&"diff"));
+        // Power tools
+        assert!(fs_ops.contains(&"git_log"));
+        assert!(fs_ops.contains(&"git_commit"));
+        assert!(fs_ops.contains(&"jq_query"));
+        assert!(fs_ops.contains(&"tmux_new_session"));
+        assert!(fs_ops.contains(&"ssh_exec"));
+        assert!(fs_ops.contains(&"gzip_compress"));
     }
 
     #[test]

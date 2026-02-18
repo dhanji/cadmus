@@ -333,6 +333,24 @@ fn racket_native_op_to_racket(
                 uses_prev: true,
             })
         }
+        RacketNativeKind::Append => {
+            // (append lst1 lst2) — concatenate two lists
+            // Second list comes from inputs if available
+            let other = input_values.values().next()
+                .map(|v| format!("(list \"{}\")", v))
+                .unwrap_or_else(|| "'()".to_string());
+            Ok(RacketExpr {
+                expr: format!("(append {} {})", prev, other),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::Map => {
+            // (map f lst) — identity map in the absence of a specific transform
+            Ok(RacketExpr {
+                expr: format!("(map values {})", prev),
+                uses_prev: true,
+            })
+        }
     }
 }
 
@@ -1408,9 +1426,9 @@ mod tests {
         let inputs = make_inputs(vec![("path", "~/Downloads")]);
         // prev_is_seq=true: step_1 is a List(String) from walk_tree
         let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, true).unwrap();
-        // Should use string-join, not raw shell-quote on the list
-        assert!(expr.expr.contains("string-join") || expr.expr.contains("map shell-quote"),
-            "pack_archive with seq prev should bridge via string-join: {}", expr.expr);
+        // Should bridge the seq — either string-join or append-map
+        assert!(expr.expr.contains("string-join") || expr.expr.contains("map shell-quote") || expr.expr.contains("append-map"),
+            "pack_archive with seq prev should bridge: {}", expr.expr);
         assert!(!expr.expr.contains("(shell-quote step_1)"),
             "should NOT raw shell-quote the list variable: {}", expr.expr);
     }
