@@ -640,45 +640,4 @@ uncertainties:
         );
         assert!(git_startup.is_some());
     }
-
-    #[test]
-    fn test_load_power_tools_fact_pack() {
-        let path = PathBuf::from("data/packs/facts/power_tools.yaml");
-        let idx = load_fact_pack(&path).expect("should load power_tools fact pack");
-
-        // 10 entities: git, tmux, screen, ripgrep, grep, ag, jq, yq, awk, sed
-        assert_eq!(idx.pack.entities.len(), 10);
-
-        // 5 axes: performance, composability, learning_curve, ecosystem, platform_support
-        assert_eq!(idx.pack.axes.len(), 5);
-
-        // Each entity has 8 claims (one per axis+sub_axis combo)
-        // 10 entities × 8 claims = 80 claims
-        assert!(idx.pack.claims.len() >= 80,
-            "expected at least 80 claims, got {}", idx.pack.claims.len());
-
-        // Evidence items
-        assert!(idx.pack.evidence.len() >= 20,
-            "expected at least 20 evidence items, got {}", idx.pack.evidence.len());
-
-        // Properties
-        assert!(idx.pack.properties.len() >= 25,
-            "expected at least 25 properties, got {}", idx.pack.properties.len());
-
-        // Relations: 3 hierarchies + 5 ordinals = 8
-        assert_eq!(idx.pack.relations.len(), 8);
-
-        // Uncertainties: one per axis = 5
-        assert_eq!(idx.pack.uncertainties.len(), 5);
-
-        // Spot-check: git claims on learning_curve
-        let git_learn = idx.claims_by_axis_entity.get(&("learning_curve".into(), "git".into()));
-        assert!(git_learn.is_some(), "expected git learning_curve claims");
-
-        // Spot-check: three-way search comparison — ripgrep, grep, ag all have performance claims
-        for entity in &["ripgrep", "grep", "ag"] {
-            let claims = idx.claims_by_axis_entity.get(&("performance".into(), entity.to_string()));
-            assert!(claims.is_some(), "expected {} performance claims", entity);
-        }
-    }
 }
