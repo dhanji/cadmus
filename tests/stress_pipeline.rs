@@ -174,7 +174,106 @@ fn stress_type_chain_nl_list_uses_path() {
     let yaml = nl_to_yaml("list ~/Downloads").expect("should produce workflow");
     assert!(!yaml.contains("textdir"),
         "list_dir should use path, not textdir: {}", yaml);
-}// ==========================================================================
+}
+
+// ===========================================================================
+// Generalized type promotion tests
+// ===========================================================================
+//
+// These tests verify that the unification-based type promotion works
+// generically — not just for the Dir(Bytes) → Dir(File(Text)) case.
+
+#[test]
+fn stress_promotion_no_bytes_no_promotion() {
+    // Dir(File(Text)) should NOT trigger promotion (no Bytes to promote)
+    let yaml = r#"
+workflow: "Already typed"
+inputs:
+  textdir: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry)
+        .expect("should compile without promotion");
+    // Input should still be Dir(File(Text)), not changed
+    assert_eq!(compiled.input_type.to_string(), "Dir(File(Text))",
+        "no promotion should happen when Bytes isn't present");
+}
+
+#[test]
+fn stress_promotion_bytes_with_polymorphic_only_no_binding() {
+    // Dir(Bytes) + list_dir (polymorphic: Dir(a) → Seq(Entry(Name, a)))
+    // list_dir doesn't constrain `a` to anything specific, so _promote
+    // stays unbound → no promotion
+    let yaml = r#"
+workflow: "List only"
+inputs:
+  path: "~/Documents"
+steps:
+  - list_dir
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry)
+        .expect("should compile with Dir(Bytes)");
+    assert_eq!(compiled.input_type.to_string(), "Dir(Bytes)",
+        "purely polymorphic chain should not promote Bytes");
+}
+
+#[test]
+fn stress_promotion_discovered_via_unification() {
+    // Dir(Bytes) + walk_tree + search_content
+    // walk_tree: Dir(a) → Seq(Entry(Name, a))  — _promote flows through as `a`
+    // search_content: Seq(Entry(Name, File(Text))) — forces _promote = File(Text)
+    let yaml = r#"
+workflow: "Search via promotion"
+inputs:
+  path: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry)
+        .expect("promotion should discover File(Text)");
+    // The input type should have been promoted
+    assert_eq!(compiled.input_type.to_string(), "Dir(File(Text))",
+        "unification should discover Bytes → File(Text)");
+}
+
+#[test]
+fn stress_promotion_each_mode_read_file() {
+    // Dir(Bytes) + walk_tree + filter + read_file:each
+    // read_file: File(a) → a, applied in :each mode to Entry values
+    // For read_file to work, the Entry value must be File(something)
+    // → _promote = File(Text) (since read_file needs File(a))
+    let yaml = r#"
+workflow: "Read files via promotion"
+inputs:
+  path: "~/Documents"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - read_file: each
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry)
+        .expect("promotion should make read_file:each work");
+    assert!(compiled.input_type.to_string().contains("File"),
+        "promotion should wrap Bytes in File(): {}", compiled.input_type);
+}
+
+// ==========================================================================
 // Pipeline Stress Tests
 // ==========================================================================
 //

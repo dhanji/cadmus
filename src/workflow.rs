@@ -1,39 +1,128 @@
-/// Check if a TypeExpr is Dir(Bytes) — the default for `path: ~/...` inputs.
-fn is_dir_bytes(ty: &TypeExpr) -> bool {
+/// Check if a TypeExpr contains `Bytes` anywhere — the "unknown content" primitive.
+///
+/// `Bytes` is the type system's bottom for content: `Dir(Bytes)` means
+/// "a directory with unknown content type". When downstream ops need
+/// something more specific, we can promote `Bytes` to whatever they need.
+fn contains_bytes(ty: &TypeExpr) -> bool {
     match ty {
-        TypeExpr::Constructor(name, args) if name == "Dir" && args.len() == 1 => {
-            matches!(&args[0], TypeExpr::Primitive(p) if p == "Bytes")
-        }
-        _ => false,
+        TypeExpr::Primitive(p) => p == "Bytes",
+        TypeExpr::Var(_) => false,
+        TypeExpr::Constructor(_, args) => args.iter().any(|a| contains_bytes(a)),
     }
 }
 
-/// Scan the workflow steps for ops that require File(Text) elements.
+/// Replace every `Prim("Bytes")` in a type expression with `Var(var_name)`.
 ///
-/// These ops have `File(Text)` or `File(a)` in their type signatures and
-/// will fail if the pipeline only carries `Bytes` elements.
-fn steps_need_file_text(steps: &[RawStep], registry: &OperationRegistry) -> bool {
-    // Ops that are known to require file content (File(Text)) in their inputs.
-    // We check both the op name (fast path) and the actual signature.
-    const FILE_CONTENT_OPS: &[&str] = &[
-        "search_content", "read_file",
-    ];
-    for step in steps {
-        if FILE_CONTENT_OPS.contains(&step.op.as_str()) {
-            return true;
+/// This is the first step of unification-based type promotion: we turn
+/// the unknown `Bytes` into a variable, then let unification with
+/// downstream op signatures discover what it should actually be.
+fn replace_bytes_with_var(ty: &TypeExpr, var_name: &str) -> TypeExpr {
+    match ty {
+        TypeExpr::Primitive(p) if p == "Bytes" => TypeExpr::var(var_name),
+        TypeExpr::Primitive(_) => ty.clone(),
+        TypeExpr::Var(_) => ty.clone(),
+        TypeExpr::Constructor(name, args) => {
+            TypeExpr::Constructor(
+                name.clone(),
+                args.iter().map(|a| replace_bytes_with_var(a, var_name)).collect(),
+            )
         }
-        // Also check the polymorphic signature for any input containing File(Text)
-        if let Some(poly) = registry.get_poly(&step.op) {
-            for input in &poly.signature.inputs {
-                let s = input.to_string();
-                if s.contains("File(Text)") || s.contains("File(a)") {
-                    return true;
+    }
+}
+
+/// Try to promote `Bytes` in the input type by simulating the type chain.
+///
+/// Algorithm:
+/// 1. If the type doesn't contain `Bytes`, return it unchanged.
+/// 2. Replace every `Bytes` with a fresh type variable `_promote`.
+/// 3. Simulate the type chain forward through each step's op signature.
+/// 4. If `_promote` gets bound to something concrete, apply the substitution
+///    to get the promoted type.
+/// 5. If the simulation fails or `_promote` stays unbound, return the
+///    original type unchanged.
+fn try_promote_bytes(
+    input_type: &TypeExpr,
+    steps: &[RawStep],
+    registry: &OperationRegistry,
+) -> TypeExpr {
+    if !contains_bytes(input_type) {
+        return input_type.clone();
+    }
+
+    const PROMO_VAR: &str = "_promote";
+    let promoted_input = replace_bytes_with_var(input_type, PROMO_VAR);
+    let mut current = promoted_input.clone();
+    let mut subst = Substitution::empty();
+
+    for (i, step) in steps.iter().enumerate() {
+        let poly_op = match registry.get_poly(&step.op) {
+            Some(op) => op,
+            None => return input_type.clone(), // unknown op — bail
+        };
+
+        let is_each = step.args.is_each();
+        let (fresh, _) = poly_op.signature.freshen(&format!("promo{}", i));
+
+        if is_each {
+            // current must be Seq(something)
+            let inner = match unwrap_seq(&current) {
+                Some(inner) => inner.clone(),
+                None => return input_type.clone(),
+            };
+
+            if fresh.inputs.is_empty() {
+                return input_type.clone();
+            }
+
+            // Try direct unification with inner element
+            if let Ok(sub) = unify(&fresh.inputs[0], &inner) {
+                let elem_out = fresh.output.apply_subst(&sub);
+                current = TypeExpr::seq(elem_out);
+                for (var, ty) in sub.iter() {
+                    let _ = subst.bind(var.clone(), ty.clone());
                 }
+            } else if let Some((key_type, val_type)) = unwrap_entry(&inner) {
+                let (fresh2, _) = poly_op.signature.freshen(&format!("promoe{}", i));
+                if let Ok(sub) = unify(&fresh2.inputs[0], val_type) {
+                    let val_out = fresh2.output.apply_subst(&sub);
+                    current = TypeExpr::seq(TypeExpr::entry(key_type.clone(), val_out));
+                    for (var, ty) in sub.iter() {
+                        let _ = subst.bind(var.clone(), ty.clone());
+                    }
+                } else {
+                    return input_type.clone();
+                }
+            } else {
+                return input_type.clone();
+            }
+        } else {
+            if fresh.inputs.is_empty() {
+                continue; // leaf op
+            }
+            let mut matched = false;
+            for inp in &fresh.inputs {
+                if let Ok(sub) = unify(inp, &current) {
+                    current = fresh.output.apply_subst(&sub);
+                    for (var, ty) in sub.iter() {
+                        let _ = subst.bind(var.clone(), ty.clone());
+                    }
+                    matched = true;
+                    break;
+                }
+            }
+            if !matched {
+                return input_type.clone();
             }
         }
     }
-    false
+
+    // If _promote got bound, apply it to the original promoted input
+    match subst.get(PROMO_VAR) {
+        Some(_) => promoted_input.apply_subst(&subst),
+        None => input_type.clone(),
+    }
 }
+
 /// Extract the operation name and parameters from a RawStep.
 ///
 /// Returns (op_name, params_map). For bare steps, params is empty.
@@ -69,7 +158,7 @@ use crate::fs_strategy::{DryRunTrace, StepKind, TraceStep};
 use crate::fs_types::build_full_registry;
 use crate::generic_planner::ExprPlanNode;
 use crate::registry::OperationRegistry;
-use crate::type_expr::{TypeExpr, unify};
+use crate::type_expr::{Substitution, TypeExpr, unify};
 
 // ---------------------------------------------------------------------------
 // Workflow YAML schema
@@ -448,19 +537,19 @@ pub fn compile_workflow(
     let (_input_name, input_desc, input_type) = best_input.unwrap();
 
     // -----------------------------------------------------------------------
-    // Type promotion: Dir(Bytes) → Dir(File(Text))
     // -----------------------------------------------------------------------
-    // If the input is Dir(Bytes) but a downstream step needs File(Text)
-    // elements (e.g., search_content, read_file in :each mode), promote
-    // the input type so the type chain doesn't break.
+    // Unification-based type promotion
+    // -----------------------------------------------------------------------
+    // If the input type contains `Bytes` (the "unknown content" primitive),
+    // try to discover what it should actually be by simulating the type chain
+    // forward with `Bytes` replaced by a fresh type variable. If downstream
+    // op signatures bind that variable to something concrete, promote the
+    // input type accordingly.
     //
-    // This handles the common case where a user writes `path: ~/Documents`
-    // (which infers Dir(Bytes)) but the pipeline includes content-reading ops.
-    let mut current_type = if is_dir_bytes(&input_type) && steps_need_file_text(&def.steps, registry) {
-        TypeExpr::dir(TypeExpr::file(TypeExpr::prim("Text")))
-    } else {
-        input_type.clone()
-    };
+    // e.g. Dir(Bytes) + walk_tree + search_content → discovers Bytes should
+    // be File(Text), promotes to Dir(File(Text)).
+    let input_type = try_promote_bytes(&input_type, &def.steps, registry);
+    let mut current_type = input_type.clone();
 
     let mut compiled_steps = Vec::new();
 

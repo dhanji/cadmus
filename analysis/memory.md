@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-18T06:06:38Z | Size: 40.5k chars
+> Updated: 2026-02-18T08:14:33Z | Size: 41.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -471,3 +471,11 @@
 - `walk_tree` on default Dir produces `Seq(Entry(Name, Bytes))`, not `Seq(Entry(Name, File(Text)))`
 - `parse_workflow` catches empty steps before `compile_workflow` runs
 - Generic planner uses `TypeId` (string-based), not `TypeExpr` — need custom registries for planner tests
+
+### Type Chain Promotion Fix
+- `src/workflow.rs` [375-410] - `is_dir_bytes()`, `steps_need_file_text()` helpers
+- `src/workflow.rs` [459-463] - Auto-promotion in `compile_workflow()`: Dir(Bytes) → Dir(File(Text)) when downstream steps need File(Text)
+- FILE_CONTENT_OPS: `search_content`, `read_file` trigger promotion
+- NL layer already used `textdir` input name for search_content (line 271 of dialogue.rs)
+- `list_dir`, `sort_by` etc. do NOT trigger promotion — Dir(Bytes) preserved
+- `read_file: each` unwraps File(Text) → Text, so you can't chain read_file:each → search_content (search_content reads files itself)
