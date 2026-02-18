@@ -1,3 +1,39 @@
+/// Check if a TypeExpr is Dir(Bytes) — the default for `path: ~/...` inputs.
+fn is_dir_bytes(ty: &TypeExpr) -> bool {
+    match ty {
+        TypeExpr::Constructor(name, args) if name == "Dir" && args.len() == 1 => {
+            matches!(&args[0], TypeExpr::Primitive(p) if p == "Bytes")
+        }
+        _ => false,
+    }
+}
+
+/// Scan the workflow steps for ops that require File(Text) elements.
+///
+/// These ops have `File(Text)` or `File(a)` in their type signatures and
+/// will fail if the pipeline only carries `Bytes` elements.
+fn steps_need_file_text(steps: &[RawStep], registry: &OperationRegistry) -> bool {
+    // Ops that are known to require file content (File(Text)) in their inputs.
+    // We check both the op name (fast path) and the actual signature.
+    const FILE_CONTENT_OPS: &[&str] = &[
+        "search_content", "read_file",
+    ];
+    for step in steps {
+        if FILE_CONTENT_OPS.contains(&step.op.as_str()) {
+            return true;
+        }
+        // Also check the polymorphic signature for any input containing File(Text)
+        if let Some(poly) = registry.get_poly(&step.op) {
+            for input in &poly.signature.inputs {
+                let s = input.to_string();
+                if s.contains("File(Text)") || s.contains("File(a)") {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
 /// Extract the operation name and parameters from a RawStep.
 ///
 /// Returns (op_name, params_map). For bare steps, params is empty.
@@ -411,7 +447,21 @@ pub fn compile_workflow(
 
     let (_input_name, input_desc, input_type) = best_input.unwrap();
 
-    let mut current_type = input_type.clone();
+    // -----------------------------------------------------------------------
+    // Type promotion: Dir(Bytes) → Dir(File(Text))
+    // -----------------------------------------------------------------------
+    // If the input is Dir(Bytes) but a downstream step needs File(Text)
+    // elements (e.g., search_content, read_file in :each mode), promote
+    // the input type so the type chain doesn't break.
+    //
+    // This handles the common case where a user writes `path: ~/Documents`
+    // (which infers Dir(Bytes)) but the pipeline includes content-reading ops.
+    let mut current_type = if is_dir_bytes(&input_type) && steps_need_file_text(&def.steps, registry) {
+        TypeExpr::dir(TypeExpr::file(TypeExpr::prim("Text")))
+    } else {
+        input_type.clone()
+    };
+
     let mut compiled_steps = Vec::new();
 
     for (i, step) in def.steps.iter().enumerate() {

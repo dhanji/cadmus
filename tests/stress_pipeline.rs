@@ -1,4 +1,180 @@
-// ==========================================================================
+
+#[test]
+fn stress_type_chain_full_search_pipeline_with_path() {
+    // path + walk_tree + filter + search_content (no read_file:each needed)
+    // search_content reads files itself — it takes Seq(Entry(Name, File(Text)))
+    let yaml = r#"
+workflow: "Search pipeline"
+inputs:
+  path: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - search_content:
+      pattern: "$pattern"
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry);
+    assert!(compiled.is_ok(),
+        "search pipeline with path should compile after promotion: {:?}", compiled.err());
+    let c = compiled.unwrap();
+    assert_eq!(c.steps.len(), 3, "should have 3 steps");
+}
+#[test]
+fn stress_type_chain_path_list_dir_no_promotion() {
+    // list_dir doesn't need File(Text), so Dir(Bytes) should NOT be promoted
+    let yaml = r#"
+workflow: "List directory"
+inputs:
+  path: "~/Documents"
+steps:
+  - list_dir
+  - sort_by: name
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry)
+        .expect("list_dir should compile with Dir(Bytes)");
+    // The input type should still be Dir(Bytes), not promoted
+    assert_eq!(compiled.input_type.to_string(), "Dir(Bytes)",
+        "list_dir should keep Dir(Bytes), not promote: {}", compiled.input_type);
+}
+// ===========================================================================
+// Type chain investigation: Dir(Bytes) vs Dir(File(Text)) gap
+// ===========================================================================
+
+// The workflow compiler infers Dir(Bytes) for `path: "~/Documents"` but
+// Dir(File(Text)) for `textdir: "~/Documents"`. Ops like search_content
+// and read_file:each need File(Text) elements, so the type chain breaks
+// when the input is named "path".
+
+#[test]
+fn stress_type_chain_textdir_search_content_compiles() {
+    // textdir → Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
+    // → search_content: should compile
+    let yaml = r#"
+workflow: "Search with textdir"
+inputs:
+  textdir: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry);
+    assert!(compiled.is_ok(),
+        "textdir should give Dir(File(Text)) making search_content work: {:?}", compiled.err());
+    let c = compiled.unwrap();
+    // Verify the type chain
+    assert_eq!(c.steps.len(), 2);
+    let walk_out = &c.steps[0].output_type;
+    assert!(walk_out.to_string().contains("File(Text)"),
+        "walk_tree output should contain File(Text): {}", walk_out);
+}
+
+#[test]
+fn stress_type_chain_path_search_content_fails() {
+    // path → Dir(Bytes) BUT compiler sees search_content downstream
+    // → auto-promotes to Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
+    // → search_content: should now SUCCEED thanks to type promotion
+    let yaml = r#"
+workflow: "Search with path"
+inputs:
+  path: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let result = workflow::compile_workflow(&def, &registry);
+    // After type promotion fix, this should compile
+    assert!(result.is_ok(),
+        "path input should be auto-promoted to Dir(File(Text)) for search_content: {:?}",
+        result.err());
+}
+
+#[test]
+fn stress_type_chain_textdir_read_file_each_compiles() {
+    // textdir → Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
+    // → read_file: each → Seq(Entry(Name, Text))
+    let yaml = r#"
+workflow: "Read all files"
+inputs:
+  textdir: "~/Documents"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - read_file: each
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let compiled = workflow::compile_workflow(&def, &registry);
+    assert!(compiled.is_ok(),
+        "textdir + read_file:each should compile: {:?}", compiled.err());
+}
+
+#[test]
+fn stress_type_chain_path_read_file_each_fails() {
+    // path → Dir(Bytes) BUT compiler sees read_file downstream
+    // → auto-promotes to Dir(File(Text)) → walk_tree → filter → read_file: each → SUCCEEDS
+    let yaml = r#"
+workflow: "Read all files with path"
+inputs:
+  path: "~/Documents"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - read_file: each
+"#;
+    let def = workflow::parse_workflow(yaml).expect("should parse");
+    let registry = build_full_registry();
+    let result = workflow::compile_workflow(&def, &registry);
+    assert!(result.is_ok(),
+        "path input should be auto-promoted for read_file:each: {:?}", result.err());
+}
+
+#[test]
+fn stress_type_chain_nl_search_uses_textdir() {
+    // The NL layer should use "textdir" for search_content, not "path"
+    let mut state = DialogueState::new();
+    let response = nl::process_input("search for TODO in ~/Documents", &mut state);
+    match &response {
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("textdir"),
+                "NL search should use textdir input, got:\n{}", workflow_yaml);
+            // Verify it compiles
+            let def: WorkflowDef = serde_yaml::from_str(workflow_yaml).unwrap();
+            let registry = build_full_registry();
+            let compiled = workflow::compile_workflow(&def, &registry);
+            assert!(compiled.is_ok(),
+                "NL-generated search workflow should compile: {:?}", compiled.err());
+        }
+        other => {
+            // NL might not recognize this as search_content — that's OK
+            // The key test is the YAML-level ones above
+            println!("NL response was not PlanCreated: {:?}", other);
+        }
+    }
+}
+
+#[test]
+fn stress_type_chain_nl_list_uses_path() {
+    // list_dir should still use "path" (Dir(Bytes) is fine for listing)
+    let yaml = nl_to_yaml("list ~/Downloads").expect("should produce workflow");
+    assert!(!yaml.contains("textdir"),
+        "list_dir should use path, not textdir: {}", yaml);
+}// ==========================================================================
 // Pipeline Stress Tests
 // ==========================================================================
 //
