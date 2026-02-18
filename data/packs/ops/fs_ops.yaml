@@ -211,8 +211,9 @@ ops:
     description: "tail -n — last N lines of file"
 
   - name: unique
-    inputs: ["Seq(Line)"]
-    output: "Seq(Line)"
+    type_params: [a]
+    inputs: ["Seq(a)"]
+    output: "Seq(a)"
     properties:
       idempotent: true
     description: "sort -u — deduplicate lines"

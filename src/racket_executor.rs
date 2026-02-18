@@ -23,7 +23,7 @@ fn first_value_param(params: &HashMap<String, String>) -> Option<&str> {
 //   2. `generate_racket_script()` produces a #!/usr/bin/env racket script
 //      with `#lang racket` preamble and let*-bindings for multi-step chains
 //   3. Single-step workflows emit a bare expression (no let overhead)
-//   4. Multi-step workflows use (let* ([step_1 ...] [step_2 ...]) ...)
+//   4. Multi-step workflows use (let* ([step-1 ...] [step-2 ...]) ...)
 //
 // The executor is data-driven: it reads the Racket symbol and arity from
 // the OperationRegistry (populated from racket_ops.yaml) instead of
@@ -203,7 +203,7 @@ fn subsumed_op_to_racket(
         // Seq→String bridge for binary ops: when the path argument is a list
         // (e.g., walk_tree output), iterate over each file individually.
         // E.g.: (append-map (lambda (_f) (shell-lines (string-append "grep "
-        //          (shell-quote pattern) " " (shell-quote _f)))) step_1)
+        //          (shell-quote pattern) " " (shell-quote _f)))) step-1)
         if prev_is_seq && prev_binding.is_some() {
             let prev = prev_binding.unwrap();
             let expr = format!(
@@ -224,7 +224,7 @@ fn subsumed_op_to_racket(
     // Unary shell op: (shell-lines (string-append "cmd " (shell-quote path)))
     // Seq→String bridge for unary ops: when the path argument is a list,
     // iterate over each item. E.g.:
-    //   (append-map (lambda (_f) (shell-lines (string-append "cat " (shell-quote _f)))) step_1)
+    //   (append-map (lambda (_f) (shell-lines (string-append "cat " (shell-quote _f)))) step-1)
     if prev_is_seq && prev_binding.is_some() {
         let prev = prev_binding.unwrap();
         let expr = format!(
@@ -404,7 +404,7 @@ pub struct RacketExpr {
 /// format, init, comparator) have explicit match arms.
 ///
 /// `prev_binding` is the variable name holding the previous step's result
-/// (e.g., "step_1"). For the first step, this is None and the expression
+/// (e.g., "step-1"). For the first step, this is None and the expression
 /// uses the workflow's input values directly.
 ///
 /// `prev_is_seq` indicates whether the previous step's output is a list/sequence
@@ -576,7 +576,7 @@ pub fn op_to_racket(
 ///
 /// The script uses `#lang racket` and follows this structure:
 /// - Single-step: bare expression wrapped in `(displayln ...)`
-/// - Multi-step: `(let* ([step_1 ...] [step_2 ...] ...) (displayln step_N))`
+/// - Multi-step: `(let* ([step-1 ...] [step-2 ...] ...) (displayln step-N))`
 ///
 /// This is the Racket analogue of `executor::generate_script()`.
 pub fn generate_racket_script(
@@ -624,8 +624,8 @@ pub fn generate_racket_script(
 
     for (i, step) in compiled.steps.iter().enumerate() {
         let step_num = i + 1;
-        let binding_name = format!("step_{}", step_num);
-        let prev_binding = if i == 0 { None } else { Some(format!("step_{}", i)) };
+        let binding_name = format!("step-{}", step_num);
+        let prev_binding = if i == 0 { None } else { Some(format!("step-{}", i)) };
 
         script.push_str(&format!("    ;; Step {}: {}{}\n", step_num, step.op,
             if step.is_each { " (each)" } else { "" }));
@@ -650,7 +650,7 @@ pub fn generate_racket_script(
     script.push_str("  )\n");
 
     // Print the final step's result
-    let final_binding = format!("step_{}", num_steps);
+    let final_binding = format!("step-{}", num_steps);
     script.push_str(&format!("  (displayln {}))\n", final_binding));
 
     Ok(script)
@@ -870,8 +870,8 @@ mod tests {
         let reg = make_registry();
         let step = make_step("add", vec![("y", "10")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
-        assert_eq!(expr.expr, "(+ step_1 10)");
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        assert_eq!(expr.expr, "(+ step-1 10)");
         assert!(expr.uses_prev);
     }
 
@@ -880,8 +880,8 @@ mod tests {
         let reg = make_registry();
         let step = make_step("display", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
-        assert_eq!(expr.expr, "(display step_1)");
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        assert_eq!(expr.expr, "(display step-1)");
     }
 
     #[test]
@@ -920,8 +920,8 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_map", vec![("function", "add1")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
-        assert_eq!(expr.expr, "(map add1 step_1)");
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        assert_eq!(expr.expr, "(map add1 step-1)");
     }
 
     #[test]
@@ -929,8 +929,8 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_foldl", vec![("function", "+"), ("init", "0")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
-        assert_eq!(expr.expr, "(foldl + 0 step_1)");
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        assert_eq!(expr.expr, "(foldl + 0 step-1)");
     }
 
     #[test]
@@ -1038,9 +1038,9 @@ mod tests {
         let script = generate_racket_script(&compiled, &def, &reg).unwrap();
         assert!(script.contains("#lang racket"));
         assert!(script.contains("let*"));
-        assert!(script.contains("[step_1 (+ 4 35)]"));
-        assert!(script.contains("[step_2 (* step_1 2)]"));
-        assert!(script.contains("(displayln step_2)"));
+        assert!(script.contains("[step-1 (+ 4 35)]"));
+        assert!(script.contains("[step-2 (* step-1 2)]"));
+        assert!(script.contains("(displayln step-2)"));
     }
 
     #[test]
@@ -1340,12 +1340,12 @@ mod tests {
             params: HashMap::new(),
         };
         let inputs = make_inputs(vec![("path", "~/Downloads")]);
-        // prev_is_seq=true: step_1 is a List(String) from walk_tree
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, true).unwrap();
+        // prev_is_seq=true: step-1 is a List(String) from walk_tree
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true).unwrap();
         // Should bridge the seq — either string-join or append-map
         assert!(expr.expr.contains("string-join") || expr.expr.contains("map shell-quote") || expr.expr.contains("append-map"),
             "pack_archive with seq prev should bridge: {}", expr.expr);
-        assert!(!expr.expr.contains("(shell-quote step_1)"),
+        assert!(!expr.expr.contains("(shell-quote step-1)"),
             "should NOT raw shell-quote the list variable: {}", expr.expr);
     }
 
@@ -1382,14 +1382,14 @@ mod tests {
             params: vec![("pattern".to_string(), "TODO".to_string())].into_iter().collect(),
         };
         let inputs = make_inputs(vec![("textdir", "~/Projects")]);
-        // prev_is_seq=true: step_1 is a List(String) from walk_tree
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, true).unwrap();
+        // prev_is_seq=true: step-1 is a List(String) from walk_tree
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true).unwrap();
         // Should use append-map to grep each file individually
         assert!(expr.expr.contains("append-map"),
             "search_content with seq prev should use append-map: {}", expr.expr);
         assert!(expr.expr.contains("grep") || expr.expr.contains("shell-lines"),
             "should still use grep/shell-lines: {}", expr.expr);
-        assert!(!expr.expr.contains("(shell-quote step_1)"),
+        assert!(!expr.expr.contains("(shell-quote step-1)"),
             "should NOT raw shell-quote the list variable: {}", expr.expr);
     }
 
@@ -1424,7 +1424,7 @@ mod tests {
             params: HashMap::new(),
         };
         let inputs = make_inputs(vec![("path", "~/Projects")]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, true).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true).unwrap();
         // Should use append-map to cat each file
         assert!(expr.expr.contains("append-map"),
             "read_file with seq prev should use append-map: {}", expr.expr);

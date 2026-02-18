@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-18T09:26:10Z | Size: 43.0k chars
+> Updated: 2026-02-18T09:41:50Z | Size: 44.8k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -497,3 +497,24 @@
 - `src/executor.rs` — `ShellCommand::stdout()`, `::exec()`, `::pipe()` constructors; `source()` and `require_param()` helpers
 - `src/type_lowering.rs` — Removed dead `ResidualFsOp`, `RESIDUAL_FS_OPS`, `is_residual_fs_op()`, `lookup_residual()`
 - 1237 total tests, all passing, zero warnings
+
+### CLI Rich Formatting (plan `slick-cli`)
+- `src/ui.rs` [1-740] — ANSI color helpers, geometric icon constants, formatting primitives. Zero external deps.
+  - `color_enabled()` — OnceLock, checks NO_COLOR env var and TERM=dumb
+  - `styled()` — core function, applies ANSI codes or returns plain text
+  - 30 style functions: bold, dim, italic, red, green, blue, cyan, etc. + bold_* and badge_* variants
+  - `icon` module: 40+ flat geometric Unicode icons (✓ ✗ △ ◆ ● ○ ▸ ▰ ◇ ▪ ↔ ⊘ ⊗ ⊢ ⊥ ├ └ │ ─ → ← ↓ λ ⚙)
+  - Formatting: banner(), section(), subsection(), kv(), kv_dim(), step(), step_each(), status_ok/fail/warn/info/pending/active(), code_block(), code_block_numbered(), yaml_block(), tree_item/last/cont/blank(), bullet(), error(), warning(), info(), success(), rule(), prompt(), reset()
+  - Axis helpers: axis_header(), axis_footer(), claim(), evidence(), similarity(), contrast_line(), uncertainty(), summary_line(), gap_line(), inference_line(), conflict_line()
+  - Write helpers: write_step(), write_kv() for Display impls
+  - 30 unit tests
+- `src/main.rs` — Complete rewrite of all 3 modes (chat, workflow, demo) using ui:: helpers
+  - VERSION constant "v0.7.0"
+  - All bubbly emojis (✅❌🔍🔧📋📎🔗⚔❓📝📐🤔⚡⚠) replaced with geometric icons
+  - Chat mode: compact banner, colored ◆ prompt, YAML in dim code block
+  - Workflow mode: progressive status chain (● Loading → ✓ Compiled → ● Executing → ✓ Done)
+  - Demo mode: geometric section headers, axis tree formatting
+  - Error paths: red ✗ badges
+- `src/workflow.rs:912` — CompiledWorkflow Display uses ui:: helpers
+- `src/fs_strategy.rs:119-150` — DryRunTrace and TraceStep Display use ui:: helpers
+- 1266 total tests, 0 failures, 0 warnings

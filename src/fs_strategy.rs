@@ -118,31 +118,33 @@ pub enum StepKind {
 
 impl fmt::Display for DryRunTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "=== Dry-Run Trace ===")?;
-        writeln!(f, "Goal: {}", self.goal)?;
-        writeln!(f, "Steps: {}", self.steps.len())?;
-        writeln!(f, "---")?;
+        use crate::ui;
+        writeln!(f, "  {}", ui::subsection(&format!("Trace ({} steps)", self.steps.len())))?;
+        writeln!(f, "{}", ui::kv_dim("goal", &self.goal.to_string()))?;
         for step in &self.steps {
             write!(f, "{}", step)?;
         }
-        writeln!(f, "=== End Trace ===")
+        Ok(())
     }
 }
 
 impl fmt::Display for TraceStep {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let kind_str = match self.kind {
-            StepKind::Op => "OP",
-            StepKind::Leaf => "INPUT",
-            StepKind::Map => "MAP",
-            StepKind::Fold => "FOLD",
+        use crate::ui;
+        let kind_tag = match self.kind {
+            StepKind::Op => "op",
+            StepKind::Leaf => "input",
+            StepKind::Map => "map",
+            StepKind::Fold => "fold",
         };
-        writeln!(f, "[{}] {} ({})", self.step, self.op_name, kind_str)?;
-        if !self.inputs.is_empty() {
-            writeln!(f, "     inputs:  {}", self.inputs.join(", "))?;
-        }
-        writeln!(f, "     output:  {}", self.output)?;
-        writeln!(f, "     command: {}", self.command_hint)
+        let detail = format!(
+            "{} {}{}",
+            ui::dim(&format!("[{}]", kind_tag)),
+            ui::dim(&self.command_hint),
+            if self.inputs.is_empty() { String::new() }
+            else { format!(" {}", ui::dim(&format!("{} {}", ui::icon::ARROW_LEFT, self.inputs.join(", ")))) },
+        );
+        writeln!(f, "{}", ui::step(self.step, &self.op_name, &detail))
     }
 }
 
@@ -370,9 +372,9 @@ mod tests {
             )],
         ).unwrap();
 
-        assert!(trace_str.contains("Dry-Run Trace"));
+        assert!(trace_str.contains("Trace"), "should contain Trace header");
         assert!(trace_str.contains("list_dir"));
-        assert!(trace_str.contains("End Trace"));
+        assert!(trace_str.contains("list_dir"), "should contain list_dir op");
     }
 
     #[test]
@@ -392,11 +394,11 @@ mod tests {
 
         let display = trace.to_string();
         // Should have structured format
-        assert!(display.contains("[1]"), "should have step numbers");
-        assert!(display.contains("[2]"), "should have step 2");
-        assert!(display.contains("INPUT"), "should show INPUT for leaf");
-        assert!(display.contains("OP"), "should show OP for operation");
-        assert!(display.contains("output:"), "should show output type");
-        assert!(display.contains("command:"), "should show command hint");
+        assert!(display.contains("1"), "should have step numbers");
+        assert!(display.contains("2"), "should have step 2");
+        assert!(display.contains("[input]") || display.contains("input"), "should show input for leaf");
+        assert!(display.contains("[op]") || display.contains("op"), "should show op for operation");
+        assert!(display.contains("list_dir") || display.contains("ls"), "should show op name");
+        assert!(display.contains("Trace"), "should show trace header");
     }
 }

@@ -393,9 +393,9 @@ fn test_shell_op_with_prev_binding() {
     let reg = make_full_registry();
     let step = make_step("shell_ls", vec![]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
     assert!(expr.uses_prev, "should use prev binding");
-    assert!(expr.expr.contains("step_1"), "should reference step_1");
+    assert!(expr.expr.contains("step-1"), "should reference step-1");
 }
 
 #[test]

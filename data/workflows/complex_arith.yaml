@@ -1,0 +1,19 @@
+# Workflow: Arithmetic Chain
+# ==========================
+# Chain: add(4, 35) → multiply(_, 2) → subtract(_, 10)
+# Each step takes previous output as first arg, param as second.
+
+workflow: "Arithmetic chain: (4+35)*2-10"
+
+inputs:
+  x: "4"
+  y: "35"
+
+steps:
+  - add:
+      x: "$x"
+      y: "$y"
+  - multiply:
+      y: "2"
+  - subtract:
+      y: "10"

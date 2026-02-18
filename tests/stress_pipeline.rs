@@ -793,8 +793,8 @@ fn stress_racket_arithmetic_to_string_to_file() {
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
     assert!(script.contains("#lang racket"));
     assert!(script.contains("let*"), "multi-step should use let*: {}", script);
-    assert!(script.contains("step_1"), "should have step_1 binding");
-    assert!(script.contains("step_4"), "should have step_4 binding");
+    assert!(script.contains("step-1"), "should have step-1 binding");
+    assert!(script.contains("step-4"), "should have step-4 binding");
     // Verify the arithmetic op is present
     assert!(script.contains("(* 6 7)"), "should contain (* 6 7): {}", script);
 }
@@ -820,7 +820,7 @@ fn stress_racket_list_processing_chain() {
     assert!(script.contains("sort"));
     assert!(script.contains("map"));
     assert!(script.contains("foldl"));
-    assert!(script.contains("step_5"), "should have 5 steps");
+    assert!(script.contains("step-5"), "should have 5 steps");
 }
 
 #[test]
@@ -921,11 +921,11 @@ fn stress_racket_10_step_pipeline() {
         steps,
     );
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
-    assert!(script.contains("step_1"));
-    assert!(script.contains("step_10"), "should have step_10: {}", script);
+    assert!(script.contains("step-1"));
+    assert!(script.contains("step-10"), "should have step-10: {}", script);
     assert!(script.contains("let*"));
     // Verify the final displayln references the last step
-    assert!(script.contains("step_10"), "should display step_10");
+    assert!(script.contains("step-10"), "should display step-10");
 }
 
 #[test]

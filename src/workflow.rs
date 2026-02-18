@@ -911,25 +911,21 @@ pub fn run_workflow_str(yaml: &str) -> Result<DryRunTrace, WorkflowError> {
 
 impl fmt::Display for CompiledWorkflow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Workflow: {}", self.name)?;
-        writeln!(f, "Input: {} ({})", self.input_description, self.input_type)?;
-        writeln!(f, "Steps:")?;
+        use crate::ui;
+        writeln!(f, "{}", ui::kv("workflow", &self.name))?;
+        writeln!(f, "{}", ui::kv_dim("input", &format!("{} ({})", self.input_description, self.input_type)))?;
         for cs in &self.steps {
-            let each_marker = if cs.is_each { " [each]" } else { "" };
-            writeln!(
-                f,
-                "  {}. {}{}: {} → {}",
-                cs.index + 1,
-                cs.op,
-                each_marker,
-                cs.input_type,
-                cs.output_type,
-            )?;
+            let type_info = format!("{} {} {}", cs.input_type, ui::icon::ARROW_RIGHT, cs.output_type);
+            if cs.is_each {
+                writeln!(f, "{}", ui::step_each(cs.index + 1, &cs.op, &type_info))?;
+            } else {
+                writeln!(f, "{}", ui::step(cs.index + 1, &cs.op, &type_info))?;
+            }
             for (k, v) in &cs.params {
-                writeln!(f, "     {} = {}", k, v)?;
+                writeln!(f, "         {} {}", ui::dim(&format!("{}:", k)), ui::dim(v))?;
             }
         }
-        writeln!(f, "Output: {}", self.output_type)
+        writeln!(f, "{}", ui::kv_dim("output", &self.output_type.to_string()))
     }
 }
 
@@ -1339,7 +1335,7 @@ steps:
         let trace = run_workflow_str(yaml).unwrap();
         let display = trace.to_string();
         assert!(display.contains("extract_archive"), "trace: {}", display);
-        assert!(display.contains("Dry-Run Trace"), "trace: {}", display);
+        assert!(display.contains("Trace"), "trace: {}", display);
     }
 
     #[test]

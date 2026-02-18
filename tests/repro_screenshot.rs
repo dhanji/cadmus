@@ -279,7 +279,7 @@ steps:
 #[test]
 fn test_pipeline_with_prev_binding() {
     // Multi-step: walk_tree → filter → sort_by
-    // Steps 2 and 3 should reference step_1 and step_2
+    // Steps 2 and 3 should reference step-1 and step-2
     let yaml = r#"
 workflow: "Pipeline"
 inputs:
@@ -291,9 +291,9 @@ steps:
   - sort_by: name
 "#;
     let script = compile_to_racket(yaml).expect("should compile");
-    assert!(script.contains("step_1"), "should have step_1 binding");
-    assert!(script.contains("step_2"), "should have step_2 binding");
-    assert!(script.contains("step_3"), "should have step_3 binding");
+    assert!(script.contains("step-1"), "should have step-1 binding");
+    assert!(script.contains("step-2"), "should have step-2 binding");
+    assert!(script.contains("step-3"), "should have step-3 binding");
     assert!(script.contains("let*"), "multi-step should use let*");
 }
 
@@ -609,7 +609,7 @@ steps:
     assert!(script.contains("string<?"), "should use string<?");
     // Should have let* for multi-step
     assert!(script.contains("let*"), "should use let* bindings");
-    assert!(script.contains("step_3"), "should have step_3 binding");
+    assert!(script.contains("step-3"), "should have step-3 binding");
 }
 
 // ---------------------------------------------------------------------------
@@ -730,7 +730,7 @@ steps:
     // The bridge should use string-join, map shell-quote, or append-map
     assert!(script.contains("string-join") || script.contains("map shell-quote") || script.contains("append-map"),
         "pack_archive after walk_tree should bridge:\n{}", script);
-    assert!(!script.contains("(shell-quote step_1)"),
+    assert!(!script.contains("(shell-quote step-1)"),
         "should NOT raw shell-quote the list variable:\n{}", script);
     // Should still have the find command for walk_tree
     assert!(script.contains("find"),
@@ -756,7 +756,7 @@ steps:
         "search_content after walk_tree should use append-map:\n{}", script);
     assert!(script.contains("grep"),
         "should use grep command:\n{}", script);
-    assert!(!script.contains("(shell-quote step_1)"),
+    assert!(!script.contains("(shell-quote step-1)"),
         "should NOT raw shell-quote the list variable:\n{}", script);
 }
 

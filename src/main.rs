@@ -4,12 +4,15 @@ use std::process;
 
 use cadmus::coding_strategy;
 use cadmus::executor;
-use cadmus::fs_strategy::{FilesystemStrategy, run_fs_goal};
+use cadmus::fs_strategy::FilesystemStrategy;
 use cadmus::generic_planner::ExprLiteral;
 use cadmus::pipeline;
 use cadmus::type_expr::TypeExpr;
 use cadmus::types::Goal;
+use cadmus::ui;
 use cadmus::workflow;
+
+const VERSION: &str = "v0.7.0";
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -23,12 +26,13 @@ fn main() {
     // --workflow <path> mode: load and execute a workflow YAML file
     if let Some(pos) = args.iter().position(|a| a == "--workflow") {
         let path = args.get(pos + 1).unwrap_or_else(|| {
-            eprintln!("Usage: cadmus --workflow <path.yaml> [--execute] [--racket]");
+            eprintln!("{}", ui::error("Missing workflow path"));
             eprintln!();
-            eprintln!("Example:");
-            eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml");
-            eprintln!("  cargo run -- --workflow data/workflows/find_pdfs.yaml --execute");
-            eprintln!("  cargo run -- --workflow data/workflows/add_numbers.yaml --racket");
+            eprintln!("  {} cadmus --workflow <path.yaml> [--execute] [--racket]", ui::dim("usage:"));
+            eprintln!();
+            eprintln!("  {} cadmus --workflow data/workflows/find_pdfs.yaml", ui::dim("$"));
+            eprintln!("  {} cadmus --workflow data/workflows/find_pdfs.yaml --execute", ui::dim("$"));
+            eprintln!("  {} cadmus --workflow data/workflows/add_numbers.yaml --racket", ui::dim("$"));
             process::exit(1);
         });
 
@@ -39,17 +43,13 @@ fn main() {
     }
 
     if args.iter().any(|a| a == "--execute" || a == "--racket") {
-        eprintln!("Error: --execute and --racket require --workflow <path.yaml>");
+        eprintln!("{}", ui::error("--execute and --racket require --workflow <path.yaml>"));
         process::exit(1);
     }
 
     // Default: run all three strategy demos
     run_demo_mode();
 }
-
-// ---------------------------------------------------------------------------
-// Workflow mode
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Chat mode (NL UX)
@@ -60,17 +60,13 @@ fn run_chat_mode() {
     use cadmus::nl;
     use cadmus::nl::dialogue::DialogueState;
 
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              CADMUS v0.5.0                                  ║");
-    println!("║    Natural Language UX                                      ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
     println!();
-    println!("Type a command in natural language. Examples:");
-    println!("  zip up everything in ~/Downloads");
-    println!("  find all PDFs in ~/Documents");
-    println!("  what's walk mean");
+    println!("{}", ui::banner("CADMUS", VERSION, "Natural Language"));
     println!();
-    println!("Type 'quit' or 'exit' to leave.");
+    println!("  {} {}", ui::dim("try:"), ui::dim_white("zip up everything in ~/Downloads"));
+    println!("  {}  {}", ui::dim("   "), ui::dim_white("find all PDFs in ~/Documents"));
+    println!("  {}  {}", ui::dim("   "), ui::dim_white("what does walk_tree mean?"));
+    println!("  {}  {}", ui::dim("   "), ui::dim_white("quit"));
     println!();
 
     let mut state = DialogueState::new();
@@ -78,15 +74,15 @@ fn run_chat_mode() {
     let mut stdout = io::stdout();
 
     loop {
-        print!("> ");
+        print!("{}{}", ui::prompt(), ui::reset());
         stdout.flush().unwrap();
 
         let mut line = String::new();
         match stdin.lock().read_line(&mut line) {
-            Ok(0) => break, // EOF
+            Ok(0) => break,
             Ok(_) => {}
             Err(e) => {
-                eprintln!("Error reading input: {}", e);
+                eprintln!("{}", ui::error(&format!("Read error: {}", e)));
                 break;
             }
         }
@@ -96,44 +92,55 @@ fn run_chat_mode() {
             continue;
         }
         if input == "quit" || input == "exit" || input == "q" {
-            println!("Bye!");
+            println!("{}", ui::dim("bye."));
             break;
         }
 
         let response = nl::process_input(input, &mut state);
 
         match response {
-            nl::NlResponse::PlanCreated { prompt, .. } => {
+            nl::NlResponse::PlanCreated { workflow_yaml, summary: _, prompt: _ } => {
                 println!();
-                println!("{}", prompt);
+                println!("  {}", ui::status_ok("Plan created"));
+                println!();
+                println!("{}", ui::yaml_block(&workflow_yaml));
+                println!();
+                println!("  {}", ui::dim("approve, edit, or reject?"));
                 println!();
             }
-            nl::NlResponse::PlanEdited { prompt, .. } => {
+            nl::NlResponse::PlanEdited { workflow_yaml, diff_description, .. } => {
                 println!();
-                println!("{}", prompt);
+                println!("  {}", ui::status_info(&format!("Edited: {}", diff_description)));
+                println!();
+                println!("{}", ui::yaml_block(&workflow_yaml));
+                println!();
+                println!("  {}", ui::dim("approve?"));
                 println!();
             }
             nl::NlResponse::Explanation { text } => {
                 println!();
-                println!("{}", text);
+                for line in text.lines() {
+                    println!("  {}", ui::cyan(line));
+                }
                 println!();
             }
             nl::NlResponse::Approved { script } => {
                 println!();
-                println!("✅ Plan approved!");
+                println!("  {}", ui::status_ok("Approved"));
                 if let Some(ref s) = script {
                     println!();
-                    println!("═══ Generated Racket Program ═══");
+                    println!("  {}", ui::subsection("Generated Racket Program"));
                     println!();
-                    println!("{}", s);
+                    println!("{}", ui::code_block(s));
                     println!();
-                    print!("Run this program? (y/n) ");
+                    print!("  {} ", ui::dim("run this? (y/n)"));
                     stdout.flush().unwrap();
                     let mut confirm = String::new();
                     if stdin.lock().read_line(&mut confirm).is_ok() {
                         let answer = confirm.trim().to_lowercase();
                         if answer == "y" || answer == "yes" {
                             println!();
+                            println!("  {}", ui::status_active("Running..."));
                             match std::process::Command::new("racket")
                                 .arg("-e")
                                 .arg(s)
@@ -143,126 +150,160 @@ fn run_chat_mode() {
                                     let stdout_str = String::from_utf8_lossy(&output.stdout);
                                     let stderr_str = String::from_utf8_lossy(&output.stderr);
                                     if !stdout_str.is_empty() {
-                                        println!("{}", stdout_str);
+                                        println!();
+                                        println!("{}", ui::code_block(&stdout_str));
                                     }
                                     if !stderr_str.is_empty() {
-                                        eprintln!("{}", stderr_str);
+                                        eprintln!("{}", ui::dim(&stderr_str));
                                     }
+                                    println!();
                                     if output.status.success() {
-                                        println!("✅ Program completed successfully.");
+                                        println!("  {}", ui::status_ok("Done"));
                                     } else {
                                         let code = output.status.code().unwrap_or(1);
-                                        println!("⚠ Program exited with code {}", code);
+                                        println!("  {}", ui::status_fail(&format!("Exit code {}", code)));
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("❌ Failed to run racket: {}", e);
-                                    eprintln!("   Is Racket installed? Try: brew install racket");
+                                    println!("  {}", ui::error(&format!("Failed to run racket: {}", e)));
+                                    println!("  {}", ui::dim("Is Racket installed? Try: brew install racket"));
                                 }
                             }
                         } else {
-                            println!("Program not executed.");
+                            println!("  {}", ui::dim("skipped."));
                         }
                     }
                 } else {
-                    println!("(workflow could not be compiled to a script)");
+                    println!("  {}", ui::dim("(could not compile to script)"));
                 }
                 println!();
             }
             nl::NlResponse::Rejected => {
                 println!();
-                println!("Plan discarded. Start fresh!");
+                println!("  {}", ui::dim("Plan discarded. Start fresh."));
                 println!();
             }
             nl::NlResponse::NeedsClarification { needs } => {
                 println!();
                 for need in &needs {
-                    println!("🤔 {}", need);
+                    println!("  {} {}", ui::yellow(ui::icon::DIAMOND), need);
                 }
                 println!();
             }
             nl::NlResponse::ParamSet { description, .. } => {
                 println!();
-                println!("{}", description);
+                println!("  {}", ui::status_info(&description));
                 println!();
             }
             nl::NlResponse::Error { message } => {
                 println!();
-                println!("❌ {}", message);
+                println!("  {}", ui::error(&message));
                 println!();
             }
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Workflow mode
+// ---------------------------------------------------------------------------
 
 fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              CADMUS v0.6.0                                  ║");
-    println!("║    Workflow DSL + Shell Executor                            ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    let mode = if racket { "Racket" } else { "Shell" };
+    println!();
+    println!("{}", ui::banner("CADMUS", VERSION, &format!("Workflow {} {}", ui::icon::ARROW_RIGHT, mode)));
     println!();
 
-    println!("Loading workflow: {}", path.display());
-    println!();
-
+    // Load
+    println!("  {}", ui::status_active("Loading"));
     let def = match workflow::load_workflow(path) {
         Ok(def) => def,
         Err(e) => {
-            eprintln!("ERROR: {}", e);
+            println!("  {}", ui::status_fail("Load failed"));
+            eprintln!("  {}", ui::error(&format!("{}", e)));
             process::exit(1);
         }
     };
 
-    println!("Workflow: {}", def.workflow);
-    println!("Inputs:");
+    println!("  {}", ui::kv("workflow", &def.workflow));
+    println!("  {}", ui::kv("source", &path.display().to_string()));
     for (k, v) in &def.inputs {
-        println!("  {} = {}", k, v);
+        println!("  {}", ui::kv_dim(k, v));
     }
-    println!("Steps: {}", def.steps.len());
-    for (i, step) in def.steps.iter().enumerate() {
-        let args_str = match &step.args {
+    println!();
+
+    // Show steps
+    println!("  {}", ui::subsection(&format!("Steps ({})", def.steps.len())));
+    for (i, s) in def.steps.iter().enumerate() {
+        let args_str = match &s.args {
             workflow::StepArgs::None => String::new(),
-            workflow::StepArgs::Scalar(s) => format!(": {}", s),
+            workflow::StepArgs::Scalar(v) => format!("{} {}", ui::icon::ARROW_RIGHT, v),
             workflow::StepArgs::Map(m) => {
                 let pairs: Vec<String> = m.iter()
                     .map(|(k, v)| format!("{}={}", k, v))
                     .collect();
-                format!(": {{{}}}", pairs.join(", "))
+                format!("{{{}}}", pairs.join(", "))
             }
         };
-        println!("  {}. {}{}", i + 1, step.op, args_str);
+        println!("{}", ui::step(i + 1, &s.op, &args_str));
     }
     println!();
 
     // Compile
+    println!("  {}", ui::status_active("Compiling"));
     let registry = cadmus::fs_types::build_full_registry();
     let compiled = match workflow::compile_workflow(&def, &registry) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("COMPILE ERROR: {}", e);
+            println!("  {}", ui::status_fail("Compile failed"));
+            eprintln!("  {}", ui::error(&format!("{}", e)));
             process::exit(1);
         }
     };
+    println!("  {}", ui::status_ok("Compiled"));
+    println!();
 
-    println!("═══ Compiled Workflow ═══");
-    println!("{}", compiled);
+    // Show compiled type chain
+    println!("  {}", ui::subsection("Type Chain"));
+    println!("  {}", ui::kv_dim("input", &compiled.input_type.to_string()));
+    for cs in &compiled.steps {
+        let type_info = format!("{} {} {}", cs.input_type, ui::icon::ARROW_RIGHT, cs.output_type);
+        if cs.is_each {
+            println!("{}", ui::step_each(cs.index + 1, &cs.op, &type_info));
+        } else {
+            println!("{}", ui::step(cs.index + 1, &cs.op, &type_info));
+        }
+        for (k, v) in &cs.params {
+            println!("         {} {}", ui::dim(&format!("{}:", k)), ui::dim(v));
+        }
+    }
+    println!("  {}", ui::kv_dim("output", &compiled.output_type.to_string()));
+    println!();
 
-    // Execute
-    let trace = match workflow::execute_workflow(&compiled, &registry) {
-        Ok(t) => t,
+    // Dry-run trace
+    match workflow::execute_workflow(&compiled, &registry) {
+        Ok(trace) => {
+            println!("  {}", ui::subsection(&format!("Dry-Run Trace ({} steps)", trace.steps.len())));
+            for ts in &trace.steps {
+                let kind_tag = match ts.kind {
+                    cadmus::fs_strategy::StepKind::Op => ui::dim("[op]"),
+                    cadmus::fs_strategy::StepKind::Leaf => ui::dim("[input]"),
+                    cadmus::fs_strategy::StepKind::Map => ui::dim("[map]"),
+                    cadmus::fs_strategy::StepKind::Fold => ui::dim("[fold]"),
+                };
+                println!("{}", ui::step(ts.step, &ts.op_name, &format!("{} {}", kind_tag, ui::dim(&ts.command_hint))));
+            }
+            println!();
+        }
         Err(e) => {
-            eprintln!("EXECUTION ERROR: {}", e);
-            process::exit(1);
+            println!("  {}", ui::warning(&format!("Trace: {}", e)));
+            println!();
         }
-    };
+    }
 
-    println!("{}", trace);
-
-    // Generate script (Racket or Shell)
+    // Generate script
     if racket {
-        println!();
-        println!("═══ Generated Racket Script ═══");
+        println!("  {}", ui::subsection("Racket Script"));
         println!();
 
         let mut racket_reg = cadmus::registry::load_ops_pack_str(
@@ -275,76 +316,80 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
         let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("RACKET SCRIPT GENERATION ERROR: {}", e);
+                println!("  {}", ui::status_fail("Codegen failed"));
+                eprintln!("  {}", ui::error(&format!("{}", e)));
                 process::exit(1);
             }
         };
 
-        println!("{}", script);
-        println!("(Racket script generated — use `racket <file.rkt>` to run)");
+        println!("{}", ui::code_block(&script));
+        println!();
+        println!("  {}", ui::dim("use `racket <file.rkt>` to run"));
         return;
     }
 
-    // Default: generate shell script
-    println!();
-    println!("═══ Generated Shell Script ═══");
+    // Shell script
+    println!("  {}", ui::subsection("Shell Script"));
     println!();
 
     let script = match executor::generate_script(&compiled, &def) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("SCRIPT GENERATION ERROR: {}", e);
+            println!("  {}", ui::status_fail("Codegen failed"));
+            eprintln!("  {}", ui::error(&format!("{}", e)));
             process::exit(1);
         }
     };
 
-    println!("{}", script);
+    println!("{}", ui::code_block(&script));
+    println!();
 
     if execute {
-        println!("═══ Executing Script ═══");
+        println!("  {}", ui::status_active("Executing..."));
         println!();
 
         let result = match executor::run_script(&script) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("EXECUTION ERROR: {}", e);
+                println!("  {}", ui::status_fail("Execution failed"));
+                eprintln!("  {}", ui::error(&format!("{}", e)));
                 process::exit(1);
             }
         };
 
         if !result.stdout.is_empty() {
-            println!("{}", result.stdout);
+            println!("{}", ui::code_block(&result.stdout));
         }
         if !result.stderr.is_empty() {
-            eprintln!("{}", result.stderr);
+            eprintln!("{}", ui::dim(&result.stderr));
         }
 
+        println!();
         if result.exit_code != 0 {
-            eprintln!("Script exited with code {}", result.exit_code);
+            println!("  {}", ui::status_fail(&format!("Exit code {}", result.exit_code)));
             process::exit(result.exit_code);
         } else {
-            println!("✅ Script completed successfully.");
+            println!("  {}", ui::status_ok("Done"));
         }
     } else {
-        println!("(dry-run: use --execute to run this script)");
+        println!("  {}", ui::dim("dry-run — use --execute to run"));
     }
+    println!();
 }
 
 // ---------------------------------------------------------------------------
-// Demo mode (original behavior)
+// Demo mode
 // ---------------------------------------------------------------------------
 
 fn run_demo_mode() {
-    println!("╔══════════════════════════════════════════════════════════════╗");
-    println!("║              CADMUS v0.4.0                                  ║");
-    println!("║    Strategy Pattern + Workflow DSL                          ║");
-    println!("╚══════════════════════════════════════════════════════════════╝");
+    println!();
+    println!("{}", ui::banner("CADMUS", VERSION, "Strategy Demo"));
     println!();
 
     // -----------------------------------------------------------------------
-    // Strategy 1: Comparison (fact-pack based entity comparison)
+    // Strategy 1: Comparison
     // -----------------------------------------------------------------------
-    println!("━━━ STRATEGY 1: Comparison ━━━");
+    println!("{}", ui::section("Strategy 1: Comparison"));
     println!();
 
     let goal = Goal {
@@ -353,118 +398,101 @@ fn run_demo_mode() {
         fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
     };
 
-    println!("Goal: {}", goal.description);
-    println!("Entities: {}", goal.entities.join(", "));
-    println!("Fact packs: {}", goal.fact_pack_paths.join(", "));
+    println!("{}", ui::kv("goal", &goal.description));
+    println!("{}", ui::kv("entities", &goal.entities.join(", ")));
+    println!("{}", ui::kv_dim("fact pack", &goal.fact_pack_paths.join(", ")));
     println!();
 
     match pipeline::run(&goal) {
         Ok(output) => {
-            println!("═══ THEORY LAYER ═══");
-            println!();
-            if !output.inferences.is_empty() {
-                println!("Inferences ({}):", output.inferences.len());
+            // Theory layer
+            if !output.inferences.is_empty() || !output.conflicts.is_empty() {
+                println!("  {}", ui::subsection("Theory Layer"));
                 for inf in &output.inferences {
-                    println!("  → {}", inf);
+                    println!("{}", ui::inference_line(inf));
                 }
-                println!();
-            }
-            if !output.conflicts.is_empty() {
-                println!("Conflicts ({}):", output.conflicts.len());
                 for c in &output.conflicts {
-                    println!("  ⚡ {}", c);
+                    println!("{}", ui::conflict_line(c));
                 }
                 println!();
             }
 
-            println!("═══ STRUCTURED COMPARISON ({} axes) ═══", output.axes.len());
+            // Axes
+            println!("  {}", ui::subsection(&format!("Comparison ({} axes)", output.axes.len())));
             println!();
 
             for axis in &output.axes {
-                println!("┌─── {} ───", axis.axis);
-                println!("│");
+                println!("{}", ui::axis_header(&axis.axis));
 
-                for claim in &axis.claims {
-                    let entity = claim.entity.as_deref().unwrap_or("?");
-                    println!("│  📋 [{}] {}", entity.to_uppercase(), claim.content);
+                for c in &axis.claims {
+                    let entity = c.entity.as_deref().unwrap_or("?");
+                    println!("{}", ui::claim(entity, &c.content));
                 }
-                println!("│");
 
                 for ev in &axis.evidence {
                     let entity = ev.entity.as_deref().unwrap_or("?");
-                    println!("│  📎 Evidence ({}): ", entity);
                     for line in ev.content.lines() {
-                        println!("│     {}", line);
+                        println!("{}", ui::evidence(entity, line));
                     }
                 }
-                println!("│");
 
                 for sim in &axis.similarities {
-                    println!("│  🔗 Similarity: {}", sim.content);
+                    println!("{}", ui::similarity(&sim.content));
                 }
-                println!("│");
 
                 for con in &axis.contrasts {
-                    println!("│  ⚔ Contrast:");
                     for line in con.content.lines() {
-                        println!("│     {}", line);
+                        println!("{}", ui::contrast_line(line));
                     }
                     if con.inferred {
-                        println!("│     [includes theory-layer inferences]");
+                        println!("{}", ui::contrast_line(&ui::dim("[inferred]")));
                     }
                 }
-                println!("│");
 
                 for unc in &axis.uncertainties {
-                    println!("│  ❓ Uncertainty:");
                     for line in unc.content.lines() {
-                        println!("│     {}", line);
+                        println!("{}", ui::uncertainty(line));
                     }
                 }
-                println!("│");
 
                 if let Some(ref sum) = axis.summary {
-                    println!("│  📝 Summary:");
                     for line in sum.content.lines() {
-                        println!("│     {}", line);
+                        println!("{}", ui::summary_line(line));
                     }
                 }
 
-                if !axis.gaps.is_empty() {
-                    println!("│");
-                    println!("│  ⚠ GAPS:");
-                    for gap in &axis.gaps {
-                        println!("│     - {}", gap);
-                    }
+                for gap in &axis.gaps {
+                    println!("{}", ui::gap_line(gap));
                 }
 
-                println!("│");
-                println!("└───────────────────────────────────────");
+                println!("{}", ui::axis_footer());
                 println!();
             }
 
             let total_gaps: usize = output.axes.iter().map(|a| a.gaps.len()).sum();
             if total_gaps == 0 {
-                println!("✅ Comparison complete — all obligation slots fulfilled.");
+                println!("  {}", ui::status_ok("Comparison complete — all obligations fulfilled"));
             } else {
-                println!("⚠ {} unfulfilled obligation(s).", total_gaps);
+                println!("  {}", ui::status_warn(&format!("{} unfulfilled obligation(s)", total_gaps)));
             }
         }
         Err(e) => {
-            eprintln!("ERROR (comparison): {}", e);
+            println!("  {}", ui::status_fail("Comparison failed"));
+            eprintln!("  {}", ui::error(&format!("{}", e)));
         }
     }
 
     println!();
-    println!();
 
     // -----------------------------------------------------------------------
-    // Strategy 2: Coding (code analysis + refactoring)
+    // Strategy 2: Coding
     // -----------------------------------------------------------------------
-    println!("━━━ STRATEGY 2: Coding ━━━");
+    println!("{}", ui::section("Strategy 2: Coding"));
     println!();
-    println!("Goal: Analyze code and plan extract-method refactoring");
-    println!("Source: {} lines of Rust code", coding_strategy::EXAMPLE_LONG_FUNCTION.lines().count());
+
+    let line_count = coding_strategy::EXAMPLE_LONG_FUNCTION.lines().count();
+    println!("{}", ui::kv("goal", "Analyze code + plan extract-method refactoring"));
+    println!("{}", ui::kv_dim("source", &format!("{} lines of Rust", line_count)));
     println!();
 
     match coding_strategy::run_coding(
@@ -472,73 +500,89 @@ fn run_demo_mode() {
         "Extract method to reduce function length",
     ) {
         Ok(output) => {
-            println!("═══ CODE ANALYSIS RESULTS ═══");
-            println!();
-
-            println!("Source ({} chars):", output.source.len());
-            for (i, line) in output.source.lines().take(5).enumerate() {
-                println!("  {:>3} │ {}", i + 1, line);
-            }
-            if output.source.lines().count() > 5 {
-                println!("  ... │ ({} more lines)", output.source.lines().count() - 5);
+            // Source preview
+            println!("  {}", ui::subsection("Source Preview"));
+            let preview: String = output.source.lines().take(5)
+                .enumerate()
+                .map(|(i, l)| format!("  {} {} {}", ui::dim(&format!("{:>4}", i + 1)), ui::dim("│"), l))
+                .collect::<Vec<_>>()
+                .join("\n");
+            println!("{}", preview);
+            let remaining = output.source.lines().count().saturating_sub(5);
+            if remaining > 0 {
+                println!("  {}  {} {}", ui::dim("    "), ui::dim("│"), ui::dim(&format!("... {} more lines", remaining)));
             }
             println!();
 
             if !output.smells.is_empty() {
-                println!("Code Smells:");
-                for smell in &output.smells {
-                    println!("  🔍 {}", smell);
+                println!("  {}", ui::subsection("Code Smells"));
+                for (i, smell) in output.smells.iter().enumerate() {
+                    if i == output.smells.len() - 1 {
+                        println!("{}", ui::tree_last(smell));
+                    } else {
+                        println!("{}", ui::tree_item(smell));
+                    }
                 }
                 println!();
             }
 
             if !output.refactorings.is_empty() {
-                println!("Planned Refactorings:");
-                for refactoring in &output.refactorings {
-                    println!("  🔧 {}", refactoring);
+                println!("  {}", ui::subsection("Planned Refactorings"));
+                for (i, r) in output.refactorings.iter().enumerate() {
+                    if i == output.refactorings.len() - 1 {
+                        println!("{}", ui::tree_last(r));
+                    } else {
+                        println!("{}", ui::tree_item(r));
+                    }
                 }
                 println!();
             }
 
             if !output.type_info.is_empty() {
-                println!("Type Information:");
-                for info in &output.type_info {
-                    println!("  📐 {}", info);
+                println!("  {}", ui::subsection("Type Information"));
+                for (i, info) in output.type_info.iter().enumerate() {
+                    if i == output.type_info.len() - 1 {
+                        println!("{}", ui::tree_last(info));
+                    } else {
+                        println!("{}", ui::tree_item(info));
+                    }
                 }
                 println!();
             }
 
-            println!("Generated Tests:");
-            for test in &output.tests {
-                for line in test.lines() {
-                    println!("  │ {}", line);
+            if !output.tests.is_empty() {
+                println!("  {}", ui::subsection("Generated Tests"));
+                for test in &output.tests {
+                    println!("{}", ui::code_block(test));
+                    println!();
                 }
-                println!();
             }
 
-            println!("✅ Coding analysis complete.");
+            println!("  {}", ui::status_ok("Coding analysis complete"));
         }
         Err(e) => {
-            eprintln!("ERROR (coding): {}", e);
+            println!("  {}", ui::status_fail("Coding analysis failed"));
+            eprintln!("  {}", ui::error(&format!("{}", e)));
         }
     }
 
     println!();
-    println!();
 
     // -----------------------------------------------------------------------
-    // Strategy 3: Filesystem (dry-run planning)
+    // Strategy 3: Filesystem (dry-run)
     // -----------------------------------------------------------------------
-    println!("━━━ STRATEGY 3: Filesystem (Dry-Run) ━━━");
-    println!();
-    println!("Goal: Extract images from a CBZ comic archive");
+    println!("{}", ui::section("Strategy 3: Filesystem"));
     println!();
 
-    let fs_target = TypeExpr::seq(TypeExpr::entry(
+    // Goal A: CBZ extraction
+    println!("{}", ui::kv("goal", "Extract images from a CBZ comic archive"));
+    println!();
+
+    let fs_target_a = TypeExpr::seq(TypeExpr::entry(
         TypeExpr::prim("Name"),
         TypeExpr::file(TypeExpr::prim("Image")),
     ));
-    let fs_available = vec![
+    let fs_available_a = vec![
         ExprLiteral::new(
             "comic.cbz",
             TypeExpr::file(TypeExpr::archive(
@@ -549,17 +593,19 @@ fn run_demo_mode() {
         ),
     ];
 
-    match run_fs_goal(fs_target, fs_available) {
+    let strategy_a = FilesystemStrategy::new();
+    match strategy_a.dry_run(fs_target_a, fs_available_a) {
         Ok(trace) => {
-            println!("{}", trace);
+            print_trace(&trace);
         }
         Err(e) => {
-            eprintln!("ERROR (filesystem): {}", e);
+            println!("  {}", ui::status_fail("Planning failed"));
+            eprintln!("  {}", ui::error(&format!("{}", e)));
         }
     }
 
-    println!();
-    println!("Goal: List directory contents");
+    // Goal B: List directory
+    println!("{}", ui::kv("goal", "List directory contents"));
     println!();
 
     let strategy = FilesystemStrategy::new();
@@ -575,14 +621,37 @@ fn run_demo_mode() {
         )],
     ) {
         Ok(trace) => {
-            println!("{}", trace);
+            print_trace(&trace);
         }
         Err(e) => {
-            eprintln!("ERROR (filesystem): {}", e);
+            println!("  {}", ui::status_fail("Planning failed"));
+            eprintln!("  {}", ui::error(&format!("{}", e)));
         }
     }
 
+    println!("{}", ui::rule());
+    println!("  {}", ui::status_ok("All strategies complete"));
     println!();
-    println!("═══ ENGINE COMPLETE ═══");
-    println!("All strategies executed through the unified pipeline.");
+}
+
+/// Print a DryRunTrace with rich formatting.
+fn print_trace(trace: &cadmus::fs_strategy::DryRunTrace) {
+    println!("  {}", ui::kv_dim("target", &trace.goal.to_string()));
+    for ts in &trace.steps {
+        let kind_tag = match ts.kind {
+            cadmus::fs_strategy::StepKind::Op => "op",
+            cadmus::fs_strategy::StepKind::Leaf => "input",
+            cadmus::fs_strategy::StepKind::Map => "map",
+            cadmus::fs_strategy::StepKind::Fold => "fold",
+        };
+        let detail = format!(
+            "{} {} {}",
+            ui::dim(&format!("[{}]", kind_tag)),
+            ui::dim(&ts.command_hint),
+            if ts.inputs.is_empty() { String::new() } else { ui::dim(&format!("{} {}", ui::icon::ARROW_LEFT, ts.inputs.join(", "))) },
+        );
+        println!("{}", ui::step(ts.step, &ts.op_name, &detail));
+    }
+    println!("  {}", ui::kv_dim("output", &trace.steps.last().map(|s| s.output.as_str()).unwrap_or("?")));
+    println!();
 }

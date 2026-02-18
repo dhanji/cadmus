@@ -1,0 +1,18 @@
+# Workflow: Git Activity Report
+# =============================
+# Analyze git history: log, filter for fixes, sort, deduplicate, count.
+# 5-step Repo → Seq(Commit) chain.
+
+workflow: "Git fix activity report"
+
+inputs:
+  repo: "~/src/cadmus"
+  pattern: "fix"
+
+steps:
+  - git_log
+  - filter:
+      pattern: "$pattern"
+  - sort_by: date
+  - unique
+  - count
