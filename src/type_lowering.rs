@@ -1,3 +1,5 @@
+use crate::registry::{AlgebraicProperties, OperationRegistry, PolyOpSignature};
+use crate::type_expr::TypeExpr;
 // ---------------------------------------------------------------------------
 // Type Lowering — Phase 2 Subsumption
 // ---------------------------------------------------------------------------
@@ -417,6 +419,387 @@ pub fn is_residual_fs_op(op: &str) -> bool {
 /// Look up a residual fs_op.
 pub fn lookup_residual(fs_op: &str) -> Option<&'static ResidualFsOp> {
     RESIDUAL_FS_OPS.iter().find(|e| e.fs_op == fs_op)
+}
+
+// ---------------------------------------------------------------------------
+// Legacy op registration — replaces data/compat/*.yaml
+// ---------------------------------------------------------------------------
+//
+// These functions programmatically register all 113 legacy op names
+// (formerly defined in fs_ops.yaml and power_tools_ops.yaml) with their
+// rich type signatures. This allows the workflow compiler to type-check
+// workflows using old op names, while execution is routed through the
+// subsumption map to shell-callable forms.
+
+/// Helper: parse a type expression, panicking on failure (compile-time constant strings).
+fn tp(s: &str) -> TypeExpr {
+    TypeExpr::parse(s).unwrap_or_else(|e| panic!("bad type expr '{}': {}", s, e))
+}
+
+/// Register all legacy filesystem ops (formerly fs_ops.yaml) into the registry.
+///
+/// These are the 49 ops from the original filesystem operations pack.
+/// Their rich type signatures enable the workflow compiler to do proper
+/// type checking before the subsumption map routes execution to shell ops.
+pub fn register_fs_legacy_ops(reg: &mut OperationRegistry) {
+    // --- Directory & File I/O ---
+    reg.register_poly(
+        "list_dir",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Dir(a)")], tp("Seq(Entry(Name, a))")),
+        AlgebraicProperties::none(),
+        "ls — list directory contents",
+    );
+    reg.register_poly(
+        "read_file",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)")], tp("a")),
+        AlgebraicProperties::none(),
+        "cat — read file contents",
+    );
+    reg.register_poly(
+        "write_file",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("a"), tp("Path")], tp("File(a)")),
+        AlgebraicProperties::none(),
+        "write content to file at path",
+    );
+    reg.register_poly(
+        "stat",
+        PolyOpSignature::mono(vec![tp("Path")], tp("Metadata")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "stat — get file metadata",
+    );
+    reg.register_poly(
+        "walk_tree",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Dir(a)")], tp("Seq(Entry(Name, a))")),
+        AlgebraicProperties::none(),
+        "find — recursively walk directory tree (flattened)",
+    );
+    reg.register_poly(
+        "walk_tree_hierarchy",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Dir(a)")], tp("Tree(Entry(Name, a))")),
+        AlgebraicProperties::none(),
+        "find — recursively walk directory tree (preserving hierarchy)",
+    );
+    reg.register_poly(
+        "flatten_tree",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Tree(a)")], tp("Seq(a)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "flatten tree structure into flat sequence",
+    );
+    // --- Filtering & Sorting ---
+    reg.register_poly(
+        "filter",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Seq(a)"), tp("Pattern")], tp("Seq(a)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "grep/filter — filter sequence by pattern",
+    );
+    reg.register_poly(
+        "sort_by",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Seq(a)")], tp("Seq(a)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "sort — sort sequence elements",
+    );
+    // --- Archive Operations ---
+    reg.register_poly(
+        "extract_archive",
+        PolyOpSignature::new(vec!["a".into(), "fmt".into()], vec![tp("File(Archive(a, fmt))")], tp("Seq(Entry(Name, a))")),
+        AlgebraicProperties::none(),
+        "unzip/tar -x — extract archive contents",
+    );
+    reg.register_poly(
+        "pack_archive",
+        PolyOpSignature::new(vec!["a".into(), "fmt".into()], vec![tp("Seq(Entry(Name, a))"), tp("fmt")], tp("File(Archive(a, fmt))")),
+        AlgebraicProperties::none(),
+        "zip/tar -c — pack entries into archive",
+    );
+    // --- Sequence Operations ---
+    reg.register_poly(
+        "concat_seq",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Seq(a)"), tp("Seq(a)")], tp("Seq(a)")),
+        AlgebraicProperties { associative: true, identity: Some("[]".into()), ..Default::default() },
+        "cat/concat — concatenate sequences (order-preserving)",
+    );
+    // --- Entry Operations ---
+    reg.register_poly(
+        "rename",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Entry(Name, a)"), tp("Name")], tp("Entry(Name, a)")),
+        AlgebraicProperties::none(),
+        "mv — rename entry",
+    );
+    reg.register_poly(
+        "move_entry",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Entry(Name, a)"), tp("Path")], tp("Entry(Name, a)")),
+        AlgebraicProperties::none(),
+        "mv — move entry to new path",
+    );
+    // --- Search ---
+    reg.register_poly(
+        "search_content",
+        PolyOpSignature::mono(vec![tp("Seq(Entry(Name, File(Text)))"), tp("Pattern")], tp("Seq(Match(Pattern, Line))")),
+        AlgebraicProperties::none(),
+        "grep — search file contents for pattern",
+    );
+    reg.register_poly(
+        "find_matching",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Pattern"), tp("Seq(Entry(Name, a))")], tp("Seq(Entry(Name, a))")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "find -name — filter entries by name pattern",
+    );
+    // --- Transformation ---
+    reg.register_poly(
+        "map_entries",
+        PolyOpSignature::new(vec!["a".into(), "b".into()], vec![tp("Seq(Entry(Name, a))")], tp("Seq(Entry(Name, b))")),
+        AlgebraicProperties::none(),
+        "xargs/map — transform entry values",
+    );
+    // --- Phase 1: File Lifecycle ---
+    reg.register_poly(
+        "copy",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)"), tp("Path")], tp("File(a)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "cp — copy file to destination path",
+    );
+    reg.register_poly(
+        "delete",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Entry(Name, a)")], tp("Unit")),
+        AlgebraicProperties::none(),
+        "rm — delete file or directory",
+    );
+    reg.register_poly(
+        "create_dir",
+        PolyOpSignature::mono(vec![tp("Path")], tp("Dir(Bytes)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "mkdir -p — create directory (and parents)",
+    );
+    reg.register_poly(
+        "create_link",
+        PolyOpSignature::mono(vec![tp("Path"), tp("Path")], tp("Entry(Name, Bytes)")),
+        AlgebraicProperties::none(),
+        "ln -s — create symbolic link (target, link_name)",
+    );
+    reg.register_poly(
+        "set_permissions",
+        PolyOpSignature::mono(vec![tp("Path"), tp("Permissions")], tp("Unit")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "chmod — set file permissions",
+    );
+    reg.register_poly(
+        "set_owner",
+        PolyOpSignature::mono(vec![tp("Path"), tp("Owner")], tp("Unit")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "chown — set file owner",
+    );
+    // --- Phase 2: Content Transformation ---
+    reg.register_poly(
+        "replace",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)"), tp("Pattern"), tp("Text")], tp("File(a)")),
+        AlgebraicProperties::none(),
+        "sed s/pattern/replacement/ — replace content in file",
+    );
+    reg.register_poly(
+        "head",
+        PolyOpSignature::mono(vec![tp("File(Text)"), tp("Count")], tp("File(Text)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "head -n — first N lines of file",
+    );
+    reg.register_poly(
+        "tail",
+        PolyOpSignature::mono(vec![tp("File(Text)"), tp("Count")], tp("File(Text)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "tail -n — last N lines of file",
+    );
+    reg.register_poly(
+        "unique",
+        PolyOpSignature::mono(vec![tp("Seq(Line)")], tp("Seq(Line)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "sort -u — deduplicate lines",
+    );
+    reg.register_poly(
+        "count",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Seq(a)")], tp("Count")),
+        AlgebraicProperties::none(),
+        "wc -l — count elements in sequence",
+    );
+    reg.register_poly(
+        "diff",
+        PolyOpSignature::mono(vec![tp("File(Text)"), tp("File(Text)")], tp("Diff")),
+        AlgebraicProperties { commutative: false, ..Default::default() },
+        "diff — compare two text files",
+    );
+    reg.register_poly(
+        "checksum",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)")], tp("Hash")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "shasum — compute file checksum",
+    );
+    // --- Phase 3: Metadata Accessors ---
+    reg.register_poly(
+        "get_size",
+        PolyOpSignature::mono(vec![tp("Metadata")], tp("Size")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "stat -f %z — extract file size from metadata",
+    );
+    reg.register_poly(
+        "get_mtime",
+        PolyOpSignature::mono(vec![tp("Metadata")], tp("Timestamp")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "stat -f %m — extract modification time from metadata",
+    );
+    reg.register_poly(
+        "get_permissions",
+        PolyOpSignature::mono(vec![tp("Metadata")], tp("Permissions")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "stat -f %p — extract permissions from metadata",
+    );
+    reg.register_poly(
+        "get_file_type",
+        PolyOpSignature::mono(vec![tp("Metadata")], tp("FileType")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "stat -f %T — extract file type from metadata",
+    );
+    // --- Phase 4: macOS-Specific ---
+    reg.register_poly("spotlight_search", PolyOpSignature::mono(vec![tp("Pattern")], tp("Seq(Entry(Name, Bytes))")), AlgebraicProperties::none(), "mdfind — Spotlight search");
+    reg.register_poly("get_xattr", PolyOpSignature::mono(vec![tp("Path"), tp("XattrKey")], tp("XattrValue")), AlgebraicProperties { idempotent: true, ..Default::default() }, "xattr -p — read extended attribute");
+    reg.register_poly("set_xattr", PolyOpSignature::mono(vec![tp("Path"), tp("XattrKey"), tp("XattrValue")], tp("Unit")), AlgebraicProperties { idempotent: true, ..Default::default() }, "xattr -w — set extended attribute");
+    reg.register_poly("remove_xattr", PolyOpSignature::mono(vec![tp("Path"), tp("XattrKey")], tp("Unit")), AlgebraicProperties { idempotent: true, ..Default::default() }, "xattr -d — remove extended attribute");
+    reg.register_poly("remove_quarantine", PolyOpSignature::mono(vec![tp("Path")], tp("Unit")), AlgebraicProperties { idempotent: true, ..Default::default() }, "xattr -d com.apple.quarantine");
+    reg.register_poly("open_file", PolyOpSignature::mono(vec![tp("Path")], tp("Unit")), AlgebraicProperties::none(), "open — open file with default application");
+    reg.register_poly("open_with", PolyOpSignature::mono(vec![tp("Path"), tp("App")], tp("Unit")), AlgebraicProperties::none(), "open -a — open with specific application");
+    reg.register_poly("reveal", PolyOpSignature::mono(vec![tp("Path")], tp("Unit")), AlgebraicProperties::none(), "open -R — reveal file in Finder");
+    reg.register_poly(
+        "clipboard_copy",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("a")], tp("Unit")),
+        AlgebraicProperties::none(),
+        "pbcopy — copy content to clipboard",
+    );
+    reg.register_poly("clipboard_paste", PolyOpSignature::leaf(tp("Text")), AlgebraicProperties::none(), "pbpaste — paste from clipboard");
+    reg.register_poly("read_plist", PolyOpSignature::mono(vec![tp("File(Plist)")], tp("Plist")), AlgebraicProperties { idempotent: true, ..Default::default() }, "plutil — read plist file");
+    reg.register_poly("write_plist", PolyOpSignature::mono(vec![tp("Plist"), tp("Path")], tp("File(Plist)")), AlgebraicProperties::none(), "plutil — write plist file");
+    // --- Phase 5: Network ---
+    reg.register_poly("download", PolyOpSignature::mono(vec![tp("URL")], tp("File(Bytes)")), AlgebraicProperties::none(), "curl -O — download file from URL");
+    reg.register_poly(
+        "upload",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)"), tp("URL")], tp("Unit")),
+        AlgebraicProperties::none(),
+        "curl -T / scp — upload file to URL",
+    );
+    reg.register_poly(
+        "sync",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Dir(a)"), tp("Path")], tp("Dir(a)")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "rsync -a — synchronize directory to destination",
+    );
+}
+
+/// Register all legacy power tools ops (formerly power_tools_ops.yaml) into the registry.
+///
+/// These are the 64 ops from the power tools operations pack.
+pub fn register_power_tools_legacy_ops(reg: &mut OperationRegistry) {
+    // --- Git ---
+    reg.register_poly("git_init", PolyOpSignature::mono(vec![tp("Path")], tp("Repo")), AlgebraicProperties::none(), "git init — initialize repository");
+    reg.register_poly("git_clone", PolyOpSignature::mono(vec![tp("URL")], tp("Repo")), AlgebraicProperties::none(), "git clone — clone remote repository");
+    reg.register_poly(
+        "git_add",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("Repo"), tp("Seq(Entry(Name, a))")], tp("StagingArea")),
+        AlgebraicProperties::none(),
+        "git add — stage files for commit",
+    );
+    reg.register_poly("git_commit", PolyOpSignature::mono(vec![tp("Repo"), tp("StagingArea"), tp("Message")], tp("Commit")), AlgebraicProperties::none(), "git commit — create a commit");
+    reg.register_poly("git_log", PolyOpSignature::mono(vec![tp("Repo")], tp("Seq(Commit)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "git log — list commit history");
+    reg.register_poly("git_log_range", PolyOpSignature::mono(vec![tp("Repo"), tp("CommitRef"), tp("CommitRef")], tp("Seq(Commit)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "git log A..B — commits in range");
+    reg.register_poly("git_diff", PolyOpSignature::mono(vec![tp("Repo")], tp("Diff")), AlgebraicProperties { idempotent: true, ..Default::default() }, "git diff — show unstaged changes");
+    reg.register_poly("git_diff_commits", PolyOpSignature::mono(vec![tp("Commit"), tp("Commit")], tp("Diff")), AlgebraicProperties { idempotent: true, ..Default::default() }, "git diff A B");
+    reg.register_poly("git_branch", PolyOpSignature::mono(vec![tp("Repo"), tp("Name")], tp("Branch")), AlgebraicProperties::none(), "git branch — create branch");
+    reg.register_poly("git_checkout", PolyOpSignature::mono(vec![tp("Repo"), tp("Branch")], tp("Repo")), AlgebraicProperties::none(), "git checkout — switch branch");
+    reg.register_poly("git_merge", PolyOpSignature::mono(vec![tp("Repo"), tp("Branch"), tp("MergeStrategy")], tp("MergeResult")), AlgebraicProperties::none(), "git merge");
+    reg.register_poly("git_rebase", PolyOpSignature::mono(vec![tp("Repo"), tp("Branch")], tp("Repo")), AlgebraicProperties::none(), "git rebase");
+    reg.register_poly("git_stash", PolyOpSignature::mono(vec![tp("Repo")], tp("Stash")), AlgebraicProperties::none(), "git stash");
+    reg.register_poly("git_stash_pop", PolyOpSignature::mono(vec![tp("Repo"), tp("Stash")], tp("Repo")), AlgebraicProperties::none(), "git stash pop");
+    reg.register_poly("git_push", PolyOpSignature::mono(vec![tp("Repo"), tp("Remote"), tp("Branch")], tp("Unit")), AlgebraicProperties::none(), "git push");
+    reg.register_poly("git_pull", PolyOpSignature::mono(vec![tp("Repo"), tp("Remote"), tp("Branch")], tp("Repo")), AlgebraicProperties::none(), "git pull");
+    reg.register_poly("git_blame", PolyOpSignature::mono(vec![tp("Repo"), tp("Path")], tp("Seq(BlameLine)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "git blame");
+    reg.register_poly("git_bisect", PolyOpSignature::mono(vec![tp("Repo"), tp("Commit"), tp("Commit")], tp("Commit")), AlgebraicProperties::none(), "git bisect");
+    reg.register_poly("git_tag", PolyOpSignature::mono(vec![tp("Repo"), tp("Name"), tp("Commit")], tp("Tag")), AlgebraicProperties::none(), "git tag");
+    reg.register_poly("git_status", PolyOpSignature::mono(vec![tp("Repo")], tp("GitStatus")), AlgebraicProperties { idempotent: true, ..Default::default() }, "git status");
+    // --- Tmux / Screen ---
+    reg.register_poly("tmux_new_session", PolyOpSignature::mono(vec![tp("Name")], tp("Session")), AlgebraicProperties::none(), "tmux new-session -s");
+    reg.register_poly("tmux_attach", PolyOpSignature::mono(vec![tp("Name")], tp("Session")), AlgebraicProperties::none(), "tmux attach -t");
+    reg.register_poly("tmux_split", PolyOpSignature::mono(vec![tp("Session"), tp("SplitDirection")], tp("Pane")), AlgebraicProperties::none(), "tmux split-window");
+    reg.register_poly("tmux_send_keys", PolyOpSignature::mono(vec![tp("Pane"), tp("Text")], tp("Unit")), AlgebraicProperties::none(), "tmux send-keys");
+    reg.register_poly("screen_new_session", PolyOpSignature::mono(vec![tp("Name")], tp("Session")), AlgebraicProperties::none(), "screen -S");
+    reg.register_poly("screen_attach", PolyOpSignature::mono(vec![tp("Name")], tp("Session")), AlgebraicProperties::none(), "screen -r");
+    // --- Structured Data (jq/yq/csv) ---
+    reg.register_poly("jq_query", PolyOpSignature::mono(vec![tp("File(Json)"), tp("JqFilter")], tp("Json")), AlgebraicProperties { idempotent: true, ..Default::default() }, "jq — query JSON");
+    reg.register_poly("jq_filter_seq", PolyOpSignature::mono(vec![tp("File(Json)"), tp("JqFilter")], tp("Seq(Json)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "jq .[] — extract array");
+    reg.register_poly("jq_transform", PolyOpSignature::mono(vec![tp("Json"), tp("JqFilter")], tp("Json")), AlgebraicProperties::none(), "jq — transform JSON");
+    reg.register_poly("yq_query", PolyOpSignature::mono(vec![tp("File(Yaml)"), tp("YqFilter")], tp("Yaml")), AlgebraicProperties { idempotent: true, ..Default::default() }, "yq — query YAML");
+    reg.register_poly("yq_convert", PolyOpSignature::mono(vec![tp("File(Yaml)")], tp("File(Json)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "yq -o=json — YAML to JSON");
+    reg.register_poly("csv_cut", PolyOpSignature::mono(vec![tp("File(Csv)"), tp("ColumnList")], tp("File(Csv)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "csvcut — select columns");
+    reg.register_poly("csv_join", PolyOpSignature::mono(vec![tp("File(Csv)"), tp("File(Csv)"), tp("ColumnList")], tp("File(Csv)")), AlgebraicProperties::none(), "csvjoin — join CSV files");
+    reg.register_poly("csv_sort", PolyOpSignature::mono(vec![tp("File(Csv)"), tp("ColumnList")], tp("File(Csv)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "csvsort — sort CSV");
+    // --- Advanced Text Processing ---
+    reg.register_poly("awk_extract", PolyOpSignature::mono(vec![tp("File(Text)"), tp("AwkProgram")], tp("File(Text)")), AlgebraicProperties::none(), "awk extract fields");
+    reg.register_poly("awk_aggregate", PolyOpSignature::mono(vec![tp("File(Text)"), tp("AwkProgram")], tp("Text")), AlgebraicProperties::none(), "awk aggregate");
+    reg.register_poly("sed_script", PolyOpSignature::mono(vec![tp("File(Text)"), tp("SedScript")], tp("File(Text)")), AlgebraicProperties::none(), "sed -f script");
+    reg.register_poly("cut_fields", PolyOpSignature::mono(vec![tp("File(Text)"), tp("Delimiter"), tp("FieldList")], tp("File(Text)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "cut -d -f");
+    reg.register_poly("tr_replace", PolyOpSignature::mono(vec![tp("Text"), tp("CharSet"), tp("CharSet")], tp("Text")), AlgebraicProperties::none(), "tr SET1 SET2");
+    reg.register_poly("paste_merge", PolyOpSignature::mono(vec![tp("File(Text)"), tp("File(Text)"), tp("Delimiter")], tp("File(Text)")), AlgebraicProperties::none(), "paste -d");
+    reg.register_poly(
+        "tee_split",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("a"), tp("Path")], tp("a")),
+        AlgebraicProperties::none(),
+        "tee — copy stdin to file while passing through",
+    );
+    reg.register_poly("column_format", PolyOpSignature::mono(vec![tp("File(Text)"), tp("Delimiter")], tp("File(Text)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "column -t — format columns");
+    // --- Process & System Management ---
+    reg.register_poly("ps_list", PolyOpSignature::leaf(tp("Seq(Process)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "ps aux — list processes");
+    reg.register_poly("kill_process", PolyOpSignature::mono(vec![tp("Pid"), tp("Signal")], tp("Unit")), AlgebraicProperties::none(), "kill -SIG PID");
+    reg.register_poly("pkill_pattern", PolyOpSignature::mono(vec![tp("Pattern")], tp("Count")), AlgebraicProperties::none(), "pkill — kill by pattern");
+    reg.register_poly("watch_command", PolyOpSignature::mono(vec![tp("Command"), tp("Interval")], tp("Seq(Text)")), AlgebraicProperties::none(), "watch -n — repeat command");
+    reg.register_poly("df_usage", PolyOpSignature::leaf(tp("Seq(DiskUsage)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "df -h — disk usage");
+    reg.register_poly("du_size", PolyOpSignature::mono(vec![tp("Path")], tp("Size")), AlgebraicProperties { idempotent: true, ..Default::default() }, "du -sh — directory size");
+    reg.register_poly("lsof_open", PolyOpSignature::mono(vec![tp("Path")], tp("Seq(OpenFile)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "lsof — open files");
+    reg.register_poly("file_type_detect", PolyOpSignature::mono(vec![tp("Path")], tp("MimeType")), AlgebraicProperties { idempotent: true, ..Default::default() }, "file --mime-type");
+    reg.register_poly("uname_info", PolyOpSignature::leaf(tp("SystemInfo")), AlgebraicProperties { idempotent: true, ..Default::default() }, "uname -a");
+    reg.register_poly("uptime_info", PolyOpSignature::leaf(tp("UptimeInfo")), AlgebraicProperties { idempotent: true, ..Default::default() }, "uptime");
+    // --- Networking ---
+    reg.register_poly("ssh_exec", PolyOpSignature::mono(vec![tp("Host"), tp("Command")], tp("Text")), AlgebraicProperties::none(), "ssh host command");
+    reg.register_poly(
+        "scp_transfer",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)"), tp("Host"), tp("Path")], tp("Unit")),
+        AlgebraicProperties::none(),
+        "scp file host:path",
+    );
+    reg.register_poly("wget_download", PolyOpSignature::mono(vec![tp("URL")], tp("File(Bytes)")), AlgebraicProperties::none(), "wget — download file");
+    reg.register_poly("nc_connect", PolyOpSignature::mono(vec![tp("Host"), tp("Port")], tp("Connection")), AlgebraicProperties::none(), "nc host port");
+    reg.register_poly("ping_host", PolyOpSignature::mono(vec![tp("Host"), tp("Count")], tp("Seq(PingResult)")), AlgebraicProperties::none(), "ping -c N host");
+    reg.register_poly("dig_lookup", PolyOpSignature::mono(vec![tp("Hostname"), tp("RecordType")], tp("Seq(DnsRecord)")), AlgebraicProperties { idempotent: true, ..Default::default() }, "dig hostname TYPE");
+    // --- Compression & Crypto ---
+    reg.register_poly(
+        "gzip_compress",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)")], tp("File(Gzip(a))")),
+        AlgebraicProperties::none(),
+        "gzip — compress file",
+    );
+    reg.register_poly(
+        "gzip_decompress",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(Gzip(a))")], tp("File(a)")),
+        AlgebraicProperties::none(),
+        "gunzip — decompress gzip file",
+    );
+    reg.register_poly(
+        "xz_compress",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)")], tp("File(Xz(a))")),
+        AlgebraicProperties::none(),
+        "xz — compress file",
+    );
+    reg.register_poly("base64_encode", PolyOpSignature::mono(vec![tp("Bytes")], tp("Text")), AlgebraicProperties::none(), "base64 — encode");
+    reg.register_poly("base64_decode", PolyOpSignature::mono(vec![tp("Text")], tp("Bytes")), AlgebraicProperties::none(), "base64 -d — decode");
+    reg.register_poly(
+        "openssl_hash",
+        PolyOpSignature::new(vec!["a".into()], vec![tp("File(a)"), tp("HashAlgorithm")], tp("Hash")),
+        AlgebraicProperties { idempotent: true, ..Default::default() },
+        "openssl dgst — cryptographic hash",
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-18T02:14:07Z | Size: 39.1k chars
+> Updated: 2026-02-18T03:48:36Z | Size: 39.8k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -449,3 +449,14 @@
 - `src/racket_executor.rs` [197-245] - subsumed ops bridge (binary + unary)
 - **Tests**: 1149 total passing, 20 new tests (8 unit for is_seq_output, 5 unit for bridges, 7 integration)
 - **data/coding_ops.yaml** - created as empty stub to fix pre-existing compile error
+
+### Phase 3: Complete Shell Migration
+- `data/macos_cli_facts.yaml` — 58 CLI tool entities, 141 submodes, 11 output-format classes
+- `data/racket_ops.yaml` — 63 ops (52 pure Racket + 11 shell anchors)
+- `data/racket_facts.yaml` — 72 entities
+- `src/type_lowering.rs` — 107 subsumption entries, RESIDUAL_FS_OPS empty, 6 racket-native entries
+- `data/compat/` — DELETED, legacy ops now registered programmatically
+- `src/type_lowering.rs` — register_fs_legacy_ops() + register_power_tools_legacy_ops()
+- `src/fs_types.rs` — build_full_registry() uses programmatic registration, no YAML
+- New output-format classes: shell_exec, shell_vcs, shell_structured, shell_session, shell_network
+- New RacketNativeKind variants: Append, Map

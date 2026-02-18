@@ -80,8 +80,8 @@ When `op_to_racket()` encounters an op, it checks three tiers in order:
 
 | Source                        | Ops  | Notes                                    |
 |-------------------------------|------|------------------------------------------|
-| `data/compat/fs_ops.yaml`    |   49 | Compatibility aliases (embedded)         |
-| `data/compat/power_tools_ops.yaml` | 64 | Compatibility aliases (embedded)   |
+| `src/type_lowering.rs` (fs)  |   49 | Legacy ops (programmatic registration)   |
+| `src/type_lowering.rs` (pt)  |   64 | Legacy ops (programmatic registration)   |
 | `data/racket_ops.yaml`       |   63 | 52 pure Racket + 11 shell anchors       |
 | Shell (inferred from facts)  | 200+ | 58 base ops + 141 submodes              |
 | **Total registry**           | 350+ | After all inference phases               |
@@ -159,15 +159,14 @@ data/
   macos_cli_facts.yaml      ← Primary: 58 CLI tool entities, 141 submodes
   racket_ops.yaml            ← 52 pure Racket + 11 shell anchors
   racket_facts.yaml          ← 72 entities (Racket + shell ops)
-  compat/
-    fs_ops.yaml              ← Compatibility: embedded for old op name resolution
-    power_tools_ops.yaml     ← Compatibility: embedded for old op name resolution
+src/
+  type_lowering.rs           ← 113 legacy ops registered programmatically
 ```
 
-The `data/compat/` files are **not loaded from disk** — they are compiled
-into the binary via `include_str!` and serve only to register the old op
-names (list_dir, git_log, etc.) so the workflow compiler and NL layer can
-resolve them. Execution is routed through the subsumption map to shell ops.
+Legacy op names (list_dir, git_log, etc.) are registered programmatically
+by `register_fs_legacy_ops()` and `register_power_tools_legacy_ops()` in
+`src/type_lowering.rs`. No YAML files needed. Execution is routed through
+the subsumption map to shell ops.
 
 ---
 
@@ -189,3 +188,4 @@ resolve them. Execution is routed through the subsumption map to shell ops.
 | 2025-02-19 | 46 new CLI tool entities (58 total), 141 submodes (up from 45) |
 | 2025-02-19 | RESIDUAL_FS_OPS emptied — all ops fully subsumed or Racket-native |
 | 2025-02-19 | fs_ops.yaml and power_tools_ops.yaml moved to data/compat/ (embedded only) |
+| 2025-02-19 | data/compat/ deleted — legacy ops now registered programmatically in type_lowering.rs |
