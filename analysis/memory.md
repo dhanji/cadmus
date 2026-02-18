@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-18T02:14:07Z | Size: 39.1k chars
+> Updated: 2026-02-18T06:06:38Z | Size: 40.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -449,3 +449,25 @@
 - `src/racket_executor.rs` [197-245] - subsumed ops bridge (binary + unary)
 - **Tests**: 1149 total passing, 20 new tests (8 unit for is_seq_output, 5 unit for bridges, 7 integration)
 - **data/coding_ops.yaml** - created as empty stub to fix pre-existing compile error
+
+### Stress Pipeline Tests
+- `tests/stress_pipeline.rs` [1-1281] - 80 stress tests across all 7 pipeline subsystems
+  - I1: NL end-to-end (21 tests) - `stress_nl_*`
+  - I2: Workflow compiler (7 tests) - `stress_workflow_*`
+  - I3: Racket codegen (12 tests) - `stress_racket_*`
+  - I4: Generic planner (7 tests) - `stress_planner_*`, `stress_expr_planner_*`
+  - I5: Inference engine (10 tests) - `stress_inference_*`
+  - I6: Type unification (11 tests) - `stress_unify_*`
+  - I7: Type lowering (10 tests) - `stress_subsumption_*`, `stress_residual_*`, `stress_has_lowering_*`, `stress_full_registry_*`
+
+### Key findings from stress testing
+- `Literal` struct has `type_id`, `key`, `value`, `metadata` — no `description` field
+- `ExprLiteral` has `description` but `Literal` does not
+- `poly_op_names()` returns `Vec<&str>` — use `contains(&"name")` not `contains("name")`
+- `multiply` inference kind is non-deterministic (OpSymmetric or TypeSymmetric depending on HashMap order)
+- `string_downcase` is always TypeSymmetric (reliable for testing)
+- `filter` is racket-native only, NOT dual-behavior
+- `sort_by`, `head`, `tail`, `count`, `unique` are dual-behavior ops
+- `walk_tree` on default Dir produces `Seq(Entry(Name, Bytes))`, not `Seq(Entry(Name, File(Text)))`
+- `parse_workflow` catches empty steps before `compile_workflow` runs
+- Generic planner uses `TypeId` (string-based), not `TypeExpr` — need custom registries for planner tests

@@ -371,11 +371,6 @@ fn fs_path_operand(prev: Option<&str>, inputs: &HashMap<String, String>) -> Stri
         .unwrap_or_else(|| racket_string("."))
 }
 
-/// Build `(shell-lines (string-append "cmd " (shell-quote path)))`.
-/// Always uses shell-quote for injection safety.
-fn fs_shell(cmd: &str, path: &str) -> String {
-    format!("(shell-lines (string-append \"{} \" (shell-quote {})))", cmd, path)
-}
 
 /// Convert a glob pattern to a grep-compatible regex (for Racket filter).
 fn glob_to_grep(pattern: &str) -> String {
@@ -389,14 +384,6 @@ fn glob_to_grep(pattern: &str) -> String {
     }
 }
 
-/// Quote a string for embedding inside a Racket string literal that will
-/// be passed to a shell command. Wraps in shell single-quotes.
-fn shell_quote_for_racket(s: &str) -> String {
-    // For embedding in a Racket string: use shell single quotes
-    // but escape any single quotes in the value
-    let escaped = s.replace('\'', "'\\''");
-    format!("'{}'", escaped)
-}
 
 // ---------------------------------------------------------------------------
 // Error type

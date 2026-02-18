@@ -30,14 +30,12 @@ use cadmus::registry::{self, load_ops_pack_str, Literal, OperationRegistry};
 use cadmus::type_expr::{self, TypeExpr, UnifyError};
 use cadmus::type_lowering;
 use cadmus::workflow::{
-    self, CompiledStep, CompiledWorkflow, WorkflowDef, WorkflowError,
-    RawStep, StepArgs,
+    self, CompiledStep, CompiledWorkflow, WorkflowDef, StepArgs,
 };
 
 const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
 const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
 const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli_facts.yaml");
-const FS_OPS_YAML: &str = include_str!("../data/packs/ops/fs_ops.yaml");
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -71,19 +69,7 @@ fn make_step(index: usize, op: &str, params: Vec<(&str, &str)>) -> CompiledStep 
     }
 }
 
-fn make_step_typed(
-    index: usize, op: &str, params: Vec<(&str, &str)>,
-    in_ty: TypeExpr, out_ty: TypeExpr,
-) -> CompiledStep {
-    CompiledStep {
-        index,
-        op: op.to_string(),
-        is_each: false,
-        input_type: in_ty,
-        output_type: out_ty,
-        params: params.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
-    }
-}
+
 
 fn make_workflow(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) -> (CompiledWorkflow, WorkflowDef) {
     let input_map: HashMap<String, String> = inputs.iter()
