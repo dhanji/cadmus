@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-18T08:14:33Z | Size: 41.1k chars
+> Updated: 2026-02-18T08:57:36Z | Size: 42.0k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -479,3 +479,12 @@
 - NL layer already used `textdir` input name for search_content (line 271 of dialogue.rs)
 - `list_dir`, `sort_by` etc. do NOT trigger promotion — Dir(Bytes) preserved
 - `read_file: each` unwraps File(Text) → Text, so you can't chain read_file:each → search_content (search_content reads files itself)
+
+### Generalized Type Promotion (commit 2513fd6)
+- `src/workflow.rs` [0..4800] - `contains_bytes()`, `replace_bytes_with_var()`, `try_promote_bytes()` — unification-based type promotion
+- Old special-case helpers `is_dir_bytes()` and `steps_need_file_text()` removed
+- Algorithm: replace `Bytes` with fresh `Var("_promote")`, simulate type chain forward, let unification discover what `_promote` should be
+- `src/workflow.rs:553-555` — promotion call site in `compile_workflow()`, shadows `input_type` with promoted version
+- `Substitution` now imported in workflow.rs
+- 4 new tests in `tests/stress_pipeline.rs`: `stress_promotion_no_bytes_no_promotion`, `stress_promotion_bytes_with_polymorphic_only_no_binding`, `stress_promotion_discovered_via_unification`, `stress_promotion_each_mode_read_file`
+- Total: 1231 tests, 0 failures, 0 warnings
