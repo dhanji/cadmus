@@ -214,7 +214,7 @@ impl ReasonerStrategy for ComparisonStrategy {
 
         // Load type signatures from YAML ops pack (source of truth for what ops exist).
         // The poly ops enable type-directed planning via TypeExpr unification.
-        const COMPARISON_OPS_YAML: &str = include_str!("../data/comparison_ops.yaml");
+        const COMPARISON_OPS_YAML: &str = include_str!("../data/packs/ops/comparison_ops.yaml");
         crate::registry::load_ops_pack_str_into(COMPARISON_OPS_YAML, &mut reg)
             .expect("embedded comparison_ops.yaml should always parse");
 
@@ -813,7 +813,7 @@ mod tests {
         let goal = Goal {
             description: "Compare Putin and Stalin".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+            fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
         };
         let output = run_comparison(&goal).unwrap();
         assert_eq!(output.axes.len(), 7);
@@ -825,7 +825,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+            fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
         };
         let strategy = ComparisonStrategy::new(goal).unwrap();
         let registry = strategy.build_registry();
@@ -843,7 +843,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+            fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
         };
         let strategy = ComparisonStrategy::new(goal).unwrap();
         let literals = strategy.available_literals();
@@ -861,7 +861,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+            fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
         };
         // We can't easily make ComparisonStrategy have an empty registry,
         // but we can test run_strategy with a minimal strategy that has no ops.
@@ -875,7 +875,7 @@ mod tests {
         let goal = Goal {
             description: "Produce a structured comparison of Putin and Stalin as autocrats".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+            fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
         };
 
         let output = run_comparison(&goal).unwrap();

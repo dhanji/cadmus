@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_theory_from_putin_stalin() {
-        let path = PathBuf::from("data/putin_stalin.yaml");
+        let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
         let idx = load_fact_pack(&path).unwrap();
         let ctx = build_theory_context(&idx);
 

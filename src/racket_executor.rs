@@ -869,8 +869,8 @@ mod tests {
     use crate::racket_strategy::{load_racket_facts_from_str, promote_inferred_ops};
 
     fn make_registry() -> OperationRegistry {
-        let mut reg = load_ops_pack_str(include_str!("../data/racket_ops.yaml")).unwrap();
-        let facts = load_racket_facts_from_str(include_str!("../data/racket_facts.yaml")).unwrap();
+        let mut reg = load_ops_pack_str(include_str!("../data/packs/ops/racket_ops.yaml")).unwrap();
+        let facts = load_racket_facts_from_str(include_str!("../data/packs/facts/racket_facts.yaml")).unwrap();
         promote_inferred_ops(&mut reg, &facts);
         reg
     }
@@ -1398,10 +1398,10 @@ mod tests {
 
     /// Build a full registry with shell submodes (needed for metasig lookups).
     fn make_full_registry() -> OperationRegistry {
-        let mut reg = load_ops_pack_str(include_str!("../data/racket_ops.yaml")).unwrap();
-        let facts = load_racket_facts_from_str(include_str!("../data/racket_facts.yaml")).unwrap();
+        let mut reg = load_ops_pack_str(include_str!("../data/packs/ops/racket_ops.yaml")).unwrap();
+        let facts = load_racket_facts_from_str(include_str!("../data/packs/facts/racket_facts.yaml")).unwrap();
         promote_inferred_ops(&mut reg, &facts);
-        let cli_yaml = include_str!("../data/macos_cli_facts.yaml");
+        let cli_yaml = include_str!("../data/packs/facts/macos_cli_facts.yaml");
         if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
             let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
             crate::racket_strategy::discover_shell_submodes(&mut reg, &facts, &cli_facts);

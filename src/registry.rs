@@ -1,7 +1,7 @@
 
     #[test]
     fn test_load_racket_ops_pack() {
-        let yaml = include_str!("../data/racket_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/racket_ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
         let names = reg.poly_op_names();
         assert!(names.len() >= 40, "expected at least 40 racket ops, got {}", names.len());
@@ -19,7 +19,7 @@
 
     #[test]
     fn test_racket_add_has_metasignature() {
-        let yaml = include_str!("../data/racket_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/racket_ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
 
         let add = reg.get_poly("add").unwrap();
@@ -49,7 +49,7 @@
     #[test]
     fn test_ops_without_meta_have_none() {
         // Existing packs should load fine with meta = None
-        let yaml = include_str!("../data/compat/fs_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/fs_ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
         let list_dir = reg.get_poly("list_dir").unwrap();
         assert!(list_dir.meta.is_none(), "list_dir should not have a metasignature");
@@ -1365,7 +1365,7 @@ ops:
 
     #[test]
     fn test_load_power_tools_ops_pack() {
-        let yaml = include_str!("../data/compat/power_tools_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/power_tools_ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
         let names = reg.poly_op_names();
         assert!(names.len() >= 55, "expected at least 55 ops, got {}", names.len());

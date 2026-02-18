@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_load_putin_stalin() {
-        let path = PathBuf::from("data/putin_stalin.yaml");
+        let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
         let idx = load_fact_pack(&path).expect("should load fact pack");
         assert_eq!(idx.pack.entities.len(), 2);
         assert_eq!(idx.pack.axes.len(), 7);
@@ -643,7 +643,7 @@ uncertainties:
 
     #[test]
     fn test_load_power_tools_fact_pack() {
-        let path = PathBuf::from("data/power_tools.yaml");
+        let path = PathBuf::from("data/packs/facts/power_tools.yaml");
         let idx = load_fact_pack(&path).expect("should load power_tools fact pack");
 
         // 10 entities: git, tmux, screen, ripgrep, grep, ag, jq, yq, awk, sed

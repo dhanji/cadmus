@@ -22,8 +22,8 @@ use cadmus::type_expr::TypeExpr;
 use cadmus::nl;
 use std::collections::HashMap;
 
-const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
-const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
 
 fn make_racket_reg() -> cadmus::registry::OperationRegistry {
     let mut reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();

@@ -266,10 +266,10 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
         println!();
 
         let mut racket_reg = cadmus::registry::load_ops_pack_str(
-            include_str!("../data/racket_ops.yaml")
+            include_str!("../data/packs/ops/racket_ops.yaml")
         ).expect("failed to load racket_ops.yaml");
         let racket_facts = cadmus::racket_strategy::load_racket_facts_from_str(
-            include_str!("../data/racket_facts.yaml")
+            include_str!("../data/packs/facts/racket_facts.yaml")
         ).expect("failed to load racket_facts.yaml");
         cadmus::racket_strategy::promote_inferred_ops(&mut racket_reg, &racket_facts);
         let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg) {
@@ -350,7 +350,7 @@ fn run_demo_mode() {
     let goal = Goal {
         description: "Produce a structured comparison of Putin and Stalin as autocrats".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+        fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
     };
 
     println!("Goal: {}", goal.description);

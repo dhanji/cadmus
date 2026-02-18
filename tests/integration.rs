@@ -5,7 +5,7 @@ fn putin_stalin_goal() -> Goal {
     Goal {
         description: "Produce a structured comparison of Putin and Stalin as autocrats".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+        fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
     }
 }
 

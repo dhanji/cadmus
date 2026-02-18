@@ -254,13 +254,13 @@ mod tests {
         Goal {
             description: "Compare Putin and Stalin as autocrats".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+            fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
         }
     }
 
     #[test]
     fn test_plan_all_axes_fulfilled() {
-        let path = PathBuf::from("data/putin_stalin.yaml");
+        let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
         let idx = load_fact_pack(&path).unwrap();
         let theory = build_theory_context(&idx);
         let goal = make_goal();
@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_plan_obligation_types() {
-        let path = PathBuf::from("data/putin_stalin.yaml");
+        let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
         let idx = load_fact_pack(&path).unwrap();
         let theory = build_theory_context(&idx);
         let goal = make_goal();

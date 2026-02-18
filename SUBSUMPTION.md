@@ -8,11 +8,11 @@ and `power_tools_ops.yaml` packs, and the completed migration.
 ## Architecture Overview
 
 ```
-Layer 1: CLI Fact Pack          data/macos_cli_facts.yaml
+Layer 1: CLI Fact Pack          data/packs/facts/macos_cli_facts.yaml
          (58 tools, 141 submodes, 11 output-format classes)
               │
               ▼
-Layer 2: Anchor Ops + Inference  data/racket_ops.yaml (category: shell)
+Layer 2: Anchor Ops + Inference  data/packs/ops/racket_ops.yaml (category: shell)
          (11 anchors → 58 base ops → 141 submode ops)
               │
               ▼
@@ -80,9 +80,9 @@ When `op_to_racket()` encounters an op, it checks three tiers in order:
 
 | Source                        | Ops  | Notes                                    |
 |-------------------------------|------|------------------------------------------|
-| `data/compat/fs_ops.yaml`    |   49 | Compatibility aliases (embedded)         |
-| `data/compat/power_tools_ops.yaml` | 64 | Compatibility aliases (embedded)   |
-| `data/racket_ops.yaml`       |   63 | 52 pure Racket + 11 shell anchors       |
+| `data/packs/ops/fs_ops.yaml`    |   49 | Compatibility aliases (embedded)         |
+| `data/packs/ops/power_tools_ops.yaml` | 64 | Compatibility aliases (embedded)   |
+| `data/packs/ops/racket_ops.yaml`       |   63 | 52 pure Racket + 11 shell anchors       |
 | Shell (inferred from facts)  | 200+ | 58 base ops + 141 submodes              |
 | **Total registry**           | 350+ | After all inference phases               |
 
@@ -156,16 +156,21 @@ When `op_to_racket()` encounters an op, it checks three tiers in order:
 
 ```
 data/
-  macos_cli_facts.yaml      ← Primary: 58 CLI tool entities, 141 submodes
-  racket_ops.yaml            ← 52 pure Racket + 11 shell anchors
-  racket_facts.yaml          ← 72 entities (Racket + shell ops)
-  compat/
-    fs_ops.yaml              ← Compatibility: embedded for old op name resolution
-    power_tools_ops.yaml     ← Compatibility: embedded for old op name resolution
+  packs/
+    facts/
+      macos_cli_facts.yaml   ← Primary: 58 CLI tool entities, 141 submodes
+      racket_facts.yaml      ← 72 entities (Racket + shell ops)
+      power_tools.yaml       ← Developer tools comparison data
+      putin_stalin.yaml      ← Autocrats comparison data
+      macos_fs.yaml          ← macOS filesystem knowledge
+    ops/
+      racket_ops.yaml        ← 52 pure Racket + 11 shell anchors
+      fs_ops.yaml            ← 49 filesystem typed operations
+      power_tools_ops.yaml   ← 64 dev tools typed operations
 ```
 
-The `data/compat/` files are **not loaded from disk** — they are compiled
-into the binary via `include_str!` and serve only to register the old op
+The ops pack files are compiled into the binary via `include_str!` and
+serve to register the old op
 names (list_dir, git_log, etc.) so the workflow compiler and NL layer can
 resolve them. Execution is routed through the subsumption map to shell ops.
 
@@ -188,4 +193,4 @@ resolve them. Execution is routed through the subsumption map to shell ops.
 | 2025-02-19 | 5 new output-format classes (shell_exec, shell_vcs, shell_structured, shell_session, shell_network) |
 | 2025-02-19 | 46 new CLI tool entities (58 total), 141 submodes (up from 45) |
 | 2025-02-19 | RESIDUAL_FS_OPS emptied — all ops fully subsumed or Racket-native |
-| 2025-02-19 | fs_ops.yaml and power_tools_ops.yaml moved to data/compat/ (embedded only) |
+| 2025-02-19 | fs_ops.yaml and power_tools_ops.yaml moved to data/packs/ops/ |

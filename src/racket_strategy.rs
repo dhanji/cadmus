@@ -108,7 +108,7 @@ pub struct InferredOp {
 // Embedded data
 // ---------------------------------------------------------------------------
 
-const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
 
 // ---------------------------------------------------------------------------
 // Registry builder
@@ -118,7 +118,7 @@ const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
 ///
 /// Tries disk first, falls back to embedded YAML.
 pub fn build_racket_registry() -> OperationRegistry {
-    if let Ok(reg) = crate::registry::load_ops_pack("data/racket_ops.yaml") {
+    if let Ok(reg) = crate::registry::load_ops_pack("data/packs/ops/racket_ops.yaml") {
         return reg;
     }
     load_ops_pack_str(RACKET_OPS_YAML)
@@ -131,7 +131,7 @@ pub fn build_racket_registry() -> OperationRegistry {
 
 /// Load the Racket fact pack and build an index.
 pub fn load_racket_facts() -> Result<FactPackIndex, InferenceError> {
-    let path = Path::new("data/racket_facts.yaml");
+    let path = Path::new("data/packs/facts/racket_facts.yaml");
     crate::fact_pack::load_fact_pack(path)
         .map_err(|e| InferenceError::FactPackError(e.to_string()))
 }
@@ -788,7 +788,7 @@ pub fn discover_shell_submodes(
 mod tests {
     use super::*;
 
-    const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
+    const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
 
     fn setup() -> (OperationRegistry, FactPackIndex) {
         let reg = build_racket_registry();

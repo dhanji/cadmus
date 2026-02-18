@@ -369,7 +369,7 @@ fn test_semantic_comparison_goal_to_output() {
     let goal = Goal {
         description: "Compare Putin and Stalin as autocrats".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+        fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
     };
 
     let output = pipeline::run(&goal).unwrap();
@@ -408,7 +408,7 @@ fn test_semantic_comparison_axes_have_evidence() {
     let goal = Goal {
         description: "Compare Putin and Stalin".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_paths: vec!["data/putin_stalin.yaml".into()],
+        fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
     };
 
     let output = pipeline::run(&goal).unwrap();

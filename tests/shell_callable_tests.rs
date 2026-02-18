@@ -23,9 +23,9 @@ use cadmus::registry::{load_ops_pack_str, OperationRegistry};
 use cadmus::type_expr::TypeExpr;
 use cadmus::workflow::{CompiledStep, CompiledWorkflow, WorkflowDef};
 
-const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
-const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
-const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/macos_cli_facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
+const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli_facts.yaml");
 
 // ---------------------------------------------------------------------------
 // Helpers

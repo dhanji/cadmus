@@ -9,8 +9,8 @@ use cadmus::type_expr::TypeExpr;
 // Power Tools Integration Tests
 // ===========================================================================
 
-const POWER_TOOLS_OPS: &str = include_str!("../data/compat/power_tools_ops.yaml");
-const FS_OPS: &str = include_str!("../data/compat/fs_ops.yaml");
+const POWER_TOOLS_OPS: &str = include_str!("../data/packs/ops/power_tools_ops.yaml");
+const FS_OPS: &str = include_str!("../data/packs/ops/fs_ops.yaml");
 
 // ---------------------------------------------------------------------------
 // 1. Ops Pack Tests
@@ -210,7 +210,7 @@ fn test_power_tools_ops_unification_no_match() {
 
 #[test]
 fn test_power_tools_fact_pack_loads() {
-    let path = PathBuf::from("data/power_tools.yaml");
+    let path = PathBuf::from("data/packs/facts/power_tools.yaml");
     let idx = fact_pack::load_fact_pack(&path).unwrap();
 
     assert_eq!(idx.pack.entities.len(), 10);
@@ -224,7 +224,7 @@ fn test_power_tools_fact_pack_loads() {
 
 #[test]
 fn test_power_tools_fact_pack_entity_coverage() {
-    let path = PathBuf::from("data/power_tools.yaml");
+    let path = PathBuf::from("data/packs/facts/power_tools.yaml");
     let idx = fact_pack::load_fact_pack(&path).unwrap();
 
     let entity_ids: Vec<&str> = idx.pack.entities.iter().map(|e| e.id.as_str()).collect();
@@ -239,7 +239,7 @@ fn test_power_tools_fact_pack_entity_coverage() {
 
 #[test]
 fn test_power_tools_fact_pack_no_cross_entity_contamination() {
-    let path = PathBuf::from("data/power_tools.yaml");
+    let path = PathBuf::from("data/packs/facts/power_tools.yaml");
     let idx = fact_pack::load_fact_pack(&path).unwrap();
 
     // Every claim should reference an entity that exists
@@ -267,7 +267,7 @@ fn test_power_tools_fact_pack_no_cross_entity_contamination() {
 
 #[test]
 fn test_power_tools_fact_pack_three_way_search_comparison() {
-    let path = PathBuf::from("data/power_tools.yaml");
+    let path = PathBuf::from("data/packs/facts/power_tools.yaml");
     let idx = fact_pack::load_fact_pack(&path).unwrap();
 
     // All three search tools should have performance claims
@@ -325,7 +325,7 @@ fn test_power_tools_fact_pack_three_way_search_comparison() {
 
 #[test]
 fn test_power_tools_fact_pack_solo_entity_git() {
-    let path = PathBuf::from("data/power_tools.yaml");
+    let path = PathBuf::from("data/packs/facts/power_tools.yaml");
     let idx = fact_pack::load_fact_pack(&path).unwrap();
 
     // Git should have claims on all 5 axes
@@ -346,8 +346,8 @@ fn test_power_tools_fact_pack_solo_entity_git() {
 
 #[test]
 fn test_compose_power_tools_and_macos_fs() {
-    let pt_path = PathBuf::from("data/power_tools.yaml");
-    let ps_path = PathBuf::from("data/putin_stalin.yaml");
+    let pt_path = PathBuf::from("data/packs/facts/power_tools.yaml");
+    let ps_path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
 
     let pt_idx = fact_pack::load_fact_pack(&pt_path).unwrap();
     let ps_idx = fact_pack::load_fact_pack(&ps_path).unwrap();
@@ -378,8 +378,8 @@ fn test_compose_power_tools_and_macos_fs() {
 
 #[test]
 fn test_compose_shared_axis_dedup() {
-    let pt_path = PathBuf::from("data/power_tools.yaml");
-    let ps_path = PathBuf::from("data/putin_stalin.yaml");
+    let pt_path = PathBuf::from("data/packs/facts/power_tools.yaml");
+    let ps_path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
 
     let merged_idx = fact_pack::load_fact_packs(&[&pt_path, &ps_path]).unwrap();
 
@@ -396,8 +396,8 @@ fn test_compose_shared_axis_dedup() {
 
 #[test]
 fn test_compose_cross_pack_queries() {
-    let pt_path = PathBuf::from("data/power_tools.yaml");
-    let ps_path = PathBuf::from("data/putin_stalin.yaml");
+    let pt_path = PathBuf::from("data/packs/facts/power_tools.yaml");
+    let ps_path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
 
     let merged_idx = fact_pack::load_fact_packs(&[&pt_path, &ps_path]).unwrap();
 
@@ -429,8 +429,8 @@ fn test_compose_via_goal_paths() {
         description: "Compare across merged packs".into(),
         entities: vec!["git".into(), "putin".into()],
         fact_pack_paths: vec![
-            "data/power_tools.yaml".into(),
-            "data/putin_stalin.yaml".into(),
+            "data/packs/facts/power_tools.yaml".into(),
+            "data/packs/facts/putin_stalin.yaml".into(),
         ],
     };
 
