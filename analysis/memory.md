@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-18T08:57:36Z | Size: 42.0k chars
+> Updated: 2026-02-18T09:26:10Z | Size: 43.0k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -488,3 +488,12 @@
 - `Substitution` now imported in workflow.rs
 - 4 new tests in `tests/stress_pipeline.rs`: `stress_promotion_no_bytes_no_promotion`, `stress_promotion_bytes_with_polymorphic_only_no_binding`, `stress_promotion_discovered_via_unification`, `stress_promotion_each_mode_read_file`
 - Total: 1231 tests, 0 failures, 0 warnings
+
+### Executor Refactor (commit `6697124`)
+- `src/shell_helpers.rs` — shared utilities: `shell_quote()`, `glob_to_grep()`, `sed_escape()`, `primary_input()`, `CodegenError` enum
+- `src/executor.rs` — `ExecutorError` is now `type ExecutorError = CodegenError`
+- `src/racket_executor.rs` — `RacketError` is now `type RacketError = CodegenError`
+- `src/executor.rs` — `op_to_command()` decomposed into 16 category functions: `cmd_directory_file_io`, `cmd_filter_sort`, `cmd_archive`, `cmd_search`, `cmd_file_lifecycle`, `cmd_content_transform`, `cmd_metadata`, `cmd_macos`, `cmd_network`, `cmd_git`, `cmd_terminal_mux`, `cmd_structured_data`, `cmd_text_processing`, `cmd_process_system`, `cmd_networking`, `cmd_compression_crypto`
+- `src/executor.rs` — `ShellCommand::stdout()`, `::exec()`, `::pipe()` constructors; `source()` and `require_param()` helpers
+- `src/type_lowering.rs` — Removed dead `ResidualFsOp`, `RESIDUAL_FS_OPS`, `is_residual_fs_op()`, `lookup_residual()`
+- 1237 total tests, all passing, zero warnings
