@@ -134,6 +134,8 @@ fn trace_input(input: &str) {
                                 format!("{} (symmetric partner)", inferred.inferred_from),
                             InferenceKind::TypeSymmetric { class } =>
                                 format!("{} (type-symmetric peer, class: {})", inferred.inferred_from, class),
+                            InferenceKind::ShellSubmode { base_op, flags } =>
+                                format!("{} (shell submode, flags: {})", base_op, flags),
                         };
                         println!("  ✅ Inferred from: {}", kind_desc);
                         println!("  Racket symbol: {}", inferred.racket_symbol);

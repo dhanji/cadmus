@@ -495,3 +495,105 @@ ops:
 
   # string_downcase is NOT listed here — discovered from the fact pack
   # and inferred via type-symmetric from string_upcase (class: string_to_string).
+
+  # =========================================================================
+  # 8. Shell Ops — Racket wrappers around CLI tools
+  # =========================================================================
+  # Each anchor represents an output-format class. Non-anchor tools in the
+  # same class (e.g., cat, head, tail in shell_text_lines) are discovered
+  # from the fact pack via type-symmetric inference. Submodes (flag variants)
+  # are discovered in Phase 4 from macos_cli_facts.yaml submode properties.
+  #
+  # All shell ops produce List(String) (lines of output) or String (raw).
+  # The Racket executor generates wrapper forms using (system ...) calls.
+
+  # --- shell_text_lines anchor: ls ---
+  - name: shell_ls
+    racket_symbol: "shell-ls"
+    inputs: ["String"]
+    output: "List(String)"
+    description: "(shell-ls path) — list directory contents, one entry per line"
+    meta:
+      params:
+        - { name: path, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  # cat, head, tail, sort are NOT listed here — discovered from the fact
+  # pack via type-symmetric inference (class: shell_text_lines).
+
+  # --- shell_tabular anchor: ps ---
+  - name: shell_ps
+    racket_symbol: "shell-ps"
+    inputs: []
+    output: "List(String)"
+    description: "(shell-ps) — list running processes as lines"
+    meta:
+      params: []
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  # df is NOT listed here — discovered via type-symmetric (class: shell_tabular).
+
+  # --- shell_tree anchor: find ---
+  - name: shell_find
+    racket_symbol: "shell-find"
+    inputs: ["String"]
+    output: "List(String)"
+    description: "(shell-find path) — recursively walk directory tree, one path per line"
+    meta:
+      params:
+        - { name: path, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  # --- shell_filtered_lines anchor: grep ---
+  - name: shell_grep
+    racket_symbol: "shell-grep"
+    inputs: ["String", "String"]
+    output: "List(String)"
+    description: "(shell-grep pattern path) — search for pattern in files, matching lines"
+    meta:
+      params:
+        - { name: pattern, type: String }
+        - { name: path, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  # --- shell_single_value anchor: du ---
+  - name: shell_du
+    racket_symbol: "shell-du"
+    inputs: ["String"]
+    output: "String"
+    description: "(shell-du path) — estimate file space usage"
+    meta:
+      params:
+        - { name: path, type: String }
+      return_type: String
+      invariants: []
+      category: shell
+      effects: io
+
+  # wc is NOT listed here — discovered via type-symmetric (class: shell_single_value).
+
+  # --- shell_byte_stream anchor: curl ---
+  - name: shell_curl
+    racket_symbol: "shell-curl"
+    inputs: ["String"]
+    output: "String"
+    description: "(shell-curl url) — download URL contents as string"
+    meta:
+      params:
+        - { name: url, type: String }
+      return_type: String
+      invariants: []
+      category: shell
+      effects: io

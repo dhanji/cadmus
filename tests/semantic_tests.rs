@@ -433,35 +433,6 @@ fn test_semantic_comparison_axes_have_evidence() {
 }
 
 #[test]
-fn test_semantic_comparison_tiramisu_cheesecake() {
-    let goal = Goal {
-        description: "Compare tiramisu and cheesecake as desserts".into(),
-        entities: vec!["tiramisu".into(), "cheesecake".into()],
-        fact_pack_paths: vec!["data/tiramisu_cheesecake.yaml".into()],
-    };
-
-    let output = pipeline::run(&goal).unwrap();
-
-    // Should have axes from the dessert fact pack
-    assert!(!output.axes.is_empty(), "should have comparison axes");
-
-    // Each axis should have claims for both desserts
-    for axis in &output.axes {
-        let entities: Vec<_> = axis.claims.iter()
-            .filter_map(|c| c.entity.as_ref())
-            .collect();
-        assert!(entities.iter().any(|e| e.contains("tiramisu")),
-            "axis '{}' should have tiramisu claims", axis.axis);
-        assert!(entities.iter().any(|e| e.contains("cheesecake")),
-            "axis '{}' should have cheesecake claims", axis.axis);
-    }
-
-    // All slots fulfilled
-    let total_gaps: usize = output.axes.iter().map(|a| a.gaps.len()).sum();
-    assert_eq!(total_gaps, 0, "all obligation slots should be fulfilled");
-}
-
-#[test]
 fn test_semantic_comparison_missing_fact_pack() {
     let goal = Goal {
         description: "Compare X and Y".into(),

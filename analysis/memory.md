@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-17T21:20:36Z | Size: 31.6k chars
+> Updated: 2026-02-18T02:14:07Z | Size: 39.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -354,3 +354,98 @@
 - Programs 11-13: comparison ops (anchor, op-symmetric, type-symmetric)
 - Programs 14-15: string ops (anchor, discovered + chain)
 - Program 16: multi-domain chain (arithmetic → string → upcase)
+
+### Shell-Callable Racket Forms (Complete)
+- `data/macos_cli_facts.yaml` - CLI fact pack: 12 entities, 45 submodes, 6 output-format classes
+- `data/racket_ops.yaml` [500..599] - 6 shell anchor ops (`shell_ls`, `shell_ps`, `shell_find`, `shell_grep`, `shell_du`, `shell_curl`)
+- `data/racket_facts.yaml` [69..108] - 12 shell entities (6 anchors + 6 type-symmetric)
+- `src/racket_strategy.rs` [636..770] - `discover_shell_submodes()`, `InferenceKind::ShellSubmode`
+- `src/racket_executor.rs` [41..105] - `shell_preamble()`, `SHELL_PREAMBLE` constant
+- `src/racket_executor.rs` [219..257] - `generate_shell_call()` with nullary/unary/binary dispatch
+- `src/fs_types.rs` [50] - `MACOS_CLI_FACTS_YAML` embedded, [88..98] Phase 4 integration
+- `tests/shell_callable_tests.rs` - 41 tests covering all layers
+- `PLAYBOOK.md` [1223..1435] - Section 10: Shell-Callable Racket Forms
+- `SUBSUMPTION.md` - Migration roadmap: 10/49 fs_ops + 4/64 power_tools_ops subsumed
+- Total registry: 246 ops after 5 inference phases
+- Total test suite: 1076 tests, 0 failures, 0 warnings
+
+### NL → Racket Compilation Fix
+- `src/racket_executor.rs` [108-345] - `is_fs_op()`, `fs_op_to_racket()`, `fs_path_operand()`, `fs_shell()`, `glob_to_grep()`, `shell_quote_for_racket()` — bridges 26 filesystem ops (walk_tree, find_matching, filter, sort_by, list_dir, etc.) to Racket shell-based expressions
+- `has_shell_ops()` updated to detect both shell-callable ops AND filesystem ops
+- All fs op paths use `(shell-quote ...)` for injection safety — never inline user paths into shell command strings
+- `tests/repro_screenshot.rs` — 15 tests for NL→Racket roundtrip
+- `tests/nl_tests.rs:53-98` — injection tests updated to accept `(shell-quote ...)` pattern
+- **1091 total tests**, 0 failures
+
+### Shell Anchor Architecture (Phase 2 context)
+- 6 anchor ops in `data/racket_ops.yaml` lines 510-620: shell_ls, shell_ps, shell_find, shell_grep, shell_du, shell_curl
+- 6 type-symmetric classes in `data/racket_facts.yaml` lines 715-940: shell_text_lines, shell_tabular, shell_tree, shell_filtered_lines, shell_single_value, shell_byte_stream
+- 6 discovered ops via type-symmetric inference: shell_cat, shell_head, shell_tail, shell_sort, shell_df, shell_wc
+- All shell ops use flat types: String → List(String) or String → String
+- Anchors have metasignatures with `category: shell` and `effects: io`
+- `discover_shell_submodes()` in `src/racket_strategy.rs:652` reads `submode_*` properties from CLI facts
+
+### fs_ops Type Signatures (the ones being subsumed)
+- `list_dir`: Dir(a) → Seq(Entry(Name, a))
+- `walk_tree`: Dir(a) → Seq(Entry(Name, a))
+- `read_file`: File(a) → a
+- `search_content`: [Seq(Entry(Name, File(Text))), Pattern] → Seq(Match(Pattern, Line))
+- `head`/`tail`: [File(Text), Count] → File(Text)
+- `sort_by`: Seq(a) → Seq(a)
+- `count`: Seq(a) → Count
+- `get_size`: Metadata → Size
+- `download`: URL → File(Bytes)
+
+### Racket-Native Forms for Intermediate Logic
+- `racket_filter` (symbol: "filter"): List(a) → List(a) — in `data/racket_ops.yaml:362`
+- `racket_map` (symbol: "map"): List(a) → List(b) — line 354
+- `sort_list` (symbol: "sort"): List(a) → List(a) — line 183
+- `racket_foldl` (symbol: "foldl"): [b, List(a)] → b — line 370
+
+### Key Design Principle
+- Shell ops = "anchors to the world" (bridge in/out of OS)
+- Racket-native ops = intermediate transformation/decision logic (filter, sort, map, fold)
+- fs_ops like `filter`, `sort_by`, `find_matching`, `unique` should map to Racket-native, NOT shell bridges
+
+### Phase 2 Type Lowering (Completed)
+- `src/type_lowering.rs` — new module with two-tier architecture
+  - `SUBSUMPTION_MAP` [60-108] — 10 world-touching fs_ops → shell ops
+  - `RACKET_NATIVE_MAP` [160-180] — 4 intermediate-logic ops → Racket primitives
+  - `DUAL_BEHAVIOR_MAP` [195-202] — 5 ops that switch shell/native based on pipeline position
+  - `RESIDUAL_FS_OPS` [260-280] — 15 ops not yet in CLI fact pack
+  - Key functions: `lookup_subsumption()`, `lookup_racket_native()`, `lookup_dual_behavior()`, `lookup_residual()`
+
+### racket_executor.rs Rewrite
+- Removed: `FS_OPS`, `is_fs_op()`, `fs_op_to_racket()` (monolithic 26-op bridge)
+- Added: `subsumed_op_to_racket()` [120-170], `racket_native_op_to_racket()` [185-270]
+- Dispatch order in `op_to_racket()`: special ops → shell ops → dual-behavior → subsumption → racket-native → residual → data-driven
+
+### NL Approval Path Fix
+- `src/nl/mod.rs:137-186` — added `discover_shell_submodes()` so extract_shell_meta() works for subsumed ops
+
+### Test Count: 1133 (up from 1091)
+
+### Racket Seq Threading Issue
+- **Problem**: When a shell-bridge step (walk_tree→shell_find) returns `List(String)` and the next step is a residual op (pack_archive) or binary subsumed op (search_content/grep), the codegen passes the list variable to `shell-quote` which expects a `String`
+- **Key insight**: `CompiledStep` has `input_type` and `output_type` as `TypeExpr` but the Racket executor currently ignores them
+- **Existing each mechanism**: `src/workflow.rs` has `is_each` on `CompiledStep` and `StepArgs::is_each()` — the shell executor wraps in `while IFS= read -r _line` loops, the Racket executor wraps in `(map (lambda (_line) ...) prev)`
+- **Residual ops path**: `src/racket_executor.rs:490-500` — uses `fs_path_operand(prev_binding, input_values)` which returns the raw binding name
+- **Subsumed binary ops path**: `src/racket_executor.rs:155-170` — `search_content` (arity==2) passes `path` to `shell-quote` but `path` could be a list
+- **Type info available**: `CompiledStep.output_type` has rich types like `Seq(Entry(Name, Bytes))`, can check for `Seq(...)` constructor
+- `src/type_lowering.rs` [7000..10000] - `ResidualFsOp` struct with `is_exec` field
+- `src/racket_executor.rs` [550..620] - `generate_racket_script()` iterates compiled steps
+
+### Racket Seq→String Bridge (racket-seq-threading plan)
+- **Problem solved**: When shell-bridge steps (walk_tree→shell_find) return `List(String)` and the next step is a residual op (pack_archive) or binary subsumed op (search_content/grep), the codegen now correctly bridges the type mismatch
+- **Key function**: `is_seq_output(step, registry)` in `src/racket_executor.rs:137-174` — reads shell op metasig `return_type` via subsumption map → registry lookup, falls back to `CompiledStep.output_type.is_seq_or_list()`
+- **Bridge strategies**:
+  - Residual exec ops (pack_archive, copy): `(string-join (map shell-quote prev) " ")` — batch all files
+  - Residual lines ops (stat, diff): `(append-map (lambda (_f) (shell-lines ...)) prev)` — iterate
+  - Subsumed binary ops (search_content/grep): `(append-map (lambda (_f) (shell-lines (grep pattern _f))) prev)` — grep each file
+  - Subsumed unary ops (read_file/cat): `(append-map (lambda (_f) (shell-lines (cat _f))) prev)` — cat each file
+- **API change**: `op_to_racket()` gained `prev_is_seq: bool` parameter; `subsumed_op_to_racket()` also gained it
+- `src/type_expr.rs` [92-106] - `TypeExpr::is_seq()`, `is_list()`, `is_seq_or_list()`
+- `src/racket_executor.rs` [556-596] - residual ops bridge
+- `src/racket_executor.rs` [197-245] - subsumed ops bridge (binary + unary)
+- **Tests**: 1149 total passing, 20 new tests (8 unit for is_seq_output, 5 unit for bridges, 7 integration)
+- **data/coding_ops.yaml** - created as empty stub to fix pre-existing compile error

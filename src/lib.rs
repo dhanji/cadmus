@@ -1,4 +1,4 @@
-pub mod racket_strategy;pub mod racket_executor;pub mod types;
+pub mod racket_strategy;pub mod racket_executor;pub mod type_lowering;pub mod types;
 pub mod type_expr;
 pub mod fact_pack;
 pub mod theory;

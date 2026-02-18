@@ -136,18 +136,34 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
         }
         Intent::Approve => {
             if let Some(wf) = state.current_workflow.take() {
-                // Generate a Racket program from the workflow
+                // Generate a Racket program from the workflow.
+                // Use a full registry that includes shell ops so that
+                // subsumed fs_ops can route through extract_shell_meta().
                 let script = {
                     let registry = crate::fs_types::build_full_registry();
                     match crate::workflow::compile_workflow(&wf, &registry) {
                         Ok(compiled) => {
+                            // Build a Racket registry with shell ops included.
+                            // This runs the same inference pipeline as build_full_registry
+                            // but for the Racket-specific ops.
                             let mut racket_reg = crate::registry::load_ops_pack_str(
                                 include_str!("../../data/racket_ops.yaml")
                             ).unwrap_or_default();
+                            let racket_facts_yaml = include_str!("../../data/racket_facts.yaml");
                             if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(
-                                include_str!("../../data/racket_facts.yaml")
+                                racket_facts_yaml
                             ) {
                                 crate::racket_strategy::promote_inferred_ops(&mut racket_reg, &facts);
+
+                                // Also discover shell submodes so extract_shell_meta()
+                                // works for subsumed fs_ops (Phase 2 type lowering).
+                                let cli_yaml = include_str!("../../data/macos_cli_facts.yaml");
+                                if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
+                                    let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
+                                    crate::racket_strategy::discover_shell_submodes(
+                                        &mut racket_reg, &facts, &cli_facts,
+                                    );
+                                }
                             }
                             match crate::racket_executor::generate_racket_script(&compiled, &wf, &racket_reg) {
                                 Ok(s) => Some(s),

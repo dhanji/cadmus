@@ -1217,3 +1217,220 @@ The NL layer uses these descriptions for:
 - **Rust loader**: `src/nl/vocab.rs` (thin serde loader, `OnceLock` singleton)
 - **Op descriptions**: `data/fs_ops.yaml`, `data/power_tools_ops.yaml` (description field on each op)
 - **Consumers**: `src/nl/normalize.rs` (synonyms, contractions, ordinals), `src/nl/intent.rs` (approvals, rejections), `src/nl/slots.rs` (stopwords), `src/nl/typo.rs` (dictionary), `src/nl/mod.rs` (op explanations), `src/nl/dialogue.rs` (display names)
+
+---
+
+## 10. Shell-Callable Racket Forms (Fact-Pack-Driven)
+
+Shell-callable forms wrap macOS CLI tools (`ls`, `grep`, `find`, etc.) as
+first-class Racket operations. Unlike manually-authored ops, they are
+**discovered by the inference engine** from a single fact pack.
+
+### Architecture
+
+```
+data/macos_cli_facts.yaml     ← Layer 1: CLI tool descriptions
+        │
+        ▼
+data/racket_ops.yaml           ← Layer 2: 6 anchor ops (category: shell)
+data/racket_facts.yaml         ← Layer 2: 12 shell entities
+        │
+        ▼
+src/racket_strategy.rs         ← Inference phases 3 & 4
+  Phase 3: type-symmetric discovery (6 non-anchor tools)
+  Phase 4: submode discovery (45 variadic flag forms)
+        │
+        ▼
+src/racket_executor.rs         ← Layer 3: Racket code generation
+  shell-exec, shell-lines, shell-quote helpers
+```
+
+### Adding a New CLI Tool
+
+**Step 1: Add the entity to `data/macos_cli_facts.yaml`**
+
+```yaml
+entities:
+  - id: cli_mv
+    name: "mv"
+    description: "Move or rename files and directories"
+```
+
+**Step 2: Add claims for the entity**
+
+Every CLI entity needs claims on these axes:
+
+```yaml
+claims:
+  # 1. Category (always "shell")
+  - entity: cli_mv
+    axis: shell_category
+    value: "shell"
+
+  # 2. Type signature
+  - entity: cli_mv
+    axis: shell_type_signature
+    value: "String, String -> List(String)"
+
+  # 3. Output format class (pick one of 6)
+  - entity: cli_mv
+    axis: shell_output_format
+    value: "text_lines"
+
+  # 4. Type symmetry class (must match an anchor's class)
+  - entity: cli_mv
+    axis: shell_type_symmetry
+    value: "shell_text_lines"
+```
+
+**Step 3: Add properties**
+
+```yaml
+properties:
+  # Required: op_name, racket_symbol, base_command, category_name, type_symmetry_class
+  - entity: cli_mv
+    key: op_name
+    value: "shell_mv"
+  - entity: cli_mv
+    key: racket_symbol
+    value: "shell-mv"
+  - entity: cli_mv
+    key: base_command
+    value: "mv"
+  - entity: cli_mv
+    key: category_name
+    value: "shell"
+  - entity: cli_mv
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # Optional: submodes (flag variants)
+  - entity: cli_mv
+    key: submode_interactive
+    value: "-i"
+  - entity: cli_mv
+    key: submode_verbose
+    value: "-v"
+  - entity: cli_mv
+    key: submode_no_clobber
+    value: "-n"
+```
+
+**Step 4: Add the entity to `data/racket_facts.yaml`** (if it's a new anchor)
+
+If the tool introduces a **new output-format class**, it needs an anchor op
+in `data/racket_ops.yaml` and an entity in `data/racket_facts.yaml`. If it
+shares a class with an existing anchor (e.g., `shell_text_lines` like `ls`),
+it will be **automatically discovered** via type-symmetric inference — no
+anchor needed.
+
+**Step 5: Done.** The inference engine discovers the tool and its submodes.
+Run `cargo test` to verify.
+
+### Output Format Classes
+
+| Class                  | Anchor   | Return Type     | Tools                    |
+|------------------------|----------|-----------------|--------------------------|
+| `shell_text_lines`     | `shell_ls` | `List(String)` | ls, cat, head, tail, sort |
+| `shell_tabular`        | `shell_ps` | `List(String)` | ps, df                   |
+| `shell_tree`           | `shell_find` | `List(String)` | find                   |
+| `shell_filtered_lines` | `shell_grep` | `List(String)` | grep                  |
+| `shell_single_value`   | `shell_du` | `List(String)`  | du, wc                  |
+| `shell_byte_stream`    | `shell_curl` | `List(String)` | curl                   |
+
+All classes return `List(String)` (raw lines). Higher-level decomposition
+uses existing Racket primitives (`racket_map`, `racket_filter`, etc.).
+
+### Submodes
+
+Submodes are **variadic flag forms** of a base op, discovered automatically
+from `submode_*` properties in the CLI fact pack:
+
+```
+shell_ls + submode_long     → shell_ls_long     (flags: "-l")
+shell_ls + submode_all      → shell_ls_all      (flags: "-a")
+shell_grep + submode_recursive → shell_grep_recursive (flags: "-r")
+```
+
+Submodes inherit the parent's metasig and add flags to invariants. They are
+**not** separate first-class ops — they are inferred at registry build time.
+
+Current submode count: **45** across 12 tools.
+
+### Generated Racket Code
+
+Shell ops generate Racket code using three helper functions:
+
+```racket
+;; shell-exec: run command, return exit-code + stdout + stderr
+(define (shell-exec cmd)
+  (define-values (p out in err)
+    (subprocess #f #f #f "/bin/sh" "-c" cmd))
+  (define stdout (port->string out))
+  (define stderr (port->string err))
+  (subprocess-wait p)
+  (values (subprocess-status p) stdout stderr))
+
+;; shell-lines: run command, return stdout lines as list
+(define (shell-lines cmd)
+  (define-values (code stdout stderr) (shell-exec cmd))
+  (if (= code 0)
+      (filter (lambda (s) (not (string=? s "")))
+              (string-split stdout "\n"))
+      (error 'shell-lines (~a "command failed: " cmd "\n" stderr))))
+
+;; shell-quote: escape a string for safe shell interpolation
+(define (shell-quote s)
+  (string-append "'" (string-replace s "'" "'\\''") "'"))
+```
+
+Example generated call for `shell_ls_long`:
+
+```racket
+(shell-lines (string-append "ls" " " "-l" " " (shell-quote path)))
+```
+
+### Inference Pipeline
+
+The full inference pipeline runs 5 phases:
+
+| Phase | Name              | What It Does                                    | Ops Added |
+|-------|-------------------|-------------------------------------------------|-----------|
+| 0     | Direct ops        | Load ops from YAML packs                        | 58        |
+| 1     | Fact-pack claims  | Derive ops from fact pack claims                | 18        |
+| 2     | Compositional     | Compose ops from existing ops                   | 12        |
+| 3     | Type-symmetric    | Discover ops sharing type symmetry class         | 6 (shell) |
+| 4     | Shell submodes    | Discover flag-variant ops from CLI fact pack     | 45        |
+
+After all phases: **246 total ops** in the registry (including fs_ops and
+power_tools_ops).
+
+### Relationship to Existing Ops
+
+Shell-callable forms **coexist** with `fs_ops.yaml` and `power_tools_ops.yaml`.
+There are zero name collisions (`shell_ls` vs `list_dir`). See
+[SUBSUMPTION.md](SUBSUMPTION.md) for the full mapping and migration roadmap.
+
+**10 of 49 fs_ops** and **4 of 64 power_tools_ops** are subsumed today.
+The remaining ops require additional CLI tool entities in the fact pack.
+
+### Security: Shell Injection Prevention
+
+All user-supplied arguments are wrapped with `shell-quote`, which uses
+POSIX single-quote escaping (`'...'` with embedded quotes escaped as
+`'\''`). This prevents shell injection attacks:
+
+```racket
+;; User input: "foo; rm -rf /"
+;; Quoted:     "'foo; rm -rf /'"  ← treated as literal string by shell
+```
+
+### Reference
+
+- **CLI fact pack**: `data/macos_cli_facts.yaml` (12 entities, 45 submodes)
+- **Shell anchor ops**: `data/racket_ops.yaml` (6 ops with `category: shell`)
+- **Shell entities**: `data/racket_facts.yaml` (12 entities with shell properties)
+- **Submode discovery**: `src/racket_strategy.rs` (`discover_shell_submodes()`)
+- **Racket generation**: `src/racket_executor.rs` (`shell_preamble()`, `generate_shell_call()`)
+- **Tests**: `tests/shell_callable_tests.rs` (41 tests)
+- **Subsumption plan**: `SUBSUMPTION.md`

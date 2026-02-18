@@ -67,6 +67,46 @@ entities:
     name: "string-downcase"
     description: "Convert string to lowercase — (string-downcase s)"
 
+  # --- Shell operations (CLI tool wrappers) ---
+  # Anchors: shell_ls, shell_ps, shell_find, shell_grep, shell_du, shell_curl
+  # Discovered via type-symmetric: shell_cat, shell_head, shell_tail, shell_sort, shell_df, shell_wc
+  - id: op_shell_ls
+    name: "shell-ls"
+    description: "List directory contents via ls"
+  - id: op_shell_cat
+    name: "shell-cat"
+    description: "Print file contents via cat"
+  - id: op_shell_head
+    name: "shell-head"
+    description: "First N lines of file via head"
+  - id: op_shell_tail
+    name: "shell-tail"
+    description: "Last N lines of file via tail"
+  - id: op_shell_sort
+    name: "shell-sort"
+    description: "Sort lines of text via sort"
+  - id: op_shell_ps
+    name: "shell-ps"
+    description: "List running processes via ps"
+  - id: op_shell_df
+    name: "shell-df"
+    description: "Show filesystem disk usage via df"
+  - id: op_shell_find
+    name: "shell-find"
+    description: "Walk directory tree via find"
+  - id: op_shell_grep
+    name: "shell-grep"
+    description: "Search file contents via grep"
+  - id: op_shell_du
+    name: "shell-du"
+    description: "Estimate file space usage via du"
+  - id: op_shell_wc
+    name: "shell-wc"
+    description: "Count lines/words/bytes via wc"
+  - id: op_shell_curl
+    name: "shell-curl"
+    description: "Download URL contents via curl"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -672,6 +712,226 @@ properties:
     key: type_symmetry_class
     value: "string_to_string"
 
+  # =========================================================================
+  # Shell operation properties
+  # =========================================================================
+
+  # --- shell_ls (anchor: shell_text_lines) ---
+  - entity: op_shell_ls
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-ls"
+  - entity: op_shell_ls
+    axis: type_signature
+    key: op_name
+    value: "shell_ls"
+  - entity: op_shell_ls
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_ls
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_cat (discovered via type-symmetric from shell_ls) ---
+  - entity: op_shell_cat
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-cat"
+  - entity: op_shell_cat
+    axis: type_signature
+    key: op_name
+    value: "shell_cat"
+  - entity: op_shell_cat
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_cat
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_head (discovered via type-symmetric from shell_ls) ---
+  - entity: op_shell_head
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-head"
+  - entity: op_shell_head
+    axis: type_signature
+    key: op_name
+    value: "shell_head"
+  - entity: op_shell_head
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_head
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_tail (discovered via type-symmetric from shell_ls) ---
+  - entity: op_shell_tail
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-tail"
+  - entity: op_shell_tail
+    axis: type_signature
+    key: op_name
+    value: "shell_tail"
+  - entity: op_shell_tail
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_tail
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_sort (discovered via type-symmetric from shell_ls) ---
+  - entity: op_shell_sort
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-sort"
+  - entity: op_shell_sort
+    axis: type_signature
+    key: op_name
+    value: "shell_sort"
+  - entity: op_shell_sort
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_sort
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # --- shell_ps (anchor: shell_tabular) ---
+  - entity: op_shell_ps
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-ps"
+  - entity: op_shell_ps
+    axis: type_signature
+    key: op_name
+    value: "shell_ps"
+  - entity: op_shell_ps
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_ps
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_tabular"
+
+  # --- shell_df (discovered via type-symmetric from shell_ps) ---
+  - entity: op_shell_df
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-df"
+  - entity: op_shell_df
+    axis: type_signature
+    key: op_name
+    value: "shell_df"
+  - entity: op_shell_df
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_df
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_tabular"
+
+  # --- shell_find (anchor: shell_tree) ---
+  - entity: op_shell_find
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-find"
+  - entity: op_shell_find
+    axis: type_signature
+    key: op_name
+    value: "shell_find"
+  - entity: op_shell_find
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_find
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_tree"
+
+  # --- shell_grep (anchor: shell_filtered_lines) ---
+  - entity: op_shell_grep
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-grep"
+  - entity: op_shell_grep
+    axis: type_signature
+    key: op_name
+    value: "shell_grep"
+  - entity: op_shell_grep
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_grep
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_filtered_lines"
+
+  # --- shell_du (anchor: shell_single_value) ---
+  - entity: op_shell_du
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-du"
+  - entity: op_shell_du
+    axis: type_signature
+    key: op_name
+    value: "shell_du"
+  - entity: op_shell_du
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_du
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # --- shell_wc (discovered via type-symmetric from shell_du) ---
+  - entity: op_shell_wc
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-wc"
+  - entity: op_shell_wc
+    axis: type_signature
+    key: op_name
+    value: "shell_wc"
+  - entity: op_shell_wc
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_wc
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # --- shell_curl (anchor: shell_byte_stream) ---
+  - entity: op_shell_curl
+    axis: type_signature
+    key: racket_symbol
+    value: "shell-curl"
+  - entity: op_shell_curl
+    axis: type_signature
+    key: op_name
+    value: "shell_curl"
+  - entity: op_shell_curl
+    axis: category
+    key: category_name
+    value: "shell"
+  - entity: op_shell_curl
+    axis: type_symmetry
+    key: type_symmetry_class
+    value: "shell_byte_stream"
+
 # ---------------------------------------------------------------------------
 # Relations
 # ---------------------------------------------------------------------------
@@ -694,3 +954,5 @@ uncertainties:
     text: "Symmetric inference transfers type structure but not semantic invariants (e.g., y>0 => x+y>x does not hold for subtraction)."
   - axis: type_symmetry
     text: "Type-symmetric inference transfers type structure within a class+category group but drops all invariants. Weaker than op-symmetric inference (no inverse relationship assumed)."
+  - axis: type_symmetry
+    text: "Shell type-symmetric inference groups CLI tools by output format. Tools in the same class produce structurally similar output (lines of text) but with different semantics."

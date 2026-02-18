@@ -77,6 +77,8 @@ pub enum InferenceKind {
     OpSymmetric,
     /// Inferred from a type-symmetric peer in the same class+category (e.g., multiply from add)
     TypeSymmetric { class: String },
+    /// Inferred as a shell submode variant (e.g., shell_ls_long from shell_ls + submode_long flags)
+    ShellSubmode { base_op: String, flags: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -622,6 +624,157 @@ pub fn promote_inferred_ops(
     for inf in phase3 {
         promote(&inf, registry);
         inferred.push(inf);
+    }
+
+    inferred
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4: Shell submode discovery
+// ---------------------------------------------------------------------------
+
+/// Discover shell submodes from a CLI fact pack.
+///
+/// For each entity in the CLI fact pack that has `submode_*` properties,
+/// finds the corresponding base op in the registry (via `op_name` in the
+/// racket facts) and creates a new op for each submode.
+///
+/// The submode op inherits the base op's type signature and metasignature,
+/// but gets a unique name (`{base_op}_{submode}`) and racket_symbol
+/// (`{base-symbol}-{submode}`).
+///
+/// The `flags` field is stored in the submode op's meta invariants as
+/// `"flags: <value>"` so the executor can extract it at codegen time.
+///
+/// Requires two fact packs:
+///   - `racket_facts`: maps entity ids to op_names (e.g., op_shell_ls → shell_ls)
+///   - `cli_facts`: contains the submode properties and base_command values
+pub fn discover_shell_submodes(
+    registry: &mut OperationRegistry,
+    racket_facts: &FactPackIndex,
+    cli_facts: &FactPackIndex,
+) -> Vec<InferredOp> {
+    let mut inferred = Vec::new();
+
+    // Build entity_id → op_name mapping from racket_facts
+    // (e.g., "op_shell_ls" → "shell_ls")
+    let mut entity_to_op: HashMap<String, String> = HashMap::new();
+    for prop in &racket_facts.pack.properties {
+        if prop.key == "op_name" {
+            entity_to_op.insert(prop.entity.clone(), prop.value.clone());
+        }
+    }
+
+    // Build cli_entity → base_command mapping from cli_facts
+    // (e.g., "cli_ls" → "ls")
+    let mut cli_entity_to_command: HashMap<String, String> = HashMap::new();
+    for prop in &cli_facts.pack.properties {
+        if prop.key == "base_command" {
+            cli_entity_to_command.insert(prop.entity.clone(), prop.value.clone());
+        }
+    }
+
+    // Build cli_entity → op_name mapping from cli_facts
+    // (e.g., "cli_ls" → "shell_ls")
+    let mut cli_entity_to_op: HashMap<String, String> = HashMap::new();
+    for prop in &cli_facts.pack.properties {
+        if prop.key == "op_name" {
+            cli_entity_to_op.insert(prop.entity.clone(), prop.value.clone());
+        }
+    }
+
+    // For each CLI entity, find its submodes and create ops
+    for entity in &cli_facts.pack.entities {
+        let cli_entity_id = &entity.id;
+
+        // Find the base op name for this CLI entity
+        let base_op_name = match cli_entity_to_op.get(cli_entity_id) {
+            Some(name) => name.clone(),
+            None => continue, // No op_name — skip
+        };
+
+        // Find the base command
+        let base_command = match cli_entity_to_command.get(cli_entity_id) {
+            Some(cmd) => cmd.clone(),
+            None => continue, // No base_command — skip
+        };
+
+        // Check if the base op exists in the registry with a meta
+        let base_meta = match registry.get_poly(&base_op_name) {
+            Some(entry) => match &entry.meta {
+                Some(m) => m.clone(),
+                None => continue, // No meta — can't derive submodes
+            },
+            None => continue, // Base op not registered
+        };
+
+        // Collect submode properties for this entity
+        let submodes: Vec<(&str, &str)> = cli_facts.pack.properties.iter()
+            .filter(|p| p.entity == *cli_entity_id && p.key.starts_with("submode_"))
+            .map(|p| {
+                let submode_name = &p.key["submode_".len()..];
+                (submode_name, p.value.as_str())
+            })
+            .collect();
+
+        for (submode_name, flags) in submodes {
+            let op_name = format!("{}_{}", base_op_name, submode_name);
+            let racket_sym = format!(
+                "{}-{}",
+                base_op_name.replace('_', "-"),
+                submode_name.replace('_', "-")
+            );
+
+            // Skip if already registered
+            if registry.get_poly(&op_name).is_some() {
+                continue;
+            }
+
+            // Build the submode meta — same type structure as base, but with
+            // flags stored in invariants for the executor to read
+            let submode_meta = MetaSignature {
+                params: base_meta.params.clone(),
+                type_params: base_meta.type_params.clone(),
+                return_type: base_meta.return_type.clone(),
+                invariants: vec![
+                    format!("flags: {}", flags),
+                    format!("base_command: {}", base_command),
+                ],
+                category: base_meta.category.clone(),
+                effects: base_meta.effects.clone(),
+            };
+
+            let sig = meta_to_poly_signature(&submode_meta);
+            let desc = format!(
+                "({} {}) — {} with flags '{}'",
+                racket_sym,
+                base_meta.params.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" "),
+                base_command,
+                flags,
+            );
+
+            registry.register_poly_with_meta(
+                &op_name,
+                sig,
+                AlgebraicProperties::default(),
+                desc,
+                Some(submode_meta.clone()),
+            );
+            registry.set_racket_symbol(&op_name, racket_sym.clone());
+
+            inferred.push(InferredOp {
+                op_name: op_name.clone(),
+                entity_id: cli_entity_id.clone(),
+                racket_symbol: racket_sym,
+                meta: submode_meta,
+                inferred_from: base_op_name.clone(),
+                invariants_dropped: false,
+                inference_kind: InferenceKind::ShellSubmode {
+                    base_op: base_op_name.clone(),
+                    flags: flags.to_string(),
+                },
+            });
+        }
     }
 
     inferred

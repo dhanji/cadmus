@@ -1,0 +1,781 @@
+# Fact Pack: macOS CLI Tools
+# ===========================
+# DESIGN PRINCIPLE: Each CLI tool is an entity. Submodes (flag variants)
+# are properties on the entity, keyed as 'submode_<name>'. The inference
+# engine discovers submode ops from these properties (Phase 4).
+#
+# Output format classes (type_symmetry_class values):
+#   shell_text_lines    — one item per line (ls, cat, head, tail)
+#   shell_tabular       — columnar/structured text (ps, df)
+#   shell_tree          — hierarchical paths (find)
+#   shell_kv_pairs      — key: value pairs (du, wc, stat)
+#   shell_single_value  — single scalar result (du -sh, wc -l)
+#   shell_filtered_lines — pattern-matched lines (grep)
+#   shell_byte_stream   — raw byte output (curl)
+#
+# Submode property format:
+#   key:   submode_<name>     (e.g., submode_long, submode_by_time)
+#   value: <flags>            (e.g., "-l", "-lt", "-aux")
+#
+# The inference engine reads these to generate variadic form ops:
+#   shell_ls + submode_long → shell_ls_long with flags="-l"
+#
+# Each entity also carries:
+#   op_name        — the base op name in the registry (e.g., "shell_ls")
+#   racket_symbol  — the Racket function name (e.g., "shell-ls")
+#   base_command   — the actual CLI command (e.g., "ls")
+#   category_name  — always "shell"
+#   type_symmetry_class — output format class (e.g., "shell_text_lines")
+
+entities:
+  # --- Text-lines tools (one item per line) ---
+  - id: cli_ls
+    name: "ls"
+    description: "List directory contents — one entry per line"
+  - id: cli_cat
+    name: "cat"
+    description: "Concatenate and print file contents"
+  - id: cli_head
+    name: "head"
+    description: "Output the first part of files"
+  - id: cli_tail
+    name: "tail"
+    description: "Output the last part of files"
+
+  # --- Tabular tools (columnar structured output) ---
+  - id: cli_ps
+    name: "ps"
+    description: "Report a snapshot of current processes"
+  - id: cli_df
+    name: "df"
+    description: "Report filesystem disk space usage"
+
+  # --- Tree tools (hierarchical path output) ---
+  - id: cli_find
+    name: "find"
+    description: "Walk a file hierarchy, printing matching paths"
+
+  # --- Filtered-lines tools (pattern-matched output) ---
+  - id: cli_grep
+    name: "grep"
+    description: "Search file contents for lines matching a pattern"
+
+  # --- Single-value tools (scalar result) ---
+  - id: cli_du
+    name: "du"
+    description: "Estimate file space usage"
+  - id: cli_wc
+    name: "wc"
+    description: "Word, line, character, and byte count"
+
+  # --- Sort tool (transforms lines) ---
+  - id: cli_sort
+    name: "sort"
+    description: "Sort lines of text"
+
+  # --- Byte-stream tools (raw download) ---
+  - id: cli_curl
+    name: "curl"
+    description: "Transfer data from or to a server"
+
+# ---------------------------------------------------------------------------
+# Axes
+# ---------------------------------------------------------------------------
+axes:
+  - id: shell_category
+    name: "Shell Category"
+    description: "All CLI tools share category=shell"
+    polarity: capability
+    sub_axes: []
+
+  - id: shell_type_signature
+    name: "Shell Type Signature"
+    description: "Input/output types for the CLI tool's base form"
+    polarity: capability
+    sub_axes: []
+
+  - id: shell_output_format
+    name: "Shell Output Format"
+    description: "The structural format of the tool's stdout"
+    polarity: capability
+    sub_axes: []
+
+  - id: shell_submodes
+    name: "Shell Submodes"
+    description: "Flag variants that modify the tool's behavior"
+    polarity: capability
+    sub_axes: []
+
+  - id: shell_type_symmetry
+    name: "Shell Type Symmetry"
+    description: "Groups tools by output format class for type-symmetric inference"
+    polarity: capability
+    sub_axes: []
+
+# ---------------------------------------------------------------------------
+# Claims — per-entity descriptions
+# ---------------------------------------------------------------------------
+claims:
+  # --- ls ---
+  - id: cli_ls_base
+    entity: cli_ls
+    axis: shell_output_format
+    text: "ls outputs one filename per line (with -1 flag, or when piped). Default output is space-separated."
+
+  - id: cli_ls_flags
+    entity: cli_ls
+    axis: shell_submodes
+    text: "ls supports flags: -l (long format), -a (all including hidden), -R (recursive), -S (sort by size), -t (sort by time), -1 (one per line), -lt (long + time sort), -lS (long + size sort), -la (long + all)"
+
+  # --- cat ---
+  - id: cli_cat_base
+    entity: cli_cat
+    axis: shell_output_format
+    text: "cat outputs file contents line by line to stdout. With -n flag, prepends line numbers."
+
+  # --- head ---
+  - id: cli_head_base
+    entity: cli_head
+    axis: shell_output_format
+    text: "head outputs the first N lines of a file (default 10). Uses -n flag to specify count."
+
+  # --- tail ---
+  - id: cli_tail_base
+    entity: cli_tail
+    axis: shell_output_format
+    text: "tail outputs the last N lines of a file (default 10). Uses -n flag for count, -f for follow."
+
+  # --- ps ---
+  - id: cli_ps_base
+    entity: cli_ps
+    axis: shell_output_format
+    text: "ps outputs a table of running processes with columns: PID, TTY, TIME, CMD (default) or USER, PID, %CPU, %MEM, VSZ, RSS, TTY, STAT, START, TIME, COMMAND (with aux)."
+
+  - id: cli_ps_flags
+    entity: cli_ps
+    axis: shell_submodes
+    text: "ps supports flags: aux (all users, detailed), -e (every process), -f (full format), aux --sort=-%cpu (sort by CPU), aux --sort=-%mem (sort by memory)"
+
+  # --- df ---
+  - id: cli_df_base
+    entity: cli_df
+    axis: shell_output_format
+    text: "df outputs a table of filesystem usage with columns: Filesystem, Size, Used, Avail, Use%, Mounted on."
+
+  - id: cli_df_flags
+    entity: cli_df
+    axis: shell_submodes
+    text: "df supports flags: -h (human-readable sizes), -i (inode info), -T (filesystem type)"
+
+  # --- find ---
+  - id: cli_find_base
+    entity: cli_find
+    axis: shell_output_format
+    text: "find outputs one path per line, recursively walking a directory tree. Supports predicates for filtering."
+
+  - id: cli_find_flags
+    entity: cli_find
+    axis: shell_submodes
+    text: "find supports predicates: -name (glob match), -type f (files only), -type d (dirs only), -size +N (larger than), -mtime -N (modified within N days), -maxdepth N (limit depth)"
+
+  # --- grep ---
+  - id: cli_grep_base
+    entity: cli_grep
+    axis: shell_output_format
+    text: "grep outputs lines matching a pattern. With -r, searches recursively. With -l, outputs only filenames."
+
+  - id: cli_grep_flags
+    entity: cli_grep
+    axis: shell_submodes
+    text: "grep supports flags: -r (recursive), -i (case insensitive), -n (line numbers), -l (filenames only), -c (count matches), -v (invert match), -E (extended regex)"
+
+  # --- du ---
+  - id: cli_du_base
+    entity: cli_du
+    axis: shell_output_format
+    text: "du outputs disk usage per directory entry. With -s, summarizes to a single total. With -h, human-readable."
+
+  - id: cli_du_flags
+    entity: cli_du
+    axis: shell_submodes
+    text: "du supports flags: -sh (summary, human-readable), -d N (max depth), -a (all files not just dirs)"
+
+  # --- wc ---
+  - id: cli_wc_base
+    entity: cli_wc
+    axis: shell_output_format
+    text: "wc outputs line count, word count, and byte count. Individual flags select which counts to show."
+
+  - id: cli_wc_flags
+    entity: cli_wc
+    axis: shell_submodes
+    text: "wc supports flags: -l (lines only), -w (words only), -c (bytes only), -m (characters only)"
+
+  # --- sort ---
+  - id: cli_sort_base
+    entity: cli_sort
+    axis: shell_output_format
+    text: "sort outputs lines in sorted order. Default is lexicographic. Reads from stdin or file."
+
+  - id: cli_sort_flags
+    entity: cli_sort
+    axis: shell_submodes
+    text: "sort supports flags: -n (numeric), -r (reverse), -u (unique), -k N (sort by field N), -t C (field delimiter)"
+
+  # --- curl ---
+  - id: cli_curl_base
+    entity: cli_curl
+    axis: shell_output_format
+    text: "curl transfers data from/to a URL. Default outputs response body to stdout."
+
+  - id: cli_curl_flags
+    entity: cli_curl
+    axis: shell_submodes
+    text: "curl supports flags: -s (silent), -L (follow redirects), -o FILE (output to file), -I (headers only), -X METHOD (HTTP method), -d DATA (POST data), -H HEADER (custom header)"
+
+# ---------------------------------------------------------------------------
+# Evidence
+# ---------------------------------------------------------------------------
+evidence:
+  - id: ev_ls_man
+    supports: cli_ls_base
+    text: "man ls — list directory contents"
+    source: "POSIX / macOS man pages"
+
+  - id: ev_ps_man
+    supports: cli_ps_base
+    text: "man ps — report a snapshot of the current processes"
+    source: "POSIX / macOS man pages"
+
+  - id: ev_find_man
+    supports: cli_find_base
+    text: "man find — walk a file hierarchy"
+    source: "POSIX / macOS man pages"
+
+  - id: ev_grep_man
+    supports: cli_grep_base
+    text: "man grep — file pattern searcher"
+    source: "POSIX / macOS man pages"
+
+  - id: ev_curl_man
+    supports: cli_curl_base
+    text: "man curl — transfer a URL"
+    source: "curl.se documentation"
+
+# ---------------------------------------------------------------------------
+# Properties — structured data for the inference engine
+# ---------------------------------------------------------------------------
+properties:
+  # =========================================================================
+  # ls — shell_text_lines anchor
+  # =========================================================================
+  - entity: cli_ls
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_ls"
+  - entity: cli_ls
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-ls"
+  - entity: cli_ls
+    axis: shell_type_signature
+    key: base_command
+    value: "ls"
+  - entity: cli_ls
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_ls
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # ls submodes
+  - entity: cli_ls
+    axis: shell_submodes
+    key: submode_long
+    value: "-l"
+  - entity: cli_ls
+    axis: shell_submodes
+    key: submode_all
+    value: "-a"
+  - entity: cli_ls
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-R"
+  - entity: cli_ls
+    axis: shell_submodes
+    key: submode_by_size
+    value: "-lS"
+  - entity: cli_ls
+    axis: shell_submodes
+    key: submode_by_time
+    value: "-lt"
+  - entity: cli_ls
+    axis: shell_submodes
+    key: submode_all_long
+    value: "-la"
+
+  # =========================================================================
+  # cat — shell_text_lines (discovered via type-symmetric from ls)
+  # =========================================================================
+  - entity: cli_cat
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_cat"
+  - entity: cli_cat
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-cat"
+  - entity: cli_cat
+    axis: shell_type_signature
+    key: base_command
+    value: "cat"
+  - entity: cli_cat
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_cat
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # cat submodes
+  - entity: cli_cat
+    axis: shell_submodes
+    key: submode_number
+    value: "-n"
+
+  # =========================================================================
+  # head — shell_text_lines (discovered via type-symmetric from ls)
+  # =========================================================================
+  - entity: cli_head
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_head"
+  - entity: cli_head
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-head"
+  - entity: cli_head
+    axis: shell_type_signature
+    key: base_command
+    value: "head"
+  - entity: cli_head
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_head
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # head submodes
+  - entity: cli_head
+    axis: shell_submodes
+    key: submode_lines
+    value: "-n"
+
+  # =========================================================================
+  # tail — shell_text_lines (discovered via type-symmetric from ls)
+  # =========================================================================
+  - entity: cli_tail
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_tail"
+  - entity: cli_tail
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-tail"
+  - entity: cli_tail
+    axis: shell_type_signature
+    key: base_command
+    value: "tail"
+  - entity: cli_tail
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_tail
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # tail submodes
+  - entity: cli_tail
+    axis: shell_submodes
+    key: submode_lines
+    value: "-n"
+  - entity: cli_tail
+    axis: shell_submodes
+    key: submode_follow
+    value: "-f"
+
+  # =========================================================================
+  # ps — shell_tabular anchor
+  # =========================================================================
+  - entity: cli_ps
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_ps"
+  - entity: cli_ps
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-ps"
+  - entity: cli_ps
+    axis: shell_type_signature
+    key: base_command
+    value: "ps"
+  - entity: cli_ps
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_ps
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_tabular"
+
+  # ps submodes
+  - entity: cli_ps
+    axis: shell_submodes
+    key: submode_aux
+    value: "aux"
+  - entity: cli_ps
+    axis: shell_submodes
+    key: submode_every
+    value: "-e"
+  - entity: cli_ps
+    axis: shell_submodes
+    key: submode_full
+    value: "-ef"
+  - entity: cli_ps
+    axis: shell_submodes
+    key: submode_by_cpu
+    value: "aux --sort=-%cpu"
+  - entity: cli_ps
+    axis: shell_submodes
+    key: submode_by_mem
+    value: "aux --sort=-%mem"
+
+  # =========================================================================
+  # df — shell_tabular (discovered via type-symmetric from ps)
+  # =========================================================================
+  - entity: cli_df
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_df"
+  - entity: cli_df
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-df"
+  - entity: cli_df
+    axis: shell_type_signature
+    key: base_command
+    value: "df"
+  - entity: cli_df
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_df
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_tabular"
+
+  # df submodes
+  - entity: cli_df
+    axis: shell_submodes
+    key: submode_human
+    value: "-h"
+  - entity: cli_df
+    axis: shell_submodes
+    key: submode_inodes
+    value: "-i"
+
+  # =========================================================================
+  # find — shell_tree anchor
+  # =========================================================================
+  - entity: cli_find
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_find"
+  - entity: cli_find
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-find"
+  - entity: cli_find
+    axis: shell_type_signature
+    key: base_command
+    value: "find"
+  - entity: cli_find
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_find
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_tree"
+
+  # find submodes
+  - entity: cli_find
+    axis: shell_submodes
+    key: submode_files_only
+    value: "-type f"
+  - entity: cli_find
+    axis: shell_submodes
+    key: submode_dirs_only
+    value: "-type d"
+  - entity: cli_find
+    axis: shell_submodes
+    key: submode_by_name
+    value: "-name"
+  - entity: cli_find
+    axis: shell_submodes
+    key: submode_by_size
+    value: "-size"
+  - entity: cli_find
+    axis: shell_submodes
+    key: submode_by_mtime
+    value: "-mtime"
+  - entity: cli_find
+    axis: shell_submodes
+    key: submode_max_depth
+    value: "-maxdepth"
+
+  # =========================================================================
+  # grep — shell_filtered_lines anchor
+  # =========================================================================
+  - entity: cli_grep
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_grep"
+  - entity: cli_grep
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-grep"
+  - entity: cli_grep
+    axis: shell_type_signature
+    key: base_command
+    value: "grep"
+  - entity: cli_grep
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_grep
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_filtered_lines"
+
+  # grep submodes
+  - entity: cli_grep
+    axis: shell_submodes
+    key: submode_recursive
+    value: "-r"
+  - entity: cli_grep
+    axis: shell_submodes
+    key: submode_case_insensitive
+    value: "-i"
+  - entity: cli_grep
+    axis: shell_submodes
+    key: submode_line_numbers
+    value: "-n"
+  - entity: cli_grep
+    axis: shell_submodes
+    key: submode_filenames_only
+    value: "-l"
+  - entity: cli_grep
+    axis: shell_submodes
+    key: submode_count
+    value: "-c"
+  - entity: cli_grep
+    axis: shell_submodes
+    key: submode_invert
+    value: "-v"
+  - entity: cli_grep
+    axis: shell_submodes
+    key: submode_extended_regex
+    value: "-E"
+
+  # =========================================================================
+  # du — shell_single_value anchor
+  # =========================================================================
+  - entity: cli_du
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_du"
+  - entity: cli_du
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-du"
+  - entity: cli_du
+    axis: shell_type_signature
+    key: base_command
+    value: "du"
+  - entity: cli_du
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_du
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # du submodes
+  - entity: cli_du
+    axis: shell_submodes
+    key: submode_summary
+    value: "-sh"
+  - entity: cli_du
+    axis: shell_submodes
+    key: submode_depth
+    value: "-d"
+  - entity: cli_du
+    axis: shell_submodes
+    key: submode_all_files
+    value: "-a"
+
+  # =========================================================================
+  # wc — shell_single_value (discovered via type-symmetric from du)
+  # =========================================================================
+  - entity: cli_wc
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_wc"
+  - entity: cli_wc
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-wc"
+  - entity: cli_wc
+    axis: shell_type_signature
+    key: base_command
+    value: "wc"
+  - entity: cli_wc
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_wc
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_single_value"
+
+  # wc submodes
+  - entity: cli_wc
+    axis: shell_submodes
+    key: submode_lines
+    value: "-l"
+  - entity: cli_wc
+    axis: shell_submodes
+    key: submode_words
+    value: "-w"
+  - entity: cli_wc
+    axis: shell_submodes
+    key: submode_bytes
+    value: "-c"
+  - entity: cli_wc
+    axis: shell_submodes
+    key: submode_chars
+    value: "-m"
+
+  # =========================================================================
+  # sort — shell_text_lines (discovered via type-symmetric from ls)
+  # =========================================================================
+  - entity: cli_sort
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_sort"
+  - entity: cli_sort
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-sort"
+  - entity: cli_sort
+    axis: shell_type_signature
+    key: base_command
+    value: "sort"
+  - entity: cli_sort
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_sort
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+
+  # sort submodes
+  - entity: cli_sort
+    axis: shell_submodes
+    key: submode_numeric
+    value: "-n"
+  - entity: cli_sort
+    axis: shell_submodes
+    key: submode_reverse
+    value: "-r"
+  - entity: cli_sort
+    axis: shell_submodes
+    key: submode_unique
+    value: "-u"
+  - entity: cli_sort
+    axis: shell_submodes
+    key: submode_numeric_reverse
+    value: "-nr"
+
+  # =========================================================================
+  # curl — shell_byte_stream anchor
+  # =========================================================================
+  - entity: cli_curl
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_curl"
+  - entity: cli_curl
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-curl"
+  - entity: cli_curl
+    axis: shell_type_signature
+    key: base_command
+    value: "curl"
+  - entity: cli_curl
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_curl
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_byte_stream"
+
+  # curl submodes
+  - entity: cli_curl
+    axis: shell_submodes
+    key: submode_silent
+    value: "-s"
+  - entity: cli_curl
+    axis: shell_submodes
+    key: submode_follow_redirects
+    value: "-sL"
+  - entity: cli_curl
+    axis: shell_submodes
+    key: submode_headers_only
+    value: "-I"
+  - entity: cli_curl
+    axis: shell_submodes
+    key: submode_download
+    value: "-sLO"
+
+# ---------------------------------------------------------------------------
+# Relations
+# ---------------------------------------------------------------------------
+relations:
+  - kind: ordinal
+    id: rel_shell_category
+    axis: shell_category
+    property_key: category_name
+    direction: higher_is_more
+    note: "All CLI tools share category=shell"
+
+# ---------------------------------------------------------------------------
+# Uncertainties
+# ---------------------------------------------------------------------------
+uncertainties:
+  - axis: shell_submodes
+    text: "Submode inference transfers the base type signature but not behavioral semantics. E.g., ls -l changes output format from filenames to structured records, but the type system sees both as List(String)."
+  - axis: shell_type_symmetry
+    text: "Type-symmetric inference across output format classes assumes all tools in a class produce structurally similar output. This is approximate — ls and cat both produce text lines but with very different semantics."
+  - axis: shell_submodes
+    text: "Compound flags (ls -lt) are modeled as atomic submodes. The inference engine does not compose individual flags — each combination must be explicitly declared."

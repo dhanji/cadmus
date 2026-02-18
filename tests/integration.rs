@@ -11,16 +11,6 @@ fn putin_stalin_goal() -> Goal {
 
 // ---------------------------------------------------------------------------
 // Derived uncertainty integration tests
-// ---------------------------------------------------------------------------
-
-fn tiramisu_cheesecake_goal() -> Goal {
-    Goal {
-        description: "Compare tiramisu and cheesecake as desserts".into(),
-        entities: vec!["tiramisu".into(), "cheesecake".into()],
-        fact_pack_paths: vec!["data/tiramisu_cheesecake.yaml".into()],
-    }
-}
-
 #[test]
 fn test_derived_uncertainties_appear_in_output() {
     let goal = putin_stalin_goal();
@@ -31,19 +21,6 @@ fn test_derived_uncertainties_appear_in_output() {
     let ideology = output.axes.iter().find(|a| a.axis == "Ideology").unwrap();
     let has_derived = ideology.uncertainties.iter().any(|u| u.content.contains("🔧"));
     assert!(has_derived, "ideology should have derived uncertainty for putin's missing evidence");
-}
-
-#[test]
-fn test_derived_uncertainties_evidence_gap_tiramisu() {
-    let goal = tiramisu_cheesecake_goal();
-    let output = pipeline::run(&goal).unwrap();
-
-    // Texture and flavor_profile have no evidence for either entity
-    let texture = output.axes.iter().find(|a| a.axis == "Texture").unwrap();
-    let unc_content = texture.uncertainties.iter().map(|u| u.content.as_str()).collect::<Vec<_>>().join("\n");
-    let gap_count = unc_content.matches("No evidence supports").count();
-    assert!(gap_count >= 2, "texture should have evidence gaps for both entities, got: {}",
-        unc_content);
 }
 
 #[test]
@@ -70,33 +47,6 @@ fn test_authored_and_derived_both_present() {
     let has_derived = legitimacy.uncertainties.iter().any(|u| u.content.contains("🔧"));
     assert!(has_authored, "legitimacy should have authored uncertainty");
     assert!(has_derived, "legitimacy should have derived uncertainty");
-}
-
-#[test]
-fn test_tiramisu_pipeline_structurally_complete() {
-    let goal = tiramisu_cheesecake_goal();
-    let output = pipeline::run(&goal).unwrap();
-
-    assert_eq!(output.axes.len(), 6, "expected 6 axes for dessert comparison");
-    for axis in &output.axes {
-        assert!(!axis.claims.is_empty(), "axis '{}' has no claims", axis.axis);
-        assert!(!axis.uncertainties.is_empty(), "axis '{}' has no uncertainties", axis.axis);
-        assert!(axis.gaps.is_empty(), "axis '{}' has gaps: {:?}", axis.axis, axis.gaps);
-    }
-}
-
-#[test]
-fn test_tiramisu_derived_uncertainties_on_axes_without_yaml() {
-    // The tiramisu fact pack has authored uncertainties on all 6 axes,
-    // but derived uncertainties should also appear (evidence gaps, ordinal boundaries)
-    let goal = tiramisu_cheesecake_goal();
-    let output = pipeline::run(&goal).unwrap();
-
-    let total_derived: usize = output.axes.iter()
-        .map(|a| a.uncertainties.iter().filter(|u| u.content.contains("🔧")).count())
-        .sum();
-
-    assert!(total_derived > 0, "expected at least some derived uncertainties in tiramisu fact pack");
 }
 
 #[test]

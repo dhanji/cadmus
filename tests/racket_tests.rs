@@ -123,7 +123,7 @@ fn test_racket_subtract_not_in_ops_pack() {
 #[test]
 fn test_racket_facts_load() {
     let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
-    assert_eq!(facts.pack.entities.len(), 14);
+    assert_eq!(facts.pack.entities.len(), 26);
     assert_eq!(facts.pack.axes.len(), 6);
     assert!(facts.pack.claims.len() >= 16);
     assert!(facts.pack.evidence.len() >= 8);
@@ -469,7 +469,7 @@ fn test_unknown_racket_op_error() {
     };
     let inputs = HashMap::new();
     let racket_reg = make_racket_reg();
-    let result = op_to_racket(&step, &inputs, None, &racket_reg);
+    let result = op_to_racket(&step, &inputs, None, &racket_reg, false);
     assert!(result.is_err());
 }
 

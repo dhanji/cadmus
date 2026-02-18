@@ -92,6 +92,21 @@ impl TypeExpr {
         }
     }
 
+    /// Returns true if this is a `Seq(...)` constructor (rich type system).
+    pub fn is_seq(&self) -> bool {
+        matches!(self, TypeExpr::Constructor(name, _) if name == "Seq")
+    }
+
+    /// Returns true if this is a `List(...)` constructor (Racket type system).
+    pub fn is_list(&self) -> bool {
+        matches!(self, TypeExpr::Constructor(name, _) if name == "List")
+    }
+
+    /// Returns true if this type represents a sequence/list in either type system.
+    pub fn is_seq_or_list(&self) -> bool {
+        self.is_seq() || self.is_list()
+    }
+
     /// Collect all type variable names in this expression.
     pub fn free_vars(&self) -> Vec<String> {
         let mut vars = Vec::new();
@@ -925,5 +940,32 @@ mod tests {
         // Seq(Entry(Name, Option(File(Bytes)))) round-trips
         let ty = TypeExpr::parse("Seq(Entry(Name, Option(File(Bytes))))").unwrap();
         assert_eq!(ty.to_string(), "Seq(Entry(Name, Option(File(Bytes))))");
+    }
+
+    // --- is_seq / is_list / is_seq_or_list tests ---
+
+    #[test]
+    fn test_is_seq_true() {
+        let ty = TypeExpr::seq(TypeExpr::prim("Bytes"));
+        assert!(ty.is_seq());
+        assert!(!ty.is_list());
+        assert!(ty.is_seq_or_list());
+    }
+
+    #[test]
+    fn test_is_list_true() {
+        let ty = TypeExpr::cons("List", vec![TypeExpr::prim("String")]);
+        assert!(!ty.is_seq());
+        assert!(ty.is_list());
+        assert!(ty.is_seq_or_list());
+    }
+
+    #[test]
+    fn test_is_seq_false_for_primitive() {
+        assert!(!TypeExpr::prim("Number").is_seq());
+        assert!(!TypeExpr::prim("Number").is_list());
+        assert!(!TypeExpr::prim("Number").is_seq_or_list());
+        assert!(!TypeExpr::prim("String").is_seq_or_list());
+        assert!(!TypeExpr::cons("File", vec![TypeExpr::prim("Bytes")]).is_seq_or_list());
     }
 }

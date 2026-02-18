@@ -38,6 +38,349 @@ use crate::registry::OperationRegistry;
 use crate::workflow::{CompiledWorkflow, CompiledStep, WorkflowDef};
 
 // ---------------------------------------------------------------------------
+// Shell op helpers
+// ---------------------------------------------------------------------------
+
+/// The Racket preamble for shell-callable ops.
+///
+/// Defines helper functions for executing shell commands and capturing output.
+/// Only emitted when the script contains at least one shell op.
+const SHELL_PREAMBLE: &str = r#"(require racket/system)
+
+;; Shell helpers: execute command, capture output as string or lines
+(define (shell-exec cmd)
+  (with-output-to-string (lambda () (system cmd))))
+(define (shell-lines cmd)
+  (filter (lambda (s) (not (string=? s "")))
+          (string-split (shell-exec cmd) "\n")))
+(define (shell-quote s)
+  (string-append "'" (string-replace s "'" "'\\''") "'"))
+"#;
+
+/// Check if an op is a shell-callable op by examining its metasignature.
+///
+/// Shell ops have `category: shell` in their meta.
+fn is_shell_op(op: &str, registry: &OperationRegistry) -> bool {
+    registry.get_poly(op)
+        .and_then(|e| e.meta.as_ref())
+        .and_then(|m| m.category.as_deref())
+        .map(|c| c == "shell")
+        .unwrap_or(false)
+}
+
+/// Extract shell metadata from an op's metasignature invariants.
+///
+/// Returns (base_command, flags) if the op has shell metadata.
+/// Base ops have no flags; submode ops have both.
+fn extract_shell_meta(op: &str, registry: &OperationRegistry) -> Option<(String, Option<String>)> {
+    let meta = registry.get_poly(op)?.meta.as_ref()?;
+
+    let mut base_command = None;
+    let mut flags = None;
+
+    for inv in &meta.invariants {
+        if let Some(cmd) = inv.strip_prefix("base_command: ") {
+            base_command = Some(cmd.to_string());
+        }
+        if let Some(f) = inv.strip_prefix("flags: ") {
+            flags = Some(f.to_string());
+        }
+    }
+
+    // For base ops (anchors), derive command from the racket_symbol
+    // e.g., "shell-ls" → "ls"
+    if base_command.is_none() {
+        let sym = registry.get_poly(op)?.racket_symbol.as_deref()?;
+        if sym.starts_with("shell-") {
+            base_command = Some(sym["shell-".len()..].to_string());
+        }
+    }
+
+    base_command.map(|cmd| (cmd, flags))
+}
+
+/// Check if any step in a compiled workflow uses a shell op, subsumed fs_op,
+/// or residual fs_op (all of which need the shell preamble).
+fn has_shell_ops(compiled: &CompiledWorkflow, registry: &OperationRegistry) -> bool {
+    compiled.steps.iter().any(|s| {
+        is_shell_op(&s.op, registry)
+            || crate::type_lowering::is_subsumed(&s.op)
+            || crate::type_lowering::is_residual_fs_op(&s.op)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Seq/List output detection — reads existing metasigs
+// ---------------------------------------------------------------------------
+
+/// Check whether a compiled step produces a list/sequence output at the
+/// Racket level.
+///
+/// Uses two sources of truth (no new fields needed):
+///   1. If the op is subsumed, look up the shell op's `return_type` in its
+///      metasig from the registry (e.g., shell_find → "List(String)").
+///   2. Fall back to the CompiledStep's `output_type` from the workflow
+///      compiler (e.g., `Seq(Entry(Name, Bytes))`).
+///
+/// Racket-native ops (filter, find_matching, sort_by in pipeline) also
+/// produce lists — their CompiledStep.output_type is Seq(...).
+pub fn is_seq_output(step: &CompiledStep, registry: &OperationRegistry) -> bool {
+    // Path 1: Check the shell op's metasig return_type via subsumption map.
+    // This is the most authoritative source for subsumed ops since it reflects
+    // the actual Racket-level type (List(String) vs String).
+    if let Some(entry) = crate::type_lowering::lookup_subsumption(&step.op) {
+        if let Some(poly) = registry.get_poly(entry.shell_op) {
+            if let Some(meta) = &poly.meta {
+                let rt = &meta.return_type;
+                if rt.starts_with("List(") || rt.starts_with("Seq(") {
+                    return true;
+                }
+                // Explicit non-list return type (e.g., "String" for shell_du)
+                return false;
+            }
+        }
+    }
+
+    // Path 2: Fall back to the CompiledStep's output_type from the workflow
+    // compiler. This covers Racket-native ops and any op not in the
+    // subsumption map.
+    step.output_type.is_seq_or_list()
+}
+
+// ---------------------------------------------------------------------------
+// Tier 1: Subsumed fs_op → shell-op codegen (via type_lowering map)
+// ---------------------------------------------------------------------------
+//
+// World-touching fs_ops (walk_tree, list_dir, etc.) are subsumed by shell
+// ops (shell_find, shell_ls, etc.). When the executor encounters a subsumed
+// fs_op, it delegates to the shell-op codegen path — the same infrastructure
+// used for first-class shell ops.
+
+/// Generate a Racket expression for a subsumed fs_op by delegating to
+/// the shell-op codegen path.
+///
+/// Looks up the SubsumptionEntry to find the shell op, then uses
+/// `extract_shell_meta()` on the shell op to get the base command and
+/// flags. Falls back to deriving the command from the shell op name
+/// if the shell op isn't in the registry (e.g., when called from the
+/// NL path with a partial registry).
+fn subsumed_op_to_racket(
+    step: &CompiledStep,
+    entry: &crate::type_lowering::SubsumptionEntry,
+    input_values: &HashMap<String, String>,
+    prev_binding: Option<&str>,
+    registry: &OperationRegistry,
+    prev_is_seq: bool,
+) -> Result<RacketExpr, RacketError> {
+    let uses_prev = prev_binding.is_some();
+    let path = fs_path_operand(prev_binding, input_values);
+
+    // Try to get the base command from the shell op's metadata in the registry.
+    // If the shell op is registered, extract_shell_meta gives us the command + flags.
+    // If not (partial registry), derive from the shell op name: "shell_find" → "find".
+    let (base_cmd, flags) = extract_shell_meta(entry.shell_op, registry)
+        .unwrap_or_else(|| {
+            let cmd = entry.shell_op
+                .strip_prefix("shell_")
+                .unwrap_or(entry.shell_op)
+                .to_string();
+            (cmd, None)
+        });
+
+    let cmd_parts = if let Some(ref f) = flags {
+        format!("{} {}", base_cmd, f)
+    } else {
+        base_cmd
+    };
+
+    // Special handling for search_content (binary: pattern + path)
+    if entry.arity == 2 {
+        let pattern = step.params.get("pattern")
+            .ok_or_else(|| RacketError::MissingParam {
+                op: step.op.clone(),
+                param: "pattern".to_string(),
+            })?;
+
+        // Seq→String bridge for binary ops: when the path argument is a list
+        // (e.g., walk_tree output), iterate over each file individually.
+        // E.g.: (append-map (lambda (_f) (shell-lines (string-append "grep "
+        //          (shell-quote pattern) " " (shell-quote _f)))) step_1)
+        if prev_is_seq && prev_binding.is_some() {
+            let prev = prev_binding.unwrap();
+            let expr = format!(
+                "(append-map (lambda (_f) (shell-lines (string-append \"{} \" (shell-quote {}) \" \" (shell-quote _f)))) {})",
+                cmd_parts, racket_string(pattern), prev
+            );
+            return Ok(RacketExpr { expr, uses_prev: true });
+        }
+
+        // Normal binary path: prev is a scalar string or no prev
+        let expr = format!(
+            "(shell-lines (string-append \"{} \" (shell-quote {}) \" \" (shell-quote {})))",
+            cmd_parts, racket_string(pattern), path
+        );
+        return Ok(RacketExpr { expr, uses_prev });
+    }
+
+    // Unary shell op: (shell-lines (string-append "cmd " (shell-quote path)))
+    // Seq→String bridge for unary ops: when the path argument is a list,
+    // iterate over each item. E.g.:
+    //   (append-map (lambda (_f) (shell-lines (string-append "cat " (shell-quote _f)))) step_1)
+    if prev_is_seq && prev_binding.is_some() {
+        let prev = prev_binding.unwrap();
+        let expr = format!(
+            "(append-map (lambda (_f) (shell-lines (string-append \"{} \" (shell-quote _f)))) {})",
+            cmd_parts, prev
+        );
+        return Ok(RacketExpr { expr, uses_prev: true });
+    }
+
+    // Normal unary path: prev is a scalar string or no prev
+    let expr = format!(
+        "(shell-lines (string-append \"{} \" (shell-quote {})))",
+        cmd_parts, path
+    );
+    Ok(RacketExpr { expr, uses_prev })
+}
+
+// ---------------------------------------------------------------------------
+// Tier 2: Racket-native fs_op codegen (via type_lowering map)
+// ---------------------------------------------------------------------------
+//
+// Intermediate-logic fs_ops (filter, find_matching, unique, etc.) map to
+// Racket's own primitives. No shell subprocess — these operate on in-memory
+// List(String) data from a prior shell bridge step.
+
+/// Generate a Racket expression for a Racket-native fs_op.
+///
+/// These ops operate on in-memory data (typically the result of a prior
+/// shell bridge step) using Racket's built-in functions.
+fn racket_native_op_to_racket(
+    step: &CompiledStep,
+    kind: &crate::type_lowering::RacketNativeKind,
+    input_values: &HashMap<String, String>,
+    prev_binding: Option<&str>,
+) -> Result<RacketExpr, RacketError> {
+    use crate::type_lowering::RacketNativeKind;
+
+    let params = &step.params;
+    let prev = prev_binding.unwrap_or_else(|| {
+        // If no prev binding, try to get a path from inputs
+        // (shouldn't normally happen for native ops, but be safe)
+        "'()"
+    });
+
+    match kind {
+        RacketNativeKind::FilterPredicate => {
+            let exclude = params.get("exclude");
+            let pattern = exclude
+                .or_else(|| params.get("pattern"))
+                .or_else(|| params.get("extension"))
+                .ok_or_else(|| RacketError::MissingParam {
+                    op: step.op.clone(),
+                    param: "pattern".to_string(),
+                })?;
+            let grep_pattern = glob_to_grep(pattern);
+            let negate = if exclude.is_some() { "not " } else { "" };
+            let expr = format!(
+                "(filter (lambda (line) ({}regexp-match? (regexp {}) line)) {})",
+                negate, racket_string(&grep_pattern), prev
+            );
+            Ok(RacketExpr { expr, uses_prev: true })
+        }
+        RacketNativeKind::SortComparator => {
+            Ok(RacketExpr {
+                expr: format!("(sort {} string<?)", prev),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::RemoveDuplicates => {
+            Ok(RacketExpr {
+                expr: format!("(remove-duplicates {})", prev),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::Length => {
+            Ok(RacketExpr {
+                expr: format!("(length {})", prev),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::Take => {
+            let n = params.get("count")
+                .or_else(|| params.get("n"))
+                .map(|s| s.as_str())
+                .unwrap_or("10");
+            Ok(RacketExpr {
+                expr: format!("(take {} {})", prev, n),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::TakeRight => {
+            let n = params.get("count")
+                .or_else(|| params.get("n"))
+                .map(|s| s.as_str())
+                .unwrap_or("10");
+            Ok(RacketExpr {
+                expr: format!("(take-right {} {})", prev, n),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::Flatten => {
+            // In the flat List(String) world, flatten is identity
+            Ok(RacketExpr {
+                expr: prev.to_string(),
+                uses_prev: true,
+            })
+        }
+    }
+}
+
+/// Resolve the path operand for a filesystem op.
+/// Returns a Racket expression: either a variable name (prev binding)
+/// or a quoted string literal from the workflow inputs.
+fn fs_path_operand(prev: Option<&str>, inputs: &HashMap<String, String>) -> String {
+    if let Some(p) = prev {
+        return p.to_string();
+    }
+    for key in &["path", "file", "archive", "pathref", "textdir"] {
+        if let Some(v) = inputs.get(*key) {
+            return racket_string(v);
+        }
+    }
+    inputs.values().next()
+        .map(|v| racket_string(v))
+        .unwrap_or_else(|| racket_string("."))
+}
+
+/// Build `(shell-lines (string-append "cmd " (shell-quote path)))`.
+/// Always uses shell-quote for injection safety.
+fn fs_shell(cmd: &str, path: &str) -> String {
+    format!("(shell-lines (string-append \"{} \" (shell-quote {})))", cmd, path)
+}
+
+/// Convert a glob pattern to a grep-compatible regex (for Racket filter).
+fn glob_to_grep(pattern: &str) -> String {
+    if pattern.starts_with("*.") {
+        let ext = &pattern[1..]; // ".ext"
+        format!("{}$", ext.replace('.', "\\."))
+    } else if pattern.starts_with('.') {
+        format!("{}$", pattern.replace('.', "\\."))
+    } else {
+        pattern.to_string()
+    }
+}
+
+/// Quote a string for embedding inside a Racket string literal that will
+/// be passed to a shell command. Wraps in shell single-quotes.
+fn shell_quote_for_racket(s: &str) -> String {
+    // For embedding in a Racket string: use shell single quotes
+    // but escape any single quotes in the value
+    let escaped = s.replace('\'', "'\\''");
+    format!("'{}'", escaped)
+}
+
+// ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
 
@@ -88,11 +431,15 @@ pub struct RacketExpr {
 /// `prev_binding` is the variable name holding the previous step's result
 /// (e.g., "step_1"). For the first step, this is None and the expression
 /// uses the workflow's input values directly.
+///
+/// `prev_is_seq` indicates whether the previous step's output is a list/sequence
+/// (checked via `is_seq_output`). Used to bridge Seq→String type mismatches.
 pub fn op_to_racket(
     step: &CompiledStep,
     input_values: &HashMap<String, String>,
     prev_binding: Option<&str>,
     registry: &OperationRegistry,
+    prev_is_seq: bool,
 ) -> Result<RacketExpr, RacketError> {
     let op = step.op.as_str();
     let params = &step.params;
@@ -149,6 +496,116 @@ pub fn op_to_racket(
     }
 
     // -----------------------------------------------------------------------
+    // Shell ops: generate (shell-lines "cmd flags path") or (shell-exec ...)
+    // -----------------------------------------------------------------------
+    if is_shell_op(op, registry) {
+        if let Some((base_cmd, flags)) = extract_shell_meta(op, registry) {
+            let poly = registry.get_poly(op)
+                .ok_or_else(|| RacketError::UnknownOp(op.to_string()))?;
+            let arity = poly.signature.inputs.len();
+
+            // Build the shell command string
+            let cmd_parts = if let Some(ref f) = flags {
+                format!("{} {}", base_cmd, f)
+            } else {
+                base_cmd.clone()
+            };
+
+            if arity == 0 {
+                // Nullary shell op (e.g., ps, df): (shell-lines "cmd flags")
+                let expr = format!("(shell-lines \"{}\")", cmd_parts);
+                return Ok(RacketExpr { expr, uses_prev: false });
+            } else if arity >= 2 {
+                // Binary+ shell op (e.g., grep pattern path):
+                // (shell-lines (string-append "cmd flags " (shell-quote pattern) " " (shell-quote path)))
+                let (a, b) = get_two_operands(step, input_values, prev_binding)?;
+                let expr = format!(
+                    "(shell-lines (string-append \"{} \" (shell-quote {}) \" \" (shell-quote {})))",
+                    cmd_parts, a, b
+                );
+                return Ok(RacketExpr { expr, uses_prev: prev_binding.is_some() });
+            } else {
+                // Unary+ shell op: (shell-lines (string-append "cmd flags " (shell-quote path)))
+                let a = get_one_operand(step, input_values, prev_binding)?;
+                let expr = format!(
+                    "(shell-lines (string-append \"{} \" (shell-quote {})))",
+                    cmd_parts, a
+                );
+                return Ok(RacketExpr { expr, uses_prev: prev_binding.is_some() });
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Tier 1: Subsumed fs_ops → shell-op codegen via type_lowering map.
+    // World-touching ops (walk_tree, list_dir, search_content, etc.) are
+    // routed through the shell-callable infrastructure.
+    // -----------------------------------------------------------------------
+    //
+    // Dual-behavior ops: if there's a prev_binding, use Racket-native form
+    // (in-memory operation). If no prev_binding, use the shell bridge.
+    if let Some(dual_kind) = crate::type_lowering::lookup_dual_behavior(op) {
+        if prev_binding.is_some() {
+            return racket_native_op_to_racket(step, dual_kind, input_values, prev_binding);
+        }
+        // Fall through to shell bridge below
+    }
+
+    if let Some(entry) = crate::type_lowering::lookup_subsumption(op) {
+        return subsumed_op_to_racket(step, entry, input_values, prev_binding, registry, prev_is_seq);
+    }
+
+    // -----------------------------------------------------------------------
+    // Tier 2: Racket-native fs_ops → Racket primitive codegen.
+    // Intermediate-logic ops (filter, find_matching, unique, flatten_tree)
+    // use Racket's own functions on in-memory List(String) data.
+    // -----------------------------------------------------------------------
+    if let Some(native) = crate::type_lowering::lookup_racket_native(op) {
+        return racket_native_op_to_racket(step, &native.kind, input_values, prev_binding);
+    }
+
+    // -----------------------------------------------------------------------
+    // Residual fs_ops: world-touching ops not yet in the CLI fact pack.
+    // These use direct shell command strings.
+    // -----------------------------------------------------------------------
+    if let Some(residual) = crate::type_lowering::lookup_residual(op) {
+        let helper = if residual.is_exec { "shell-exec" } else { "shell-lines" };
+
+        // Seq→String bridge: when the previous step produced a list and this
+        // residual op expects a string path, we need to bridge the types.
+        if prev_is_seq && prev_binding.is_some() {
+            let prev = prev_binding.unwrap();
+            if residual.is_exec {
+                // Exec ops (pack_archive, copy, delete, etc.): pass all files
+                // at once using string-join. E.g.:
+                //   (shell-exec (string-append "tar cf archive.tar " (string-join step_1 " ")))
+                let expr = format!(
+                    "({} (string-append \"{} \" (string-join (map shell-quote {}) \" \")))",
+                    helper, residual.shell_cmd, prev
+                );
+                return Ok(RacketExpr { expr, uses_prev: true });
+            } else {
+                // Lines ops (diff, stat, etc.): iterate over each file and
+                // collect output. E.g.:
+                //   (append-map (lambda (f) (shell-lines (string-append "stat " (shell-quote f)))) step_1)
+                let expr = format!(
+                    "(append-map (lambda (_f) ({} (string-append \"{} \" (shell-quote _f)))) {})",
+                    helper, residual.shell_cmd, prev
+                );
+                return Ok(RacketExpr { expr, uses_prev: true });
+            }
+        }
+
+        // Normal path: prev is a scalar string or no prev at all
+        let path = fs_path_operand(prev_binding, input_values);
+        let expr = format!(
+            "({} (string-append \"{} \" (shell-quote {})))",
+            helper, residual.shell_cmd, path
+        );
+        return Ok(RacketExpr { expr, uses_prev: prev_binding.is_some() });
+    }
+
+    // -----------------------------------------------------------------------
     // Data-driven path: look up symbol and arity from the registry.
     // -----------------------------------------------------------------------
     let poly = registry.get_poly(op)
@@ -202,6 +659,12 @@ pub fn generate_racket_script(
     script.push_str(&format!(";; Generated by cadmus: {}\n", compiled.name));
     script.push_str(";;\n");
 
+    // Emit shell preamble if any step uses a shell op
+    if has_shell_ops(compiled, registry) {
+        script.push_str("\n");
+        script.push_str(SHELL_PREAMBLE);
+    }
+
     // Collect input values for operand resolution
     let input_values = &def.inputs;
 
@@ -216,7 +679,7 @@ pub fn generate_racket_script(
     if num_steps == 1 {
         let step = &compiled.steps[0];
         script.push_str(&format!(";; Step 1: {}\n", step.op));
-        let expr = op_to_racket(step, input_values, None, registry)?;
+        let expr = op_to_racket(step, input_values, None, registry, false)?;
         script.push_str(&format!("(displayln {})\n", expr.expr));
         return Ok(script);
     }
@@ -233,7 +696,12 @@ pub fn generate_racket_script(
         script.push_str(&format!("    ;; Step {}: {}{}\n", step_num, step.op,
             if step.is_each { " (each)" } else { "" }));
 
-        let expr = op_to_racket(step, input_values, prev_binding.as_deref(), registry)?;
+        // Compute whether the previous step's output is a list/sequence.
+        // This drives Seq→String bridging in the codegen paths.
+        let prev_is_seq = if i > 0 {
+            is_seq_output(&compiled.steps[i - 1], registry)
+        } else { false };
+        let expr = op_to_racket(step, input_values, prev_binding.as_deref(), registry, prev_is_seq)?;
 
         if step.is_each {
             // Map-each: wrap in (map (lambda (_line) ...) prev)
@@ -411,7 +879,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("add", vec![("x", "4"), ("y", "35")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(+ 4 35)");
         assert!(!expr.uses_prev);
     }
@@ -422,7 +890,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("remove", vec![("x", "3"), ("y", "'(1 2 3 4)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(remove 3 '(1 2 3 4))");
     }
 
@@ -432,7 +900,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("list_reverse", vec![("value", "'(1 2 3)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(reverse '(1 2 3))");
     }
 
@@ -441,7 +909,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("subtract", vec![("x", "6"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(- 6 2)");
     }
 
@@ -450,7 +918,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("multiply", vec![("x", "3"), ("y", "7")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(* 3 7)");
     }
 
@@ -459,7 +927,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("divide", vec![("x", "10"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(/ 10 2)");
     }
 
@@ -468,7 +936,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("add", vec![("y", "10")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
         assert_eq!(expr.expr, "(+ step_1 10)");
         assert!(expr.uses_prev);
     }
@@ -478,7 +946,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("display", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
         assert_eq!(expr.expr, "(display step_1)");
     }
 
@@ -487,7 +955,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("displayln", vec![("value", "hello")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(displayln \"hello\")");
     }
 
@@ -496,7 +964,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("nonexistent_op", vec![]);
         let inputs = make_inputs(vec![]);
-        let result = op_to_racket(&step, &inputs, None, &reg);
+        let result = op_to_racket(&step, &inputs, None, &reg, false);
         assert!(result.is_err());
         match result.unwrap_err() {
             RacketError::UnknownOp(name) => assert_eq!(name, "nonexistent_op"),
@@ -509,7 +977,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_filter", vec![("predicate", "even?")]);
         let inputs = make_inputs(vec![("lst", "'(1 2 3 4 5)")]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(filter even? '(1 2 3 4 5))");
     }
 
@@ -518,7 +986,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_map", vec![("function", "add1")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
         assert_eq!(expr.expr, "(map add1 step_1)");
     }
 
@@ -527,7 +995,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_foldl", vec![("function", "+"), ("init", "0")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, false).unwrap();
         assert_eq!(expr.expr, "(foldl + 0 step_1)");
     }
 
@@ -536,7 +1004,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("set_union", vec![("x", "(set 1 2 3)"), ("y", "(set 3 4 5)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(set-union (set 1 2 3) (set 3 4 5))");
     }
 
@@ -545,7 +1013,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("cons", vec![("x", "42"), ("y", "'()")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(cons 42 '())");
     }
 
@@ -665,7 +1133,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_append", vec![("x", "hello"), ("y", " world")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(string-append \"hello\" \" world\")");
     }
 
@@ -674,7 +1142,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("number_to_string", vec![("value", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(number->string 42)");
     }
 
@@ -683,7 +1151,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("abs", vec![("value", "-5")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(abs -5)");
     }
 
@@ -692,7 +1160,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("equal", vec![("x", "42"), ("y", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(equal? 42 42)");
     }
 
@@ -701,7 +1169,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("less_than", vec![("x", "1"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(< 1 2)");
     }
 
@@ -712,7 +1180,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("newline", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(newline)");
         assert!(!expr.uses_prev);
     }
@@ -722,7 +1190,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("read_line", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(read-line)");
         assert!(!expr.uses_prev);
     }
@@ -732,7 +1200,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("set_member", vec![("x", "(set 1 2 3)"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(set-member? (set 1 2 3) 2)");
     }
 
@@ -741,7 +1209,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("set_new", vec![("value", "'(1 2 3)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(list->set '(1 2 3))");
     }
 
@@ -750,7 +1218,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("list_reverse", vec![("value", "'(1 2 3)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(reverse '(1 2 3))");
     }
 
@@ -759,7 +1227,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("sort_list", vec![("value", "'(3 1 2)"), ("comparator", ">")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(sort '(3 1 2) >)");
     }
 
@@ -768,7 +1236,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("greater_than", vec![("x", "5"), ("y", "3")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(> 5 3)");
     }
 
@@ -777,7 +1245,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_to_number", vec![("value", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(string->number 42)");
     }
 
@@ -786,7 +1254,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("less_than_or_equal", vec![("x", "3"), ("y", "5")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(<= 3 5)");
     }
 
@@ -795,7 +1263,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("greater_than_or_equal", vec![("x", "7"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(>= 7 2)");
     }
 
@@ -804,7 +1272,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_upcase", vec![("value", "hello")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(string-upcase \"hello\")");
     }
 
@@ -813,7 +1281,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_downcase", vec![("value", "HELLO")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(string-downcase \"HELLO\")");
     }
 
@@ -822,7 +1290,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_read", vec![("value", "data.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(file->string \"data.txt\")");
     }
 
@@ -831,7 +1299,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_read_lines", vec![("value", "data.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(file->lines \"data.txt\")");
     }
 
@@ -840,7 +1308,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_write", vec![("x", "hello world"), ("y", "output.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(display-to-file \"hello world\" \"output.txt\")");
     }
 
@@ -849,7 +1317,184 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_exists", vec![("value", "data.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
         assert_eq!(expr.expr, "(file-exists? \"data.txt\")");
+    }
+
+    // --- is_seq_output tests ---
+
+    /// Helper: make a step with a specific output_type.
+    fn make_step_with_output(op: &str, output_type: TypeExpr) -> CompiledStep {
+        CompiledStep {
+            index: 0,
+            op: op.to_string(),
+            is_each: false,
+            input_type: TypeExpr::prim("Bytes"),
+            output_type,
+            params: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_is_seq_output_walk_tree_via_metasig() {
+        // walk_tree is subsumed to shell_find, whose metasig has return_type="List(String)"
+        let reg = make_full_registry();
+        let step = make_step_with_output("walk_tree",
+            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))));
+        assert!(is_seq_output(&step, &reg));
+    }
+
+    #[test]
+    fn test_is_seq_output_get_size_scalar() {
+        // get_size is subsumed to shell_du, whose metasig has return_type="String"
+        let reg = make_full_registry();
+        let step = make_step_with_output("get_size", TypeExpr::prim("String"));
+        assert!(!is_seq_output(&step, &reg));
+    }
+
+    #[test]
+    fn test_is_seq_output_filter_via_output_type() {
+        // filter is Racket-native (not subsumed), but output_type is Seq(...)
+        let reg = make_full_registry();
+        let step = make_step_with_output("filter",
+            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))));
+        assert!(is_seq_output(&step, &reg));
+    }
+
+    #[test]
+    fn test_is_seq_output_add_not_seq() {
+        // add is a pure Racket op, output_type is Number — not a seq
+        let reg = make_registry();
+        let step = make_step_with_output("add", TypeExpr::prim("Number"));
+        assert!(!is_seq_output(&step, &reg));
+    }
+
+    #[test]
+    fn test_is_seq_output_list_dir_via_metasig() {
+        // list_dir is subsumed to shell_ls, return_type="List(String)"
+        let reg = make_full_registry();
+        let step = make_step_with_output("list_dir",
+            TypeExpr::seq(TypeExpr::entry(TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))));
+        assert!(is_seq_output(&step, &reg));
+    }
+
+    /// Build a full registry with shell submodes (needed for metasig lookups).
+    fn make_full_registry() -> OperationRegistry {
+        let mut reg = load_ops_pack_str(include_str!("../data/racket_ops.yaml")).unwrap();
+        let facts = load_racket_facts_from_str(include_str!("../data/racket_facts.yaml")).unwrap();
+        promote_inferred_ops(&mut reg, &facts);
+        let cli_yaml = include_str!("../data/macos_cli_facts.yaml");
+        if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
+            let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
+            crate::racket_strategy::discover_shell_submodes(&mut reg, &facts, &cli_facts);
+        }
+        reg
+    }
+
+    // --- Seq→String bridge tests ---
+
+    #[test]
+    fn test_residual_bridge_pack_archive_with_seq_prev() {
+        let reg = make_full_registry();
+        let step = CompiledStep {
+            index: 1,
+            op: "pack_archive".to_string(),
+            is_each: false,
+            input_type: TypeExpr::seq(TypeExpr::entry(
+                TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))),
+            output_type: TypeExpr::prim("File"),
+            params: HashMap::new(),
+        };
+        let inputs = make_inputs(vec![("path", "~/Downloads")]);
+        // prev_is_seq=true: step_1 is a List(String) from walk_tree
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, true).unwrap();
+        // Should use string-join, not raw shell-quote on the list
+        assert!(expr.expr.contains("string-join") || expr.expr.contains("map shell-quote"),
+            "pack_archive with seq prev should bridge via string-join: {}", expr.expr);
+        assert!(!expr.expr.contains("(shell-quote step_1)"),
+            "should NOT raw shell-quote the list variable: {}", expr.expr);
+    }
+
+    #[test]
+    fn test_residual_no_bridge_stat_single_step() {
+        let reg = make_full_registry();
+        let step = CompiledStep {
+            index: 0,
+            op: "stat".to_string(),
+            is_each: false,
+            input_type: TypeExpr::prim("Path"),
+            output_type: TypeExpr::prim("String"),
+            params: HashMap::new(),
+        };
+        let inputs = make_inputs(vec![("pathref", "~/readme.md")]);
+        // prev_is_seq=false, no prev_binding: should use input path directly
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        assert!(expr.expr.contains("shell-quote"),
+            "stat single step should use shell-quote: {}", expr.expr);
+        assert!(expr.expr.contains("~/readme.md"),
+            "stat should reference the input path: {}", expr.expr);
+    }
+
+    #[test]
+    fn test_subsumed_bridge_search_content_with_seq_prev() {
+        let reg = make_full_registry();
+        let step = CompiledStep {
+            index: 1,
+            op: "search_content".to_string(),
+            is_each: false,
+            input_type: TypeExpr::seq(TypeExpr::entry(
+                TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))),
+            output_type: TypeExpr::seq(TypeExpr::prim("String")),
+            params: vec![("pattern".to_string(), "TODO".to_string())].into_iter().collect(),
+        };
+        let inputs = make_inputs(vec![("textdir", "~/Projects")]);
+        // prev_is_seq=true: step_1 is a List(String) from walk_tree
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, true).unwrap();
+        // Should use append-map to grep each file individually
+        assert!(expr.expr.contains("append-map"),
+            "search_content with seq prev should use append-map: {}", expr.expr);
+        assert!(expr.expr.contains("grep") || expr.expr.contains("shell-lines"),
+            "should still use grep/shell-lines: {}", expr.expr);
+        assert!(!expr.expr.contains("(shell-quote step_1)"),
+            "should NOT raw shell-quote the list variable: {}", expr.expr);
+    }
+
+    #[test]
+    fn test_subsumed_search_content_no_bridge_first_step() {
+        let reg = make_full_registry();
+        let step = CompiledStep {
+            index: 0,
+            op: "search_content".to_string(),
+            is_each: false,
+            input_type: TypeExpr::prim("String"),
+            output_type: TypeExpr::seq(TypeExpr::prim("String")),
+            params: vec![("pattern".to_string(), "TODO".to_string())].into_iter().collect(),
+        };
+        let inputs = make_inputs(vec![("textdir", "~/Projects")]);
+        // prev_is_seq=false, no prev: should use input path directly
+        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        assert!(expr.expr.contains("~/Projects"),
+            "search_content first step should use input path: {}", expr.expr);
+    }
+
+    #[test]
+    fn test_subsumed_bridge_read_file_with_seq_prev() {
+        // walk_tree → read_file: cat each file in the list
+        let reg = make_full_registry();
+        let step = CompiledStep {
+            index: 1,
+            op: "read_file".to_string(),
+            is_each: false,
+            input_type: TypeExpr::seq(TypeExpr::prim("String")),
+            output_type: TypeExpr::seq(TypeExpr::prim("String")),
+            params: HashMap::new(),
+        };
+        let inputs = make_inputs(vec![("path", "~/Projects")]);
+        let expr = op_to_racket(&step, &inputs, Some("step_1"), &reg, true).unwrap();
+        // Should use append-map to cat each file
+        assert!(expr.expr.contains("append-map"),
+            "read_file with seq prev should use append-map: {}", expr.expr);
+        assert!(expr.expr.contains("cat"),
+            "should use cat command: {}", expr.expr);
     }
 }

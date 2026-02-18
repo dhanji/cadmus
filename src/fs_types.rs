@@ -47,6 +47,9 @@ pub fn build_fs_registry() -> OperationRegistry {
 const RACKET_OPS_YAML: &str = include_str!("../data/racket_ops.yaml");
 const RACKET_FACTS_YAML: &str = include_str!("../data/racket_facts.yaml");
 
+/// The embedded macOS CLI facts YAML, used as fallback when the file is not found on disk.
+const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/macos_cli_facts.yaml");
+
 pub fn build_full_registry() -> OperationRegistry {
     let mut reg = if let Ok(r) = load_ops_pack("data/fs_ops.yaml") {
         r
@@ -77,6 +80,18 @@ pub fn build_full_registry() -> OperationRegistry {
             .unwrap_or_else(|_| RACKET_FACTS_YAML.to_string()),
     ) {
         crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);
+
+        // Phase 4: Shell submode discovery from macOS CLI facts
+        // Reads submode_ properties from the CLI fact pack and creates
+        // variadic form ops for each tool's flag variants.
+        let cli_yaml = std::fs::read_to_string("data/macos_cli_facts.yaml")
+            .unwrap_or_else(|_| MACOS_CLI_FACTS_YAML.to_string());
+        if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(&cli_yaml) {
+            let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
+            crate::racket_strategy::discover_shell_submodes(
+                &mut reg, &facts, &cli_facts,
+            );
+        }
     }
 
     reg
