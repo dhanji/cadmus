@@ -260,9 +260,9 @@ pub fn build_workflow(
         "list_dir" => {
             inputs.insert("path".to_string(), target_path.clone());
             steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
-            if let Some(pattern) = slots.patterns.first() {
+            if !slots.patterns.is_empty() {
                 let mut params = HashMap::new();
-                params.insert("pattern".to_string(), pattern.clone());
+                params.insert("pattern".to_string(), join_patterns(&slots.patterns));
                 steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
             }
             if slots.modifiers.contains(&Modifier::Reverse) {
@@ -272,9 +272,9 @@ pub fn build_workflow(
         "walk_tree" => {
             inputs.insert("path".to_string(), target_path.clone());
             steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
-            if let Some(pattern) = slots.patterns.first() {
+            if !slots.patterns.is_empty() {
                 let mut params = HashMap::new();
-                params.insert("pattern".to_string(), pattern.clone());
+                params.insert("pattern".to_string(), join_patterns(&slots.patterns));
                 steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
             }
         }
@@ -464,6 +464,16 @@ pub fn build_workflow(
 /// Ops that take a URL as input.
 fn is_url_op(op: &str) -> bool {
     matches!(op, "git_clone" | "download" | "wget_download")
+}
+
+/// Join multiple glob patterns into a single filter pattern.
+/// e.g., ["*.cbz", "*.cbr"] → "*.cbz|*.cbr"
+fn join_patterns(patterns: &[String]) -> String {
+    if patterns.len() == 1 {
+        patterns[0].clone()
+    } else {
+        patterns.join("|")
+    }
 }
 
 /// Git ops that work on an existing repo (not clone).
@@ -1013,10 +1023,48 @@ mod tests {
         match parsed {
             Intent::CreateWorkflow { op, .. } => {
                 let wf = build_workflow(&op, &extracted, None).unwrap();
-                assert!(wf.steps.iter().any(|s| s.op == "walk_tree" || s.op == "find_matching"));
+                assert!(wf.steps.iter().any(|s| s.op == "walk_tree" || s
+                    .op == "find_matching"));
             }
             other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_build_workflow_list_comics() {
+        let normalized = normalize::normalize("list all the comics in ~/Downloads");
+        let parsed = intent::parse_intent(&normalized);
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        match parsed {
+            Intent::CreateWorkflow { op, .. } => {
+                let wf = build_workflow(&op, &extracted, None).unwrap();
+                assert!(wf.steps.iter().any(|s| s.op == "list_dir"),
+                    "should have list_dir: {:?}", wf.steps);
+                assert!(wf.steps.iter().any(|s| s.op == "filter"),
+                    "should have filter step for comic types: {:?}", wf.steps);
+                let filter_step = wf.steps.iter().find(|s| s.op == "filter").unwrap();
+                match &filter_step.args {
+                    StepArgs::Map(m) => {
+                        let pat = m.get("pattern").expect("filter should have pattern");
+                        assert!(pat.contains("cbz"), "pattern should include cbz: {}", pat);
+                        assert!(pat.contains("cbr"), "pattern should include cbr: {}", pat);
+                    }
+                    other => panic!("filter should have map args, got: {:?}", other),
+                }
+            }
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_build_workflow_list_comic_books_bigram() {
+        let normalized = normalize::normalize("list comic books in ~/Downloads");
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+        assert!(!extracted.patterns.is_empty(),
+            "should extract patterns from 'comic books': {:?}", extracted);
+        assert!(extracted.patterns.iter().any(|p| p.contains("cbz")),
+            "should have cbz pattern: {:?}", extracted.patterns);
     }
 
     #[test]

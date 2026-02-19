@@ -1154,3 +1154,28 @@ noun_patterns:
     - "*.toml"
     - "*.ini"
     - "*.conf"
+  comics:
+    - "*.cbz"
+    - "*.cbr"
+  comic:
+    - "*.cbz"
+    - "*.cbr"
+  comic books:
+    - "*.cbz"
+    - "*.cbr"
+  comic book:
+    - "*.cbz"
+    - "*.cbr"
+  manga:
+    - "*.cbz"
+    - "*.cbr"
+  ebooks:
+    - "*.epub"
+    - "*.mobi"
+    - "*.azw3"
+    - "*.pdf"
+  ebook:
+    - "*.epub"
+    - "*.mobi"
+    - "*.azw3"
+    - "*.pdf"

@@ -58,6 +58,13 @@ pub fn shell_quote(s: &str) -> String {
 /// Convert a glob-like pattern to a grep-compatible regex.
 /// e.g., "*.pdf" → "\\.pdf$", "*.tmp" → "\\.tmp$"
 pub fn glob_to_grep(pattern: &str) -> String {
+    // Handle |-separated multi-patterns: "*.cbz|*.cbr" → "\\.cbz$|\\.cbr$"
+    if pattern.contains('|') {
+        return pattern.split('|')
+            .map(|p| glob_to_grep(p.trim()))
+            .collect::<Vec<_>>()
+            .join("|");
+    }
     if pattern.starts_with("*.") {
         // *.ext → match lines ending with .ext
         let ext = &pattern[1..]; // ".ext"
@@ -140,6 +147,16 @@ mod tests {
     #[test]
     fn test_glob_to_grep_literal() {
         assert_eq!(glob_to_grep("error"), "error");
+    }
+
+    #[test]
+    fn test_glob_to_grep_multi_pattern() {
+        assert_eq!(glob_to_grep("*.cbz|*.cbr"), "\\.cbz$|\\.cbr$");
+    }
+
+    #[test]
+    fn test_glob_to_grep_single_no_pipe() {
+        assert_eq!(glob_to_grep("*.pdf"), "\\.pdf$");
     }
 
 

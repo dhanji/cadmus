@@ -252,6 +252,19 @@ pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
         // 10. Noun-to-filetype pattern: "screenshots" → *.png, "photos" → *.png *.jpg etc.
         {
             let noun_patterns = &super::vocab::vocab().noun_patterns;
+            // Try bigram first: "comic books" etc.
+            if i + 1 < tokens.len() {
+                let bigram = format!("{} {}", token, tokens[i + 1]);
+                if let Some(patterns) = noun_patterns.get(bigram.as_str()) {
+                    for p in patterns {
+                        result.slots.push(SlotValue::Pattern(p.clone()));
+                        result.patterns.push(p.clone());
+                    }
+                    i += 2;
+                    continue;
+                }
+            }
+            // Single token
             if let Some(patterns) = noun_patterns.get(token.as_str()) {
                 for p in patterns {
                     result.slots.push(SlotValue::Pattern(p.clone()));
