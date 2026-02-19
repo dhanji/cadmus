@@ -267,7 +267,7 @@ fn test_chaos_html_injection() {
 // I4: Diverse ops end-to-end — NL → workflow → script
 // ===========================================================================
 
-/// Helper: NL input → PlanCreated → compile → generate_script, return script
+/// Helper: NL input → PlanCreated → compile → generate Racket script, return script
 /// Panics if any step fails.
 fn nl_e2e_script(input: &str) -> String {
     let mut state = DialogueState::new();
@@ -279,7 +279,8 @@ fn nl_e2e_script(input: &str) -> String {
             let registry = cadmus::fs_types::build_full_registry();
             let compiled = cadmus::workflow::compile_workflow(&parsed, &registry)
                 .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
-            cadmus::executor::generate_script(&compiled, &parsed, &registry)
+            let racket_reg = build_racket_registry();
+            cadmus::racket_executor::generate_racket_script(&compiled, &parsed, &racket_reg)
                 .unwrap_or_else(|e| panic!("script gen failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml))
         }
         other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
@@ -904,6 +905,23 @@ fn test_bugfix_full_conversation_ambiguous_then_specific() {
 
 use cadmus::nl::dialogue::DialogueState;
 use cadmus::nl::{NlResponse, process_input};
+
+/// Build a Racket registry with inference + shell submodes (shared helper).
+fn build_racket_registry() -> cadmus::registry::OperationRegistry {
+    let mut reg = cadmus::registry::load_ops_pack_str(
+        include_str!("../data/packs/ops/racket_ops.yaml")
+    ).expect("racket_ops.yaml");
+    let facts = cadmus::racket_strategy::load_racket_facts_from_str(
+        include_str!("../data/packs/facts/racket_facts.yaml")
+    ).expect("racket_facts.yaml");
+    cadmus::racket_strategy::promote_inferred_ops(&mut reg, &facts);
+    let cli_yaml = include_str!("../data/packs/facts/macos_cli_facts.yaml");
+    if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(cli_yaml) {
+        let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
+        cadmus::racket_strategy::discover_shell_submodes(&mut reg, &facts, &cli_facts);
+    }
+    reg
+}
 
 // ---------------------------------------------------------------------------
 // Diverse phrasings → CreateWorkflow

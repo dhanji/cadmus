@@ -215,7 +215,7 @@ steps:
   - list_dir
   - filter
 "#;
-    // This should fail at the shell executor level (filter needs a pattern)
+    // This should fail at the Racket codegen level (filter needs a pattern)
     // but the workflow compiler may accept it (filter is polymorphic)
     let def = workflow::parse_workflow(yaml).unwrap();
     let registry = fs_types::build_full_registry();

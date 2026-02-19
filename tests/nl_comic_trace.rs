@@ -153,7 +153,7 @@ fn test_nl_simple_extract_still_works() {
     // A simple "extract foo.cbz" should NOT trigger the compound repack planner
     let input = "extract archive.cbz";
 
-    let (def, compiled) = nl_to_compiled(input);
+    let (_def, compiled) = nl_to_compiled(input);
 
     // Should be a simple 1-step workflow
     assert!(compiled.steps.len() <= 2,

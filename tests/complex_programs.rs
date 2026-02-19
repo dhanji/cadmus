@@ -1,4 +1,4 @@
-// Generate complex Racket programs through the executor.
+// Generate complex Racket programs through the racket_executor.
 // Run with: cargo test --test complex_programs -- --nocapture
 
 use cadmus::racket_strategy::{load_racket_facts_from_str,

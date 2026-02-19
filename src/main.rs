@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process;
 
 use cadmus::coding_strategy;
-use cadmus::executor;
+
 use cadmus::fs_strategy::FilesystemStrategy;
 use cadmus::generic_planner::ExprLiteral;
 use cadmus::pipeline;
@@ -28,22 +28,20 @@ fn main() {
         let path = args.get(pos + 1).unwrap_or_else(|| {
             eprintln!("{}", ui::error("Missing workflow path"));
             eprintln!();
-            eprintln!("  {} cadmus --workflow <path.yaml> [--execute] [--racket]", ui::dim("usage:"));
+            eprintln!("  {} cadmus --workflow <path.yaml> [--run]", ui::dim("usage:"));
             eprintln!();
             eprintln!("  {} cadmus --workflow data/workflows/find_pdfs.yaml", ui::dim("$"));
-            eprintln!("  {} cadmus --workflow data/workflows/find_pdfs.yaml --execute", ui::dim("$"));
-            eprintln!("  {} cadmus --workflow data/workflows/add_numbers.yaml --racket", ui::dim("$"));
+            eprintln!("  {} cadmus --workflow data/workflows/find_pdfs.yaml --run", ui::dim("$"));
             process::exit(1);
         });
 
-        let execute = args.iter().any(|a| a == "--execute");
-        let racket = args.iter().any(|a| a == "--racket");
-        run_workflow_mode(Path::new(path), execute, racket);
+        let run = args.iter().any(|a| a == "--run");
+        run_workflow_mode(Path::new(path), run);
         return;
     }
 
-    if args.iter().any(|a| a == "--execute" || a == "--racket") {
-        eprintln!("{}", ui::error("--execute and --racket require --workflow <path.yaml>"));
+    if args.iter().any(|a| a == "--run") {
+        eprintln!("{}", ui::error("--run requires --workflow <path.yaml>"));
         process::exit(1);
     }
 
@@ -208,10 +206,9 @@ fn run_chat_mode() {
 // Workflow mode
 // ---------------------------------------------------------------------------
 
-fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
-    let mode = if racket { "Racket" } else { "Shell" };
+fn run_workflow_mode(path: &Path, run: bool) {
     println!();
-    println!("{}", ui::banner("CADMUS", VERSION, &format!("Workflow {} {}", ui::icon::ARROW_RIGHT, mode)));
+    println!("{}", ui::banner("CADMUS", VERSION, &format!("Workflow {} Racket", ui::icon::ARROW_RIGHT)));
     println!();
 
     // Load
@@ -302,48 +299,28 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
         }
     }
 
-    // Generate script
-    if racket {
-        println!("  {}", ui::subsection("Racket Script"));
-        println!();
-
-        let mut racket_reg = cadmus::registry::load_ops_pack_str(
-            include_str!("../data/packs/ops/racket_ops.yaml")
-        ).expect("failed to load racket_ops.yaml");
-        let racket_facts = cadmus::racket_strategy::load_racket_facts_from_str(
-            include_str!("../data/packs/facts/racket_facts.yaml")
-        ).expect("failed to load racket_facts.yaml");
-        cadmus::racket_strategy::promote_inferred_ops(&mut racket_reg, &racket_facts);
-
-        // Discover shell submodes (Phase 4) — needed for archive tool dispatch
-        let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli_facts.yaml")
-            .unwrap_or_else(|_| include_str!("../data/packs/facts/macos_cli_facts.yaml").to_string());
-        if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(&cli_yaml) {
-            let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
-            cadmus::racket_strategy::discover_shell_submodes(
-                &mut racket_reg, &racket_facts, &cli_facts,
-            );
-        }
-        let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg) {
-            Ok(s) => s,
-            Err(e) => {
-                println!("  {}", ui::status_fail("Codegen failed"));
-                eprintln!("  {}", ui::error(&format!("{}", e)));
-                process::exit(1);
-            }
-        };
-
-        println!("{}", ui::code_block(&script));
-        println!();
-        println!("  {}", ui::dim("use `racket <file.rkt>` to run"));
-        return;
-    }
-
-    // Shell script
-    println!("  {}", ui::subsection("Shell Script"));
+    // Generate Racket script
+    println!("  {}", ui::subsection("Racket Script"));
     println!();
 
-    let script = match executor::generate_script(&compiled, &def, &registry) {
+    let mut racket_reg = cadmus::registry::load_ops_pack_str(
+        include_str!("../data/packs/ops/racket_ops.yaml")
+    ).expect("failed to load racket_ops.yaml");
+    let racket_facts = cadmus::racket_strategy::load_racket_facts_from_str(
+        include_str!("../data/packs/facts/racket_facts.yaml")
+    ).expect("failed to load racket_facts.yaml");
+    cadmus::racket_strategy::promote_inferred_ops(&mut racket_reg, &racket_facts);
+
+    // Discover shell submodes (Phase 4) — needed for archive tool dispatch
+    let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli_facts.yaml")
+        .unwrap_or_else(|_| include_str!("../data/packs/facts/macos_cli_facts.yaml").to_string());
+    if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(&cli_yaml) {
+        let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
+        cadmus::racket_strategy::discover_shell_submodes(
+            &mut racket_reg, &racket_facts, &cli_facts,
+        );
+    }
+    let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg) {
         Ok(s) => s,
         Err(e) => {
             println!("  {}", ui::status_fail("Codegen failed"));
@@ -355,35 +332,41 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
     println!("{}", ui::code_block(&script));
     println!();
 
-    if execute {
-        println!("  {}", ui::status_active("Executing..."));
+    if run {
+        println!("  {}", ui::status_active("Running..."));
         println!();
 
-        let result = match executor::run_script(&script) {
-            Ok(r) => r,
+        match std::process::Command::new("racket")
+            .arg("-e")
+            .arg(&script)
+            .output()
+        {
+            Ok(output) => {
+                let stdout_str = String::from_utf8_lossy(&output.stdout);
+                let stderr_str = String::from_utf8_lossy(&output.stderr);
+                if !stdout_str.is_empty() {
+                    println!("{}", ui::code_block(&stdout_str));
+                }
+                if !stderr_str.is_empty() {
+                    eprintln!("{}", ui::dim(&stderr_str));
+                }
+                println!();
+                if output.status.success() {
+                    println!("  {}", ui::status_ok("Done"));
+                } else {
+                    let code = output.status.code().unwrap_or(1);
+                    println!("  {}", ui::status_fail(&format!("Exit code {}", code)));
+                    process::exit(code);
+                }
+            }
             Err(e) => {
-                println!("  {}", ui::status_fail("Execution failed"));
-                eprintln!("  {}", ui::error(&format!("{}", e)));
+                println!("  {}", ui::error(&format!("Failed to run racket: {}", e)));
+                println!("  {}", ui::dim("Is Racket installed? Try: brew install racket"));
                 process::exit(1);
             }
-        };
-
-        if !result.stdout.is_empty() {
-            println!("{}", ui::code_block(&result.stdout));
-        }
-        if !result.stderr.is_empty() {
-            eprintln!("{}", ui::dim(&result.stderr));
-        }
-
-        println!();
-        if result.exit_code != 0 {
-            println!("  {}", ui::status_fail(&format!("Exit code {}", result.exit_code)));
-            process::exit(result.exit_code);
-        } else {
-            println!("  {}", ui::status_ok("Done"));
         }
     } else {
-        println!("  {}", ui::dim("dry-run — use --execute to run"));
+        println!("  {}", ui::dim("use --run to execute, or `racket <file.rkt>`"));
     }
     println!();
 }

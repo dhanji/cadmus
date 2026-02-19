@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-19T10:14:44Z | Size: 48.6k chars
+> Updated: 2026-02-19T23:03:45Z | Size: 49.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -559,3 +559,13 @@
 - `is_extract_op()` helper removed from racket_executor.rs
 - All CompiledStep construction sites use `..Default::default()` for the new field
 - Total tests: 1301
+
+### Bash Executor Removal (plan `remove-bash-executor`)
+- `src/executor.rs` — **DELETED** (1425 lines, 37 unit tests). Was: `op_to_command()`, `generate_script()`, `run_script()`, `ShellCommand`, `ScriptResult`, `extract_archive_format()`
+- `tests/executor_tests.rs` — **DELETED** (668 lines, 62 integration tests)
+- `src/lib.rs` — `pub mod executor;` removed
+- `src/main.rs` — `--execute` and `--racket` flags removed. New `--run` flag executes via `racket -e`. Racket is sole codegen target.
+- `src/shell_helpers.rs` — `ExecFailed` variant, `sed_escape()`, `primary_input()` removed. `shell_quote()`, `glob_to_grep()`, `CodegenError` kept (used by racket_executor).
+- `tests/nl_tests.rs` — `nl_e2e_script()` rewritten to use `racket_executor::generate_racket_script()`. `build_racket_registry()` helper added.
+- CLI usage: `cadmus --workflow <path.yaml> [--run]` (was `[--execute] [--racket]`)
+- **Total: 1202 tests** (was 1301), 0 failures, 0 warnings

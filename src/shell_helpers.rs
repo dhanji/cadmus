@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Shell Helpers — shared utilities for shell and Racket executors
+// Shell Helpers — shared utilities for the Racket executor
 // ---------------------------------------------------------------------------
 
 use std::fmt;
@@ -8,15 +8,13 @@ use std::fmt;
 // Shared error type for both shell and Racket executors
 // ---------------------------------------------------------------------------
 
-/// Error type shared by both the shell executor and the Racket executor.
+/// Error type for the Racket codegen executor.
 #[derive(Debug, Clone)]
 pub enum CodegenError {
     /// Op is not recognized / has no mapping
     UnknownOp(String),
     /// A required parameter is missing
     MissingParam { op: String, param: String },
-    /// Script execution failed (shell executor only)
-    ExecFailed { exit_code: Option<i32>, stderr: String },
 }
 
 impl fmt::Display for CodegenError {
@@ -26,8 +24,6 @@ impl fmt::Display for CodegenError {
                 write!(f, "unknown op '{}': no command mapping", op),
             CodegenError::MissingParam { op, param } =>
                 write!(f, "op '{}' requires param '{}' but it was not provided", op, param),
-            CodegenError::ExecFailed { exit_code, stderr } =>
-                write!(f, "script failed (exit {:?}): {}", exit_code, stderr),
         }
     }
 }
@@ -75,33 +71,7 @@ pub fn glob_to_grep(pattern: &str) -> String {
     }
 }
 
-/// Escape special characters for use inside a sed s/.../ expression.
-pub fn sed_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '/' | '\\' | '&' | '.' | '*' | '[' | ']' | '^' | '$' => {
-                out.push('\\');
-                out.push(c);
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
 
-/// Extract the primary input path from a WorkflowDef.
-/// Looks for common input keys: path, archive, logfile, repo, source, query, url.
-pub fn primary_input(inputs: &std::collections::HashMap<String, String>) -> String {
-    for key in &["path", "archive", "logfile", "repo", "source", "query", "url"] {
-        if let Some(v) = inputs.get(*key) {
-            return v.clone();
-        }
-    }
-    inputs.values().next()
-        .cloned()
-        .unwrap_or_else(|| ".".to_string())
-}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -172,34 +142,5 @@ mod tests {
         assert_eq!(glob_to_grep("error"), "error");
     }
 
-    // --- Sed escape ---
 
-    #[test]
-    fn test_sed_escape_basic() {
-        assert_eq!(sed_escape("hello"), "hello");
-        assert_eq!(sed_escape("a.b"), "a\\.b");
-        assert_eq!(sed_escape("a/b"), "a\\/b");
-    }
-
-    #[test]
-    fn test_sed_escape_special() {
-        assert_eq!(sed_escape("foo*bar"), "foo\\*bar");
-        assert_eq!(sed_escape("[test]"), "\\[test\\]");
-    }
-
-    // --- Primary input ---
-
-    #[test]
-    fn test_primary_input_path() {
-        let mut inputs = std::collections::HashMap::new();
-        inputs.insert("path".to_string(), "/tmp/test".to_string());
-        inputs.insert("other".to_string(), "ignored".to_string());
-        assert_eq!(primary_input(&inputs), "/tmp/test");
-    }
-
-    #[test]
-    fn test_primary_input_fallback() {
-        let inputs = std::collections::HashMap::new();
-        assert_eq!(primary_input(&inputs), ".");
-    }
 }
