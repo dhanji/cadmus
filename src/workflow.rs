@@ -90,10 +90,10 @@ fn try_promote_bytes(
                         let _ = subst.bind(var.clone(), ty.clone());
                     }
                 } else {
-                    return input_type.clone();
+                    break;
                 }
             } else {
-                return input_type.clone();
+                break;
             }
         } else {
             if fresh.inputs.is_empty() {
@@ -111,7 +111,33 @@ fn try_promote_bytes(
                 }
             }
             if !matched {
-                return input_type.clone();
+                // Don't bail — _promote may already be bound from an earlier
+                // step (e.g., find_matching pattern narrowing). Break out of
+                // the simulation loop and check the substitution.
+                break;
+            }
+
+            // ── Pattern-based type narrowing ──
+            // When find_matching has a pattern like *.cbz, narrow the element
+            // type inside Seq(Entry(Name, a)) by looking up the extension in
+            // filetypes.yaml. This lets Dir(Bytes) → Dir(File(Archive(Image, Cbz)))
+            // propagate through the chain.
+            if step.op == "find_matching" || step.op == "filter" {
+                if let StepArgs::Map(params) = &step.args {
+                    if let Some(pattern) = params.get("pattern") {
+                        if let Some(narrowed) = narrow_type_from_pattern(&current, pattern) {
+                            // Apply the narrowed type and try to bind _promote
+                            if let Ok(sub) = unify(&current, &narrowed) {
+                                current = narrowed;
+                                for (var, ty) in sub.iter() {
+                                    let _ = subst.bind(var.clone(), ty.clone());
+                                }
+                            } else {
+                                current = narrowed;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -460,21 +486,79 @@ fn validate_workflow(def: &WorkflowDef) -> Result<(), WorkflowError> {
 // Workflow compiler — resolve types step by step
 // ---------------------------------------------------------------------------
 
+/// Determine whether a compiled step needs element-wise mapping.
+///
+/// This is a **type-driven** check: if the step's input_type is `Seq(X)`
+/// (or `Seq(Entry(K, X))`) but the op's registered signature expects a
+/// non-Seq first input, the codegen must wrap in `(map ...)`.
+///
+/// Ops like `sort_by` and `filter` natively accept `Seq(a)` — they do NOT
+/// need mapping even though their input is a sequence.
+pub fn step_needs_map(step: &CompiledStep, registry: &crate::registry::OperationRegistry) -> bool {
+    // Step input must be Seq(...)
+    let _inner = match unwrap_seq(&step.input_type) {
+        Some(inner) => inner,
+        None => return false,
+    };
+
+    // Look up the op's registered signature from the provided registry first,
+    // then fall back to the canonical fs_ops registry (cached). This handles
+    // the case where the Racket codegen passes a racket-only registry that
+    // doesn't contain fs_ops entries like extract_archive or pack_archive.
+    let sig_inputs = lookup_op_inputs(&step.op, registry);
+
+    if sig_inputs.is_none() {
+        return false; // unknown op — don't map
+    }
+    let sig_inputs = sig_inputs.unwrap();
+    if sig_inputs.is_empty() {
+        return false; // leaf op
+    }
+
+    // Check if ANY input in the signature accepts Seq/List — if so, the op
+    // natively accepts sequences and doesn't need mapping.
+    // Examples: sort_by(Seq(a)), filter(pred, Seq(a)), find_matching(Pattern, Seq(Entry(Name, a)))
+    let accepts_seq = sig_inputs.iter().any(|input| {
+        matches!(input, TypeExpr::Constructor(name, _) if name == "Seq" || name == "List")
+    });
+    !accepts_seq
+}
+
+/// Look up an op's input types from the given registry, falling back to the
+/// canonical full registry (fs_ops + power_tools + racket_ops).
+fn lookup_op_inputs(op: &str, registry: &crate::registry::OperationRegistry) -> Option<Vec<TypeExpr>> {
+    use std::sync::OnceLock;
+    static FULL_REG: OnceLock<crate::registry::OperationRegistry> = OnceLock::new();
+
+    // Try the provided registry first
+    if let Some(poly) = registry.get_poly(op) {
+        return Some(poly.signature.inputs.clone());
+    }
+
+    // Fall back to the canonical full registry
+    let full = FULL_REG.get_or_init(|| crate::fs_types::build_full_registry());
+    full.get_poly(op).map(|p| p.signature.inputs.clone())
+}
+
 /// A compiled workflow step with resolved types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CompiledStep {
     /// Step index (0-based)
     pub index: usize,
     /// Operation name
     pub op: String,
-    /// Whether this is a map-each step
-    pub is_each: bool,
     /// The resolved input type for this step
     pub input_type: TypeExpr,
     /// The resolved output type for this step
     pub output_type: TypeExpr,
     /// Resolved parameters (after $var expansion)
     pub params: HashMap<String, String>,
+    /// Whether this step requires filesystem isolation when run in map mode.
+    ///
+    /// Set by the compiler when an op with filesystem side effects (e.g.,
+    /// extract_*) is applied element-wise over a Seq. Each invocation must
+    /// write to its own temp directory to prevent filename collisions.
+    pub isolate: bool,
 }
 
 /// A fully compiled workflow ready for execution.
@@ -665,23 +749,52 @@ pub fn compile_workflow(
                 if matched {
                     (current_type.clone(), step_output)
                 } else {
-                    return Err(WorkflowError::TypeMismatch {
+                    // Special case: flatten_seq on Entry-wrapped nested sequences.
+                    // Signature is Seq(Seq(a)) → Seq(a), but actual type may be
+                    // Seq(Entry(K, Seq(V))) → Seq(V). Unwrap the Entry layer.
+                    if step.op == "flatten_seq" {
+                        if let Some(outer_inner) = unwrap_seq(&current_type) {
+                            if let Some((_, val_type)) = unwrap_entry(outer_inner) {
+                                if let Some(inner_seq_elem) = unwrap_seq(val_type) {
+                                    let output = TypeExpr::seq(inner_seq_elem.clone());
+                                    (current_type.clone(), output)
+                                } else {
+                                    return Err(WorkflowError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
+                                }
+                            } else {
+                                return Err(WorkflowError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
+                            }
+                        } else {
+                            return Err(WorkflowError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
+                        }
+                    } else {
+                        return Err(WorkflowError::TypeMismatch {
                         step: i,
                         op: step.op.clone(),
                         expected: format!("one of {:?}", sig.inputs.iter().map(|i| i.to_string()).collect::<Vec<_>>()),
                         got: current_type.to_string(),
-                    });
+                        });
+                    }
                 }
             }
         };
 
+        // Resolve generic archive ops to format-specific variants
+        let resolved_op = resolve_archive_op(&step.op, &step_input, &step_output, &params, registry);
+
+        // Filesystem isolation: extract ops in each/map mode write files to
+        // disk. When applied over a Seq, multiple invocations can collide
+        // (e.g., two archives both containing cover.jpg). Mark the step so
+        // executors create per-item temp directories.
+        let isolate = is_each && needs_isolation(&resolved_op);
+
         compiled_steps.push(CompiledStep {
             index: i,
-            op: step.op.clone(),
-            is_each,
+            op: resolved_op,
             input_type: step_input,
             output_type: step_output.clone(),
             params,
+            isolate,
         });
 
         current_type = step_output;
@@ -697,6 +810,134 @@ pub fn compile_workflow(
 }
 
 /// Unwrap Seq(X) → Some(X), anything else → None.
+/// Extract the archive format primitive from a type expression.
+///
+/// Looks for `Archive(content, fmt)` anywhere inside the type and returns
+/// the `fmt` if it's a concrete `Primitive` (not a variable).
+///
+/// ```text
+/// File(Archive(File(Image), Cbz))           → Some("Cbz")
+/// Seq(Entry(Name, File(Archive(Bytes, Rar)))) → Some("Rar")
+/// Dir(Bytes)                                  → None
+/// File(Archive(a, promoe3_fmt))               → None (variable)
+/// ```
+fn extract_archive_format(ty: &TypeExpr) -> Option<&str> {
+    match ty {
+        TypeExpr::Constructor(name, args) if name == "Archive" && args.len() == 2 => {
+            match &args[1] {
+                TypeExpr::Primitive(fmt) => Some(fmt.as_str()),
+                _ => None, // variable or nested — unresolved
+            }
+        }
+        TypeExpr::Constructor(_, args) => {
+            // Recurse into constructor args
+            for arg in args {
+                if let Some(fmt) = extract_archive_format(arg) {
+                    return Some(fmt);
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Resolve a generic archive op to a format-specific op.
+
+/// Check whether an op needs filesystem isolation when run in map/each mode.
+///
+/// Ops that extract archives write files to disk. When multiple archives are
+/// extracted in parallel (map over Seq), their output files can collide if
+/// they share filenames (e.g., cover.jpg in every comic issue). This function
+/// identifies such ops so the compiler can set `CompiledStep::isolate = true`.
+fn needs_isolation(op: &str) -> bool {
+    op.starts_with("extract_")
+}
+
+/// Resolve a generic archive op to a format-specific op.
+///
+/// If the step's type contains a concrete archive format (e.g., `Cbz`),
+/// and the op is `extract_archive` or `pack_archive`, rewrite it to the
+/// format-specific variant (e.g., `extract_zip`).
+///
+/// Returns the original op name if no resolution is possible.
+fn resolve_archive_op(op: &str, step_input: &TypeExpr, step_output: &TypeExpr, params: &HashMap<String, String>, registry: &crate::registry::OperationRegistry) -> String {
+    let (prefix, ty) = match op {
+        "extract_archive" => ("extract", step_input),
+        "pack_archive" => ("pack", step_output),
+        _ => return op.to_string(),
+    };
+
+    // Extract the format from the type
+    let fmt = match extract_archive_format(ty) {
+        Some(f) => f.to_string(),
+        None => {
+            // For pack_archive: try to resolve from the "output" param extension
+            if op == "pack_archive" {
+                if let Some(output) = params.get("output") {
+                    if let Some(entry) = crate::filetypes::dictionary().lookup_by_path(output) {
+                        match extract_archive_format(&entry.type_expr) {
+                            Some(f) => f.to_string(),
+                            None => return op.to_string(),
+                        }
+                    } else { return op.to_string(); }
+                } else { return op.to_string(); }
+            } else { return op.to_string(); }
+        }
+    };
+
+    // Look up the format family (Cbz→zip, TarGz→tar_gz, etc.)
+    let family = match crate::filetypes::dictionary().format_family(&fmt) {
+        Some(f) => f,
+        None => return op.to_string(), // unknown format — keep generic
+    };
+
+    // Build the specific op name and check it exists
+    let specific_op = format!("{}_{}", prefix, family);
+    if registry.get_poly(&specific_op).is_some() {
+        specific_op
+    } else {
+        op.to_string() // specific op not registered — keep generic
+    }
+}
+
+/// Narrow a type based on a glob pattern from find_matching/filter.
+///
+/// When the current type is `Seq(Entry(Name, X))` where X contains a type
+/// variable (from Bytes promotion), and the pattern is `*.cbz`, look up
+/// `.cbz` in filetypes.yaml to get `File(Archive(Image, Cbz))` and
+/// substitute it into the type.
+///
+/// Returns `Some(narrowed_type)` if narrowing is possible, `None` otherwise.
+fn narrow_type_from_pattern(current: &TypeExpr, pattern: &str) -> Option<TypeExpr> {
+    // Extract extension from glob pattern: "*.cbz" → "cbz", "*.tar.gz" → "tar.gz"
+    let ext = pattern.strip_prefix("*.")?;
+
+    // Look up the extension in filetypes
+    let dict = crate::filetypes::dictionary();
+    let entry = dict.lookup(ext)?;
+    let file_type = &entry.type_expr;
+
+    // Current type should be Seq(Entry(Name, X)) — narrow X to file_type
+    if let TypeExpr::Constructor(seq_name, seq_args) = current {
+        if seq_name == "Seq" && seq_args.len() == 1 {
+            if let TypeExpr::Constructor(entry_name, entry_args) = &seq_args[0] {
+                if entry_name == "Entry" && entry_args.len() == 2 {
+                    let narrowed_entry = TypeExpr::entry(
+                        entry_args[0].clone(),
+                        file_type.clone(),
+                    );
+                    return Some(TypeExpr::seq(narrowed_entry));
+                }
+            }
+            // Also handle bare Seq(X) without Entry wrapper
+            return Some(TypeExpr::seq(file_type.clone()));
+        }
+    }
+
+    None
+}
+
 fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
     match ty {
         TypeExpr::Constructor(name, args) if name == "Seq" && args.len() == 1 => {
@@ -830,9 +1071,10 @@ pub fn execute_workflow(
             })
             .unwrap_or_else(|| format!("<{}>", cs.op));
 
-        let kind = if cs.is_each { StepKind::Map } else { StepKind::Op };
+        let is_map = step_needs_map(cs, registry);
+        let kind = if is_map { StepKind::Map } else { StepKind::Op };
 
-        let op_display = if cs.is_each {
+        let op_display = if is_map {
             format!("map({})", cs.op)
         } else {
             cs.op.clone()
@@ -850,7 +1092,7 @@ pub fn execute_workflow(
 
     // Build the plan tree for display purposes
     // (a linear chain: each step wraps the previous)
-    let plan = build_plan_chain(compiled);
+    let plan = build_plan_chain(compiled, registry);
 
     Ok(DryRunTrace {
         goal: compiled.output_type.clone(),
@@ -860,14 +1102,14 @@ pub fn execute_workflow(
 }
 
 /// Build a linear ExprPlanNode chain from the compiled workflow.
-fn build_plan_chain(compiled: &CompiledWorkflow) -> ExprPlanNode {
+fn build_plan_chain(compiled: &CompiledWorkflow, registry: &OperationRegistry) -> ExprPlanNode {
     let mut current = ExprPlanNode::Leaf {
         key: compiled.input_description.clone(),
         output_type: compiled.input_type.clone(),
     };
 
     for cs in &compiled.steps {
-        if cs.is_each {
+        if step_needs_map(cs, registry) {
             current = ExprPlanNode::Map {
                 op_name: cs.op.clone(),
                 elem_output: cs.output_type.clone(),
@@ -916,11 +1158,7 @@ impl fmt::Display for CompiledWorkflow {
         writeln!(f, "{}", ui::kv_dim("input", &format!("{} ({})", self.input_description, self.input_type)))?;
         for cs in &self.steps {
             let type_info = format!("{} {} {}", cs.input_type, ui::icon::ARROW_RIGHT, cs.output_type);
-            if cs.is_each {
-                writeln!(f, "{}", ui::step_each(cs.index + 1, &cs.op, &type_info))?;
-            } else {
-                writeln!(f, "{}", ui::step(cs.index + 1, &cs.op, &type_info))?;
-            }
+            writeln!(f, "{}", ui::step(cs.index + 1, &cs.op, &type_info))?;
             for (k, v) in &cs.params {
                 writeln!(f, "         {} {}", ui::dim(&format!("{}:", k)), ui::dim(v))?;
             }
@@ -1152,8 +1390,9 @@ steps:
         let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 1);
-        assert_eq!(compiled.steps[0].op, "extract_archive");
-        assert!(!compiled.steps[0].is_each);
+        // Format resolution: extract_archive + Cbz → extract_zip
+        assert_eq!(compiled.steps[0].op, "extract_zip");
+
         // Output should be Seq(Entry(Name, File(Image)))
         let out = &compiled.output_type;
         assert!(out.to_string().contains("Seq"), "output should be Seq: {}", out);
@@ -1219,7 +1458,8 @@ steps:
         let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 2);
-        assert!(compiled.steps[1].is_each);
+        // Step 1 should be a map step (input is Seq but op expects scalar)
+        assert!(step_needs_map(&compiled.steps[1], &registry));
         // extract_archive: File(Archive(File(Image), Cbz)) → Seq(Entry(Name, File(Image)))
         // read_file each: applies File(a)→a to each entry value → Seq(Entry(Name, Image))
         let out = &compiled.output_type;
@@ -1270,7 +1510,7 @@ steps:
         assert_eq!(trace.steps.len(), 2); // input + extract_archive
         assert_eq!(trace.steps[0].kind, StepKind::Leaf);
         assert_eq!(trace.steps[1].kind, StepKind::Op);
-        assert_eq!(trace.steps[1].op_name, "extract_archive");
+        assert_eq!(trace.steps[1].op_name, "extract_zip");
     }
 
     #[test]
@@ -1334,7 +1574,8 @@ steps:
 "#;
         let trace = run_workflow_str(yaml).unwrap();
         let display = trace.to_string();
-        assert!(display.contains("extract_archive"), "trace: {}", display);
+        // Format resolution: extract_archive + Cbz → extract_zip
+        assert!(display.contains("extract_zip"), "trace: {}", display);
         assert!(display.contains("Trace"), "trace: {}", display);
     }
 

@@ -24,10 +24,10 @@ fn make_step(index: usize, op: &str, params: Vec<(&str, &str)>) -> CompiledStep 
     CompiledStep {
         index,
         op: op.to_string(),
-        is_each: false,
         input_type: TypeExpr::prim("Any"),
         output_type: TypeExpr::prim("Any"),
         params: params.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+        ..Default::default()
     }
 }
 

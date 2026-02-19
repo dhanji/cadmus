@@ -540,6 +540,60 @@ ops:
   # gzip, xz are NOT listed here — discovered via type-symmetric from mv
   # (class: shell_exec).
 
+  # --- shell_archive anchors: unzip, zip, unrar, 7z ---
+  - name: shell_unzip
+    racket_symbol: "shell-unzip"
+    inputs: ["String"]
+    output: "List(String)"
+    description: "(shell-unzip path) — extract ZIP archive, list extracted files"
+    meta:
+      params:
+        - { name: path, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  - name: shell_zip
+    racket_symbol: "shell-zip"
+    inputs: ["String", "String"]
+    output: "String"
+    description: "(shell-zip archive file) — add file to ZIP archive"
+    meta:
+      params:
+        - { name: archive, type: String }
+        - { name: file, type: String }
+      return_type: String
+      invariants: []
+      category: shell
+      effects: io
+
+  - name: shell_unrar
+    racket_symbol: "shell-unrar"
+    inputs: ["String"]
+    output: "List(String)"
+    description: "(shell-unrar path) — extract RAR archive, list extracted files"
+    meta:
+      params:
+        - { name: path, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
+  - name: shell_7z
+    racket_symbol: "shell-7z"
+    inputs: ["String"]
+    output: "List(String)"
+    description: "(shell-7z path) — extract 7z archive, list extracted files"
+    meta:
+      params:
+        - { name: path, type: String }
+      return_type: "List(String)"
+      invariants: []
+      category: shell
+      effects: io
+
   # --- shell_vcs anchor: git ---
   - name: shell_git
     racket_symbol: "shell-git"

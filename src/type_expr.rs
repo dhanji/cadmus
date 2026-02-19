@@ -23,6 +23,13 @@ pub enum TypeExpr {
     Var(String),
 }
 
+impl Default for TypeExpr {
+    /// Default to `Bytes` — the "unknown content" primitive.
+    fn default() -> Self {
+        TypeExpr::Primitive("Bytes".to_string())
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Convenience constructors
 // ---------------------------------------------------------------------------

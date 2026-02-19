@@ -31,6 +31,26 @@ categories:
   - disk_image
   - ebook
 
+# Archive format families: maps type-system format primitives to their
+# tool family. Used by the workflow compiler to resolve generic ops like
+# extract_archive → extract_zip when the format type variable is bound.
+#
+# Cbz/Cbr are comic book archives — same underlying format as Zip/Rar.
+# The compiler resolves Cbz→Zip and Cbr→Rar so the same tool is used.
+format_families:
+  Zip: zip
+  Cbz: zip
+  Tar: tar
+  TarGz: tar_gz
+  TarBz2: tar_bz2
+  TarXz: tar_xz
+  Rar: rar
+  Cbr: rar
+  SevenZip: 7z
+  Cpio: tar        # cpio uses tar as fallback
+  Gzip: tar_gz     # single-file gzip treated as tar_gz
+  Bzip2: tar_bz2   # single-file bzip2 treated as tar_bz2
+
 filetypes:
 
   # ===========================================================================

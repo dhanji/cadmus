@@ -29,7 +29,7 @@ fn script_for_workflow(yaml_path: &str) -> String {
     let registry = build_full_registry();
     let compiled = workflow::compile_workflow(&def, &registry)
         .unwrap_or_else(|e| panic!("failed to compile {}: {}", yaml_path, e));
-    generate_script(&compiled, &def)
+    generate_script(&compiled, &def, &registry)
         .unwrap_or_else(|e| panic!("failed to generate script for {}: {}", yaml_path, e))
 }
 
@@ -348,10 +348,10 @@ fn test_script_generation_unknown_op_fails() {
         steps: vec![CompiledStep {
             index: 0,
             op: "nonexistent_op_xyz".to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Bytes"),
             output_type: TypeExpr::prim("Bytes"),
             params: HashMap::new(),
+        ..Default::default()
         }],
         output_type: TypeExpr::prim("Bytes"),
     };
@@ -364,7 +364,8 @@ fn test_script_generation_unknown_op_fails() {
         },
         steps: vec![],
     };
-    let result = generate_script(&compiled, &def);
+    let registry = build_full_registry();
+    let result = generate_script(&compiled, &def, &registry);
     assert!(result.is_err());
     match result {
         Err(ExecutorError::UnknownOp(name)) => assert_eq!(name, "nonexistent_op_xyz"),
@@ -386,7 +387,8 @@ fn test_empty_workflow_generates_minimal_script() {
         inputs: HashMap::new(),
         steps: vec![],
     };
-    let script = generate_script(&compiled, &def).unwrap();
+    let registry = build_full_registry();
+    let script = generate_script(&compiled, &def, &registry).unwrap();
     assert!(script.starts_with("#!/bin/sh\n"));
     assert!(script.contains("# (no steps)"));
 }
@@ -603,4 +605,64 @@ fn test_shell_quote_dash_prefix_safe() {
     // Starts with - could be interpreted as flag, but shell_quote's job is quoting not flag safety
     let quoted = shell_quote("-rf");
     assert_eq!(quoted, "-rf");
+}
+
+// ===========================================================================
+// Isolation tests: extract in map mode uses per-item temp dirs
+// ===========================================================================
+
+#[test]
+fn test_bash_extract_map_mode_uses_temp_dirs() {
+    // The repack_comics.yaml workflow has extract_archive: each
+    // which should compile with isolate=true and generate per-item temp dirs
+    let script = script_for_workflow("data/workflows/repack_comics.yaml");
+
+    // Should have a while-read loop for the extract step
+    assert!(script.contains("while IFS= read -r _line; do"),
+        "Should have map-mode while loop: {}", script);
+
+    // Should create per-item temp dirs (isolate=true)
+    assert!(script.contains("_td=$(mktemp -d)"),
+        "Isolated extract should create per-item temp dir: {}", script);
+
+    // Should extract into $_td, not $WORK_DIR/extracted
+    assert!(script.contains("$_td"),
+        "Should reference per-item temp dir: {}", script);
+
+    // Should use find on $_td to list extracted files
+    assert!(script.contains("find \"$_td\"") || script.contains("find $_td"),
+        "Should find files in per-item temp dir: {}", script);
+}
+
+#[test]
+fn test_bash_single_extract_no_temp_dir() {
+    // A single extract (not in map mode) should use $WORK_DIR/extracted
+    let script = script_for_workflow("data/workflows/extract_cbz.yaml");
+
+    // Should NOT have per-item temp dirs
+    assert!(!script.contains("_td=$(mktemp -d)"),
+        "Single extract should not use per-item temp dir: {}", script);
+}
+
+#[test]
+fn test_bash_repack_script_structure() {
+    // Verify the full repack script has the right structure
+    let script = script_for_workflow("data/workflows/repack_comics.yaml");
+
+    // Should have all 5 steps
+    assert!(script.contains("Step 1: list_dir"), "Missing step 1: {}", script);
+    assert!(script.contains("Step 2: find_matching"), "Missing step 2: {}", script);
+    assert!(script.contains("Step 3: sort_by"), "Missing step 3: {}", script);
+    assert!(script.contains("Step 4:"), "Missing step 4: {}", script);
+    assert!(script.contains("Step 5:"), "Missing step 5: {}", script);
+
+    // Step 4 should be marked as (each)
+    assert!(script.contains("(each)"),
+        "Extract step should be marked as each: {}", script);
+}
+
+#[test]
+fn trace_bash_repack_script() {
+    let script = script_for_workflow("data/workflows/repack_comics.yaml");
+    println!("\n=== BASH REPACK SCRIPT ===\n{}", script);
 }

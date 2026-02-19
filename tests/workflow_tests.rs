@@ -42,7 +42,7 @@ fn test_workflow_extract_cbz() {
     let trace = run_workflow(&path).unwrap();
     let display = trace.to_string();
 
-    assert!(display.contains("extract_archive"), "trace: {}", display);
+    assert!(display.contains("extract_zip"), "trace: {}", display);
     assert!(display.contains("Seq(Entry(Name, File(Image)))"), "trace: {}", display);
     assert_eq!(trace.steps.len(), 2); // input + extract_archive
 }

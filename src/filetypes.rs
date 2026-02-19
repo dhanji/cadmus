@@ -26,6 +26,8 @@ const FILETYPES_YAML: &str = include_str!("../data/filetypes.yaml");
 struct FileTypesYaml {
     #[allow(dead_code)]
     categories: Option<Vec<String>>,
+    #[serde(default)]
+    format_families: HashMap<String, String>,
     filetypes: Vec<FileTypeRaw>,
 }
 
@@ -125,6 +127,8 @@ pub struct FileTypeDictionary {
     by_ext: HashMap<String, FileTypeEntry>,
     /// Compound extensions sorted longest-first for greedy matching.
     compound_exts: Vec<String>,
+    /// Archive format → tool family (e.g., "Cbz" → "zip", "TarGz" → "tar_gz").
+    format_families: HashMap<String, String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +185,7 @@ pub fn load_filetypes_str(yaml: &str) -> Result<FileTypeDictionary, FileTypeLoad
     // Sort compound extensions longest-first for greedy matching
     compound_exts.sort_by(|a, b| b.len().cmp(&a.len()));
 
-    Ok(FileTypeDictionary { by_ext, compound_exts })
+    Ok(FileTypeDictionary { by_ext, compound_exts, format_families: raw.format_families })
 }
 
 /// Load from disk, falling back to embedded YAML.
@@ -296,6 +300,18 @@ impl FileTypeDictionary {
     /// Whether the dictionary is empty.
     pub fn is_empty(&self) -> bool {
         self.by_ext.is_empty()
+    }
+
+    /// Look up the tool family for an archive format primitive.
+    ///
+    /// ```text
+    /// format_family("Cbz")   → Some("zip")
+    /// format_family("TarGz") → Some("tar_gz")
+    /// format_family("Rar")   → Some("rar")
+    /// format_family("Text")  → None  (not an archive format)
+    /// ```
+    pub fn format_family(&self, format_name: &str) -> Option<&str> {
+        self.format_families.get(format_name).map(|s| s.as_str())
     }
 }
 

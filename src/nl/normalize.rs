@@ -3,6 +3,10 @@
 //! Pipeline: raw input → case fold → strip punctuation → expand contractions
 //! → canonicalize ordinals → map synonym phrases to canonical op names.
 //!
+//! Single-word synonyms that are common English words (e.g. "dir", "archive",
+//! "order", "total") are guarded: they only fire in command position (first
+//! content token, or after a conjunction like "then"/"and"/"also").
+//!
 //! All operations are pure string transforms — no allocation-heavy structures,
 //! no external dependencies. Designed for grep-like latency.
 
@@ -214,6 +218,72 @@ fn canonicalize_ordinal(token: &str) -> Option<u32> {
 fn apply_synonyms(tokens: &[String]) -> Vec<String> {
     let vocab = super::vocab::vocab();
 
+    // ── Ambiguous single-word synonyms ──────────────────────────────────
+    // These are common English words that also happen to be command names.
+    // They should only fire in "command position" — first content token,
+    // or after a conjunction/sequencing word ("then", "and", "also").
+    // Multi-word phrases containing these words are NOT affected (the
+    // multi-word context already disambiguates).
+    static AMBIGUOUS: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    let ambiguous = AMBIGUOUS.get_or_init(|| {
+        [
+            "dir", "archive", "order", "total", "list", "sort", "tree",
+            "walk", "find", "filter", "search", "copy", "move", "head",
+            "tail", "link", "file", "type", "extract", "pack", "count",
+            "diff", "hash", "sum", "add", "merge", "reveal", "replace",
+            "rename", "remove", "delete", "info", "stat", "more", "less",
+            "cut", "paste", "push", "pull", "fetch", "clone", "commit",
+            "checkout", "narrow", "unique", "duplicate", "compress",
+            "decompress", "download", "upload", "sync", "erase", "trash",
+            "dedup", "deduplicate", "arrange", "sift", "recurse",
+            "recursive", "traverse", "spotlight",
+        ].into_iter().collect()
+    });
+
+    // Words that signal the next token is in command position.
+    static SEQUENCERS: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    let sequencers = SEQUENCERS.get_or_init(|| {
+        [
+            "then", "and", "also", "next", "after", "before", "finally",
+            "first", "now", "please", "instead", "that", "this",
+            "to", "just", "go", "want", "need", "like", "can", "could",
+            "should", "would", "will", "shall", "may", "might", "let",
+            "gonna", "wanna", "gotta", "so", "ok", "okay",
+        ].into_iter().collect()
+    });
+
+    // Meta-command words that make the following token command-like.
+    static META_CMDS: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    let meta_cmds = META_CMDS.get_or_init(|| {
+        [
+            "explain", "what", "how", "describe", "show", "run", "do",
+            "execute", "try", "use", "skip", "actually", "is", "does",
+            "about", "mean", "means",
+        ].into_iter().collect()
+    });
+
+    // Command position: the token is likely an op name, not prose.
+    // True when:
+    //   - Position 0 (first token)
+    //   - Previous result token is a sequencer ("then", "and", ...)
+    //   - Previous result token is a meta-command ("explain", "what", ...)
+    //   - Previous result token is a canonical op (chaining: "walk filter")
+    //   - Previous result token is a path ("/foo", "~/bar")
+    let is_command_pos = |i: usize, result: &[String]| -> bool {
+        if i == 0 { return true; }
+        match result.last() {
+            None => true,
+            Some(prev) => {
+                sequencers.contains(prev.as_str())
+                    || meta_cmds.contains(prev.as_str())
+                    || is_canonical_op(prev)
+                    || prev.starts_with('/')
+                    || prev.starts_with("~/")
+                    || prev.starts_with('$')
+            }
+        }
+    };
+
     // Group by first token for fast lookup
     let mut by_first: HashMap<&str, Vec<(&[String], &str)>> = HashMap::new();
     for (phrase, op) in &vocab.synonyms {
@@ -239,6 +309,12 @@ fn apply_synonyms(tokens: &[String]) -> Vec<String> {
         if let Some(candidates) = by_first.get(token) {
             let mut matched = false;
             for (phrase, op) in candidates {
+                // Guard: single-word ambiguous synonyms only in command position
+                if phrase.len() == 1 && ambiguous.contains(token) {
+                    if !is_command_pos(i, &result) {
+                        continue;
+                    }
+                }
                 let end = i + phrase.len();
                 if end <= tokens.len() {
                     let matches = tokens[i..end]

@@ -337,10 +337,10 @@ fn make_step(index: usize, op: &str, params: Vec<(&str, &str)>) -> CompiledStep 
     CompiledStep {
         index,
         op: op.to_string(),
-        is_each: false,
         input_type: TypeExpr::prim("Any"),
         output_type: TypeExpr::prim("Any"),
         params: params.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+        ..Default::default()
     }
 }
 
@@ -481,10 +481,10 @@ fn stress_nl_full_pipeline_add_produces_racket() {
         steps: vec![CompiledStep {
             index: 0,
             op: "add".to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Number"),
             output_type: TypeExpr::prim("Number"),
             params: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
+            ..Default::default()
         }],
         output_type: TypeExpr::prim("Number"),
     };
@@ -511,10 +511,10 @@ fn stress_nl_full_pipeline_subtract_produces_racket() {
         steps: vec![CompiledStep {
             index: 0,
             op: "subtract".to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Number"),
             output_type: TypeExpr::prim("Number"),
             params: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
+            ..Default::default()
         }],
         output_type: TypeExpr::prim("Number"),
     };

@@ -243,7 +243,8 @@ fn cmd_archive(
     prev_file: Option<&str>, input_path: &str, step: &CompiledStep,
 ) -> Option<Result<ShellCommand, ExecutorError>> {
     match op {
-        "extract_archive" => {
+        "extract_archive" | "extract_zip" | "extract_tar" | "extract_tar_gz"
+        | "extract_tar_bz2" | "extract_tar_xz" | "extract_rar" => {
             let fmt = extract_archive_format(&step.input_type).unwrap_or("Zip");
             let src = source(prev_file, input_path);
             let cmd = match fmt {
@@ -274,7 +275,7 @@ fn cmd_archive(
                 "mkdir -p \"$WORK_DIR/extracted\" && {} && find \"$WORK_DIR/extracted\" -type f", cmd
             ))))
         }
-        "pack_archive" => {
+        "pack_archive" | "pack_zip" | "pack_tar" | "pack_tar_gz" => {
             let fmt = extract_archive_format(&step.output_type).unwrap_or("Zip");
             let output_name = params.get("output").map(|s| s.as_str()).unwrap_or("archive");
             let src = source(prev_file, input_path);
@@ -911,6 +912,7 @@ fn cmd_compression_crypto(
 pub fn generate_script(
     compiled: &CompiledWorkflow,
     def: &WorkflowDef,
+    registry: &crate::registry::OperationRegistry,
 ) -> Result<String, ExecutorError> {
     let mut script = String::new();
 
@@ -955,7 +957,8 @@ pub fn generate_script(
         let step = &compiled.steps[0];
         script.push_str(&format!("# Step 1: {}\n", step.op));
 
-        if step.is_each {
+        let is_map = crate::workflow::step_needs_map(step, registry);
+        if is_map {
             // each-mode on a single step doesn't make sense without prior output,
             // but handle it gracefully
             let cmd = op_to_command(step, &input_path, None)?;
@@ -973,8 +976,9 @@ pub fn generate_script(
         let out_file = format!("$WORK_DIR/step_{}.txt", step_num);
         let prev_file = if i == 0 { None } else { Some(format!("$WORK_DIR/step_{}.txt", i)) };
 
+        let is_map = crate::workflow::step_needs_map(step, registry);
         script.push_str(&format!("# Step {}: {}{}\n", step_num, step.op,
-            if step.is_each { " (each)" } else { "" }));
+            if is_map { " (each)" } else { "" }));
 
         // Format params as a comment
         if !step.params.is_empty() {
@@ -984,18 +988,32 @@ pub fn generate_script(
             script.push_str(&format!("#   params: {}\n", param_str.join(", ")));
         }
 
-        if step.is_each {
+        if is_map {
             // Map-each: read lines from prev file, run command on each, collect output
             let fallback = format!("$WORK_DIR/step_{}.txt", i);
             let prev = prev_file.as_deref()
                 .unwrap_or(&fallback);
-            // For each-mode, we generate a while-read loop
-            // The command operates on each line (file path) from the previous step
-            script.push_str(&format!("while IFS= read -r _line; do\n"));
 
-            // Build command with _line as input
-            let cmd = op_to_command(step, "$_line", None)?;
-            script.push_str(&format!("  {}\n", cmd.command));
+            script.push_str("while IFS= read -r _line; do\n");
+
+            if step.isolate {
+                // Isolated map mode: each iteration gets its own temp directory
+                // to prevent filename collisions (e.g., multiple archives with
+                // identically-named files like cover.jpg).
+                script.push_str("  _td=$(mktemp -d)\n");
+
+                // Generate the extract command but redirect to $_td instead of
+                // $WORK_DIR/extracted. We get the normal command and replace the
+                // shared extraction directory with the per-item temp dir.
+                let cmd = op_to_command(step, "$_line", None)?;
+                let isolated_cmd = cmd.command.replace("$WORK_DIR/extracted", "$_td");
+                script.push_str(&format!("  {}\n", isolated_cmd));
+            } else {
+                // Normal map-each: the command operates on each line (file path)
+                // from the previous step.
+                let cmd = op_to_command(step, "$_line", None)?;
+                script.push_str(&format!("  {}\n", cmd.command));
+            }
 
             script.push_str(&format!("done < \"{}\" > \"{}\"\n", prev, out_file));
         } else {
@@ -1084,10 +1102,10 @@ mod tests {
         CompiledStep {
             index: 0,
             op: op.to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Bytes"),
             output_type: TypeExpr::prim("Bytes"),
             params: params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            ..Default::default()
         }
     }
 
@@ -1095,10 +1113,10 @@ mod tests {
         CompiledStep {
             index: 0,
             op: op.to_string(),
-            is_each: false,
             input_type,
             output_type,
             params: params.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            ..Default::default()
         }
     }
 

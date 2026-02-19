@@ -1,0 +1,13 @@
+workflow: "Repack comic book collection"
+
+inputs:
+  path: "/comics"
+
+steps:
+  - list_dir
+  - find_matching:
+      pattern: "*.cbz"
+  - sort_by: name
+  - extract_archive: each
+  - pack_archive:
+      output: "combined.cbz"

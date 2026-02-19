@@ -45,10 +45,10 @@ fn make_step(op: &str, params: Vec<(&str, &str)>) -> CompiledStep {
     CompiledStep {
         index: 0,
         op: op.to_string(),
-        is_each: false,
         input_type: TypeExpr::prim("String"),
         output_type: TypeExpr::cons("List", vec![TypeExpr::prim("String")]),
         params: params.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+    ..Default::default()
     }
 }
 
@@ -63,7 +63,7 @@ fn make_inputs(pairs: Vec<(&str, &str)>) -> HashMap<String, String> {
 #[test]
 fn test_cli_facts_load() {
     let pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
-    assert_eq!(pack.entities.len(), 58, "expected 58 CLI tool entities");
+    assert_eq!(pack.entities.len(), 62, "expected 62 CLI tool entities");
     assert_eq!(pack.axes.len(), 5);
     assert!(pack.claims.len() >= 60);
     assert!(pack.evidence.len() >= 5);
@@ -85,7 +85,7 @@ fn test_cli_facts_submodes_count() {
     let submodes: Vec<_> = pack.properties.iter()
         .filter(|p| p.key.starts_with("submode_"))
         .collect();
-    assert_eq!(submodes.len(), 141, "expected 141 submode properties");
+    assert_eq!(submodes.len(), 151, "expected 141 submode properties");
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_cli_facts_type_symmetry_classes() {
         }
     }
     assert_eq!(classes.len(), 11, "expected 11 type symmetry classes");
-    assert_eq!(classes["shell_text_lines"].len(), 21, "text_lines should have 21 tools");
+    assert_eq!(classes["shell_text_lines"].len(), 24, "text_lines should have 24 tools");
     assert_eq!(classes["shell_tabular"].len(), 3, "tabular should have 3 tools");
     assert_eq!(classes["shell_tree"].len(), 2, "tree should have 2 tools");
 }
@@ -291,7 +291,7 @@ fn test_submode_total_count() {
     let cli_pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
     let cli_facts = FactPackIndex::build(cli_pack);
     let submodes = discover_shell_submodes(&mut reg, &facts, &cli_facts);
-    assert_eq!(submodes.len(), 141, "expected 141 submode ops");
+    assert_eq!(submodes.len(), 151, "expected 141 submode ops");
 }
 
 #[test]
@@ -446,10 +446,10 @@ fn test_script_no_preamble_for_pure_racket() {
         steps: vec![CompiledStep {
             index: 0,
             op: "add".to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Number"),
             output_type: TypeExpr::prim("Number"),
             params: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
+        ..Default::default()
         }],
         output_type: TypeExpr::prim("Number"),
     };
@@ -473,18 +473,18 @@ fn test_mixed_pipeline_script() {
             CompiledStep {
                 index: 0,
                 op: "shell_ls".to_string(),
-                is_each: false,
                 input_type: TypeExpr::prim("String"),
                 output_type: TypeExpr::cons("List", vec![TypeExpr::prim("String")]),
                 params: vec![("path".into(), "/tmp".into())].into_iter().collect(),
+            ..Default::default()
             },
             CompiledStep {
                 index: 1,
                 op: "length".to_string(),
-                is_each: false,
                 input_type: TypeExpr::cons("List", vec![TypeExpr::prim("String")]),
                 output_type: TypeExpr::prim("Number"),
                 params: HashMap::new(),
+            ..Default::default()
             },
         ],
         output_type: TypeExpr::prim("Number"),
@@ -566,7 +566,7 @@ fn test_submode_idempotent() {
     let second = discover_shell_submodes(&mut reg, &facts, &cli_facts2);
     let count_after_second = reg.poly_op_names().len();
 
-    assert_eq!(first.len(), 141);
+    assert_eq!(first.len(), 151);
     assert_eq!(second.len(), 0, "second run should discover 0 new ops");
     assert_eq!(count_after_first, count_after_second, "op count should not change");
 }

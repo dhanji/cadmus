@@ -279,7 +279,7 @@ fn nl_e2e_script(input: &str) -> String {
             let registry = cadmus::fs_types::build_full_registry();
             let compiled = cadmus::workflow::compile_workflow(&parsed, &registry)
                 .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
-            cadmus::executor::generate_script(&compiled, &parsed)
+            cadmus::executor::generate_script(&compiled, &parsed, &registry)
                 .unwrap_or_else(|e| panic!("script gen failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml))
         }
         other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),

@@ -268,7 +268,8 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
     println!("  {}", ui::kv_dim("input", &compiled.input_type.to_string()));
     for cs in &compiled.steps {
         let type_info = format!("{} {} {}", cs.input_type, ui::icon::ARROW_RIGHT, cs.output_type);
-        if cs.is_each {
+        let is_map = cadmus::workflow::step_needs_map(cs, &registry);
+        if is_map {
             println!("{}", ui::step_each(cs.index + 1, &cs.op, &type_info));
         } else {
             println!("{}", ui::step(cs.index + 1, &cs.op, &type_info));
@@ -313,6 +314,16 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
             include_str!("../data/packs/facts/racket_facts.yaml")
         ).expect("failed to load racket_facts.yaml");
         cadmus::racket_strategy::promote_inferred_ops(&mut racket_reg, &racket_facts);
+
+        // Discover shell submodes (Phase 4) — needed for archive tool dispatch
+        let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli_facts.yaml")
+            .unwrap_or_else(|_| include_str!("../data/packs/facts/macos_cli_facts.yaml").to_string());
+        if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(&cli_yaml) {
+            let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
+            cadmus::racket_strategy::discover_shell_submodes(
+                &mut racket_reg, &racket_facts, &cli_facts,
+            );
+        }
         let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg) {
             Ok(s) => s,
             Err(e) => {
@@ -332,7 +343,7 @@ fn run_workflow_mode(path: &Path, execute: bool, racket: bool) {
     println!("  {}", ui::subsection("Shell Script"));
     println!();
 
-    let script = match executor::generate_script(&compiled, &def) {
+    let script = match executor::generate_script(&compiled, &def, &registry) {
         Ok(s) => s,
         Err(e) => {
             println!("  {}", ui::status_fail("Codegen failed"));

@@ -193,6 +193,21 @@ fn subsumed_op_to_racket(
     };
 
     // Special handling for search_content (binary: pattern + path)
+    // Special handling for pack_* ops: take file list from prev, output from param
+    if step.op.starts_with("pack_") {
+        let output = step.params.get("output")
+            .map(|s| s.as_str())
+            .unwrap_or("output.zip");
+        let prev = prev_binding.unwrap_or("'()");
+        // Generate: zip -r output.cbz file1 file2 ...
+        // Using string-join to pass all files as arguments
+        let expr = format!(
+            "(shell-exec (string-append \"{} \" (shell-quote {}) \" \" (string-join (map shell-quote {}) \" \")))",
+            cmd_parts, racket_string(output), prev
+        );
+        return Ok(RacketExpr { expr, uses_prev: true });
+    }
+
     if entry.arity == 2 {
         let pattern = step.params.get("pattern")
             .ok_or_else(|| RacketError::MissingParam {
@@ -347,6 +362,29 @@ fn racket_native_op_to_racket(
             // (map f lst) — identity map in the absence of a specific transform
             Ok(RacketExpr {
                 expr: format!("(map values {})", prev),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::FlattenSeq => {
+            // (apply append lst) — flatten Seq(Seq(a)) → Seq(a)
+            Ok(RacketExpr {
+                expr: format!("(apply append {})", prev),
+                uses_prev: true,
+            })
+        }
+        RacketNativeKind::EnumerateEntries => {
+            // Rename entries with zero-padded sequential numbers.
+            // Each entry is a filename string; we preserve the extension
+            // and replace the basename with a padded index.
+            // (for/list ([f (in-list lst)] [i (in-naturals 1)])
+            //   (let ([ext (path-get-extension (string->path f))])
+            //     (string-append (~r i #:min-width 4 #:pad-string "0")
+            //                    (if ext (bytes->string/utf-8 ext) ""))))
+            Ok(RacketExpr {
+                expr: format!(
+                    "(for/list ([f (in-list {})] [i (in-naturals 1)]) (let ([ext (path-get-extension (string->path f))]) (string-append (~r i #:min-width 4 #:pad-string \"0\") (if ext (bytes->string/utf-8 ext) \"\"))))",
+                    prev
+                ),
                 uses_prev: true,
             })
         }
@@ -627,22 +665,59 @@ pub fn generate_racket_script(
         let binding_name = format!("step-{}", step_num);
         let prev_binding = if i == 0 { None } else { Some(format!("step-{}", i)) };
 
+        // Type-driven each-mode detection: if the step's input is Seq(X)
+        // but the op's registered signature expects a non-Seq first input,
+        // we need to wrap in (map ...).
+        let is_map = crate::workflow::step_needs_map(step, registry);
+
         script.push_str(&format!("    ;; Step {}: {}{}\n", step_num, step.op,
-            if step.is_each { " (each)" } else { "" }));
+            if is_map { " (map)" } else { "" }));
 
-        // Compute whether the previous step's output is a list/sequence.
-        // This drives Seq→String bridging in the codegen paths.
-        let prev_is_seq = if i > 0 {
-            is_seq_output(&compiled.steps[i - 1], registry)
-        } else { false };
-        let expr = op_to_racket(step, input_values, prev_binding.as_deref(), registry, prev_is_seq)?;
-
-        if step.is_each {
-            // Map-each: wrap in (map (lambda (_line) ...) prev)
+        if is_map {
             let prev = prev_binding.as_deref().unwrap_or("'()");
-            script.push_str(&format!("    [{} (map (lambda (_line) {}) {})]\n",
-                binding_name, expr.expr, prev));
+
+            if step.isolate {
+                // Isolated map mode: the compiler determined this op has
+                // filesystem side effects that can collide when run over a
+                // Seq (e.g., extract_zip on multiple archives with
+                // identically-named files like cover.jpg).
+                //
+                // Generate:
+                //   (map (lambda (_line)
+                //     (let ([_td (path->string (make-temporary-directory))])
+                //       (begin
+                //         (shell-exec (string-append "CMD " (shell-quote _line) " -d " (shell-quote _td)))
+                //         (shell-lines (string-append "find " (shell-quote _td) " -type f")))))
+                //     prev)
+                let entry = crate::type_lowering::lookup_subsumption(&step.op);
+                let cmd_parts = entry.map(|e| {
+                    extract_shell_meta(e.shell_op, registry)
+                        .unwrap_or_else(|| {
+                            let cmd = e.shell_op.strip_prefix("shell_").unwrap_or(e.shell_op).to_string();
+                            (cmd, None)
+                        })
+                }).map(|(cmd, flags)| match flags {
+                    Some(f) => format!("{} {}", cmd, f),
+                    None => cmd,
+                }).unwrap_or_else(|| "unzip -o".to_string());
+
+                script.push_str(&format!(
+                    "    [{} (map (lambda (_line) (let ([_td (path->string (make-temporary-directory))]) (begin (shell-exec (string-append \"{} \" (shell-quote _line) \" -d \" (shell-quote _td))) (shell-lines (string-append \"find \" (shell-quote _td) \" -type f\"))))) {})]\n",
+                    binding_name, cmd_parts, prev));
+            } else {
+                // Normal map-each: generate the inner expression with _line as the
+                // scalar prev_binding (not the list), and prev_is_seq=false
+                // since _line is a single element.
+                let expr = op_to_racket(step, input_values, Some("_line"), registry, false)?;
+                script.push_str(&format!("    [{} (map (lambda (_line) {}) {})]\n",
+                    binding_name, expr.expr, prev));
+            }
         } else {
+            // Normal step: pass the previous binding directly.
+            let prev_is_seq = if i > 0 {
+                is_seq_output(&compiled.steps[i - 1], registry)
+            } else { false };
+            let expr = op_to_racket(step, input_values, prev_binding.as_deref(), registry, prev_is_seq)?;
             script.push_str(&format!("    [{} {}]\n", binding_name, expr.expr));
         }
     }
@@ -795,10 +870,10 @@ mod tests {
         CompiledStep {
             index: 0,
             op: op.to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Number"),
             output_type: TypeExpr::prim("Number"),
             params: params.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            ..Default::default()
         }
     }
 
@@ -983,10 +1058,10 @@ mod tests {
                 CompiledStep {
                     index: 0,
                     op: "add".to_string(),
-                    is_each: false,
                     input_type: TypeExpr::prim("Number"),
                     output_type: TypeExpr::prim("Number"),
                     params: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
+                    ..Default::default()
                 },
             ],
             output_type: TypeExpr::prim("Number"),
@@ -1014,18 +1089,18 @@ mod tests {
                 CompiledStep {
                     index: 0,
                     op: "add".to_string(),
-                    is_each: false,
                     input_type: TypeExpr::prim("Number"),
                     output_type: TypeExpr::prim("Number"),
                     params: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
+                    ..Default::default()
                 },
                 CompiledStep {
                     index: 1,
                     op: "multiply".to_string(),
-                    is_each: false,
                     input_type: TypeExpr::prim("Number"),
                     output_type: TypeExpr::prim("Number"),
                     params: vec![("y".into(), "2".into())].into_iter().collect(),
+                    ..Default::default()
                 },
             ],
             output_type: TypeExpr::prim("Number"),
@@ -1262,10 +1337,10 @@ mod tests {
         CompiledStep {
             index: 0,
             op: op.to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Bytes"),
             output_type,
             params: HashMap::new(),
+            ..Default::default()
         }
     }
 
@@ -1333,11 +1408,11 @@ mod tests {
         let step = CompiledStep {
             index: 1,
             op: "pack_archive".to_string(),
-            is_each: false,
             input_type: TypeExpr::seq(TypeExpr::entry(
                 TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))),
             output_type: TypeExpr::prim("File"),
             params: HashMap::new(),
+            ..Default::default()
         };
         let inputs = make_inputs(vec![("path", "~/Downloads")]);
         // prev_is_seq=true: step-1 is a List(String) from walk_tree
@@ -1355,10 +1430,10 @@ mod tests {
         let step = CompiledStep {
             index: 0,
             op: "stat".to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Path"),
             output_type: TypeExpr::prim("String"),
             params: HashMap::new(),
+            ..Default::default()
         };
         let inputs = make_inputs(vec![("pathref", "~/readme.md")]);
         // prev_is_seq=false, no prev_binding: should use input path directly
@@ -1375,11 +1450,11 @@ mod tests {
         let step = CompiledStep {
             index: 1,
             op: "search_content".to_string(),
-            is_each: false,
             input_type: TypeExpr::seq(TypeExpr::entry(
                 TypeExpr::prim("Name"), TypeExpr::prim("Bytes"))),
             output_type: TypeExpr::seq(TypeExpr::prim("String")),
             params: vec![("pattern".to_string(), "TODO".to_string())].into_iter().collect(),
+            ..Default::default()
         };
         let inputs = make_inputs(vec![("textdir", "~/Projects")]);
         // prev_is_seq=true: step-1 is a List(String) from walk_tree
@@ -1399,10 +1474,10 @@ mod tests {
         let step = CompiledStep {
             index: 0,
             op: "search_content".to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("String"),
             output_type: TypeExpr::seq(TypeExpr::prim("String")),
             params: vec![("pattern".to_string(), "TODO".to_string())].into_iter().collect(),
+            ..Default::default()
         };
         let inputs = make_inputs(vec![("textdir", "~/Projects")]);
         // prev_is_seq=false, no prev: should use input path directly
@@ -1418,10 +1493,10 @@ mod tests {
         let step = CompiledStep {
             index: 1,
             op: "read_file".to_string(),
-            is_each: false,
             input_type: TypeExpr::seq(TypeExpr::prim("String")),
             output_type: TypeExpr::seq(TypeExpr::prim("String")),
             params: HashMap::new(),
+            ..Default::default()
         };
         let inputs = make_inputs(vec![("path", "~/Projects")]);
         let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true).unwrap();

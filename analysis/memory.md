@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-18T09:41:50Z | Size: 44.8k chars
+> Updated: 2026-02-19T10:14:44Z | Size: 48.6k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -518,3 +518,44 @@
 - `src/workflow.rs:912` — CompiledWorkflow Display uses ui:: helpers
 - `src/fs_strategy.rs:119-150` — DryRunTrace and TraceStep Display use ui:: helpers
 - 1266 total tests, 0 failures, 0 warnings
+
+### Archive Codegen Fix (plan `archive-codegen-fix`)
+- `src/workflow.rs` [471-517] — `step_needs_map()`, `lookup_op_inputs()` — type-driven each-mode detection. Compares step.input_type against op signature. OnceLock fallback to full registry.
+- `src/workflow.rs` [751-812] — `extract_archive_format()`, `resolve_archive_op()` — format resolution. Extracts fmt from TypeExpr, looks up format_family in filetypes.yaml, rewrites generic op to format-specific.
+- `src/workflow.rs` — `is_each` removed from `CompiledStep` struct
+- `src/racket_executor.rs` [625-660] — `generate_racket_script()` uses `step_needs_map` instead of `is_each`. Map steps pass `_line` as prev_binding with `prev_is_seq=false`.
+- `data/filetypes.yaml` [35-55] — `format_families` section: Cbz→zip, Cbr→rar, TarGz→tar_gz, etc.
+- `src/filetypes.rs` [303-315] — `FileTypeDictionary.format_family()` method
+- `data/packs/ops/fs_ops.yaml` [82-137] — 9 format-specific ops: extract_zip, extract_tar, extract_tar_gz, extract_tar_bz2, extract_tar_xz, extract_rar, pack_zip, pack_tar, pack_tar_gz
+- `src/type_lowering.rs` [136-151] — Subsumption entries for format-specific ops
+- `data/packs/facts/macos_cli_facts.yaml` — cli_unzip, cli_zip, cli_unrar, cli_7z entities with submodes
+- `data/packs/ops/racket_ops.yaml` [541-599] — shell_unzip, shell_zip, shell_unrar, shell_7z anchor ops
+- `tests/archive_codegen_tests.rs` — 19 tests
+- `data/workflows/repack_comics.yaml` — example comic repack workflow
+- `src/main.rs` [310-325] — Racket registry now runs discover_shell_submodes (Phase 4)
+- **Total: 1285 tests**, all passing, zero warnings
+
+### Comic Repack E2E Pipeline (Session 2 completion)
+- `data/nl/nl_dictionary.yaml` - SymSpell typo correction dictionary. "repack" was being corrected to "replace" (edit distance 2). Added repack, unpack, flattened.
+- `src/nl/mod.rs:93` - `process_input()` does normalize → typo_correct → re-normalize → intent → slots. The typo correction step can change words before synonym mapping.
+- `tests/nl_comic_trace.rs` - 5 E2E tests for NL comic repack: full pipeline, Racket codegen, simple extract regression, no-format-hint boundary
+- `tests/archive_codegen_tests.rs` - 22 tests total. Added: pack_archive_without_output, find_matching_cbz_narrows_format, find_matching_txt_does_not_narrow
+- `tests/semantic_tests.rs:128` - `test_semantic_find_pdfs_execution` updated to accept `File(PDF)` type (more specific than `Bytes`)
+
+### Extract Interleave Fix
+- `src/racket_executor.rs:113-118` - `is_extract_op()` helper detects `extract_*` ops
+- `src/racket_executor.rs:690-720` - MAP-mode extract codegen creates per-archive temp dirs via `(make-temporary-directory)`, extracts with `-d`, lists via `find -type f`
+- Non-MAP (single archive) extract unchanged
+- Tests: `test_extract_map_mode_uses_temp_dirs`, `test_single_extract_no_temp_dir` in `tests/archive_codegen_tests.rs`
+- Total tests: 1297 (was 1295)
+
+### Isolate Flag (ops-layer collision prevention)
+- `src/workflow.rs:545-563` - `CompiledStep` now has `pub isolate: bool` field
+- `src/workflow.rs:844-854` - `needs_isolation()` helper: returns true for `extract_*` ops
+- `src/workflow.rs:785-797` - Compiler sets `isolate = is_each && needs_isolation(&resolved_op)`
+- `src/type_expr.rs:27-33` - `TypeExpr` now implements `Default` (returns `Primitive("Bytes")`)
+- `src/racket_executor.rs:680-720` - Racket codegen checks `step.isolate` (not `is_extract_op`)
+- `src/executor.rs:991-1017` - Bash codegen: `_td=$(mktemp -d)` + replaces `$WORK_DIR/extracted` with `$_td`
+- `is_extract_op()` helper removed from racket_executor.rs
+- All CompiledStep construction sites use `..Default::default()` for the new field
+- Total tests: 1301

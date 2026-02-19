@@ -228,10 +228,10 @@ fn test_add_4_and_35_script() {
             CompiledStep {
                 index: 0,
                 op: "add".to_string(),
-                is_each: false,
                 input_type: TypeExpr::prim("Number"),
                 output_type: TypeExpr::prim("Number"),
                 params: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
+            ..Default::default()
             },
         ],
         output_type: TypeExpr::prim("Number"),
@@ -257,10 +257,10 @@ fn test_subtract_6_minus_2_script() {
             CompiledStep {
                 index: 0,
                 op: "subtract".to_string(),
-                is_each: false,
                 input_type: TypeExpr::prim("Number"),
                 output_type: TypeExpr::prim("Number"),
                 params: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
+            ..Default::default()
             },
         ],
         output_type: TypeExpr::prim("Number"),
@@ -369,10 +369,10 @@ fn test_nl_add_produces_racket_script() {
                     CompiledStep {
                         index: i,
                         op,
-                        is_each: false,
                         input_type: TypeExpr::prim("Number"),
                         output_type: TypeExpr::prim("Number"),
                         params: resolved,
+                    ..Default::default()
                     }
                 }).collect(),
                 output_type: TypeExpr::prim("Number"),
@@ -462,10 +462,10 @@ fn test_unknown_racket_op_error() {
     let step = CompiledStep {
         index: 0,
         op: "nonexistent_racket_op".to_string(),
-        is_each: false,
         input_type: TypeExpr::prim("Number"),
         output_type: TypeExpr::prim("Number"),
         params: HashMap::new(),
+    ..Default::default()
     };
     let inputs = HashMap::new();
     let racket_reg = make_racket_reg();
@@ -525,10 +525,10 @@ fn test_full_pipeline_subtract_with_inference() {
         steps: vec![CompiledStep {
             index: 0,
             op: "subtract".to_string(),
-            is_each: false,
             input_type: TypeExpr::prim("Number"),
             output_type: TypeExpr::prim("Number"),
             params: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
+        ..Default::default()
         }],
         output_type: TypeExpr::prim("Number"),
     };

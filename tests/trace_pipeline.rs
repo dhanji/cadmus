@@ -183,10 +183,10 @@ fn trace_input(input: &str) {
                     CompiledStep {
                         index: i,
                         op: op_name,
-                        is_each: false,
                         input_type: TypeExpr::prim("Number"),
                         output_type: TypeExpr::prim("Number"),
                         params: resolved,
+                    ..Default::default()
                     }
                 }).collect(),
                 output_type: TypeExpr::prim("Number"),

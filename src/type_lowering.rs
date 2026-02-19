@@ -133,8 +133,20 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "du_size", shell_op: "shell_du", arity: 1, note: "du -sh — disk usage" },
     SubsumptionEntry { fs_op: "open_file", shell_op: "shell_open", arity: 1, note: "open — macOS open" },
     SubsumptionEntry { fs_op: "reveal", shell_op: "shell_open", arity: 1, note: "open -R — Finder reveal" },
-    SubsumptionEntry { fs_op: "extract_archive", shell_op: "shell_tar", arity: 1, note: "tar xf — extract" },
-    SubsumptionEntry { fs_op: "pack_archive", shell_op: "shell_tar", arity: 1, note: "tar cf — create archive" },
+    // Generic extract_archive/pack_archive kept for fallback (unresolved format)
+    SubsumptionEntry { fs_op: "extract_archive", shell_op: "shell_tar_extract", arity: 1, note: "tar -xf — extract (generic fallback)" },
+    SubsumptionEntry { fs_op: "pack_archive", shell_op: "shell_tar_create", arity: 1, note: "tar -cf — create (generic fallback)" },
+    // Format-specific extract ops
+    SubsumptionEntry { fs_op: "extract_zip", shell_op: "shell_unzip_extract", arity: 1, note: "unzip -o — extract ZIP/CBZ" },
+    SubsumptionEntry { fs_op: "extract_tar", shell_op: "shell_tar_extract", arity: 1, note: "tar -xf — extract TAR" },
+    SubsumptionEntry { fs_op: "extract_tar_gz", shell_op: "shell_tar_extract_gz", arity: 1, note: "tar -xzf — extract TarGz" },
+    SubsumptionEntry { fs_op: "extract_tar_bz2", shell_op: "shell_tar_extract_bz2", arity: 1, note: "tar -xjf — extract TarBz2" },
+    SubsumptionEntry { fs_op: "extract_tar_xz", shell_op: "shell_tar_extract_xz", arity: 1, note: "tar -xJf — extract TarXz" },
+    SubsumptionEntry { fs_op: "extract_rar", shell_op: "shell_unrar_extract", arity: 1, note: "unrar x — extract RAR/CBR" },
+    // Format-specific pack ops
+    SubsumptionEntry { fs_op: "pack_zip", shell_op: "shell_zip_create", arity: 2, note: "zip -r — create ZIP/CBZ" },
+    SubsumptionEntry { fs_op: "pack_tar", shell_op: "shell_tar_create", arity: 1, note: "tar -cf — create TAR" },
+    SubsumptionEntry { fs_op: "pack_tar_gz", shell_op: "shell_tar_create_gz", arity: 1, note: "tar -czf — create TarGz" },
     SubsumptionEntry { fs_op: "write_file", shell_op: "shell_tee", arity: 1, note: "tee — write to file" },
     SubsumptionEntry { fs_op: "copy", shell_op: "shell_cp", arity: 2, note: "cp — copy file/dir" },
     SubsumptionEntry { fs_op: "delete", shell_op: "shell_rm", arity: 1, note: "rm — delete file/dir" },
@@ -309,6 +321,10 @@ pub enum RacketNativeKind {
     Append,
     /// `(map f lst)` — transform each element
     Map,
+    /// `(apply append lst)` — flatten nested sequences
+    FlattenSeq,
+    /// `(for/list ...)` — rename entries with zero-padded sequential numbers
+    EnumerateEntries,
 }
 
 /// The static Racket-native map: intermediate fs_ops → Racket primitives.
@@ -342,6 +358,16 @@ const RACKET_NATIVE_MAP: &[RacketNativeEntry] = &[
         fs_op: "map_entries",
         kind: RacketNativeKind::Map,
         note: "(map f lst) — transform entry values",
+    },
+    RacketNativeEntry {
+        fs_op: "flatten_seq",
+        kind: RacketNativeKind::FlattenSeq,
+        note: "(apply append lst) — flatten nested sequences",
+    },
+    RacketNativeEntry {
+        fs_op: "enumerate_entries",
+        kind: RacketNativeKind::EnumerateEntries,
+        note: "(for/list ...) — rename entries with sequential numbers",
     },
 ];
 

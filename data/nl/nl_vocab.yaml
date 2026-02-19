@@ -139,6 +139,14 @@ synonyms:
     op: extract_archive
   - phrase: [pack, files]
     op: pack_archive
+  - phrase: [repack, into]
+    op: pack_archive
+  - phrase: [repack, them]
+    op: pack_archive
+  - phrase: [repack, files]
+    op: pack_archive
+  - phrase: [repack, archives]
+    op: pack_archive
   - phrase: [pack, archive]
     op: pack_archive
   - phrase: [compress, files]
@@ -492,6 +500,12 @@ synonyms:
     op: pack_archive
   - phrase: [unpack]
     op: extract_archive
+  - phrase: [repack]
+    op: pack_archive
+  - phrase: [flatten]
+    op: flatten_seq
+  - phrase: [flattened]
+    op: flatten_seq
   - phrase: [archive]
     op: pack_archive
   - phrase: [walk]

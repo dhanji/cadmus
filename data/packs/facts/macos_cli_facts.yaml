@@ -103,6 +103,18 @@ entities:
   - id: cli_tar
     name: "tar"
     description: "Archive and extract files"
+  - id: cli_unzip
+    name: "unzip"
+    description: "Extract files from ZIP archives"
+  - id: cli_zip
+    name: "zip"
+    description: "Create and modify ZIP archives"
+  - id: cli_unrar
+    name: "unrar"
+    description: "Extract files from RAR archives"
+  - id: cli_7z
+    name: "7z"
+    description: "Archive and extract files (7-Zip, multi-format)"
   - id: cli_rsync
     name: "rsync"
     description: "Fast, versatile file copying/synchronization"
@@ -1587,6 +1599,146 @@ properties:
     axis: shell_submodes
     key: submode_extract_gz
     value: "-xzf"
+  - entity: cli_tar
+    axis: shell_submodes
+    key: submode_extract_bz2
+    value: "-xjf"
+  - entity: cli_tar
+    axis: shell_submodes
+    key: submode_extract_xz
+    value: "-xJf"
+
+  # =========================================================================
+  # unzip — shell_text_lines (extract ZIP archives)
+  # =========================================================================
+  - entity: cli_unzip
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_unzip"
+  - entity: cli_unzip
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-unzip"
+  - entity: cli_unzip
+    axis: shell_type_signature
+    key: base_command
+    value: "unzip"
+  - entity: cli_unzip
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_unzip
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # unzip submodes
+  - entity: cli_unzip
+    axis: shell_submodes
+    key: submode_extract
+    value: "-o"
+  - entity: cli_unzip
+    axis: shell_submodes
+    key: submode_list
+    value: "-l"
+
+  # =========================================================================
+  # zip — shell_exec (create/modify ZIP archives)
+  # =========================================================================
+  - entity: cli_zip
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_zip"
+  - entity: cli_zip
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-zip"
+  - entity: cli_zip
+    axis: shell_type_signature
+    key: base_command
+    value: "zip"
+  - entity: cli_zip
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_zip
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_exec"
+  # zip submodes
+  - entity: cli_zip
+    axis: shell_submodes
+    key: submode_add
+    value: "-g"
+  - entity: cli_zip
+    axis: shell_submodes
+    key: submode_create
+    value: "-r"
+
+  # =========================================================================
+  # unrar — shell_text_lines (extract RAR archives)
+  # =========================================================================
+  - entity: cli_unrar
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_unrar"
+  - entity: cli_unrar
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-unrar"
+  - entity: cli_unrar
+    axis: shell_type_signature
+    key: base_command
+    value: "unrar"
+  - entity: cli_unrar
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_unrar
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # unrar submodes (extract only — no create capability)
+  - entity: cli_unrar
+    axis: shell_submodes
+    key: submode_extract
+    value: "x"
+
+  # =========================================================================
+  # 7z — shell_text_lines (multi-format archive tool)
+  # =========================================================================
+  - entity: cli_7z
+    axis: shell_type_signature
+    key: op_name
+    value: "shell_7z"
+  - entity: cli_7z
+    axis: shell_type_signature
+    key: racket_symbol
+    value: "shell-7z"
+  - entity: cli_7z
+    axis: shell_type_signature
+    key: base_command
+    value: "7z"
+  - entity: cli_7z
+    axis: shell_category
+    key: category_name
+    value: "shell"
+  - entity: cli_7z
+    axis: shell_type_symmetry
+    key: type_symmetry_class
+    value: "shell_text_lines"
+  # 7z submodes
+  - entity: cli_7z
+    axis: shell_submodes
+    key: submode_extract
+    value: "x"
+  - entity: cli_7z
+    axis: shell_submodes
+    key: submode_add
+    value: "a"
+  - entity: cli_7z
+    axis: shell_submodes
+    key: submode_list
+    value: "l"
 
   # =========================================================================
   # rsync — shell_exec

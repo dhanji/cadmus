@@ -20,11 +20,14 @@ op_components:
   tree: 100
   hierarchy: 60
   flatten: 60
+  flattened: 60
   filter: 100
   sort: 100
   extract: 100
   archive: 100
   pack: 100
+  repack: 100
+  unpack: 80
   concat: 60
   seq: 60
   rename: 100

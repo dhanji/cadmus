@@ -86,13 +86,69 @@ ops:
     type_params: [a, fmt]
     inputs: ["File(Archive(a, fmt))"]
     output: "Seq(Entry(Name, a))"
-    description: "unzip/tar -x — extract archive contents"
+    description: "extract archive contents (generic — resolved to format-specific op)"
 
   - name: pack_archive
     type_params: [a, fmt]
     inputs: ["Seq(Entry(Name, a))", "fmt"]
     output: "File(Archive(a, fmt))"
-    description: "zip/tar -c — pack entries into archive"
+    description: "pack entries into archive (generic — resolved to format-specific op)"
+
+  # Format-specific extract ops (resolved from extract_archive by the compiler)
+  - name: extract_zip
+    type_params: [a]
+    inputs: ["File(Archive(a, Zip))"]
+    output: "Seq(Entry(Name, a))"
+    description: "unzip — extract ZIP/CBZ archive"
+
+  - name: extract_tar
+    type_params: [a]
+    inputs: ["File(Archive(a, Tar))"]
+    output: "Seq(Entry(Name, a))"
+    description: "tar -xf — extract TAR archive"
+
+  - name: extract_tar_gz
+    type_params: [a]
+    inputs: ["File(Archive(a, TarGz))"]
+    output: "Seq(Entry(Name, a))"
+    description: "tar -xzf — extract gzipped TAR archive"
+
+  - name: extract_tar_bz2
+    type_params: [a]
+    inputs: ["File(Archive(a, TarBz2))"]
+    output: "Seq(Entry(Name, a))"
+    description: "tar -xjf — extract bzip2 TAR archive"
+
+  - name: extract_tar_xz
+    type_params: [a]
+    inputs: ["File(Archive(a, TarXz))"]
+    output: "Seq(Entry(Name, a))"
+    description: "tar -xJf — extract xz TAR archive"
+
+  - name: extract_rar
+    type_params: [a]
+    inputs: ["File(Archive(a, Rar))"]
+    output: "Seq(Entry(Name, a))"
+    description: "unrar x — extract RAR/CBR archive"
+
+  # Format-specific pack ops
+  - name: pack_zip
+    type_params: [a]
+    inputs: ["Seq(Entry(Name, a))"]
+    output: "File(Archive(a, Zip))"
+    description: "zip — create ZIP/CBZ archive"
+
+  - name: pack_tar
+    type_params: [a]
+    inputs: ["Seq(Entry(Name, a))"]
+    output: "File(Archive(a, Tar))"
+    description: "tar -cf — create TAR archive"
+
+  - name: pack_tar_gz
+    type_params: [a]
+    inputs: ["Seq(Entry(Name, a))"]
+    output: "File(Archive(a, TarGz))"
+    description: "tar -czf — create gzipped TAR archive"
 
   # --- Sequence Operations ---
 
@@ -104,6 +160,22 @@ ops:
       associative: true
       identity: "[]"
     description: "cat/concat — concatenate sequences (order-preserving)"
+
+  - name: flatten_seq
+    type_params: [a]
+    inputs: ["Seq(Seq(a))"]
+    output: "Seq(a)"
+    properties:
+      idempotent: true
+    description: "flatten — collapse nested sequences into flat sequence (order-preserving)"
+
+  - name: enumerate_entries
+    type_params: [a]
+    inputs: ["Seq(Entry(Name, a))"]
+    output: "Seq(Entry(Name, a))"
+    properties:
+      idempotent: false
+    description: "enumerate — rename entries with zero-padded sequential numbers (0001.ext, 0002.ext, ...)"
 
   # --- Entry Operations ---
 

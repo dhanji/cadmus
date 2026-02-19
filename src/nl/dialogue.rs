@@ -198,15 +198,58 @@ pub fn build_workflow(
     match primary_op {
         // Archive operations: walk → pack/extract
         "pack_archive" => {
-            inputs.insert("path".to_string(), target_path.clone());
-            steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
-            // Add filter if there's a pattern
-            if let Some(pattern) = slots.patterns.first() {
-                let mut params = HashMap::new();
-                params.insert("pattern".to_string(), pattern.clone());
-                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+            // Detect compound "repack" goal: flatten_seq in keywords/slots,
+            // or Each modifier with archive-related context.
+            // This triggers type-directed planning instead of the simple template.
+            let has_flatten = slots.keywords.iter().any(|k| k == "flatten_seq")
+                || slots.slots.iter().any(|s| matches!(s, SlotValue::OpName(n) if n == "flatten_seq"));
+            let has_each = slots.modifiers.contains(&Modifier::Each);
+            let has_archive_context = slots.keywords.iter()
+                .any(|k| k == "comic" || k == "archive" || k == "issue" || k == "issues." || k == "issues");
+
+            // Detect archive format from keywords (cbr/cbz/tar.gz etc.)
+            let format_hint = detect_archive_format_from_slots(slots);
+
+            if has_flatten || (has_each && has_archive_context) {
+                // ── Compound repack goal ──
+                // Type-directed: list → filter → sort → extract each → flatten → enumerate → pack
+                inputs.insert("path".to_string(), target_path.clone());
+
+                steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
+
+                // Filter by archive format if we can detect it
+                let filter_pattern = format_hint.as_deref()
+                    .unwrap_or("*.cbz");
+                let mut filter_params = HashMap::new();
+                filter_params.insert("pattern".to_string(), filter_pattern.to_string());
+                steps.push(RawStep { op: "find_matching".to_string(), args: StepArgs::Map(filter_params) });
+
+                steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) });
+
+                steps.push(RawStep { op: "extract_archive".to_string(), args: StepArgs::Scalar("each".to_string()) });
+
+                steps.push(RawStep { op: "flatten_seq".to_string(), args: StepArgs::None });
+
+                steps.push(RawStep { op: "enumerate_entries".to_string(), args: StepArgs::None });
+
+                // Output filename from format hint
+                let output_name = format!("combined{}", format_hint.as_deref()
+                    .map(|p| p.trim_start_matches('*'))
+                    .unwrap_or(".cbz"));
+                let mut pack_params = HashMap::new();
+                pack_params.insert("output".to_string(), output_name);
+                steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::Map(pack_params) });
+            } else {
+                // ── Simple pack: walk → filter → pack ──
+                inputs.insert("path".to_string(), target_path.clone());
+                steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
+                if let Some(pattern) = slots.patterns.first() {
+                    let mut params = HashMap::new();
+                    params.insert("pattern".to_string(), pattern.clone());
+                    steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                }
+                steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::None });
             }
-            steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::None });
         }
         "extract_archive" => {
             inputs.insert("file".to_string(), target_path.clone());
@@ -444,6 +487,39 @@ fn is_path_op(op: &str) -> bool {
 /// Ops that take Seq(a) as first input — need a pipeline to produce the sequence.
 fn is_seq_op(op: &str) -> bool {
     matches!(op, "count" | "unique" | "head" | "tail" | "reverse")
+}
+
+/// Detect archive format from NL slots.
+///
+/// Looks for format hints in keywords and paths:
+/// - "cbz" or "cbr" in keywords → *.cbz or *.cbr
+/// - "cbr/cbz" or "cbz/cbr" as a path token → *.cbz (first mentioned)
+/// - Archive patterns in slots → use first one
+fn detect_archive_format_from_slots(slots: &ExtractedSlots) -> Option<String> {
+    // Check for format keywords like "cbz", "cbr", "tar.gz"
+    for kw in &slots.keywords {
+        let lower = kw.to_lowercase();
+        if lower == "cbz" || lower == ".cbz" { return Some("*.cbz".to_string()); }
+        if lower == "cbr" || lower == ".cbr" { return Some("*.cbr".to_string()); }
+        if lower == "tar.gz" { return Some("*.tar.gz".to_string()); }
+        if lower == "zip" || lower == ".zip" { return Some("*.zip".to_string()); }
+        if lower == "rar" || lower == ".rar" { return Some("*.rar".to_string()); }
+    }
+    // Check for compound format tokens like "cbr/cbz" in paths
+    for slot in &slots.slots {
+        if let SlotValue::Path(p) = slot {
+            let lower = p.to_lowercase();
+            if lower.contains("cbz") { return Some("*.cbz".to_string()); }
+            if lower.contains("cbr") { return Some("*.cbr".to_string()); }
+        }
+    }
+    // Check archive patterns
+    for pat in &slots.patterns {
+        if pat.contains("zip") || pat.contains("rar") || pat.contains("tar") || pat.contains("7z") {
+            return Some(pat.clone());
+        }
+    }
+    None
 }
 
 /// Resolve a bare path name to an actual filesystem location.

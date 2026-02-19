@@ -500,5 +500,5 @@ fn test_sync_idempotent() {
 fn test_total_op_count() {
     let reg = build_fs_registry();
     let count = reg.poly_op_names().len();
-    assert_eq!(count, 49, "expected 49 total ops, got {}", count);
+    assert_eq!(count, 60, "expected 60 total ops, got {}", count);
 }
