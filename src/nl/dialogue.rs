@@ -264,6 +264,10 @@ pub fn build_workflow(
                 let mut params = HashMap::new();
                 params.insert("pattern".to_string(), join_patterns(&slots.patterns));
                 steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+            } else if let Some(kw) = first_filterable_keyword(slots) {
+                let mut params = HashMap::new();
+                params.insert("pattern".to_string(), format!("*{}*", kw));
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
             }
             if slots.modifiers.contains(&Modifier::Reverse) {
                 steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) });
@@ -275,6 +279,10 @@ pub fn build_workflow(
             if !slots.patterns.is_empty() {
                 let mut params = HashMap::new();
                 params.insert("pattern".to_string(), join_patterns(&slots.patterns));
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+            } else if let Some(kw) = first_filterable_keyword(slots) {
+                let mut params = HashMap::new();
+                params.insert("pattern".to_string(), format!("*{}*", kw));
                 steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
             }
         }
@@ -474,6 +482,29 @@ fn join_patterns(patterns: &[String]) -> String {
     } else {
         patterns.join("|")
     }
+}
+
+/// Return the first keyword that looks like a filterable noun (not a path,
+/// sort key, or structural word). Used by list_dir/walk_tree to infer a
+/// filter step from "list all the X in Y".
+fn first_filterable_keyword(slots: &ExtractedSlots) -> Option<&str> {
+    // Words that are structural / sort-related, not filter targets
+    const SKIP: &[&str] = &[
+        "name", "size", "date", "time", "type", "extension", "ext",
+        "reverse", "reversed", "ascending", "descending",
+        "all", "everything", "anything", "file", "files",
+        "directory", "directories", "folder", "folders",
+        "contents", "items", "entries", "stuff", "things",
+    ];
+    slots.keywords.iter()
+        .find(|kw| {
+            !SKIP.contains(&kw.as_str())
+                && !kw.starts_with('/')
+                && !kw.starts_with('~')
+                && !kw.starts_with('.')
+                && !kw.starts_with('$')
+        })
+        .map(|s| s.as_str())
 }
 
 /// Git ops that work on an existing repo (not clone).
@@ -1065,6 +1096,44 @@ mod tests {
             "should extract patterns from 'comic books': {:?}", extracted);
         assert!(extracted.patterns.iter().any(|p| p.contains("cbz")),
             "should have cbz pattern: {:?}", extracted.patterns);
+    }
+
+    #[test]
+    fn test_list_unknown_noun_still_filters() {
+        // "scripts" is not in noun_patterns, but should still produce a filter
+        let normalized = normalize::normalize("list all the scripts in ~/src");
+        let parsed = intent::parse_intent(&normalized);
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        match parsed {
+            Intent::CreateWorkflow { op, .. } => {
+                let wf = build_workflow(&op, &extracted, None).unwrap();
+                assert!(wf.steps.iter().any(|s| s.op == "list_dir"),
+                    "should have list_dir: {:?}", wf.steps);
+                assert!(wf.steps.iter().any(|s| s.op == "filter"),
+                    "unknown noun 'scripts' should still produce a filter: {:?}", wf.steps);
+            }
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_list_files_no_spurious_filter() {
+        // "list files in ~/Downloads" should NOT add a filter — "files" is structural
+        let normalized = normalize::normalize("list files in ~/Downloads");
+        let parsed = intent::parse_intent(&normalized);
+        let extracted = slots::extract_slots(&normalized.canonical_tokens);
+
+        match parsed {
+            Intent::CreateWorkflow { op, .. } => {
+                let wf = build_workflow(&op, &extracted, None).unwrap();
+                assert!(wf.steps.iter().any(|s| s.op == "list_dir"),
+                    "should have list_dir: {:?}", wf.steps);
+                assert!(!wf.steps.iter().any(|s| s.op == "filter"),
+                    "'list files' should NOT add a filter: {:?}", wf.steps);
+            }
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
+        }
     }
 
     #[test]
