@@ -435,17 +435,17 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: intensity
-    value: low
-    ordinal: 1
-  - entity: b
-    axis: x
-    key: intensity
-    value: high
-    ordinal: 4
+compact_properties:
+  a:
+    x:
+      intensity:
+        value: low
+        ordinal: 1
+  b:
+    x:
+      intensity:
+        value: high
+        ordinal: 4
 relations:
   - id: r1
     kind: ordinal
@@ -487,17 +487,17 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: level
-    value: low
-    ordinal: 2
-  - entity: b
-    axis: x
-    key: level
-    value: medium
-    ordinal: 3
+compact_properties:
+  a:
+    x:
+      level:
+        value: low
+        ordinal: 2
+  b:
+    x:
+      level:
+        value: medium
+        ordinal: 3
 relations:
   - id: r1
     kind: ordinal
@@ -707,17 +707,17 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: level
-    value: low
-    ordinal: 3
-  - entity: b
-    axis: x
-    key: level
-    value: medium
-    ordinal: 4
+compact_properties:
+  a:
+    x:
+      level:
+        value: low
+        ordinal: 3
+  b:
+    x:
+      level:
+        value: medium
+        ordinal: 4
 relations:
   - id: r1
     kind: ordinal
@@ -760,17 +760,17 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: level
-    value: same
-    ordinal: 3
-  - entity: b
-    axis: x
-    key: level
-    value: same
-    ordinal: 3
+compact_properties:
+  a:
+    x:
+      level:
+        value: same
+        ordinal: 3
+  b:
+    x:
+      level:
+        value: same
+        ordinal: 3
 relations:
   - id: r1
     kind: ordinal
@@ -817,17 +817,17 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: intensity
-    value: low
-    ordinal: 1
-  - entity: b
-    axis: x
-    key: intensity
-    value: high
-    ordinal: 4
+compact_properties:
+  a:
+    x:
+      intensity:
+        value: low
+        ordinal: 1
+  b:
+    x:
+      intensity:
+        value: high
+        ordinal: 4
 relations:
   - id: r1
     kind: ordinal
@@ -870,27 +870,25 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: difficulty
-    value: high
-    ordinal: 4
-  - entity: b
-    axis: x
-    key: difficulty
-    value: low
-    ordinal: 1
-  - entity: a
-    axis: y
-    key: adaptability
-    value: high
-    ordinal: 5
-  - entity: b
-    axis: y
-    key: adaptability
-    value: low
-    ordinal: 2
+compact_properties:
+  a:
+    x:
+      difficulty:
+        value: high
+        ordinal: 4
+    y:
+      adaptability:
+        value: high
+        ordinal: 5
+  b:
+    x:
+      difficulty:
+        value: low
+        ordinal: 1
+    y:
+      adaptability:
+        value: low
+        ordinal: 2
 relations:
   - id: r1
     kind: ordinal
@@ -945,27 +943,25 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: difficulty
-    value: high
-    ordinal: 4
-  - entity: b
-    axis: x
-    key: difficulty
-    value: low
-    ordinal: 1
-  - entity: a
-    axis: y
-    key: complexity
-    value: high
-    ordinal: 5
-  - entity: b
-    axis: y
-    key: complexity
-    value: low
-    ordinal: 2
+compact_properties:
+  a:
+    x:
+      difficulty:
+        value: high
+        ordinal: 4
+    y:
+      complexity:
+        value: high
+        ordinal: 5
+  b:
+    x:
+      difficulty:
+        value: low
+        ordinal: 1
+    y:
+      complexity:
+        value: low
+        ordinal: 2
 relations:
   - id: r1
     kind: ordinal
@@ -1012,27 +1008,25 @@ axes:
     sub_axes: []
 claims: []
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: level
-    value: high
-    ordinal: 5
-  - entity: b
-    axis: x
-    key: level
-    value: low
-    ordinal: 1
-  - entity: a
-    axis: y
-    key: score
-    value: high
-    ordinal: 5
-  - entity: b
-    axis: y
-    key: score
-    value: low
-    ordinal: 1
+compact_properties:
+  a:
+    x:
+      level:
+        value: high
+        ordinal: 5
+    y:
+      score:
+        value: high
+        ordinal: 5
+  b:
+    x:
+      level:
+        value: low
+        ordinal: 1
+    y:
+      score:
+        value: low
+        ordinal: 1
 relations:
   - id: r1
     kind: ordinal
@@ -1082,17 +1076,17 @@ claims:
     axis: x
     text: "B is very light and airy"
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: weight
-    value: light
-    ordinal: 2
-  - entity: b
-    axis: x
-    key: weight
-    value: dense
-    ordinal: 4
+compact_properties:
+  a:
+    x:
+      weight:
+        value: light
+        ordinal: 2
+  b:
+    x:
+      weight:
+        value: dense
+        ordinal: 4
 relations:
   - id: r1
     kind: ordinal
@@ -1139,17 +1133,17 @@ claims:
     axis: x
     text: "B is dense and heavy"
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: weight
-    value: light
-    ordinal: 2
-  - entity: b
-    axis: x
-    key: weight
-    value: dense
-    ordinal: 4
+compact_properties:
+  a:
+    x:
+      weight:
+        value: light
+        ordinal: 2
+  b:
+    x:
+      weight:
+        value: dense
+        ordinal: 4
 relations:
   - id: r1
     kind: ordinal
@@ -1194,17 +1188,17 @@ claims:
     axis: x
     text: "B is quite remarkable"
 evidence: []
-properties:
-  - entity: a
-    axis: x
-    key: weight
-    value: light
-    ordinal: 2
-  - entity: b
-    axis: x
-    key: weight
-    value: dense
-    ordinal: 4
+compact_properties:
+  a:
+    x:
+      weight:
+        value: light
+        ordinal: 2
+  b:
+    x:
+      weight:
+        value: dense
+        ordinal: 4
 relations:
   - id: r1
     kind: ordinal

@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-19T23:03:45Z | Size: 49.5k chars
+> Updated: 2026-02-21T03:19:01Z | Size: 50.7k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -569,3 +569,17 @@
 - `tests/nl_tests.rs` — `nl_e2e_script()` rewritten to use `racket_executor::generate_racket_script()`. `build_racket_registry()` helper added.
 - CLI usage: `cadmus --workflow <path.yaml> [--run]` (was `[--execute] [--racket]`)
 - **Total: 1202 tests** (was 1301), 0 failures, 0 warnings
+
+### Compact Properties Format (plan `compact-fact-packs`)
+- `src/fact_pack.rs` [105-185] — `CompactValue` enum (Simple/Extended), `CompactProperties` type (BTreeMap³), `expand_compact_properties()`, `RawFactPack` intermediate struct, custom `Deserialize` impl for `FactPack`
+- YAML key is `compact_properties:` (entity → axis → key → value). Simple values are strings, extended values have `value`, `ordinal?`, `note?` fields.
+- `BTreeMap` used for deterministic alphabetical iteration order
+- Old verbose `properties:` list format removed entirely — compact is the only format
+- All 3 fact pack files converted:
+  - `data/packs/facts/racket_facts.yaml`: 1939→1099 lines (43% reduction), 312 properties
+  - `data/packs/facts/macos_cli_facts.yaml`: 3003→1605 lines (47% reduction), 461 properties
+  - `data/packs/facts/putin_stalin.yaml`: 496→459 lines, 14 properties with ordinal+note
+- 13 inline YAML blocks converted (11 in theory.rs, 2 in fact_pack.rs)
+- `tests/compact_facts_tests.rs` — 16 new tests
+- `tests/shell_callable_tests.rs:189-199` — Fixed fragile test (inferred_from depends on iteration order)
+- Total: 1224 tests, 0 failures, 0 warnings

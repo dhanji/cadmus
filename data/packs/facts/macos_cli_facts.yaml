@@ -827,2162 +827,764 @@ evidence:
 # ---------------------------------------------------------------------------
 # Properties — structured data for the inference engine
 # ---------------------------------------------------------------------------
-properties:
-  # =========================================================================
-  # ls — shell_text_lines anchor
-  # =========================================================================
-  - entity: cli_ls
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_ls"
-  - entity: cli_ls
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-ls"
-  - entity: cli_ls
-    axis: shell_type_signature
-    key: base_command
-    value: "ls"
-  - entity: cli_ls
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_ls
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # ls submodes
-  - entity: cli_ls
-    axis: shell_submodes
-    key: submode_long
-    value: "-l"
-  - entity: cli_ls
-    axis: shell_submodes
-    key: submode_all
-    value: "-a"
-  - entity: cli_ls
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-R"
-  - entity: cli_ls
-    axis: shell_submodes
-    key: submode_by_size
-    value: "-lS"
-  - entity: cli_ls
-    axis: shell_submodes
-    key: submode_by_time
-    value: "-lt"
-  - entity: cli_ls
-    axis: shell_submodes
-    key: submode_all_long
-    value: "-la"
-
-  # =========================================================================
-  # cat — shell_text_lines (discovered via type-symmetric from ls)
-  # =========================================================================
-  - entity: cli_cat
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_cat"
-  - entity: cli_cat
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-cat"
-  - entity: cli_cat
-    axis: shell_type_signature
-    key: base_command
-    value: "cat"
-  - entity: cli_cat
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_cat
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # cat submodes
-  - entity: cli_cat
-    axis: shell_submodes
-    key: submode_number
-    value: "-n"
-
-  # =========================================================================
-  # head — shell_text_lines (discovered via type-symmetric from ls)
-  # =========================================================================
-  - entity: cli_head
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_head"
-  - entity: cli_head
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-head"
-  - entity: cli_head
-    axis: shell_type_signature
-    key: base_command
-    value: "head"
-  - entity: cli_head
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_head
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # head submodes
-  - entity: cli_head
-    axis: shell_submodes
-    key: submode_lines
-    value: "-n"
-
-  # =========================================================================
-  # tail — shell_text_lines (discovered via type-symmetric from ls)
-  # =========================================================================
-  - entity: cli_tail
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_tail"
-  - entity: cli_tail
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-tail"
-  - entity: cli_tail
-    axis: shell_type_signature
-    key: base_command
-    value: "tail"
-  - entity: cli_tail
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_tail
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # tail submodes
-  - entity: cli_tail
-    axis: shell_submodes
-    key: submode_lines
-    value: "-n"
-  - entity: cli_tail
-    axis: shell_submodes
-    key: submode_follow
-    value: "-f"
-
-  # =========================================================================
-  # ps — shell_tabular anchor
-  # =========================================================================
-  - entity: cli_ps
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_ps"
-  - entity: cli_ps
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-ps"
-  - entity: cli_ps
-    axis: shell_type_signature
-    key: base_command
-    value: "ps"
-  - entity: cli_ps
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_ps
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_tabular"
-
-  # ps submodes
-  - entity: cli_ps
-    axis: shell_submodes
-    key: submode_aux
-    value: "aux"
-  - entity: cli_ps
-    axis: shell_submodes
-    key: submode_every
-    value: "-e"
-  - entity: cli_ps
-    axis: shell_submodes
-    key: submode_full
-    value: "-ef"
-  - entity: cli_ps
-    axis: shell_submodes
-    key: submode_by_cpu
-    value: "aux --sort=-%cpu"
-  - entity: cli_ps
-    axis: shell_submodes
-    key: submode_by_mem
-    value: "aux --sort=-%mem"
-
-  # =========================================================================
-  # df — shell_tabular (discovered via type-symmetric from ps)
-  # =========================================================================
-  - entity: cli_df
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_df"
-  - entity: cli_df
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-df"
-  - entity: cli_df
-    axis: shell_type_signature
-    key: base_command
-    value: "df"
-  - entity: cli_df
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_df
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_tabular"
-
-  # df submodes
-  - entity: cli_df
-    axis: shell_submodes
-    key: submode_human
-    value: "-h"
-  - entity: cli_df
-    axis: shell_submodes
-    key: submode_inodes
-    value: "-i"
-
-  # =========================================================================
-  # find — shell_tree anchor
-  # =========================================================================
-  - entity: cli_find
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_find"
-  - entity: cli_find
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-find"
-  - entity: cli_find
-    axis: shell_type_signature
-    key: base_command
-    value: "find"
-  - entity: cli_find
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_find
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_tree"
-
-  # find submodes
-  - entity: cli_find
-    axis: shell_submodes
-    key: submode_files_only
-    value: "-type f"
-  - entity: cli_find
-    axis: shell_submodes
-    key: submode_dirs_only
-    value: "-type d"
-  - entity: cli_find
-    axis: shell_submodes
-    key: submode_by_name
-    value: "-name"
-  - entity: cli_find
-    axis: shell_submodes
-    key: submode_by_size
-    value: "-size"
-  - entity: cli_find
-    axis: shell_submodes
-    key: submode_by_mtime
-    value: "-mtime"
-  - entity: cli_find
-    axis: shell_submodes
-    key: submode_max_depth
-    value: "-maxdepth"
-
-  # =========================================================================
-  # grep — shell_filtered_lines anchor
-  # =========================================================================
-  - entity: cli_grep
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_grep"
-  - entity: cli_grep
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-grep"
-  - entity: cli_grep
-    axis: shell_type_signature
-    key: base_command
-    value: "grep"
-  - entity: cli_grep
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_grep
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_filtered_lines"
-
-  # grep submodes
-  - entity: cli_grep
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-r"
-  - entity: cli_grep
-    axis: shell_submodes
-    key: submode_case_insensitive
-    value: "-i"
-  - entity: cli_grep
-    axis: shell_submodes
-    key: submode_line_numbers
-    value: "-n"
-  - entity: cli_grep
-    axis: shell_submodes
-    key: submode_filenames_only
-    value: "-l"
-  - entity: cli_grep
-    axis: shell_submodes
-    key: submode_count
-    value: "-c"
-  - entity: cli_grep
-    axis: shell_submodes
-    key: submode_invert
-    value: "-v"
-  - entity: cli_grep
-    axis: shell_submodes
-    key: submode_extended_regex
-    value: "-E"
-
-  # =========================================================================
-  # du — shell_single_value anchor
-  # =========================================================================
-  - entity: cli_du
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_du"
-  - entity: cli_du
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-du"
-  - entity: cli_du
-    axis: shell_type_signature
-    key: base_command
-    value: "du"
-  - entity: cli_du
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_du
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # du submodes
-  - entity: cli_du
-    axis: shell_submodes
-    key: submode_summary
-    value: "-sh"
-  - entity: cli_du
-    axis: shell_submodes
-    key: submode_depth
-    value: "-d"
-  - entity: cli_du
-    axis: shell_submodes
-    key: submode_all_files
-    value: "-a"
-
-  # =========================================================================
-  # wc — shell_single_value (discovered via type-symmetric from du)
-  # =========================================================================
-  - entity: cli_wc
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_wc"
-  - entity: cli_wc
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-wc"
-  - entity: cli_wc
-    axis: shell_type_signature
-    key: base_command
-    value: "wc"
-  - entity: cli_wc
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_wc
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # wc submodes
-  - entity: cli_wc
-    axis: shell_submodes
-    key: submode_lines
-    value: "-l"
-  - entity: cli_wc
-    axis: shell_submodes
-    key: submode_words
-    value: "-w"
-  - entity: cli_wc
-    axis: shell_submodes
-    key: submode_bytes
-    value: "-c"
-  - entity: cli_wc
-    axis: shell_submodes
-    key: submode_chars
-    value: "-m"
-
-  # =========================================================================
-  # sort — shell_text_lines (discovered via type-symmetric from ls)
-  # =========================================================================
-  - entity: cli_sort
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_sort"
-  - entity: cli_sort
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-sort"
-  - entity: cli_sort
-    axis: shell_type_signature
-    key: base_command
-    value: "sort"
-  - entity: cli_sort
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_sort
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # sort submodes
-  - entity: cli_sort
-    axis: shell_submodes
-    key: submode_numeric
-    value: "-n"
-  - entity: cli_sort
-    axis: shell_submodes
-    key: submode_reverse
-    value: "-r"
-  - entity: cli_sort
-    axis: shell_submodes
-    key: submode_unique
-    value: "-u"
-  - entity: cli_sort
-    axis: shell_submodes
-    key: submode_numeric_reverse
-    value: "-nr"
-
-  # =========================================================================
-  # curl — shell_byte_stream anchor
-  # =========================================================================
-  - entity: cli_curl
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_curl"
-  - entity: cli_curl
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-curl"
-  - entity: cli_curl
-    axis: shell_type_signature
-    key: base_command
-    value: "curl"
-  - entity: cli_curl
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_curl
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_byte_stream"
-
-  # curl submodes
-  - entity: cli_curl
-    axis: shell_submodes
-    key: submode_silent
-    value: "-s"
-  - entity: cli_curl
-    axis: shell_submodes
-    key: submode_follow_redirects
-    value: "-sL"
-  - entity: cli_curl
-    axis: shell_submodes
-    key: submode_headers_only
-    value: "-I"
-  - entity: cli_curl
-    axis: shell_submodes
-    key: submode_download
-    value: "-sLO"
-
-  # =========================================================================
-  # mv — shell_exec (fire-and-forget anchor)
-  # =========================================================================
-  - entity: cli_mv
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_mv"
-  - entity: cli_mv
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-mv"
-  - entity: cli_mv
-    axis: shell_type_signature
-    key: base_command
-    value: "mv"
-  - entity: cli_mv
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_mv
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # mv submodes
-  - entity: cli_mv
-    axis: shell_submodes
-    key: submode_interactive
-    value: "-i"
-  - entity: cli_mv
-    axis: shell_submodes
-    key: submode_no_clobber
-    value: "-n"
-  - entity: cli_mv
-    axis: shell_submodes
-    key: submode_verbose
-    value: "-v"
-
-  # =========================================================================
-  # cp — shell_exec (discovered via type-symmetric from mv)
-  # =========================================================================
-  - entity: cli_cp
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_cp"
-  - entity: cli_cp
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-cp"
-  - entity: cli_cp
-    axis: shell_type_signature
-    key: base_command
-    value: "cp"
-  - entity: cli_cp
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_cp
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # cp submodes
-  - entity: cli_cp
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-r"
-  - entity: cli_cp
-    axis: shell_submodes
-    key: submode_archive
-    value: "-a"
-  - entity: cli_cp
-    axis: shell_submodes
-    key: submode_verbose
-    value: "-v"
-  - entity: cli_cp
-    axis: shell_submodes
-    key: submode_no_clobber
-    value: "-n"
-
-  # =========================================================================
-  # rm — shell_exec
-  # =========================================================================
-  - entity: cli_rm
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_rm"
-  - entity: cli_rm
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-rm"
-  - entity: cli_rm
-    axis: shell_type_signature
-    key: base_command
-    value: "rm"
-  - entity: cli_rm
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_rm
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # rm submodes
-  - entity: cli_rm
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-r"
-  - entity: cli_rm
-    axis: shell_submodes
-    key: submode_force
-    value: "-rf"
-  - entity: cli_rm
-    axis: shell_submodes
-    key: submode_interactive
-    value: "-i"
-
-  # =========================================================================
-  # mkdir — shell_exec
-  # =========================================================================
-  - entity: cli_mkdir
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_mkdir"
-  - entity: cli_mkdir
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-mkdir"
-  - entity: cli_mkdir
-    axis: shell_type_signature
-    key: base_command
-    value: "mkdir"
-  - entity: cli_mkdir
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_mkdir
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # mkdir submodes
-  - entity: cli_mkdir
-    axis: shell_submodes
-    key: submode_parents
-    value: "-p"
-
-  # =========================================================================
-  # ln — shell_exec
-  # =========================================================================
-  - entity: cli_ln
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_ln"
-  - entity: cli_ln
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-ln"
-  - entity: cli_ln
-    axis: shell_type_signature
-    key: base_command
-    value: "ln"
-  - entity: cli_ln
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_ln
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # ln submodes
-  - entity: cli_ln
-    axis: shell_submodes
-    key: submode_symbolic
-    value: "-s"
-  - entity: cli_ln
-    axis: shell_submodes
-    key: submode_force
-    value: "-sf"
-
-  # =========================================================================
-  # chmod — shell_exec
-  # =========================================================================
-  - entity: cli_chmod
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_chmod"
-  - entity: cli_chmod
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-chmod"
-  - entity: cli_chmod
-    axis: shell_type_signature
-    key: base_command
-    value: "chmod"
-  - entity: cli_chmod
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_chmod
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # chmod submodes
-  - entity: cli_chmod
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-R"
-
-  # =========================================================================
-  # chown — shell_exec
-  # =========================================================================
-  - entity: cli_chown
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_chown"
-  - entity: cli_chown
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-chown"
-  - entity: cli_chown
-    axis: shell_type_signature
-    key: base_command
-    value: "chown"
-  - entity: cli_chown
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_chown
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # chown submodes
-  - entity: cli_chown
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-R"
-
-  # =========================================================================
-  # tar — shell_exec
-  # =========================================================================
-  - entity: cli_tar
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_tar"
-  - entity: cli_tar
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-tar"
-  - entity: cli_tar
-    axis: shell_type_signature
-    key: base_command
-    value: "tar"
-  - entity: cli_tar
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_tar
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # tar submodes
-  - entity: cli_tar
-    axis: shell_submodes
-    key: submode_create
-    value: "-cf"
-  - entity: cli_tar
-    axis: shell_submodes
-    key: submode_extract
-    value: "-xf"
-  - entity: cli_tar
-    axis: shell_submodes
-    key: submode_list
-    value: "-tf"
-  - entity: cli_tar
-    axis: shell_submodes
-    key: submode_create_gz
-    value: "-czf"
-  - entity: cli_tar
-    axis: shell_submodes
-    key: submode_extract_gz
-    value: "-xzf"
-  - entity: cli_tar
-    axis: shell_submodes
-    key: submode_extract_bz2
-    value: "-xjf"
-  - entity: cli_tar
-    axis: shell_submodes
-    key: submode_extract_xz
-    value: "-xJf"
-
-  # =========================================================================
-  # unzip — shell_text_lines (extract ZIP archives)
-  # =========================================================================
-  - entity: cli_unzip
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_unzip"
-  - entity: cli_unzip
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-unzip"
-  - entity: cli_unzip
-    axis: shell_type_signature
-    key: base_command
-    value: "unzip"
-  - entity: cli_unzip
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_unzip
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # unzip submodes
-  - entity: cli_unzip
-    axis: shell_submodes
-    key: submode_extract
-    value: "-o"
-  - entity: cli_unzip
-    axis: shell_submodes
-    key: submode_list
-    value: "-l"
-
-  # =========================================================================
-  # zip — shell_exec (create/modify ZIP archives)
-  # =========================================================================
-  - entity: cli_zip
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_zip"
-  - entity: cli_zip
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-zip"
-  - entity: cli_zip
-    axis: shell_type_signature
-    key: base_command
-    value: "zip"
-  - entity: cli_zip
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_zip
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # zip submodes
-  - entity: cli_zip
-    axis: shell_submodes
-    key: submode_add
-    value: "-g"
-  - entity: cli_zip
-    axis: shell_submodes
-    key: submode_create
-    value: "-r"
-
-  # =========================================================================
-  # unrar — shell_text_lines (extract RAR archives)
-  # =========================================================================
-  - entity: cli_unrar
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_unrar"
-  - entity: cli_unrar
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-unrar"
-  - entity: cli_unrar
-    axis: shell_type_signature
-    key: base_command
-    value: "unrar"
-  - entity: cli_unrar
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_unrar
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # unrar submodes (extract only — no create capability)
-  - entity: cli_unrar
-    axis: shell_submodes
-    key: submode_extract
-    value: "x"
-
-  # =========================================================================
-  # 7z — shell_text_lines (multi-format archive tool)
-  # =========================================================================
-  - entity: cli_7z
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_7z"
-  - entity: cli_7z
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-7z"
-  - entity: cli_7z
-    axis: shell_type_signature
-    key: base_command
-    value: "7z"
-  - entity: cli_7z
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_7z
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # 7z submodes
-  - entity: cli_7z
-    axis: shell_submodes
-    key: submode_extract
-    value: "x"
-  - entity: cli_7z
-    axis: shell_submodes
-    key: submode_add
-    value: "a"
-  - entity: cli_7z
-    axis: shell_submodes
-    key: submode_list
-    value: "l"
-
-  # =========================================================================
-  # rsync — shell_exec
-  # =========================================================================
-  - entity: cli_rsync
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_rsync"
-  - entity: cli_rsync
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-rsync"
-  - entity: cli_rsync
-    axis: shell_type_signature
-    key: base_command
-    value: "rsync"
-  - entity: cli_rsync
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_rsync
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # rsync submodes
-  - entity: cli_rsync
-    axis: shell_submodes
-    key: submode_archive
-    value: "-a"
-  - entity: cli_rsync
-    axis: shell_submodes
-    key: submode_archive_verbose
-    value: "-av"
-  - entity: cli_rsync
-    axis: shell_submodes
-    key: submode_dry_run
-    value: "-avn"
-
-  # =========================================================================
-  # open — shell_exec (macOS)
-  # =========================================================================
-  - entity: cli_open
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_open"
-  - entity: cli_open
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-open"
-  - entity: cli_open
-    axis: shell_type_signature
-    key: base_command
-    value: "open"
-  - entity: cli_open
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_open
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # open submodes
-  - entity: cli_open
-    axis: shell_submodes
-    key: submode_with_app
-    value: "-a"
-  - entity: cli_open
-    axis: shell_submodes
-    key: submode_reveal
-    value: "-R"
-  - entity: cli_open
-    axis: shell_submodes
-    key: submode_textedit
-    value: "-e"
-
-  # =========================================================================
-  # tee — shell_text_lines
-  # =========================================================================
-  - entity: cli_tee
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_tee"
-  - entity: cli_tee
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-tee"
-  - entity: cli_tee
-    axis: shell_type_signature
-    key: base_command
-    value: "tee"
-  - entity: cli_tee
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_tee
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # tee submodes
-  - entity: cli_tee
-    axis: shell_submodes
-    key: submode_append
-    value: "-a"
-
-  # =========================================================================
-  # stat — shell_single_value
-  # =========================================================================
-  - entity: cli_stat
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_stat"
-  - entity: cli_stat
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-stat"
-  - entity: cli_stat
-    axis: shell_type_signature
-    key: base_command
-    value: "stat"
-  - entity: cli_stat
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_stat
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-  # stat submodes (macOS stat format strings)
-  - entity: cli_stat
-    axis: shell_submodes
-    key: submode_size
-    value: "-f %z"
-  - entity: cli_stat
-    axis: shell_submodes
-    key: submode_mtime
-    value: "-f %m"
-  - entity: cli_stat
-    axis: shell_submodes
-    key: submode_permissions
-    value: "-f %p"
-  - entity: cli_stat
-    axis: shell_submodes
-    key: submode_type
-    value: "-f %T"
-
-  # =========================================================================
-  # shasum — shell_single_value
-  # =========================================================================
-  - entity: cli_shasum
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_shasum"
-  - entity: cli_shasum
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-shasum"
-  - entity: cli_shasum
-    axis: shell_type_signature
-    key: base_command
-    value: "shasum"
-  - entity: cli_shasum
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_shasum
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-  # shasum submodes
-  - entity: cli_shasum
-    axis: shell_submodes
-    key: submode_sha256
-    value: "-a 256"
-  - entity: cli_shasum
-    axis: shell_submodes
-    key: submode_sha512
-    value: "-a 512"
-
-  # =========================================================================
-  # file — shell_single_value
-  # =========================================================================
-  - entity: cli_file
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_file"
-  - entity: cli_file
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-file"
-  - entity: cli_file
-    axis: shell_type_signature
-    key: base_command
-    value: "file"
-  - entity: cli_file
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_file
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-  # file submodes
-  - entity: cli_file
-    axis: shell_submodes
-    key: submode_mime
-    value: "--mime-type"
-  - entity: cli_file
-    axis: shell_submodes
-    key: submode_brief
-    value: "-b"
-
-  # =========================================================================
-  # uname — shell_single_value
-  # =========================================================================
-  - entity: cli_uname
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_uname"
-  - entity: cli_uname
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-uname"
-  - entity: cli_uname
-    axis: shell_type_signature
-    key: base_command
-    value: "uname"
-  - entity: cli_uname
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_uname
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-  # uname submodes
-  - entity: cli_uname
-    axis: shell_submodes
-    key: submode_all
-    value: "-a"
-
-  # =========================================================================
-  # uptime — shell_single_value
-  # =========================================================================
-  - entity: cli_uptime
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_uptime"
-  - entity: cli_uptime
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-uptime"
-  - entity: cli_uptime
-    axis: shell_type_signature
-    key: base_command
-    value: "uptime"
-  - entity: cli_uptime
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_uptime
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # =========================================================================
-  # diff — shell_text_lines
-  # =========================================================================
-  - entity: cli_diff
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_diff"
-  - entity: cli_diff
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-diff"
-  - entity: cli_diff
-    axis: shell_type_signature
-    key: base_command
-    value: "diff"
-  - entity: cli_diff
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_diff
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # diff submodes
-  - entity: cli_diff
-    axis: shell_submodes
-    key: submode_unified
-    value: "-u"
-  - entity: cli_diff
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-r"
-  - entity: cli_diff
-    axis: shell_submodes
-    key: submode_brief
-    value: "-q"
-
-  # =========================================================================
-  # sed — shell_text_lines
-  # =========================================================================
-  - entity: cli_sed
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_sed"
-  - entity: cli_sed
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-sed"
-  - entity: cli_sed
-    axis: shell_type_signature
-    key: base_command
-    value: "sed"
-  - entity: cli_sed
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_sed
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # sed submodes
-  - entity: cli_sed
-    axis: shell_submodes
-    key: submode_in_place
-    value: "-i ''"
-  - entity: cli_sed
-    axis: shell_submodes
-    key: submode_extended
-    value: "-E"
-
-  # =========================================================================
-  # awk — shell_text_lines
-  # =========================================================================
-  - entity: cli_awk
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_awk"
-  - entity: cli_awk
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-awk"
-  - entity: cli_awk
-    axis: shell_type_signature
-    key: base_command
-    value: "awk"
-  - entity: cli_awk
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_awk
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # =========================================================================
-  # cut — shell_text_lines
-  # =========================================================================
-  - entity: cli_cut
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_cut"
-  - entity: cli_cut
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-cut"
-  - entity: cli_cut
-    axis: shell_type_signature
-    key: base_command
-    value: "cut"
-  - entity: cli_cut
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_cut
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # =========================================================================
-  # tr — shell_text_lines
-  # =========================================================================
-  - entity: cli_tr
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_tr"
-  - entity: cli_tr
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-tr"
-  - entity: cli_tr
-    axis: shell_type_signature
-    key: base_command
-    value: "tr"
-  - entity: cli_tr
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_tr
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # tr submodes
-  - entity: cli_tr
-    axis: shell_submodes
-    key: submode_delete
-    value: "-d"
-  - entity: cli_tr
-    axis: shell_submodes
-    key: submode_squeeze
-    value: "-s"
-
-  # =========================================================================
-  # paste — shell_text_lines
-  # =========================================================================
-  - entity: cli_paste
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_paste"
-  - entity: cli_paste
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-paste"
-  - entity: cli_paste
-    axis: shell_type_signature
-    key: base_command
-    value: "paste"
-  - entity: cli_paste
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_paste
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # =========================================================================
-  # column — shell_text_lines
-  # =========================================================================
-  - entity: cli_column
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_column"
-  - entity: cli_column
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-column"
-  - entity: cli_column
-    axis: shell_type_signature
-    key: base_command
-    value: "column"
-  - entity: cli_column
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_column
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # column submodes
-  - entity: cli_column
-    axis: shell_submodes
-    key: submode_table
-    value: "-t"
-
-  # =========================================================================
-  # base64 — shell_text_lines
-  # =========================================================================
-  - entity: cli_base64
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_base64"
-  - entity: cli_base64
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-base64"
-  - entity: cli_base64
-    axis: shell_type_signature
-    key: base_command
-    value: "base64"
-  - entity: cli_base64
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_base64
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # base64 submodes
-  - entity: cli_base64
-    axis: shell_submodes
-    key: submode_decode
-    value: "-D"
-
-  # =========================================================================
-  # mdfind — shell_tree (macOS Spotlight)
-  # =========================================================================
-  - entity: cli_mdfind
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_mdfind"
-  - entity: cli_mdfind
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-mdfind"
-  - entity: cli_mdfind
-    axis: shell_type_signature
-    key: base_command
-    value: "mdfind"
-  - entity: cli_mdfind
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_mdfind
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_tree"
-  # mdfind submodes
-  - entity: cli_mdfind
-    axis: shell_submodes
-    key: submode_name
-    value: "-name"
-  - entity: cli_mdfind
-    axis: shell_submodes
-    key: submode_onlyin
-    value: "-onlyin"
-
-  # =========================================================================
-  # xattr — shell_text_lines (macOS)
-  # =========================================================================
-  - entity: cli_xattr
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_xattr"
-  - entity: cli_xattr
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-xattr"
-  - entity: cli_xattr
-    axis: shell_type_signature
-    key: base_command
-    value: "xattr"
-  - entity: cli_xattr
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_xattr
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # xattr submodes
-  - entity: cli_xattr
-    axis: shell_submodes
-    key: submode_list
-    value: "-l"
-  - entity: cli_xattr
-    axis: shell_submodes
-    key: submode_print
-    value: "-p"
-  - entity: cli_xattr
-    axis: shell_submodes
-    key: submode_write
-    value: "-w"
-  - entity: cli_xattr
-    axis: shell_submodes
-    key: submode_delete
-    value: "-d"
-  - entity: cli_xattr
-    axis: shell_submodes
-    key: submode_clear
-    value: "-c"
-
-  # =========================================================================
-  # pbcopy — shell_exec (macOS clipboard)
-  # =========================================================================
-  - entity: cli_pbcopy
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_pbcopy"
-  - entity: cli_pbcopy
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-pbcopy"
-  - entity: cli_pbcopy
-    axis: shell_type_signature
-    key: base_command
-    value: "pbcopy"
-  - entity: cli_pbcopy
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_pbcopy
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # =========================================================================
-  # pbpaste — shell_text_lines (macOS clipboard)
-  # =========================================================================
-  - entity: cli_pbpaste
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_pbpaste"
-  - entity: cli_pbpaste
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-pbpaste"
-  - entity: cli_pbpaste
-    axis: shell_type_signature
-    key: base_command
-    value: "pbpaste"
-  - entity: cli_pbpaste
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_pbpaste
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # =========================================================================
-  # plutil — shell_text_lines (macOS plist)
-  # =========================================================================
-  - entity: cli_plutil
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_plutil"
-  - entity: cli_plutil
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-plutil"
-  - entity: cli_plutil
-    axis: shell_type_signature
-    key: base_command
-    value: "plutil"
-  - entity: cli_plutil
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_plutil
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # plutil submodes
-  - entity: cli_plutil
-    axis: shell_submodes
-    key: submode_print
-    value: "-p"
-  - entity: cli_plutil
-    axis: shell_submodes
-    key: submode_convert_json
-    value: "-convert json"
-  - entity: cli_plutil
-    axis: shell_submodes
-    key: submode_convert_xml
-    value: "-convert xml1"
-
-  # =========================================================================
-  # lsof — shell_tabular
-  # =========================================================================
-  - entity: cli_lsof
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_lsof"
-  - entity: cli_lsof
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-lsof"
-  - entity: cli_lsof
-    axis: shell_type_signature
-    key: base_command
-    value: "lsof"
-  - entity: cli_lsof
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_lsof
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_tabular"
-
-  # =========================================================================
-  # kill — shell_exec
-  # =========================================================================
-  - entity: cli_kill
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_kill"
-  - entity: cli_kill
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-kill"
-  - entity: cli_kill
-    axis: shell_type_signature
-    key: base_command
-    value: "kill"
-  - entity: cli_kill
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_kill
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # =========================================================================
-  # pkill — shell_exec
-  # =========================================================================
-  - entity: cli_pkill
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_pkill"
-  - entity: cli_pkill
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-pkill"
-  - entity: cli_pkill
-    axis: shell_type_signature
-    key: base_command
-    value: "pkill"
-  - entity: cli_pkill
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_pkill
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # =========================================================================
-  # watch — shell_text_lines
-  # =========================================================================
-  - entity: cli_watch
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_watch"
-  - entity: cli_watch
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-watch"
-  - entity: cli_watch
-    axis: shell_type_signature
-    key: base_command
-    value: "watch"
-  - entity: cli_watch
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_watch
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # =========================================================================
-  # git — shell_vcs (new class, anchor)
-  # =========================================================================
-  - entity: cli_git
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_git"
-  - entity: cli_git
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-git"
-  - entity: cli_git
-    axis: shell_type_signature
-    key: base_command
-    value: "git"
-  - entity: cli_git
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_git
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_vcs"
-  # git submodes (each subcommand is a submode)
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_init
-    value: "init"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_clone
-    value: "clone"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_add
-    value: "add"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_commit
-    value: "commit"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_log
-    value: "log"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_log_oneline
-    value: "log --oneline"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_diff
-    value: "diff"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_status
-    value: "status"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_branch
-    value: "branch"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_checkout
-    value: "checkout"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_merge
-    value: "merge"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_rebase
-    value: "rebase"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_stash
-    value: "stash"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_stash_pop
-    value: "stash pop"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_push
-    value: "push"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_pull
-    value: "pull"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_blame
-    value: "blame"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_bisect
-    value: "bisect"
-  - entity: cli_git
-    axis: shell_submodes
-    key: submode_tag
-    value: "tag"
-
-  # =========================================================================
-  # jq — shell_structured (new class, anchor)
-  # =========================================================================
-  - entity: cli_jq
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_jq"
-  - entity: cli_jq
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-jq"
-  - entity: cli_jq
-    axis: shell_type_signature
-    key: base_command
-    value: "jq"
-  - entity: cli_jq
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_jq
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_structured"
-  # jq submodes
-  - entity: cli_jq
-    axis: shell_submodes
-    key: submode_raw
-    value: "-r"
-  - entity: cli_jq
-    axis: shell_submodes
-    key: submode_compact
-    value: "-c"
-  - entity: cli_jq
-    axis: shell_submodes
-    key: submode_slurp
-    value: "-s"
-
-  # =========================================================================
-  # yq — shell_structured (discovered via type-symmetric from jq)
-  # =========================================================================
-  - entity: cli_yq
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_yq"
-  - entity: cli_yq
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-yq"
-  - entity: cli_yq
-    axis: shell_type_signature
-    key: base_command
-    value: "yq"
-  - entity: cli_yq
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_yq
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_structured"
-  # yq submodes
-  - entity: cli_yq
-    axis: shell_submodes
-    key: submode_json_out
-    value: "-o=json"
-  - entity: cli_yq
-    axis: shell_submodes
-    key: submode_raw
-    value: "-r"
-
-  # =========================================================================
-  # tmux — shell_session (new class, anchor)
-  # =========================================================================
-  - entity: cli_tmux
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_tmux"
-  - entity: cli_tmux
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-tmux"
-  - entity: cli_tmux
-    axis: shell_type_signature
-    key: base_command
-    value: "tmux"
-  - entity: cli_tmux
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_tmux
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_session"
-  # tmux submodes
-  - entity: cli_tmux
-    axis: shell_submodes
-    key: submode_new_session
-    value: "new-session -s"
-  - entity: cli_tmux
-    axis: shell_submodes
-    key: submode_attach
-    value: "attach -t"
-  - entity: cli_tmux
-    axis: shell_submodes
-    key: submode_split_h
-    value: "split-window -h"
-  - entity: cli_tmux
-    axis: shell_submodes
-    key: submode_split_v
-    value: "split-window -v"
-  - entity: cli_tmux
-    axis: shell_submodes
-    key: submode_send_keys
-    value: "send-keys"
-  - entity: cli_tmux
-    axis: shell_submodes
-    key: submode_list_sessions
-    value: "list-sessions"
-
-  # =========================================================================
-  # screen — shell_session (discovered via type-symmetric from tmux)
-  # =========================================================================
-  - entity: cli_screen
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_screen"
-  - entity: cli_screen
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-screen"
-  - entity: cli_screen
-    axis: shell_type_signature
-    key: base_command
-    value: "screen"
-  - entity: cli_screen
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_screen
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_session"
-  # screen submodes
-  - entity: cli_screen
-    axis: shell_submodes
-    key: submode_new_session
-    value: "-S"
-  - entity: cli_screen
-    axis: shell_submodes
-    key: submode_reattach
-    value: "-r"
-  - entity: cli_screen
-    axis: shell_submodes
-    key: submode_list
-    value: "-ls"
-
-  # =========================================================================
-  # ssh — shell_network (new class, anchor)
-  # =========================================================================
-  - entity: cli_ssh
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_ssh"
-  - entity: cli_ssh
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-ssh"
-  - entity: cli_ssh
-    axis: shell_type_signature
-    key: base_command
-    value: "ssh"
-  - entity: cli_ssh
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_ssh
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_network"
-
-  # =========================================================================
-  # scp — shell_network
-  # =========================================================================
-  - entity: cli_scp
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_scp"
-  - entity: cli_scp
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-scp"
-  - entity: cli_scp
-    axis: shell_type_signature
-    key: base_command
-    value: "scp"
-  - entity: cli_scp
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_scp
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_network"
-  # scp submodes
-  - entity: cli_scp
-    axis: shell_submodes
-    key: submode_recursive
-    value: "-r"
-
-  # =========================================================================
-  # nc — shell_network
-  # =========================================================================
-  - entity: cli_nc
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_nc"
-  - entity: cli_nc
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-nc"
-  - entity: cli_nc
-    axis: shell_type_signature
-    key: base_command
-    value: "nc"
-  - entity: cli_nc
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_nc
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_network"
-
-  # =========================================================================
-  # ping — shell_text_lines
-  # =========================================================================
-  - entity: cli_ping
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_ping"
-  - entity: cli_ping
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-ping"
-  - entity: cli_ping
-    axis: shell_type_signature
-    key: base_command
-    value: "ping"
-  - entity: cli_ping
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_ping
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # =========================================================================
-  # dig — shell_text_lines
-  # =========================================================================
-  - entity: cli_dig
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_dig"
-  - entity: cli_dig
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-dig"
-  - entity: cli_dig
-    axis: shell_type_signature
-    key: base_command
-    value: "dig"
-  - entity: cli_dig
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_dig
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # =========================================================================
-  # gzip — shell_exec (compression)
-  # =========================================================================
-  - entity: cli_gzip
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_gzip"
-  - entity: cli_gzip
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-gzip"
-  - entity: cli_gzip
-    axis: shell_type_signature
-    key: base_command
-    value: "gzip"
-  - entity: cli_gzip
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_gzip
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # gzip submodes
-  - entity: cli_gzip
-    axis: shell_submodes
-    key: submode_decompress
-    value: "-d"
-  - entity: cli_gzip
-    axis: shell_submodes
-    key: submode_keep
-    value: "-k"
-  - entity: cli_gzip
-    axis: shell_submodes
-    key: submode_best
-    value: "-9"
-
-  # =========================================================================
-  # xz — shell_exec (compression)
-  # =========================================================================
-  - entity: cli_xz
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_xz"
-  - entity: cli_xz
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-xz"
-  - entity: cli_xz
-    axis: shell_type_signature
-    key: base_command
-    value: "xz"
-  - entity: cli_xz
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_xz
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-  # xz submodes
-  - entity: cli_xz
-    axis: shell_submodes
-    key: submode_decompress
-    value: "-d"
-  - entity: cli_xz
-    axis: shell_submodes
-    key: submode_keep
-    value: "-k"
-
-  # =========================================================================
-  # openssl — shell_text_lines (crypto)
-  # =========================================================================
-  - entity: cli_openssl
-    axis: shell_type_signature
-    key: op_name
-    value: "shell_openssl"
-  - entity: cli_openssl
-    axis: shell_type_signature
-    key: racket_symbol
-    value: "shell-openssl"
-  - entity: cli_openssl
-    axis: shell_type_signature
-    key: base_command
-    value: "openssl"
-  - entity: cli_openssl
-    axis: shell_category
-    key: category_name
-    value: "shell"
-  - entity: cli_openssl
-    axis: shell_type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-  # openssl submodes
-  - entity: cli_openssl
-    axis: shell_submodes
-    key: submode_sha256
-    value: "dgst -sha256"
-  - entity: cli_openssl
-    axis: shell_submodes
-    key: submode_md5
-    value: "dgst -md5"
-
-# ---------------------------------------------------------------------------
-# Relations
-# ---------------------------------------------------------------------------
+compact_properties:
+  cli_7z:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_add: a
+      submode_extract: x
+      submode_list: l
+    shell_type_signature:
+      base_command: 7z
+      op_name: shell_7z
+      racket_symbol: shell-7z
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_awk:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: awk
+      op_name: shell_awk
+      racket_symbol: shell-awk
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_base64:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_decode: -D
+    shell_type_signature:
+      base_command: base64
+      op_name: shell_base64
+      racket_symbol: shell-base64
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_cat:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_number: -n
+    shell_type_signature:
+      base_command: cat
+      op_name: shell_cat
+      racket_symbol: shell-cat
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_chmod:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_recursive: -R
+    shell_type_signature:
+      base_command: chmod
+      op_name: shell_chmod
+      racket_symbol: shell-chmod
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_chown:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_recursive: -R
+    shell_type_signature:
+      base_command: chown
+      op_name: shell_chown
+      racket_symbol: shell-chown
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_column:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_table: -t
+    shell_type_signature:
+      base_command: column
+      op_name: shell_column
+      racket_symbol: shell-column
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_cp:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_archive: -a
+      submode_no_clobber: -n
+      submode_recursive: -r
+      submode_verbose: -v
+    shell_type_signature:
+      base_command: cp
+      op_name: shell_cp
+      racket_symbol: shell-cp
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_curl:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_download: -sLO
+      submode_follow_redirects: -sL
+      submode_headers_only: -I
+      submode_silent: -s
+    shell_type_signature:
+      base_command: curl
+      op_name: shell_curl
+      racket_symbol: shell-curl
+    shell_type_symmetry:
+      type_symmetry_class: shell_byte_stream
+  cli_cut:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: cut
+      op_name: shell_cut
+      racket_symbol: shell-cut
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_df:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_human: -h
+      submode_inodes: -i
+    shell_type_signature:
+      base_command: df
+      op_name: shell_df
+      racket_symbol: shell-df
+    shell_type_symmetry:
+      type_symmetry_class: shell_tabular
+  cli_diff:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_brief: -q
+      submode_recursive: -r
+      submode_unified: -u
+    shell_type_signature:
+      base_command: diff
+      op_name: shell_diff
+      racket_symbol: shell-diff
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_dig:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: dig
+      op_name: shell_dig
+      racket_symbol: shell-dig
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_du:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_all_files: -a
+      submode_depth: -d
+      submode_summary: -sh
+    shell_type_signature:
+      base_command: du
+      op_name: shell_du
+      racket_symbol: shell-du
+    shell_type_symmetry:
+      type_symmetry_class: shell_single_value
+  cli_file:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_brief: -b
+      submode_mime: --mime-type
+    shell_type_signature:
+      base_command: file
+      op_name: shell_file
+      racket_symbol: shell-file
+    shell_type_symmetry:
+      type_symmetry_class: shell_single_value
+  cli_find:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_by_mtime: -mtime
+      submode_by_name: -name
+      submode_by_size: -size
+      submode_dirs_only: -type d
+      submode_files_only: -type f
+      submode_max_depth: -maxdepth
+    shell_type_signature:
+      base_command: find
+      op_name: shell_find
+      racket_symbol: shell-find
+    shell_type_symmetry:
+      type_symmetry_class: shell_tree
+  cli_git:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_add: add
+      submode_bisect: bisect
+      submode_blame: blame
+      submode_branch: branch
+      submode_checkout: checkout
+      submode_clone: clone
+      submode_commit: commit
+      submode_diff: diff
+      submode_init: init
+      submode_log: log
+      submode_log_oneline: log --oneline
+      submode_merge: merge
+      submode_pull: pull
+      submode_push: push
+      submode_rebase: rebase
+      submode_stash: stash
+      submode_stash_pop: stash pop
+      submode_status: status
+      submode_tag: tag
+    shell_type_signature:
+      base_command: git
+      op_name: shell_git
+      racket_symbol: shell-git
+    shell_type_symmetry:
+      type_symmetry_class: shell_vcs
+  cli_grep:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_case_insensitive: -i
+      submode_count: -c
+      submode_extended_regex: -E
+      submode_filenames_only: -l
+      submode_invert: -v
+      submode_line_numbers: -n
+      submode_recursive: -r
+    shell_type_signature:
+      base_command: grep
+      op_name: shell_grep
+      racket_symbol: shell-grep
+    shell_type_symmetry:
+      type_symmetry_class: shell_filtered_lines
+  cli_gzip:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_best: "-9"
+      submode_decompress: -d
+      submode_keep: -k
+    shell_type_signature:
+      base_command: gzip
+      op_name: shell_gzip
+      racket_symbol: shell-gzip
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_head:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_lines: -n
+    shell_type_signature:
+      base_command: head
+      op_name: shell_head
+      racket_symbol: shell-head
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_jq:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_compact: -c
+      submode_raw: -r
+      submode_slurp: -s
+    shell_type_signature:
+      base_command: jq
+      op_name: shell_jq
+      racket_symbol: shell-jq
+    shell_type_symmetry:
+      type_symmetry_class: shell_structured
+  cli_kill:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: kill
+      op_name: shell_kill
+      racket_symbol: shell-kill
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_ln:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_force: -sf
+      submode_symbolic: -s
+    shell_type_signature:
+      base_command: ln
+      op_name: shell_ln
+      racket_symbol: shell-ln
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_ls:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_all: -a
+      submode_all_long: -la
+      submode_by_size: -lS
+      submode_by_time: -lt
+      submode_long: -l
+      submode_recursive: -R
+    shell_type_signature:
+      base_command: ls
+      op_name: shell_ls
+      racket_symbol: shell-ls
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_lsof:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: lsof
+      op_name: shell_lsof
+      racket_symbol: shell-lsof
+    shell_type_symmetry:
+      type_symmetry_class: shell_tabular
+  cli_mdfind:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_name: -name
+      submode_onlyin: -onlyin
+    shell_type_signature:
+      base_command: mdfind
+      op_name: shell_mdfind
+      racket_symbol: shell-mdfind
+    shell_type_symmetry:
+      type_symmetry_class: shell_tree
+  cli_mkdir:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_parents: -p
+    shell_type_signature:
+      base_command: mkdir
+      op_name: shell_mkdir
+      racket_symbol: shell-mkdir
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_mv:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_interactive: -i
+      submode_no_clobber: -n
+      submode_verbose: -v
+    shell_type_signature:
+      base_command: mv
+      op_name: shell_mv
+      racket_symbol: shell-mv
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_nc:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: nc
+      op_name: shell_nc
+      racket_symbol: shell-nc
+    shell_type_symmetry:
+      type_symmetry_class: shell_network
+  cli_open:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_reveal: -R
+      submode_textedit: -e
+      submode_with_app: -a
+    shell_type_signature:
+      base_command: open
+      op_name: shell_open
+      racket_symbol: shell-open
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_openssl:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_md5: dgst -md5
+      submode_sha256: dgst -sha256
+    shell_type_signature:
+      base_command: openssl
+      op_name: shell_openssl
+      racket_symbol: shell-openssl
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_paste:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: paste
+      op_name: shell_paste
+      racket_symbol: shell-paste
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_pbcopy:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: pbcopy
+      op_name: shell_pbcopy
+      racket_symbol: shell-pbcopy
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_pbpaste:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: pbpaste
+      op_name: shell_pbpaste
+      racket_symbol: shell-pbpaste
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_ping:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: ping
+      op_name: shell_ping
+      racket_symbol: shell-ping
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_pkill:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: pkill
+      op_name: shell_pkill
+      racket_symbol: shell-pkill
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_plutil:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_convert_json: -convert json
+      submode_convert_xml: -convert xml1
+      submode_print: -p
+    shell_type_signature:
+      base_command: plutil
+      op_name: shell_plutil
+      racket_symbol: shell-plutil
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_ps:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_aux: aux
+      submode_by_cpu: aux --sort=-%cpu
+      submode_by_mem: aux --sort=-%mem
+      submode_every: -e
+      submode_full: -ef
+    shell_type_signature:
+      base_command: ps
+      op_name: shell_ps
+      racket_symbol: shell-ps
+    shell_type_symmetry:
+      type_symmetry_class: shell_tabular
+  cli_rm:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_force: -rf
+      submode_interactive: -i
+      submode_recursive: -r
+    shell_type_signature:
+      base_command: rm
+      op_name: shell_rm
+      racket_symbol: shell-rm
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_rsync:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_archive: -a
+      submode_archive_verbose: -av
+      submode_dry_run: -avn
+    shell_type_signature:
+      base_command: rsync
+      op_name: shell_rsync
+      racket_symbol: shell-rsync
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_scp:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_recursive: -r
+    shell_type_signature:
+      base_command: scp
+      op_name: shell_scp
+      racket_symbol: shell-scp
+    shell_type_symmetry:
+      type_symmetry_class: shell_network
+  cli_screen:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_list: -ls
+      submode_new_session: -S
+      submode_reattach: -r
+    shell_type_signature:
+      base_command: screen
+      op_name: shell_screen
+      racket_symbol: shell-screen
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_sed:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_extended: -E
+      submode_in_place: -i ''
+    shell_type_signature:
+      base_command: sed
+      op_name: shell_sed
+      racket_symbol: shell-sed
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_shasum:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_sha256: -a 256
+      submode_sha512: -a 512
+    shell_type_signature:
+      base_command: shasum
+      op_name: shell_shasum
+      racket_symbol: shell-shasum
+    shell_type_symmetry:
+      type_symmetry_class: shell_single_value
+  cli_sort:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_numeric: -n
+      submode_numeric_reverse: -nr
+      submode_reverse: -r
+      submode_unique: -u
+    shell_type_signature:
+      base_command: sort
+      op_name: shell_sort
+      racket_symbol: shell-sort
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_ssh:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: ssh
+      op_name: shell_ssh
+      racket_symbol: shell-ssh
+    shell_type_symmetry:
+      type_symmetry_class: shell_network
+  cli_stat:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_mtime: -f %m
+      submode_permissions: -f %p
+      submode_size: -f %z
+      submode_type: -f %T
+    shell_type_signature:
+      base_command: stat
+      op_name: shell_stat
+      racket_symbol: shell-stat
+    shell_type_symmetry:
+      type_symmetry_class: shell_single_value
+  cli_tail:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_follow: -f
+      submode_lines: -n
+    shell_type_signature:
+      base_command: tail
+      op_name: shell_tail
+      racket_symbol: shell-tail
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_tar:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_create: -cf
+      submode_create_gz: -czf
+      submode_extract: -xf
+      submode_extract_bz2: -xjf
+      submode_extract_gz: -xzf
+      submode_extract_xz: -xJf
+      submode_list: -tf
+    shell_type_signature:
+      base_command: tar
+      op_name: shell_tar
+      racket_symbol: shell-tar
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_tee:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_append: -a
+    shell_type_signature:
+      base_command: tee
+      op_name: shell_tee
+      racket_symbol: shell-tee
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_tmux:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_attach: attach -t
+      submode_list_sessions: list-sessions
+      submode_new_session: new-session -s
+      submode_send_keys: send-keys
+      submode_split_h: split-window -h
+      submode_split_v: split-window -v
+    shell_type_signature:
+      base_command: tmux
+      op_name: shell_tmux
+      racket_symbol: shell-tmux
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_tr:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_delete: -d
+      submode_squeeze: -s
+    shell_type_signature:
+      base_command: tr
+      op_name: shell_tr
+      racket_symbol: shell-tr
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_uname:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_all: -a
+    shell_type_signature:
+      base_command: uname
+      op_name: shell_uname
+      racket_symbol: shell-uname
+    shell_type_symmetry:
+      type_symmetry_class: shell_single_value
+  cli_unrar:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_extract: x
+    shell_type_signature:
+      base_command: unrar
+      op_name: shell_unrar
+      racket_symbol: shell-unrar
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_unzip:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_extract: -o
+      submode_list: -l
+    shell_type_signature:
+      base_command: unzip
+      op_name: shell_unzip
+      racket_symbol: shell-unzip
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_uptime:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: uptime
+      op_name: shell_uptime
+      racket_symbol: shell-uptime
+    shell_type_symmetry:
+      type_symmetry_class: shell_single_value
+  cli_watch:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: watch
+      op_name: shell_watch
+      racket_symbol: shell-watch
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_wc:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_bytes: -c
+      submode_chars: -m
+      submode_lines: -l
+      submode_words: -w
+    shell_type_signature:
+      base_command: wc
+      op_name: shell_wc
+      racket_symbol: shell-wc
+    shell_type_symmetry:
+      type_symmetry_class: shell_single_value
+  cli_xattr:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_clear: -c
+      submode_delete: -d
+      submode_list: -l
+      submode_print: -p
+      submode_write: -w
+    shell_type_signature:
+      base_command: xattr
+      op_name: shell_xattr
+      racket_symbol: shell-xattr
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_xz:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_decompress: -d
+      submode_keep: -k
+    shell_type_signature:
+      base_command: xz
+      op_name: shell_xz
+      racket_symbol: shell-xz
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_yq:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_json_out: -o=json
+      submode_raw: -r
+    shell_type_signature:
+      base_command: yq
+      op_name: shell_yq
+      racket_symbol: shell-yq
+    shell_type_symmetry:
+      type_symmetry_class: shell_structured
+  cli_zip:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_add: -g
+      submode_create: -r
+    shell_type_signature:
+      base_command: zip
+      op_name: shell_zip
+      racket_symbol: shell-zip
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
 relations:
   - kind: ordinal
     id: rel_shell_category

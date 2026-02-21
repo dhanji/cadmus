@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::collections::HashSet;
+use serde::de::Deserializer;
+use std::collections::{BTreeMap, HashMap};
+use std::collections::{HashSet};
 use std::path::Path;
 
 use crate::types::{EngineError, Result};
@@ -99,18 +100,116 @@ pub struct UncertaintyEntry {
     pub text: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// ---------------------------------------------------------------------------
+// Compact property format
+// ---------------------------------------------------------------------------
+//
+// YAML layout:
+//   compact_properties:
+//     <entity>:
+//       <axis>:
+//         <key>: <value>            # simple string
+//         <key>:                    # extended — with ordinal/note
+//           value: <value>
+//           ordinal: <int>
+//           note: <string>
+//
+// Expands into Vec<Property> at load time.
+
+/// A compact property value: either a plain string or a map with
+/// `value`, optional `ordinal`, and optional `note`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum CompactValue {
+    Simple(String),
+    Extended {
+        value: String,
+        #[serde(default)]
+        ordinal: Option<i32>,
+        #[serde(default)]
+        note: Option<String>,
+    },
+}
+
+/// entity → axis → key → value
+type CompactProperties = BTreeMap<String, BTreeMap<String, BTreeMap<String, CompactValue>>>;
+
+/// Expand compact properties into the flat [`Vec<Property>`] that all
+/// downstream code expects.
+fn expand_compact_properties(compact: &CompactProperties) -> Vec<Property> {
+    let mut out = Vec::new();
+    // BTreeMap iterates in sorted order — deterministic output.
+    for (entity, axes_map) in compact {
+        for (axis, keys_map) in axes_map {
+            for (key, cv) in keys_map {
+                let (value, ordinal, note) = match cv {
+                    CompactValue::Simple(v) => (v.clone(), None, None),
+                    CompactValue::Extended { value, ordinal, note } => {
+                        (value.clone(), *ordinal, note.clone())
+                    }
+                };
+                out.push(Property {
+                    entity: entity.clone(),
+                    axis: axis.clone(),
+                    key: key.clone(),
+                    value,
+                    ordinal,
+                    note,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Raw YAML shape — has `compact_properties` instead of `properties`.
+#[derive(Debug, Deserialize)]
+struct RawFactPack {
+    entities: Vec<Entity>,
+    axes: Vec<Axis>,
+    claims: Vec<Claim>,
+    evidence: Vec<Evidence>,
+    #[serde(default)]
+    compact_properties: CompactProperties,
+    #[serde(default)]
+    relations: Vec<Relation>,
+    #[serde(default)]
+    uncertainties: Vec<UncertaintyEntry>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct FactPack {
     pub entities: Vec<Entity>,
     pub axes: Vec<Axis>,
     pub claims: Vec<Claim>,
     pub evidence: Vec<Evidence>,
-    #[serde(default)]
+    /// Expanded from `compact_properties` during deserialization.
+    /// In YAML, write as `compact_properties:` (entity → axis → key → value).
+    /// At runtime, this is the flat `Vec<Property>` that all downstream code uses.
     pub properties: Vec<Property>,
     #[serde(default)]
     pub relations: Vec<Relation>,
     #[serde(default)]
     pub uncertainties: Vec<UncertaintyEntry>,
+}
+
+impl<'de> Deserialize<'de> for FactPack {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawFactPack::deserialize(deserializer)?;
+        let properties = expand_compact_properties(&raw.compact_properties);
+        Ok(FactPack {
+            entities: raw.entities,
+            axes: raw.axes,
+            claims: raw.claims,
+            evidence: raw.evidence,
+            properties,
+            relations: raw.relations,
+            uncertainties: raw.uncertainties,
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +524,7 @@ uncertainties: []
 
     fn pack_a() -> FactPack {
         serde_yaml::from_str(r#"
+
 entities:
   - id: tmux
     name: "tmux"
@@ -456,12 +556,12 @@ evidence:
   - id: ev_tmux_perf
     supports: tmux_perf
     text: "Measured on macOS 14"
-properties:
-  - entity: tmux
-    axis: performance
-    key: startup_ms
-    value: "50"
-    ordinal: 50
+compact_properties:
+  tmux:
+    performance:
+      startup_ms:
+        value: "50"
+        ordinal: 50
 relations:
   - kind: ordinal
     id: rel_startup
@@ -509,12 +609,12 @@ evidence:
   - id: ev_git_perf
     supports: git_perf
     text: "Measured on large repo"
-properties:
-  - entity: git
-    axis: performance
-    key: startup_ms
-    value: "100"
-    ordinal: 100
+compact_properties:
+  git:
+    performance:
+      startup_ms:
+        value: "100"
+        ordinal: 100
 relations:
   - kind: ordinal
     id: rel_startup

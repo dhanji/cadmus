@@ -307,116 +307,79 @@ evidence:
 # These are the RAW INPUTS the theory layer uses to DERIVE comparisons.
 # No property references another entity.
 # ---------------------------------------------------------------------------
-properties:
-  # -- Coercion scale --
-  - entity: putin
-    axis: coercion
-    key: repression_scale
-    value: targeted
-    ordinal: 2
-    note: "Selective targeting of individuals: journalists, opposition leaders, defectors."
-
-  - entity: stalin
-    axis: coercion
-    key: repression_scale
-    value: mass
-    ordinal: 5
-    note: "Systematic mass repression affecting millions through purges, deportations, and forced labor."
-
-  # -- Ideology coherence --
-  - entity: putin
-    axis: ideology
-    key: ideological_coherence
-    value: instrumental
-    ordinal: 1
-    note: "No formal state doctrine; ideology deployed tactically."
-
-  - entity: stalin
-    axis: ideology
-    key: ideological_coherence
-    value: totalizing
-    ordinal: 5
-    note: "Marxism-Leninism enforced as mandatory doctrine across all spheres."
-
-  # -- Foreign policy aggression --
-  - entity: putin
-    axis: foreign_policy_risk
-    key: military_directness
-    value: direct
-    ordinal: 4
-    note: "Direct military interventions in Georgia, Ukraine, Syria."
-
-  - entity: stalin
-    axis: foreign_policy_risk
-    key: military_directness
-    value: indirect
-    ordinal: 2
-    note: "Preferred proxy conflicts and diplomatic coercion over direct confrontation."
-
-  # -- Information control degree --
-  - entity: putin
-    axis: information_control
-    key: media_control_degree
-    value: partial
-    ordinal: 3
-    note: "Controls broadcast media; internet partially restricted but not fully censored."
-
-  - entity: stalin
-    axis: information_control
-    key: media_control_degree
-    value: total
-    ordinal: 5
-    note: "Complete state monopoly on all information channels."
-
-  # -- Elite control mechanism --
-  - entity: putin
-    axis: elite_control
-    key: control_mechanism
-    value: co-optation
-    ordinal: 2
-    note: "Bargain-based: loyalty exchanged for wealth and position."
-
-  - entity: stalin
-    axis: elite_control
-    key: control_mechanism
-    value: terror
-    ordinal: 5
-    note: "No elite was safe; rotation and elimination of subordinates."
-
-  # -- Economic state control --
-  - entity: putin
-    axis: economic_management
-    key: state_control_degree
-    value: partial_state
-    ordinal: 3
-    note: "State-controlled champions in key sectors; private enterprise exists."
-
-  - entity: stalin
-    axis: economic_management
-    key: state_control_degree
-    value: total_command
-    ordinal: 5
-    note: "Complete command economy; all private enterprise eliminated."
-
-  # -- Legitimacy basis --
-  - entity: putin
-    axis: legitimacy
-    key: legitimacy_basis
-    value: electoral_managed
-    ordinal: 3
-    note: "Managed elections and plebiscitary approval."
-
-  - entity: stalin
-    axis: legitimacy
-    key: legitimacy_basis
-    value: revolutionary_mythic
-    ordinal: 4
-    note: "Revolutionary credentials and cult of personality."
-
-# ---------------------------------------------------------------------------
-# Relations: entity-blind structural metadata about axes.
-# NO cross-entity references. NO comparative judgments.
-# ---------------------------------------------------------------------------
+compact_properties:
+  putin:
+    coercion:
+      repression_scale:
+        value: targeted
+        ordinal: 2
+        note: "Selective targeting of individuals: journalists, opposition leaders, defectors."
+    economic_management:
+      state_control_degree:
+        value: partial_state
+        ordinal: 3
+        note: State-controlled champions in key sectors; private enterprise exists.
+    elite_control:
+      control_mechanism:
+        value: co-optation
+        ordinal: 2
+        note: "Bargain-based: loyalty exchanged for wealth and position."
+    foreign_policy_risk:
+      military_directness:
+        value: direct
+        ordinal: 4
+        note: Direct military interventions in Georgia, Ukraine, Syria.
+    ideology:
+      ideological_coherence:
+        value: instrumental
+        ordinal: 1
+        note: No formal state doctrine; ideology deployed tactically.
+    information_control:
+      media_control_degree:
+        value: partial
+        ordinal: 3
+        note: Controls broadcast media; internet partially restricted but not fully censored.
+    legitimacy:
+      legitimacy_basis:
+        value: electoral_managed
+        ordinal: 3
+        note: Managed elections and plebiscitary approval.
+  stalin:
+    coercion:
+      repression_scale:
+        value: mass
+        ordinal: 5
+        note: Systematic mass repression affecting millions through purges, deportations, and forced labor.
+    economic_management:
+      state_control_degree:
+        value: total_command
+        ordinal: 5
+        note: Complete command economy; all private enterprise eliminated.
+    elite_control:
+      control_mechanism:
+        value: terror
+        ordinal: 5
+        note: No elite was safe; rotation and elimination of subordinates.
+    foreign_policy_risk:
+      military_directness:
+        value: indirect
+        ordinal: 2
+        note: Preferred proxy conflicts and diplomatic coercion over direct confrontation.
+    ideology:
+      ideological_coherence:
+        value: totalizing
+        ordinal: 5
+        note: Marxism-Leninism enforced as mandatory doctrine across all spheres.
+    information_control:
+      media_control_degree:
+        value: total
+        ordinal: 5
+        note: Complete state monopoly on all information channels.
+    legitimacy:
+      legitimacy_basis:
+        value: revolutionary_mythic
+        ordinal: 4
+        note: Revolutionary credentials and cult of personality.
 relations:
   # Hierarchy: coercion subdivides into surveillance, purges, imprisonment
   - id: rel_hierarchy_coercion

@@ -298,17 +298,17 @@ evidence:
     text: "PostgreSQL's MVCC implementation avoids read locks entirely"
     source: "PostgreSQL documentation"
 
-properties:
-  - entity: postgres
-    axis: performance
-    key: max_connections_default
-    value: "100"
-    ordinal: 100
-  - entity: mysql
-    axis: performance
-    key: max_connections_default
-    value: "151"
-    ordinal: 151
+compact_properties:
+  postgres:
+    performance:
+      max_connections_default:
+        value: "100"
+        ordinal: 100
+  mysql:
+    performance:
+      max_connections_default:
+        value: "151"
+        ordinal: 151
 
 relations:
   - kind: hierarchy
@@ -663,17 +663,17 @@ evidence:
     text: "WAL mode allows concurrent reads but still single writer"
     source: "SQLite docs"
 
-properties:
-  - entity: postgres
-    axis: concurrency
-    key: max_writers
-    value: "unlimited"
-    ordinal: 1000
-  - entity: sqlite
-    axis: concurrency
-    key: max_writers
-    value: "1"
-    ordinal: 1
+compact_properties:
+  postgres:
+    concurrency:
+      max_writers:
+        value: unlimited
+        ordinal: 1000
+  sqlite:
+    concurrency:
+      max_writers:
+        value: "1"
+        ordinal: 1
 
 relations:
   - kind: ordinal
@@ -915,8 +915,14 @@ claims:
   - { id, entity, axis, sub_axis?, text }
 evidence:
   - { id, supports, text, source? }
-properties:
-  - { entity, axis, key, value, ordinal?, note? }
+compact_properties:
+  <entity>:
+    <axis>:
+      <key>: <value>                    # simple string
+      <key>:                            # extended (ordinal/note)
+        value: <value>
+        ordinal: <int>
+        note: <string>
 relations:
   - { kind: hierarchy, id, axis, parent, children: [...] }
   - { kind: ordinal, id, axis, property_key, direction, note? }
@@ -1286,34 +1292,22 @@ claims:
 **Step 3: Add properties**
 
 ```yaml
-properties:
-  # Required: op_name, racket_symbol, base_command, category_name, type_symmetry_class
-  - entity: cli_mv
-    key: op_name
-    value: "shell_mv"
-  - entity: cli_mv
-    key: racket_symbol
-    value: "shell-mv"
-  - entity: cli_mv
-    key: base_command
-    value: "mv"
-  - entity: cli_mv
-    key: category_name
-    value: "shell"
-  - entity: cli_mv
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # Optional: submodes (flag variants)
-  - entity: cli_mv
-    key: submode_interactive
-    value: "-i"
-  - entity: cli_mv
-    key: submode_verbose
-    value: "-v"
-  - entity: cli_mv
-    key: submode_no_clobber
-    value: "-n"
+compact_properties:
+  cli_mv:
+    # Required: op_name, racket_symbol, base_command, category_name, type_symmetry_class
+    shell_type_signature:
+      op_name: shell_mv
+      racket_symbol: shell-mv
+      base_command: mv
+    shell_category:
+      category_name: shell
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+    # Optional: submodes (flag variants)
+    shell_submodes:
+      submode_interactive: "-i"
+      submode_verbose: "-v"
+      submode_no_clobber: "-n"
 ```
 
 **Step 4: Add the entity to `data/packs/facts/racket_facts.yaml`** (if it's a new anchor)

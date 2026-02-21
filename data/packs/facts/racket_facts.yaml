@@ -457,1465 +457,625 @@ evidence:
 # ---------------------------------------------------------------------------
 # Properties — structured key-value data for the reasoner
 # ---------------------------------------------------------------------------
-properties:
-  # --- Racket symbols ---
-  - entity: op_add
-    axis: type_signature
-    key: racket_symbol
-    value: "+"
-
-  - entity: op_subtract
-    axis: type_signature
-    key: racket_symbol
-    value: "-"
-
-  - entity: op_multiply
-    axis: type_signature
-    key: racket_symbol
-    value: "*"
-
-  - entity: op_divide
-    axis: type_signature
-    key: racket_symbol
-    value: "/"
-
-  # --- Op name mapping (entity id → ops pack name) ---
-  - entity: op_add
-    axis: type_signature
-    key: op_name
-    value: "add"
-
-  - entity: op_subtract
-    axis: type_signature
-    key: op_name
-    value: "subtract"
-
-  - entity: op_multiply
-    axis: type_signature
-    key: op_name
-    value: "multiply"
-
-  - entity: op_divide
-    axis: type_signature
-    key: op_name
-    value: "divide"
-
-  # --- Symmetric partner declarations ---
-  # The reasoner reads these to know which ops are inverse pairs.
-  - entity: op_add
-    axis: symmetry
-    key: symmetric_partner
-    value: "op_subtract"
-
-  - entity: op_subtract
-    axis: symmetry
-    key: symmetric_partner
-    value: "op_add"
-
-  - entity: op_multiply
-    axis: symmetry
-    key: symmetric_partner
-    value: "op_divide"
-
-  - entity: op_divide
-    axis: symmetry
-    key: symmetric_partner
-    value: "op_multiply"
-
-  # --- Keyword → operator mappings ---
-  # Each keyword property maps a natural language word to the entity.
-  # The reasoner/NL layer reads these to resolve "add" → op_add → "+"
-  - entity: op_add
-    axis: keywords
-    key: keyword_add
-    value: "add"
-  - entity: op_add
-    axis: keywords
-    key: keyword_addition
-    value: "addition"
-  - entity: op_add
-    axis: keywords
-    key: keyword_plus
-    value: "plus"
-  - entity: op_add
-    axis: keywords
-    key: keyword_sum
-    value: "sum"
-  - entity: op_add
-    axis: keywords
-    key: keyword_total
-    value: "total"
-  - entity: op_add
-    axis: keywords
-    key: keyword_combine
-    value: "combine"
-
-  - entity: op_subtract
-    axis: keywords
-    key: keyword_subtract
-    value: "subtract"
-  - entity: op_subtract
-    axis: keywords
-    key: keyword_subtraction
-    value: "subtraction"
-  - entity: op_subtract
-    axis: keywords
-    key: keyword_minus
-    value: "minus"
-  - entity: op_subtract
-    axis: keywords
-    key: keyword_difference
-    value: "difference"
-  - entity: op_subtract
-    axis: keywords
-    key: keyword_deduct
-    value: "deduct"
-
-  - entity: op_multiply
-    axis: keywords
-    key: keyword_multiply
-    value: "multiply"
-  - entity: op_multiply
-    axis: keywords
-    key: keyword_multiplication
-    value: "multiplication"
-  - entity: op_multiply
-    axis: keywords
-    key: keyword_times
-    value: "times"
-  - entity: op_multiply
-    axis: keywords
-    key: keyword_product
-    value: "product"
-
-  - entity: op_divide
-    axis: keywords
-    key: keyword_divide
-    value: "divide"
-  - entity: op_divide
-    axis: keywords
-    key: keyword_division
-    value: "division"
-  - entity: op_divide
-    axis: keywords
-    key: keyword_quotient
-    value: "quotient"
-
-  # --- Category ordinals (all arithmetic = same ordinal) ---
-  - entity: op_add
-    axis: category
-    key: category_name
-    value: "arithmetic"
-    ordinal: 1
-
-  - entity: op_subtract
-    axis: category
-    key: category_name
-    value: "arithmetic"
-    ordinal: 1
-
-  - entity: op_multiply
-    axis: category
-    key: category_name
-    value: "arithmetic"
-    ordinal: 1
-
-  - entity: op_divide
-    axis: category
-    key: category_name
-    value: "arithmetic"
-    ordinal: 1
-
-  # --- Type symmetry class ---
-  # Ops in the same class AND same category share type structure.
-  # The inference engine uses this to generalize: if one member has a
-  # metasignature, stubs in the same class+category can inherit it.
-  # Class name is intentionally generic (binop = binary operator);
-  # the category gate (arithmetic) prevents cross-domain leakage.
-  - entity: op_add
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "binop"
-  - entity: op_subtract
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "binop"
-  - entity: op_multiply
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "binop"
-  - entity: op_divide
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "binop"
-
-  # =========================================================================
-  # List operation properties
-  # =========================================================================
-
-  # --- Racket symbols ---
-  - entity: op_cons
-    axis: type_signature
-    key: racket_symbol
-    value: "cons"
-  - entity: op_cdr
-    axis: type_signature
-    key: racket_symbol
-    value: "cdr"
-  - entity: op_remove
-    axis: type_signature
-    key: racket_symbol
-    value: "remove"
-  - entity: op_list_reverse
-    axis: type_signature
-    key: racket_symbol
-    value: "reverse"
-
-  # --- Op name mapping ---
-  - entity: op_cons
-    axis: type_signature
-    key: op_name
-    value: "cons"
-  - entity: op_cdr
-    axis: type_signature
-    key: op_name
-    value: "cdr"
-  - entity: op_remove
-    axis: type_signature
-    key: op_name
-    value: "remove"
-  - entity: op_list_reverse
-    axis: type_signature
-    key: op_name
-    value: "list_reverse"
-
-  # --- Category (list) ---
-  - entity: op_cons
-    axis: category
-    key: category_name
-    value: "list"
-  - entity: op_cdr
-    axis: category
-    key: category_name
-    value: "list"
-  - entity: op_remove
-    axis: category
-    key: category_name
-    value: "list"
-  - entity: op_list_reverse
-    axis: category
-    key: category_name
-    value: "list"
-
-  # --- Type symmetry classes ---
-  # list_elem_to_list: (a, List(a)) → List(a) — cons (anchor), remove
-  # list_to_list: (List(a)) → List(a) — cdr (anchor), list_reverse
-  - entity: op_cons
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "list_elem_to_list"
-  - entity: op_remove
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "list_elem_to_list"
-  - entity: op_cdr
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "list_to_list"
-  - entity: op_list_reverse
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "list_to_list"
-
-  # =========================================================================
-  # Comparison operation properties
-  # =========================================================================
-
-  # --- Racket symbols ---
-  - entity: op_less_than
-    axis: type_signature
-    key: racket_symbol
-    value: "<"
-  - entity: op_greater_than
-    axis: type_signature
-    key: racket_symbol
-    value: ">"
-  - entity: op_less_than_or_equal
-    axis: type_signature
-    key: racket_symbol
-    value: "<="
-  - entity: op_greater_than_or_equal
-    axis: type_signature
-    key: racket_symbol
-    value: ">="
-
-  # --- Op name mapping ---
-  - entity: op_less_than
-    axis: type_signature
-    key: op_name
-    value: "less_than"
-  - entity: op_greater_than
-    axis: type_signature
-    key: op_name
-    value: "greater_than"
-  - entity: op_less_than_or_equal
-    axis: type_signature
-    key: op_name
-    value: "less_than_or_equal"
-  - entity: op_greater_than_or_equal
-    axis: type_signature
-    key: op_name
-    value: "greater_than_or_equal"
-
-  # --- Category (comparison) ---
-  - entity: op_less_than
-    axis: category
-    key: category_name
-    value: "comparison"
-  - entity: op_greater_than
-    axis: category
-    key: category_name
-    value: "comparison"
-  - entity: op_less_than_or_equal
-    axis: category
-    key: category_name
-    value: "comparison"
-  - entity: op_greater_than_or_equal
-    axis: category
-    key: category_name
-    value: "comparison"
-
-  # --- Symmetric partner (less_than ↔ greater_than) ---
-  - entity: op_less_than
-    axis: symmetry
-    key: symmetric_partner
-    value: "op_greater_than"
-  - entity: op_greater_than
-    axis: symmetry
-    key: symmetric_partner
-    value: "op_less_than"
-
-  # --- Type symmetry classes ---
-  # comparison_binop: (Number, Number) → Boolean
-  # less_than (anchor), greater_than, lte, gte
-  - entity: op_less_than
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "comparison_binop"
-  - entity: op_greater_than
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "comparison_binop"
-  - entity: op_less_than_or_equal
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "comparison_binop"
-  - entity: op_greater_than_or_equal
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "comparison_binop"
-
-  # =========================================================================
-  # String operation properties
-  # =========================================================================
-
-  # --- Racket symbols ---
-  - entity: op_string_upcase
-    axis: type_signature
-    key: racket_symbol
-    value: "string-upcase"
-  - entity: op_string_downcase
-    axis: type_signature
-    key: racket_symbol
-    value: "string-downcase"
-
-  # --- Op name mapping ---
-  - entity: op_string_upcase
-    axis: type_signature
-    key: op_name
-    value: "string_upcase"
-  - entity: op_string_downcase
-    axis: type_signature
-    key: op_name
-    value: "string_downcase"
-
-  # --- Category (string) ---
-  - entity: op_string_upcase
-    axis: category
-    key: category_name
-    value: "string"
-  - entity: op_string_downcase
-    axis: category
-    key: category_name
-    value: "string"
-
-  # --- Type symmetry classes ---
-  # string_to_string: (String) → String
-  # string_upcase (anchor), string_downcase
-  - entity: op_string_upcase
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "string_to_string"
-  - entity: op_string_downcase
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "string_to_string"
-
-  # =========================================================================
-  # Shell operation properties
-  # =========================================================================
-
-  # --- shell_ls (anchor: shell_text_lines) ---
-  - entity: op_shell_ls
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-ls"
-  - entity: op_shell_ls
-    axis: type_signature
-    key: op_name
-    value: "shell_ls"
-  - entity: op_shell_ls
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_ls
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_cat (discovered via type-symmetric from shell_ls) ---
-  - entity: op_shell_cat
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-cat"
-  - entity: op_shell_cat
-    axis: type_signature
-    key: op_name
-    value: "shell_cat"
-  - entity: op_shell_cat
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_cat
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_head (discovered via type-symmetric from shell_ls) ---
-  - entity: op_shell_head
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-head"
-  - entity: op_shell_head
-    axis: type_signature
-    key: op_name
-    value: "shell_head"
-  - entity: op_shell_head
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_head
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_tail (discovered via type-symmetric from shell_ls) ---
-  - entity: op_shell_tail
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-tail"
-  - entity: op_shell_tail
-    axis: type_signature
-    key: op_name
-    value: "shell_tail"
-  - entity: op_shell_tail
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_tail
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_sort (discovered via type-symmetric from shell_ls) ---
-  - entity: op_shell_sort
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-sort"
-  - entity: op_shell_sort
-    axis: type_signature
-    key: op_name
-    value: "shell_sort"
-  - entity: op_shell_sort
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_sort
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_ps (anchor: shell_tabular) ---
-  - entity: op_shell_ps
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-ps"
-  - entity: op_shell_ps
-    axis: type_signature
-    key: op_name
-    value: "shell_ps"
-  - entity: op_shell_ps
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_ps
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_tabular"
-
-  # --- shell_df (discovered via type-symmetric from shell_ps) ---
-  - entity: op_shell_df
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-df"
-  - entity: op_shell_df
-    axis: type_signature
-    key: op_name
-    value: "shell_df"
-  - entity: op_shell_df
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_df
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_tabular"
-
-  # --- shell_find (anchor: shell_tree) ---
-  - entity: op_shell_find
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-find"
-  - entity: op_shell_find
-    axis: type_signature
-    key: op_name
-    value: "shell_find"
-  - entity: op_shell_find
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_find
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_tree"
-
-  # --- shell_grep (anchor: shell_filtered_lines) ---
-  - entity: op_shell_grep
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-grep"
-  - entity: op_shell_grep
-    axis: type_signature
-    key: op_name
-    value: "shell_grep"
-  - entity: op_shell_grep
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_grep
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_filtered_lines"
-
-  # --- shell_du (anchor: shell_single_value) ---
-  - entity: op_shell_du
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-du"
-  - entity: op_shell_du
-    axis: type_signature
-    key: op_name
-    value: "shell_du"
-  - entity: op_shell_du
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_du
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # --- shell_wc (discovered via type-symmetric from shell_du) ---
-  - entity: op_shell_wc
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-wc"
-  - entity: op_shell_wc
-    axis: type_signature
-    key: op_name
-    value: "shell_wc"
-  - entity: op_shell_wc
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_wc
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # --- shell_curl (anchor: shell_byte_stream) ---
-  - entity: op_shell_curl
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-curl"
-  - entity: op_shell_curl
-    axis: type_signature
-    key: op_name
-    value: "shell_curl"
-  - entity: op_shell_curl
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_curl
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_byte_stream"
-
-  # =========================================================================
-  # New shell operation properties (Phase 3 migration)
-  # =========================================================================
-
-  # --- shell_mv (anchor: shell_exec) ---
-  - entity: op_shell_mv
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-mv"
-  - entity: op_shell_mv
-    axis: type_signature
-    key: op_name
-    value: "shell_mv"
-  - entity: op_shell_mv
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_mv
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_cp ---
-  - entity: op_shell_cp
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-cp"
-  - entity: op_shell_cp
-    axis: type_signature
-    key: op_name
-    value: "shell_cp"
-  - entity: op_shell_cp
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_cp
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_rm ---
-  - entity: op_shell_rm
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-rm"
-  - entity: op_shell_rm
-    axis: type_signature
-    key: op_name
-    value: "shell_rm"
-  - entity: op_shell_rm
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_rm
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_mkdir ---
-  - entity: op_shell_mkdir
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-mkdir"
-  - entity: op_shell_mkdir
-    axis: type_signature
-    key: op_name
-    value: "shell_mkdir"
-  - entity: op_shell_mkdir
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_mkdir
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_ln ---
-  - entity: op_shell_ln
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-ln"
-  - entity: op_shell_ln
-    axis: type_signature
-    key: op_name
-    value: "shell_ln"
-  - entity: op_shell_ln
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_ln
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_chmod ---
-  - entity: op_shell_chmod
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-chmod"
-  - entity: op_shell_chmod
-    axis: type_signature
-    key: op_name
-    value: "shell_chmod"
-  - entity: op_shell_chmod
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_chmod
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_chown ---
-  - entity: op_shell_chown
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-chown"
-  - entity: op_shell_chown
-    axis: type_signature
-    key: op_name
-    value: "shell_chown"
-  - entity: op_shell_chown
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_chown
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_tar ---
-  - entity: op_shell_tar
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-tar"
-  - entity: op_shell_tar
-    axis: type_signature
-    key: op_name
-    value: "shell_tar"
-  - entity: op_shell_tar
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_tar
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_rsync ---
-  - entity: op_shell_rsync
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-rsync"
-  - entity: op_shell_rsync
-    axis: type_signature
-    key: op_name
-    value: "shell_rsync"
-  - entity: op_shell_rsync
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_rsync
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_open ---
-  - entity: op_shell_open
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-open"
-  - entity: op_shell_open
-    axis: type_signature
-    key: op_name
-    value: "shell_open"
-  - entity: op_shell_open
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_open
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_tee ---
-  - entity: op_shell_tee
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-tee"
-  - entity: op_shell_tee
-    axis: type_signature
-    key: op_name
-    value: "shell_tee"
-  - entity: op_shell_tee
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_tee
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_stat ---
-  - entity: op_shell_stat
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-stat"
-  - entity: op_shell_stat
-    axis: type_signature
-    key: op_name
-    value: "shell_stat"
-  - entity: op_shell_stat
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_stat
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # --- shell_shasum ---
-  - entity: op_shell_shasum
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-shasum"
-  - entity: op_shell_shasum
-    axis: type_signature
-    key: op_name
-    value: "shell_shasum"
-  - entity: op_shell_shasum
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_shasum
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # --- shell_file ---
-  - entity: op_shell_file
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-file"
-  - entity: op_shell_file
-    axis: type_signature
-    key: op_name
-    value: "shell_file"
-  - entity: op_shell_file
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_file
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # --- shell_uname ---
-  - entity: op_shell_uname
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-uname"
-  - entity: op_shell_uname
-    axis: type_signature
-    key: op_name
-    value: "shell_uname"
-  - entity: op_shell_uname
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_uname
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # --- shell_uptime ---
-  - entity: op_shell_uptime
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-uptime"
-  - entity: op_shell_uptime
-    axis: type_signature
-    key: op_name
-    value: "shell_uptime"
-  - entity: op_shell_uptime
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_uptime
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_single_value"
-
-  # --- shell_diff ---
-  - entity: op_shell_diff
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-diff"
-  - entity: op_shell_diff
-    axis: type_signature
-    key: op_name
-    value: "shell_diff"
-  - entity: op_shell_diff
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_diff
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_sed ---
-  - entity: op_shell_sed
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-sed"
-  - entity: op_shell_sed
-    axis: type_signature
-    key: op_name
-    value: "shell_sed"
-  - entity: op_shell_sed
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_sed
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_awk ---
-  - entity: op_shell_awk
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-awk"
-  - entity: op_shell_awk
-    axis: type_signature
-    key: op_name
-    value: "shell_awk"
-  - entity: op_shell_awk
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_awk
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_cut ---
-  - entity: op_shell_cut
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-cut"
-  - entity: op_shell_cut
-    axis: type_signature
-    key: op_name
-    value: "shell_cut"
-  - entity: op_shell_cut
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_cut
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_tr ---
-  - entity: op_shell_tr
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-tr"
-  - entity: op_shell_tr
-    axis: type_signature
-    key: op_name
-    value: "shell_tr"
-  - entity: op_shell_tr
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_tr
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_paste ---
-  - entity: op_shell_paste
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-paste"
-  - entity: op_shell_paste
-    axis: type_signature
-    key: op_name
-    value: "shell_paste"
-  - entity: op_shell_paste
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_paste
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_column ---
-  - entity: op_shell_column
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-column"
-  - entity: op_shell_column
-    axis: type_signature
-    key: op_name
-    value: "shell_column"
-  - entity: op_shell_column
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_column
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_base64 ---
-  - entity: op_shell_base64
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-base64"
-  - entity: op_shell_base64
-    axis: type_signature
-    key: op_name
-    value: "shell_base64"
-  - entity: op_shell_base64
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_base64
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_mdfind ---
-  - entity: op_shell_mdfind
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-mdfind"
-  - entity: op_shell_mdfind
-    axis: type_signature
-    key: op_name
-    value: "shell_mdfind"
-  - entity: op_shell_mdfind
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_mdfind
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_tree"
-
-  # --- shell_xattr ---
-  - entity: op_shell_xattr
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-xattr"
-  - entity: op_shell_xattr
-    axis: type_signature
-    key: op_name
-    value: "shell_xattr"
-  - entity: op_shell_xattr
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_xattr
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_pbcopy ---
-  - entity: op_shell_pbcopy
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-pbcopy"
-  - entity: op_shell_pbcopy
-    axis: type_signature
-    key: op_name
-    value: "shell_pbcopy"
-  - entity: op_shell_pbcopy
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_pbcopy
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_pbpaste ---
-  - entity: op_shell_pbpaste
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-pbpaste"
-  - entity: op_shell_pbpaste
-    axis: type_signature
-    key: op_name
-    value: "shell_pbpaste"
-  - entity: op_shell_pbpaste
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_pbpaste
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_plutil ---
-  - entity: op_shell_plutil
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-plutil"
-  - entity: op_shell_plutil
-    axis: type_signature
-    key: op_name
-    value: "shell_plutil"
-  - entity: op_shell_plutil
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_plutil
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_lsof ---
-  - entity: op_shell_lsof
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-lsof"
-  - entity: op_shell_lsof
-    axis: type_signature
-    key: op_name
-    value: "shell_lsof"
-  - entity: op_shell_lsof
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_lsof
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_tabular"
-
-  # --- shell_kill ---
-  - entity: op_shell_kill
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-kill"
-  - entity: op_shell_kill
-    axis: type_signature
-    key: op_name
-    value: "shell_kill"
-  - entity: op_shell_kill
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_kill
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_pkill ---
-  - entity: op_shell_pkill
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-pkill"
-  - entity: op_shell_pkill
-    axis: type_signature
-    key: op_name
-    value: "shell_pkill"
-  - entity: op_shell_pkill
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_pkill
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_watch ---
-  - entity: op_shell_watch
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-watch"
-  - entity: op_shell_watch
-    axis: type_signature
-    key: op_name
-    value: "shell_watch"
-  - entity: op_shell_watch
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_watch
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_git (anchor: shell_vcs) ---
-  - entity: op_shell_git
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-git"
-  - entity: op_shell_git
-    axis: type_signature
-    key: op_name
-    value: "shell_git"
-  - entity: op_shell_git
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_git
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_vcs"
-
-  # --- shell_jq (anchor: shell_structured) ---
-  - entity: op_shell_jq
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-jq"
-  - entity: op_shell_jq
-    axis: type_signature
-    key: op_name
-    value: "shell_jq"
-  - entity: op_shell_jq
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_jq
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_structured"
-
-  # --- shell_yq ---
-  - entity: op_shell_yq
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-yq"
-  - entity: op_shell_yq
-    axis: type_signature
-    key: op_name
-    value: "shell_yq"
-  - entity: op_shell_yq
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_yq
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_structured"
-
-  # --- shell_tmux (anchor: shell_session) ---
-  - entity: op_shell_tmux
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-tmux"
-  - entity: op_shell_tmux
-    axis: type_signature
-    key: op_name
-    value: "shell_tmux"
-  - entity: op_shell_tmux
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_tmux
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_session"
-
-  # --- shell_screen ---
-  - entity: op_shell_screen
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-screen"
-  - entity: op_shell_screen
-    axis: type_signature
-    key: op_name
-    value: "shell_screen"
-  - entity: op_shell_screen
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_screen
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_session"
-
-  # --- shell_ssh (anchor: shell_network) ---
-  - entity: op_shell_ssh
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-ssh"
-  - entity: op_shell_ssh
-    axis: type_signature
-    key: op_name
-    value: "shell_ssh"
-  - entity: op_shell_ssh
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_ssh
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_network"
-
-  # --- shell_scp ---
-  - entity: op_shell_scp
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-scp"
-  - entity: op_shell_scp
-    axis: type_signature
-    key: op_name
-    value: "shell_scp"
-  - entity: op_shell_scp
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_scp
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_network"
-
-  # --- shell_nc ---
-  - entity: op_shell_nc
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-nc"
-  - entity: op_shell_nc
-    axis: type_signature
-    key: op_name
-    value: "shell_nc"
-  - entity: op_shell_nc
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_nc
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_network"
-
-  # --- shell_ping ---
-  - entity: op_shell_ping
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-ping"
-  - entity: op_shell_ping
-    axis: type_signature
-    key: op_name
-    value: "shell_ping"
-  - entity: op_shell_ping
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_ping
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_dig ---
-  - entity: op_shell_dig
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-dig"
-  - entity: op_shell_dig
-    axis: type_signature
-    key: op_name
-    value: "shell_dig"
-  - entity: op_shell_dig
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_dig
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-  # --- shell_gzip ---
-  - entity: op_shell_gzip
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-gzip"
-  - entity: op_shell_gzip
-    axis: type_signature
-    key: op_name
-    value: "shell_gzip"
-  - entity: op_shell_gzip
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_gzip
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_xz ---
-  - entity: op_shell_xz
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-xz"
-  - entity: op_shell_xz
-    axis: type_signature
-    key: op_name
-    value: "shell_xz"
-  - entity: op_shell_xz
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_xz
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_exec"
-
-  # --- shell_openssl ---
-  - entity: op_shell_openssl
-    axis: type_signature
-    key: racket_symbol
-    value: "shell-openssl"
-  - entity: op_shell_openssl
-    axis: type_signature
-    key: op_name
-    value: "shell_openssl"
-  - entity: op_shell_openssl
-    axis: category
-    key: category_name
-    value: "shell"
-  - entity: op_shell_openssl
-    axis: type_symmetry
-    key: type_symmetry_class
-    value: "shell_text_lines"
-
-# ---------------------------------------------------------------------------
-# Relations
-# ---------------------------------------------------------------------------
+compact_properties:
+  op_add:
+    category:
+      category_name:
+        value: arithmetic
+        ordinal: 1
+    keywords:
+      keyword_add: add
+      keyword_addition: addition
+      keyword_combine: combine
+      keyword_plus: plus
+      keyword_sum: sum
+      keyword_total: total
+    symmetry:
+      symmetric_partner: op_subtract
+    type_signature:
+      op_name: add
+      racket_symbol: "+"
+    type_symmetry:
+      type_symmetry_class: binop
+  op_cdr:
+    category:
+      category_name: list
+    type_signature:
+      op_name: cdr
+      racket_symbol: cdr
+    type_symmetry:
+      type_symmetry_class: list_to_list
+  op_cons:
+    category:
+      category_name: list
+    type_signature:
+      op_name: cons
+      racket_symbol: cons
+    type_symmetry:
+      type_symmetry_class: list_elem_to_list
+  op_divide:
+    category:
+      category_name:
+        value: arithmetic
+        ordinal: 1
+    keywords:
+      keyword_divide: divide
+      keyword_division: division
+      keyword_quotient: quotient
+    symmetry:
+      symmetric_partner: op_multiply
+    type_signature:
+      op_name: divide
+      racket_symbol: "/"
+    type_symmetry:
+      type_symmetry_class: binop
+  op_greater_than:
+    category:
+      category_name: comparison
+    symmetry:
+      symmetric_partner: op_less_than
+    type_signature:
+      op_name: greater_than
+      racket_symbol: ">"
+    type_symmetry:
+      type_symmetry_class: comparison_binop
+  op_greater_than_or_equal:
+    category:
+      category_name: comparison
+    type_signature:
+      op_name: greater_than_or_equal
+      racket_symbol: ">="
+    type_symmetry:
+      type_symmetry_class: comparison_binop
+  op_less_than:
+    category:
+      category_name: comparison
+    symmetry:
+      symmetric_partner: op_greater_than
+    type_signature:
+      op_name: less_than
+      racket_symbol: "<"
+    type_symmetry:
+      type_symmetry_class: comparison_binop
+  op_less_than_or_equal:
+    category:
+      category_name: comparison
+    type_signature:
+      op_name: less_than_or_equal
+      racket_symbol: "<="
+    type_symmetry:
+      type_symmetry_class: comparison_binop
+  op_list_reverse:
+    category:
+      category_name: list
+    type_signature:
+      op_name: list_reverse
+      racket_symbol: reverse
+    type_symmetry:
+      type_symmetry_class: list_to_list
+  op_multiply:
+    category:
+      category_name:
+        value: arithmetic
+        ordinal: 1
+    keywords:
+      keyword_multiplication: multiplication
+      keyword_multiply: multiply
+      keyword_product: product
+      keyword_times: times
+    symmetry:
+      symmetric_partner: op_divide
+    type_signature:
+      op_name: multiply
+      racket_symbol: "*"
+    type_symmetry:
+      type_symmetry_class: binop
+  op_remove:
+    category:
+      category_name: list
+    type_signature:
+      op_name: remove
+      racket_symbol: remove
+    type_symmetry:
+      type_symmetry_class: list_elem_to_list
+  op_shell_awk:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_awk
+      racket_symbol: shell-awk
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_base64:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_base64
+      racket_symbol: shell-base64
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_cat:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_cat
+      racket_symbol: shell-cat
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_chmod:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_chmod
+      racket_symbol: shell-chmod
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_chown:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_chown
+      racket_symbol: shell-chown
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_column:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_column
+      racket_symbol: shell-column
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_cp:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_cp
+      racket_symbol: shell-cp
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_curl:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_curl
+      racket_symbol: shell-curl
+    type_symmetry:
+      type_symmetry_class: shell_byte_stream
+  op_shell_cut:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_cut
+      racket_symbol: shell-cut
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_df:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_df
+      racket_symbol: shell-df
+    type_symmetry:
+      type_symmetry_class: shell_tabular
+  op_shell_diff:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_diff
+      racket_symbol: shell-diff
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_dig:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_dig
+      racket_symbol: shell-dig
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_du:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_du
+      racket_symbol: shell-du
+    type_symmetry:
+      type_symmetry_class: shell_single_value
+  op_shell_file:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_file
+      racket_symbol: shell-file
+    type_symmetry:
+      type_symmetry_class: shell_single_value
+  op_shell_find:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_find
+      racket_symbol: shell-find
+    type_symmetry:
+      type_symmetry_class: shell_tree
+  op_shell_git:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_git
+      racket_symbol: shell-git
+    type_symmetry:
+      type_symmetry_class: shell_vcs
+  op_shell_grep:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_grep
+      racket_symbol: shell-grep
+    type_symmetry:
+      type_symmetry_class: shell_filtered_lines
+  op_shell_gzip:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_gzip
+      racket_symbol: shell-gzip
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_head:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_head
+      racket_symbol: shell-head
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_jq:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_jq
+      racket_symbol: shell-jq
+    type_symmetry:
+      type_symmetry_class: shell_structured
+  op_shell_kill:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_kill
+      racket_symbol: shell-kill
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_ln:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_ln
+      racket_symbol: shell-ln
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_ls:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_ls
+      racket_symbol: shell-ls
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_lsof:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_lsof
+      racket_symbol: shell-lsof
+    type_symmetry:
+      type_symmetry_class: shell_tabular
+  op_shell_mdfind:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_mdfind
+      racket_symbol: shell-mdfind
+    type_symmetry:
+      type_symmetry_class: shell_tree
+  op_shell_mkdir:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_mkdir
+      racket_symbol: shell-mkdir
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_mv:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_mv
+      racket_symbol: shell-mv
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_nc:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_nc
+      racket_symbol: shell-nc
+    type_symmetry:
+      type_symmetry_class: shell_network
+  op_shell_open:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_open
+      racket_symbol: shell-open
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_openssl:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_openssl
+      racket_symbol: shell-openssl
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_paste:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_paste
+      racket_symbol: shell-paste
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_pbcopy:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_pbcopy
+      racket_symbol: shell-pbcopy
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_pbpaste:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_pbpaste
+      racket_symbol: shell-pbpaste
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_ping:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_ping
+      racket_symbol: shell-ping
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_pkill:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_pkill
+      racket_symbol: shell-pkill
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_plutil:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_plutil
+      racket_symbol: shell-plutil
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_ps:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_ps
+      racket_symbol: shell-ps
+    type_symmetry:
+      type_symmetry_class: shell_tabular
+  op_shell_rm:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_rm
+      racket_symbol: shell-rm
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_rsync:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_rsync
+      racket_symbol: shell-rsync
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_scp:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_scp
+      racket_symbol: shell-scp
+    type_symmetry:
+      type_symmetry_class: shell_network
+  op_shell_screen:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_screen
+      racket_symbol: shell-screen
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_sed:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_sed
+      racket_symbol: shell-sed
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_shasum:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_shasum
+      racket_symbol: shell-shasum
+    type_symmetry:
+      type_symmetry_class: shell_single_value
+  op_shell_sort:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_sort
+      racket_symbol: shell-sort
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_ssh:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_ssh
+      racket_symbol: shell-ssh
+    type_symmetry:
+      type_symmetry_class: shell_network
+  op_shell_stat:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_stat
+      racket_symbol: shell-stat
+    type_symmetry:
+      type_symmetry_class: shell_single_value
+  op_shell_tail:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_tail
+      racket_symbol: shell-tail
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_tar:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_tar
+      racket_symbol: shell-tar
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_tee:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_tee
+      racket_symbol: shell-tee
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_tmux:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_tmux
+      racket_symbol: shell-tmux
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_tr:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_tr
+      racket_symbol: shell-tr
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_uname:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_uname
+      racket_symbol: shell-uname
+    type_symmetry:
+      type_symmetry_class: shell_single_value
+  op_shell_uptime:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_uptime
+      racket_symbol: shell-uptime
+    type_symmetry:
+      type_symmetry_class: shell_single_value
+  op_shell_watch:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_watch
+      racket_symbol: shell-watch
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_wc:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_wc
+      racket_symbol: shell-wc
+    type_symmetry:
+      type_symmetry_class: shell_single_value
+  op_shell_xattr:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_xattr
+      racket_symbol: shell-xattr
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_xz:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_xz
+      racket_symbol: shell-xz
+    type_symmetry:
+      type_symmetry_class: shell_exec
+  op_shell_yq:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_yq
+      racket_symbol: shell-yq
+    type_symmetry:
+      type_symmetry_class: shell_structured
+  op_string_downcase:
+    category:
+      category_name: string
+    type_signature:
+      op_name: string_downcase
+      racket_symbol: string-downcase
+    type_symmetry:
+      type_symmetry_class: string_to_string
+  op_string_upcase:
+    category:
+      category_name: string
+    type_signature:
+      op_name: string_upcase
+      racket_symbol: string-upcase
+    type_symmetry:
+      type_symmetry_class: string_to_string
+  op_subtract:
+    category:
+      category_name:
+        value: arithmetic
+        ordinal: 1
+    keywords:
+      keyword_deduct: deduct
+      keyword_difference: difference
+      keyword_minus: minus
+      keyword_subtract: subtract
+      keyword_subtraction: subtraction
+    symmetry:
+      symmetric_partner: op_add
+    type_signature:
+      op_name: subtract
+      racket_symbol: "-"
+    type_symmetry:
+      type_symmetry_class: binop
 relations:
   # Ordinal: all four ops share the same category ordinal (arithmetic)
   - kind: ordinal

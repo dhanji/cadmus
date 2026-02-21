@@ -146,21 +146,38 @@ Current packs:
 
 ## Fact Packs
 
-**`src/fact_pack.rs`** (~290 lines) + **`data/macos_fs.yaml`**, **`data/putin_stalin.yaml`**
+**`src/fact_pack.rs`** (~350 lines) + **`data/packs/facts/`**
 
 Domain knowledge as structured YAML. Currently loaded and indexed but
 **not consulted during planning** (Phase 6 deferred).
 
+```yaml
+# Compact property format — entity → axis → key → value
+compact_properties:
+  putin:
+    coercion:
+      repression_scale:          # extended value (ordinal + note)
+        value: targeted
+        ordinal: 2
+        note: "Selective targeting..."
+    legitimacy:
+      legitimacy_basis: electoral_managed   # simple string value
+```
+
+Properties are expanded into flat `Vec<Property>` at load time. All
+downstream code (FactPackIndex, theory, strategies) sees the same
+`Property { entity, axis, key, value, ordinal?, note? }` structs.
+
 ```rust
 struct FactPack { entities, axes, claims, evidence, properties, relations, uncertainties }
-struct FactPackIndex { pack, claims_by_axis_entity, evidence_by_claim, ... }
+struct FactPackIndex { pack, claims_by_axis_entity, evidence_by_claim, properties_by_axis_key_entity, ... }
 ```
 
 - `load_fact_pack(path) → FactPackIndex` — load and build indexes
 - Axes have optional `sub_axes` and `polarity`
 - Claims link entity + axis + text
 - Evidence links to a claim via `supports`
-- Properties are per-entity, per-axis key-value pairs with optional ordinals
+- Properties are per-entity, per-axis key-value pairs with optional ordinals and notes
 - Relations are tagged enums: `Hierarchy` or `Ordinal`
 
 ## Planners
