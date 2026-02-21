@@ -9,7 +9,7 @@
 #     discovers them from the fact pack (phase 0) and derives their
 #     signatures via symmetry/type-symmetry relations from add's metasig
 #   - List/set and composable ops follow the same TypeExpr patterns as
-#     fs_ops.yaml (Seq, Entry, etc.)
+#     fs.ops.yaml (Seq, Entry, etc.)
 #   - Printing ops use a simple Value → Unit pattern
 #   - Every op carries a `racket_symbol` — the actual Racket identifier
 #     used in s-expressions. The executor reads this at codegen time
@@ -28,7 +28,7 @@ ops:
   # 1. Arithmetic
   # =========================================================================
   # Only + is fully defined. -, *, / are stubs — the reasoner infers their
-  # full signatures from the symmetric_pair relations in racket_facts.yaml.
+  # full signatures from the symmetric_pair relations in racket.facts.yaml.
 
   - name: add
     racket_symbol: "+"
@@ -502,7 +502,7 @@ ops:
   # Each anchor represents an output-format class. Non-anchor tools in the
   # same class (e.g., cat, head, tail in shell_text_lines) are discovered
   # from the fact pack via type-symmetric inference. Submodes (flag variants)
-  # are discovered in Phase 4 from macos_cli_facts.yaml submode properties.
+  # are discovered in Phase 4 from macos_cli.facts.yaml submode properties.
   #
   # All shell ops produce List(String) (lines of output) or String (raw).
   # The Racket executor generates wrapper forms using (system ...) calls.

@@ -38,14 +38,14 @@ fn nl_to_compiled(input: &str) -> (workflow::WorkflowDef, workflow::CompiledWork
 
 fn build_racket_registry() -> cadmus::registry::OperationRegistry {
     let mut reg = cadmus::registry::load_ops_pack_str(
-        include_str!("../data/packs/ops/racket_ops.yaml")
-    ).expect("racket_ops.yaml");
+        include_str!("../data/packs/ops/racket.ops.yaml")
+    ).expect("racket.ops.yaml");
     let facts = cadmus::racket_strategy::load_racket_facts_from_str(
-        include_str!("../data/packs/facts/racket_facts.yaml")
-    ).expect("racket_facts.yaml");
+        include_str!("../data/packs/facts/racket.facts.yaml")
+    ).expect("racket.facts.yaml");
     cadmus::racket_strategy::promote_inferred_ops(&mut reg, &facts);
 
-    let cli_yaml = include_str!("../data/packs/facts/macos_cli_facts.yaml");
+    let cli_yaml = include_str!("../data/packs/facts/macos_cli.facts.yaml");
     if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(cli_yaml) {
         let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
         cadmus::racket_strategy::discover_shell_submodes(&mut reg, &facts, &cli_facts);

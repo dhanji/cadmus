@@ -12,16 +12,16 @@ use crate::registry::{OperationRegistry, load_ops_pack_str, load_ops_pack_str_in
 
 /// The embedded filesystem ops pack YAML.
 ///
-/// Phase 3 migration: the on-disk `data/fs_ops.yaml` file has been deleted.
+/// Phase 3 migration: the on-disk `data/fs.ops.yaml` file has been deleted.
 /// These ops are now registered as compatibility aliases — the actual
 /// execution is routed through the shell-callable subsumption map in
 /// `src/type_lowering.rs`. The YAML is kept embedded so that old op names
 /// (list_dir, walk_tree, etc.) remain resolvable by the workflow compiler
 /// and NL layer.
-const FS_OPS_YAML: &str = include_str!("../data/packs/ops/fs_ops.yaml");
+const FS_OPS_YAML: &str = include_str!("../data/packs/ops/fs.ops.yaml");
 
 /// The embedded power tools ops pack YAML (compatibility aliases).
-const POWER_TOOLS_OPS_YAML: &str = include_str!("../data/packs/ops/power_tools_ops.yaml");
+const POWER_TOOLS_OPS_YAML: &str = include_str!("../data/packs/ops/power_tools.ops.yaml");
 
 // ---------------------------------------------------------------------------
 // Registry builders
@@ -30,12 +30,12 @@ const POWER_TOOLS_OPS_YAML: &str = include_str!("../data/packs/ops/power_tools_o
 /// Build and return an OperationRegistry populated with the filesystem
 /// type vocabulary from the ops pack YAML.
 ///
-/// Uses the embedded copy of fs_ops.yaml (the on-disk file has been deleted
+/// Uses the embedded copy of fs.ops.yaml (the on-disk file has been deleted
 /// as part of the Phase 3 shell migration). These ops serve as compatibility
 /// aliases — execution is routed through the subsumption map.
 pub fn build_fs_registry() -> OperationRegistry {
     load_ops_pack_str(FS_OPS_YAML)
-        .expect("embedded fs_ops.yaml should always parse")
+        .expect("embedded fs.ops.yaml should always parse")
 }
 
 /// Build a full registry with both filesystem and power tools ops.
@@ -45,31 +45,31 @@ pub fn build_fs_registry() -> OperationRegistry {
 /// YAML packs, then runs inference to discover shell-callable forms.
 /// The embedded racket ops pack YAML, used as fallback when the file
 /// is not found on disk.
-const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
-const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket.ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket.facts.yaml");
 
 /// The embedded macOS CLI facts YAML, used as fallback when the file is not found on disk.
-const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli_facts.yaml");
+const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli.facts.yaml");
 
 pub fn build_full_registry() -> OperationRegistry {
     // Start with embedded fs_ops (compatibility aliases)
     let mut reg = load_ops_pack_str(FS_OPS_YAML)
-        .expect("embedded fs_ops.yaml should always parse");
+        .expect("embedded fs.ops.yaml should always parse");
 
     // Merge embedded power tools ops (compatibility aliases)
     let _ = load_ops_pack_str_into(POWER_TOOLS_OPS_YAML, &mut reg);
 
     // Merge racket ops
     let _ = load_ops_pack_str_into(
-        &std::fs::read_to_string("data/packs/ops/racket_ops.yaml")
+        &std::fs::read_to_string("data/packs/ops/racket.ops.yaml")
             .unwrap_or_else(|_| RACKET_OPS_YAML.to_string()),
         &mut reg,
     );
 
     // Run inference to discover and promote ops from the fact pack
-    // (e.g., subtract, multiply, divide are discovered from racket_facts.yaml)
+    // (e.g., subtract, multiply, divide are discovered from racket.facts.yaml)
     if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(
-        &std::fs::read_to_string("data/packs/facts/racket_facts.yaml")
+        &std::fs::read_to_string("data/packs/facts/racket.facts.yaml")
             .unwrap_or_else(|_| RACKET_FACTS_YAML.to_string()),
     ) {
         crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);
@@ -77,7 +77,7 @@ pub fn build_full_registry() -> OperationRegistry {
         // Phase 4: Shell submode discovery from macOS CLI facts
         // Reads submode_ properties from the CLI fact pack and creates
         // variadic form ops for each tool's flag variants.
-        let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli_facts.yaml")
+        let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli.facts.yaml")
             .unwrap_or_else(|_| MACOS_CLI_FACTS_YAML.to_string());
         if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(&cli_yaml) {
             let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);

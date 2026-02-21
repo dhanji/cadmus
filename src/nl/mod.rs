@@ -147,9 +147,9 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
                             // This runs the same inference pipeline as build_full_registry
                             // but for the Racket-specific ops.
                             let mut racket_reg = crate::registry::load_ops_pack_str(
-                                include_str!("../../data/packs/ops/racket_ops.yaml")
+                                include_str!("../../data/packs/ops/racket.ops.yaml")
                             ).unwrap_or_default();
-                            let racket_facts_yaml = include_str!("../../data/packs/facts/racket_facts.yaml");
+                            let racket_facts_yaml = include_str!("../../data/packs/facts/racket.facts.yaml");
                             if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(
                                 racket_facts_yaml
                             ) {
@@ -157,7 +157,7 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
 
                                 // Also discover shell submodes so extract_shell_meta()
                                 // works for subsumed fs_ops (Phase 2 type lowering).
-                                let cli_yaml = include_str!("../../data/packs/facts/macos_cli_facts.yaml");
+                                let cli_yaml = include_str!("../../data/packs/facts/macos_cli.facts.yaml");
                                 if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
                                     let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
                                     crate::racket_strategy::discover_shell_submodes(

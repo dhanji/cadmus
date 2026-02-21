@@ -151,7 +151,7 @@ steps:
     println!("    ↓ format_families: Cbz → zip");
     println!("    ↓ resolve_archive_op: extract_archive → extract_zip");
     println!("    ↓ type_lowering subsumption: extract_zip → shell_unzip_extract");
-    println!("    ↓ racket_ops.yaml: shell_unzip_extract → \"unzip -o\"");
+    println!("    ↓ racket.ops.yaml: shell_unzip_extract → \"unzip -o\"");
     println!("    = Racket: (shell-lines (string-append \"unzip -o \" (shell-quote path)))");
     println!();
     println!("  Compiled op name: {} (was: extract_archive)", compiled.steps[0].op);

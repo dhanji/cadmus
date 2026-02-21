@@ -113,7 +113,7 @@ Operations are defined as YAML data, loaded at runtime. Zero Rust
 recompilation to add ops.
 
 ```yaml
-# data/fs_ops.yaml
+# data/fs.ops.yaml
 ops:
   - name: list_dir
     type_params: [a]
@@ -140,9 +140,9 @@ Current packs:
 
 | File | Ops | Domain |
 |------|-----|--------|
-| `data/fs_ops.yaml` | 49 | Filesystem (POSIX + macOS) |
-| `data/comparison_ops.yaml` | 6 | Comparative reasoning |
-| `data/coding_ops.yaml` | 6 | Code analysis |
+| `data/fs.ops.yaml` | 49 | Filesystem (POSIX + macOS) |
+| `data/comparison.ops.yaml` | 6 | Comparative reasoning |
+| `data/coding.ops.yaml` | 6 | Code analysis |
 
 ## Fact Packs
 
@@ -238,13 +238,13 @@ The trait is the extension point. Each strategy:
 
 Compares entities across axes using fact pack data. Ops: `retrieve_claim`,
 `retrieve_evidence`, `compare`, `find_similarity`, `summarize`, `assess_uncertainty`.
-Uses the monomorphic planner. Loads `comparison_ops.yaml` for poly signatures.
+Uses the monomorphic planner. Loads `comparison.ops.yaml` for poly signatures.
 
 ### CodingStrategy (`src/coding_strategy.rs`, ~780 lines)
 
 Analyzes source code. Ops: `parse_source`, `analyze_types`, `detect_smells`,
 `plan_refactoring`, `generate_tests`, `compose`. Uses the monomorphic planner.
-Loads `coding_ops.yaml` for poly signatures.
+Loads `coding.ops.yaml` for poly signatures.
 
 ### FilesystemStrategy (`src/fs_strategy.rs`, ~400 lines)
 
@@ -330,7 +330,7 @@ Step forms:
 | `coding_strategy` | 780 | `CodingStrategy` |
 | `fs_strategy` | 400 | `FilesystemStrategy` + dry-run trace |
 | `fact_pack` | 290 | Fact pack YAML schema + indexed loader |
-| `fs_types` | 190 | `build_fs_registry()` — loads `fs_ops.yaml` |
+| `fs_types` | 190 | `build_fs_registry()` — loads `fs.ops.yaml` |
 | `types` | 310 | Core domain types (`Goal`, `Obligation`, `ReasoningOutput`) |
 | `planner` | 350 | Legacy obligation-based planner (pre-strategy) |
 | `pipeline` | 135 | Entry point — delegates to strategy |
@@ -341,11 +341,11 @@ Step forms:
 
 ```
 data/
-  fs_ops.yaml              49 filesystem ops (type signatures + properties)
-  comparison_ops.yaml       6 comparison ops
-  coding_ops.yaml           6 coding ops
-  macos_fs.yaml            Fact pack: macOS tool knowledge (~40 claims)
-  putin_stalin.yaml        Fact pack: political comparison domain
+  fs.ops.yaml              49 filesystem ops (type signatures + properties)
+  comparison.ops.yaml       6 comparison ops
+  coding.ops.yaml           6 coding ops
+  macos_fs.facts.yaml            Fact pack: macOS tool knowledge (~40 claims)
+  putin_stalin.facts.yaml        Fact pack: political comparison domain
   tiramisu_cheesecake.yaml Fact pack: dessert comparison domain
   workflows/               9 workflow YAML examples
 ```

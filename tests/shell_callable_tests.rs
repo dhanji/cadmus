@@ -3,7 +3,7 @@
 // ==========================================================================
 //
 // Tests for the shell-callable ops feature:
-//   - Fact pack loading (macos_cli_facts.yaml)
+//   - Fact pack loading (macos_cli.facts.yaml)
 //   - Anchor registration (shell_ls, shell_ps, etc.)
 //   - Type-symmetric discovery (cat, head, tail, sort, df, wc)
 //   - Phase 4 submode discovery (shell_ls_long, shell_ps_aux, etc.)
@@ -23,9 +23,9 @@ use cadmus::registry::{load_ops_pack_str, OperationRegistry};
 use cadmus::type_expr::TypeExpr;
 use cadmus::workflow::{CompiledStep, CompiledWorkflow, WorkflowDef};
 
-const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
-const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
-const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli_facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket.ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket.facts.yaml");
+const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli.facts.yaml");
 
 // ---------------------------------------------------------------------------
 // Helpers

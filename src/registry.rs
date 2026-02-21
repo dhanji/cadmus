@@ -1,7 +1,7 @@
 
     #[test]
     fn test_load_racket_ops_pack() {
-        let yaml = include_str!("../data/packs/ops/racket_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/racket.ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
         let names = reg.poly_op_names();
         assert!(names.len() >= 40, "expected at least 40 racket ops, got {}", names.len());
@@ -19,7 +19,7 @@
 
     #[test]
     fn test_racket_add_has_metasignature() {
-        let yaml = include_str!("../data/packs/ops/racket_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/racket.ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
 
         let add = reg.get_poly("add").unwrap();
@@ -49,7 +49,7 @@
     #[test]
     fn test_ops_without_meta_have_none() {
         // Existing packs should load fine with meta = None
-        let yaml = include_str!("../data/packs/ops/fs_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/fs.ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
         let list_dir = reg.get_poly("list_dir").unwrap();
         assert!(list_dir.meta.is_none(), "list_dir should not have a metasignature");
@@ -683,6 +683,8 @@ impl OperationRegistry {
 pub enum OpsPackError {
     /// I/O error reading the file
     Io(std::io::Error),
+    /// Wrong file suffix (expected .ops.yaml)
+    BadSuffix(String),
     /// YAML parsing error
     Yaml(serde_yaml::Error),
     /// Type signature parse error for a specific op
@@ -698,6 +700,7 @@ impl fmt::Display for OpsPackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             OpsPackError::Io(e) => write!(f, "ops pack I/O error: {}", e),
+            OpsPackError::BadSuffix(msg) => write!(f, "ops pack suffix error: {}", msg),
             OpsPackError::Yaml(e) => write!(f, "ops pack YAML error: {}", e),
             OpsPackError::TypeParse { op_name, field, source, message } => {
                 write!(f, "ops pack type error in '{}' field '{}': {} (source: \"{}\")", op_name, field, message, source)
@@ -830,6 +833,12 @@ pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> 
 
 /// Load an ops pack from a YAML file path, returning a populated OperationRegistry.
 pub fn load_ops_pack(path: impl AsRef<Path>) -> Result<OperationRegistry, OpsPackError> {
+    let name = path.as_ref().to_string_lossy();
+    if !name.ends_with(".ops.yaml") {
+        return Err(OpsPackError::BadSuffix(format!(
+            "ops pack files must end in .ops.yaml, got: {}", path.as_ref().display()
+        )));
+    }
     let content = std::fs::read_to_string(path.as_ref())?;
     load_ops_pack_str(&content)
 }
@@ -1365,7 +1374,7 @@ ops:
 
     #[test]
     fn test_load_power_tools_ops_pack() {
-        let yaml = include_str!("../data/packs/ops/power_tools_ops.yaml");
+        let yaml = include_str!("../data/packs/ops/power_tools.ops.yaml");
         let reg = load_ops_pack_str(yaml).unwrap();
         let names = reg.poly_op_names();
         assert!(names.len() >= 55, "expected at least 55 ops, got {}", names.len());
@@ -1378,5 +1387,27 @@ ops:
         assert!(reg.get_poly("ps_list").is_some(), "missing ps_list");
         assert!(reg.get_poly("ssh_exec").is_some(), "missing ssh_exec");
         assert!(reg.get_poly("gzip_compress").is_some(), "missing gzip_compress");
+    }
+
+    #[test]
+    fn test_load_ops_pack_rejects_wrong_suffix() {
+        let result = load_ops_pack("data/packs/ops/something.facts.yaml");
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains(".ops.yaml"), "got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_load_ops_pack_rejects_plain_yaml() {
+        let result = load_ops_pack("data/packs/ops/something.yaml");
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains(".ops.yaml"), "got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_load_ops_pack_accepts_ops_suffix() {
+        let result = load_ops_pack("data/packs/ops/racket.ops.yaml");
+        assert!(result.is_ok(), "should accept .ops.yaml suffix");
     }
 }

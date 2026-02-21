@@ -187,7 +187,7 @@ Same structure, different domain. All axes have claims for both entities, all ob
 
 ```
 Source code + goal description
-  → build registry (coding_ops.yaml + monomorphic exec bindings)
+  → build registry (coding.ops.yaml + monomorphic exec bindings)
   → plan: SourceCode → parse_source → AST → analyze_types → TypeSignature
                                            → detect_smells → CodeSmell
                                            → plan_refactoring → Refactoring

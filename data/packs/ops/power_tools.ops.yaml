@@ -4,7 +4,7 @@
 # structured data processing, advanced text processing, process/system
 # management, networking, and compression/crypto.
 #
-# Designed to compose with fs_ops.yaml — no name collisions.
+# Designed to compose with fs.ops.yaml — no name collisions.
 # Loaded at runtime by the ops pack loader — no Rust recompilation needed.
 
 name: power_tools

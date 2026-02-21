@@ -304,16 +304,16 @@ fn run_workflow_mode(path: &Path, run: bool) {
     println!();
 
     let mut racket_reg = cadmus::registry::load_ops_pack_str(
-        include_str!("../data/packs/ops/racket_ops.yaml")
-    ).expect("failed to load racket_ops.yaml");
+        include_str!("../data/packs/ops/racket.ops.yaml")
+    ).expect("failed to load racket.ops.yaml");
     let racket_facts = cadmus::racket_strategy::load_racket_facts_from_str(
-        include_str!("../data/packs/facts/racket_facts.yaml")
-    ).expect("failed to load racket_facts.yaml");
+        include_str!("../data/packs/facts/racket.facts.yaml")
+    ).expect("failed to load racket.facts.yaml");
     cadmus::racket_strategy::promote_inferred_ops(&mut racket_reg, &racket_facts);
 
     // Discover shell submodes (Phase 4) — needed for archive tool dispatch
-    let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli_facts.yaml")
-        .unwrap_or_else(|_| include_str!("../data/packs/facts/macos_cli_facts.yaml").to_string());
+    let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli.facts.yaml")
+        .unwrap_or_else(|_| include_str!("../data/packs/facts/macos_cli.facts.yaml").to_string());
     if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(&cli_yaml) {
         let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
         cadmus::racket_strategy::discover_shell_submodes(
@@ -389,7 +389,7 @@ fn run_demo_mode() {
     let goal = Goal {
         description: "Produce a structured comparison of Putin and Stalin as autocrats".into(),
         entities: vec!["putin".into(), "stalin".into()],
-        fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
+        fact_pack_paths: vec!["data/packs/facts/putin_stalin.facts.yaml".into()],
     };
 
     println!("{}", ui::kv("goal", &goal.description));

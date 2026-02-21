@@ -30,7 +30,7 @@
 
 /// A subsumption entry mapping an fs_op to its shell-callable equivalent.
 ///
-/// The shell op lives in the registry (discovered from racket_ops.yaml +
+/// The shell op lives in the registry (discovered from racket.ops.yaml +
 /// fact pack inference) and has flat types: String → List(String).
 /// The fs_op has rich types: Dir(Bytes) → Seq(Entry(Name, Bytes)).
 ///
@@ -39,7 +39,7 @@
 /// the base command and flags).
 #[derive(Debug, Clone)]
 pub struct SubsumptionEntry {
-    /// The fs_ops.yaml operation name (e.g., "walk_tree")
+    /// The fs.ops.yaml operation name (e.g., "walk_tree")
     pub fs_op: &'static str,
     /// The shell-callable operation name (e.g., "shell_find")
     pub shell_op: &'static str,
@@ -51,13 +51,13 @@ pub struct SubsumptionEntry {
 
 /// The static subsumption map: world-touching fs_ops + power_tools_ops → shell ops.
 ///
-/// All world-touching ops from fs_ops.yaml and power_tools_ops.yaml that have
+/// All world-touching ops from fs.ops.yaml and power_tools.ops.yaml that have
 /// direct shell equivalents. Phase 3 migration: complete coverage.
 /// The shell ops are anchors (or type-symmetric peers of anchors) in the
 /// inference pipeline.
 const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     // =====================================================================
-    // fs_ops.yaml — shell_text_lines class
+    // fs.ops.yaml — shell_text_lines class
     // =====================================================================
     SubsumptionEntry {
         fs_op: "list_dir",
@@ -125,7 +125,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
         note: "curl — download URL contents",
     },
     // =====================================================================
-    // fs_ops.yaml — formerly residual ops (now fully subsumed)
+    // fs.ops.yaml — formerly residual ops (now fully subsumed)
     // =====================================================================
     SubsumptionEntry { fs_op: "stat", shell_op: "shell_stat", arity: 1, note: "stat — file metadata" },
     SubsumptionEntry { fs_op: "walk_tree_hierarchy", shell_op: "shell_find", arity: 1, note: "find — hierarchy walk" },
@@ -155,7 +155,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "create_dir", shell_op: "shell_mkdir", arity: 1, note: "mkdir -p — create dir" },
     SubsumptionEntry { fs_op: "diff", shell_op: "shell_diff", arity: 2, note: "diff — compare files" },
     // =====================================================================
-    // fs_ops.yaml — remaining uncovered ops
+    // fs.ops.yaml — remaining uncovered ops
     // =====================================================================
     SubsumptionEntry { fs_op: "create_link", shell_op: "shell_ln", arity: 2, note: "ln -s — symbolic link" },
     SubsumptionEntry { fs_op: "set_permissions", shell_op: "shell_chmod", arity: 2, note: "chmod — set permissions" },
@@ -178,7 +178,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "sync", shell_op: "shell_rsync", arity: 2, note: "rsync -a — sync dir" },
     SubsumptionEntry { fs_op: "unique", shell_op: "shell_sort", arity: 1, note: "sort -u — deduplicate" },
     // =====================================================================
-    // power_tools_ops.yaml — git
+    // power_tools.ops.yaml — git
     // =====================================================================
     SubsumptionEntry { fs_op: "git_init", shell_op: "shell_git", arity: 1, note: "git init" },
     SubsumptionEntry { fs_op: "git_clone", shell_op: "shell_git", arity: 1, note: "git clone" },
@@ -201,7 +201,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "git_tag", shell_op: "shell_git", arity: 1, note: "git tag" },
     SubsumptionEntry { fs_op: "git_status", shell_op: "shell_git", arity: 1, note: "git status" },
     // =====================================================================
-    // power_tools_ops.yaml — tmux / screen
+    // power_tools.ops.yaml — tmux / screen
     // =====================================================================
     SubsumptionEntry { fs_op: "tmux_new_session", shell_op: "shell_tmux", arity: 1, note: "tmux new-session" },
     SubsumptionEntry { fs_op: "tmux_attach", shell_op: "shell_tmux", arity: 1, note: "tmux attach" },
@@ -210,7 +210,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "screen_new_session", shell_op: "shell_screen", arity: 1, note: "screen -S" },
     SubsumptionEntry { fs_op: "screen_attach", shell_op: "shell_screen", arity: 1, note: "screen -r" },
     // =====================================================================
-    // power_tools_ops.yaml — jq / yq / csv
+    // power_tools.ops.yaml — jq / yq / csv
     // =====================================================================
     SubsumptionEntry { fs_op: "jq_query", shell_op: "shell_jq", arity: 2, note: "jq filter file" },
     SubsumptionEntry { fs_op: "jq_filter_seq", shell_op: "shell_jq", arity: 2, note: "jq .[] filter" },
@@ -221,7 +221,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "csv_join", shell_op: "shell_paste", arity: 2, note: "paste — join CSV" },
     SubsumptionEntry { fs_op: "csv_sort", shell_op: "shell_sort", arity: 1, note: "sort — CSV sort" },
     // =====================================================================
-    // power_tools_ops.yaml — awk / sed / text processing
+    // power_tools.ops.yaml — awk / sed / text processing
     // =====================================================================
     SubsumptionEntry { fs_op: "awk_extract", shell_op: "shell_awk", arity: 2, note: "awk extract fields" },
     SubsumptionEntry { fs_op: "awk_aggregate", shell_op: "shell_awk", arity: 2, note: "awk aggregate" },
@@ -232,7 +232,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "tee_split", shell_op: "shell_tee", arity: 2, note: "tee — split output" },
     SubsumptionEntry { fs_op: "column_format", shell_op: "shell_column", arity: 1, note: "column -t" },
     // =====================================================================
-    // power_tools_ops.yaml — process / system management
+    // power_tools.ops.yaml — process / system management
     // =====================================================================
     SubsumptionEntry { fs_op: "ps_list", shell_op: "shell_ps", arity: 0, note: "ps aux" },
     SubsumptionEntry { fs_op: "kill_process", shell_op: "shell_kill", arity: 2, note: "kill -SIG PID" },
@@ -244,7 +244,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "uname_info", shell_op: "shell_uname", arity: 0, note: "uname -a" },
     SubsumptionEntry { fs_op: "uptime_info", shell_op: "shell_uptime", arity: 0, note: "uptime" },
     // =====================================================================
-    // power_tools_ops.yaml — networking
+    // power_tools.ops.yaml — networking
     // =====================================================================
     SubsumptionEntry { fs_op: "ssh_exec", shell_op: "shell_ssh", arity: 2, note: "ssh host cmd" },
     SubsumptionEntry { fs_op: "scp_transfer", shell_op: "shell_scp", arity: 2, note: "scp file host:path" },
@@ -253,7 +253,7 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "ping_host", shell_op: "shell_ping", arity: 2, note: "ping -c N host" },
     SubsumptionEntry { fs_op: "dig_lookup", shell_op: "shell_dig", arity: 2, note: "dig host TYPE" },
     // =====================================================================
-    // power_tools_ops.yaml — compression / crypto
+    // power_tools.ops.yaml — compression / crypto
     // =====================================================================
     SubsumptionEntry { fs_op: "gzip_compress", shell_op: "shell_gzip", arity: 1, note: "gzip" },
     SubsumptionEntry { fs_op: "gzip_decompress", shell_op: "shell_gzip", arity: 1, note: "gunzip" },
@@ -291,7 +291,7 @@ pub fn all_subsumptions() -> &'static [SubsumptionEntry] {
 /// prior shell bridge step) and map to Racket's own primitives.
 #[derive(Debug, Clone)]
 pub struct RacketNativeEntry {
-    /// The fs_ops.yaml operation name (e.g., "filter")
+    /// The fs.ops.yaml operation name (e.g., "filter")
     pub fs_op: &'static str,
     /// The kind of Racket-native expression to generate
     pub kind: RacketNativeKind,

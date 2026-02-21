@@ -396,6 +396,12 @@ impl FactPackIndex {
 // ---------------------------------------------------------------------------
 
 pub fn load_fact_pack(path: &Path) -> Result<FactPackIndex> {
+    let name = path.to_string_lossy();
+    if !name.ends_with(".facts.yaml") {
+        return Err(EngineError::FactPack(format!(
+            "fact pack files must end in .facts.yaml, got: {}", path.display()
+        )));
+    }
     let content = std::fs::read_to_string(path).map_err(|e| {
         EngineError::FactPack(format!("cannot read {}: {}", path.display(), e))
     })?;
@@ -423,6 +429,12 @@ pub fn load_fact_pack_str(yaml: &str) -> Result<FactPackIndex> {
 pub fn load_fact_packs(paths: &[impl AsRef<Path>]) -> Result<FactPackIndex> {
     let mut packs = Vec::with_capacity(paths.len());
     for path in paths {
+        let name = path.as_ref().to_string_lossy();
+        if !name.ends_with(".facts.yaml") {
+            return Err(EngineError::FactPack(format!(
+                "fact pack files must end in .facts.yaml, got: {}", path.as_ref().display()
+            )));
+        }
         let content = std::fs::read_to_string(path.as_ref()).map_err(|e| {
             EngineError::FactPack(format!("cannot read {}: {}", path.as_ref().display(), e))
         })?;
@@ -445,7 +457,7 @@ mod tests {
 
     #[test]
     fn test_load_putin_stalin() {
-        let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
+        let path = PathBuf::from("data/packs/facts/putin_stalin.facts.yaml");
         let idx = load_fact_pack(&path).expect("should load fact pack");
         assert_eq!(idx.pack.entities.len(), 2);
         assert_eq!(idx.pack.axes.len(), 7);
@@ -479,7 +491,7 @@ mod tests {
     fn test_malformed_yaml() {
         let dir = PathBuf::from("tmp");
         std::fs::create_dir_all(&dir).ok();
-        let path = dir.join("bad.yaml");
+        let path = dir.join("bad.facts.yaml");
         std::fs::write(&path, "{{{{not yaml").unwrap();
         let result = load_fact_pack(&path);
         assert!(result.is_err());
@@ -489,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_missing_file() {
-        let path = PathBuf::from("data/nonexistent.yaml");
+        let path = PathBuf::from("data/nonexistent.facts.yaml");
         let result = load_fact_pack(&path);
         assert!(result.is_err());
         let err_msg = format!("{}", result.unwrap_err());
@@ -739,5 +751,30 @@ uncertainties:
             &("performance".into(), "startup_ms".into(), "git".into())
         );
         assert!(git_startup.is_some());
+    }
+
+    #[test]
+    fn test_load_fact_pack_rejects_wrong_suffix() {
+        let path = PathBuf::from("data/packs/facts/something.ops.yaml");
+        let result = load_fact_pack(&path);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains(".facts.yaml"), "got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_load_fact_pack_rejects_plain_yaml() {
+        let path = PathBuf::from("data/packs/facts/something.yaml");
+        let result = load_fact_pack(&path);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains(".facts.yaml"), "got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_load_fact_pack_accepts_facts_suffix() {
+        let path = PathBuf::from("data/packs/facts/putin_stalin.facts.yaml");
+        let result = load_fact_pack(&path);
+        assert!(result.is_ok(), "should accept .facts.yaml suffix");
     }
 }

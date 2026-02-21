@@ -171,7 +171,7 @@ maps an fs_op to a shell command.
   `"-cf"` for create)
 - Split into `shell_tar_extract` and `shell_tar_create` as separate ops
 - Use the CLI fact pack's submodes (`submode_extract: "-xf"`,
-  `submode_create: "-cf"`) — these already exist in `macos_cli_facts.yaml`
+  `submode_create: "-cf"`) — these already exist in `macos_cli.facts.yaml`
 
 ### Gap 3: Archive format awareness missing from Racket path
 

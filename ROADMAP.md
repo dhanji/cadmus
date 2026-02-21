@@ -12,10 +12,10 @@ recompilation needed to add new ops. The layout:
 
 ```
 data/
-  fs_ops.yaml          ← filesystem ops (49 ops)
-  comparison_ops.yaml   ← comparative reasoning ops (6 ops)
-  coding_ops.yaml       ← code analysis ops (6 ops)
-  macos_fs.yaml         ← macOS fact pack (tool knowledge, claims)
+  fs.ops.yaml          ← filesystem ops (49 ops)
+  comparison.ops.yaml   ← comparative reasoning ops (6 ops)
+  coding.ops.yaml       ← code analysis ops (6 ops)
+  macos_fs.facts.yaml         ← macOS fact pack (tool knowledge, claims)
   workflows/            ← workflow YAML definitions
 ```
 
@@ -28,7 +28,7 @@ types are just strings. `Option(a)` is a first-class constructor alongside
 - **Ops are data, not code** — YAML ops packs define type signatures and
   algebraic properties. The core engine loads them at runtime.
 - **Fact packs are separate** — tool knowledge, claims, and platform
-  constraints live in fact packs (e.g., `macos_fs.yaml`).
+  constraints live in fact packs (e.g., `macos_fs.facts.yaml`).
 - **No grammar extensions needed** — new primitives like `Size`, `URL`,
   `Permissions` are just strings. New constructors like `Option(a)` are
   first-class.
@@ -104,7 +104,7 @@ New primitives referenced (no grammar changes needed):
 
 ### 1c. Fact pack additions
 
-Add claims for `cp`, `rm`, `mkdir`, `ln`, `chmod`, `chown` to `macos_fs.yaml`
+Add claims for `cp`, `rm`, `mkdir`, `ln`, `chmod`, `chown` to `macos_fs.facts.yaml`
 under the `tools/core_utils` sub-axis. Include common flags, type signatures,
 and platform notes (e.g., `cp -R` vs `ditto` for preserving macOS metadata).
 
@@ -346,7 +346,7 @@ New primitive: `Plist` — property list content type.
 
 ### 4e. Fact pack additions
 
-Expand `macos_fs.yaml` with claims for:
+Expand `macos_fs.facts.yaml` with claims for:
 - `open`, `pbcopy`, `pbpaste` — desktop integration
 - `plutil`, `defaults` — plist tools
 - `hdiutil` — disk image tools
@@ -535,17 +535,17 @@ if users need to reason about compression algorithms independently.
 
 | Phase | Effort | Impact | Files touched |
 |-------|--------|--------|---------------|
-| 1. Tree + lifecycle | Small | Critical | fs_types.rs, macos_fs.yaml |
-| 2. Content transform | Small | High | fs_types.rs, macos_fs.yaml |
+| 1. Tree + lifecycle | Small | Critical | fs_types.rs, macos_fs.facts.yaml |
+| 2. Content transform | Small | High | fs_types.rs, macos_fs.facts.yaml |
 | 3. Metadata access | Small | High | fs_types.rs |
-| 4. macOS-specific | Medium | Medium | fs_types.rs, macos_fs.yaml |
-| 5. Network | Small | Medium | fs_types.rs, macos_fs.yaml |
+| 4. macOS-specific | Medium | Medium | fs_types.rs, macos_fs.facts.yaml |
+| 5. Network | Small | Medium | fs_types.rs, macos_fs.facts.yaml |
 | 6. Fact↔Planner | Medium | High | fs_strategy.rs, generic_planner.rs |
 | 7. DSL extensions | Large | Medium | workflow.rs |
 | 8. Compression | Small | Low | fs_types.rs |
 
 Phases 1-3 are all just adding ops to `build_fs_registry()` and claims
-to `macos_fs.yaml`. No grammar changes, no planner changes, no DSL changes.
+to `macos_fs.facts.yaml`. No grammar changes, no planner changes, no DSL changes.
 Pure vocabulary expansion.
 
 Phase 6 is the most architecturally interesting — it connects the fact

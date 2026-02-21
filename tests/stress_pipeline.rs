@@ -308,9 +308,9 @@ use cadmus::workflow::{
     self, CompiledStep, CompiledWorkflow, WorkflowDef, StepArgs,
 };
 
-const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
-const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
-const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli_facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket.ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket.facts.yaml");
+const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli.facts.yaml");
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -1129,7 +1129,7 @@ fn stress_inference_all_arithmetic_ops() {
 
     let inferred_names: HashSet<String> = inferred.iter().map(|i| i.op_name.clone()).collect();
 
-    // These should all be inferred (not in racket_ops.yaml directly)
+    // These should all be inferred (not in racket.ops.yaml directly)
     for expected in &["subtract", "multiply", "divide", "greater_than", "less_than_or_equal"] {
         assert!(inferred_names.contains(*expected),
             "expected '{}' to be inferred, got: {:?}", expected, inferred_names);

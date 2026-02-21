@@ -23,18 +23,18 @@ Current packs and their coverage:
 
 | Pack | Ops | Domain |
 |------|-----|--------|
-| `data/packs/ops/fs_ops.yaml` | 49 | Filesystem: ls, cat, mv, find, grep, sort, zip, tar, chmod, curl, rsync, macOS tools |
-| `data/packs/ops/power_tools_ops.yaml` | 64 | Dev tools: git, tmux, screen, jq, yq, awk, sed, ps, ssh, gzip, base64 |
-| `comparison_ops.yaml` | 6 | Reasoning: retrieve_evidence, compare_claims, summarize |
-| `coding_ops.yaml` | 6 | Code analysis: parse_source, detect_smells, generate_tests |
+| `data/packs/ops/fs.ops.yaml` | 49 | Filesystem: ls, cat, mv, find, grep, sort, zip, tar, chmod, curl, rsync, macOS tools |
+| `data/packs/ops/power_tools.ops.yaml` | 64 | Dev tools: git, tmux, screen, jq, yq, awk, sed, ps, ssh, gzip, base64 |
+| `comparison.ops.yaml` | 6 | Reasoning: retrieve_evidence, compare_claims, summarize |
+| `coding.ops.yaml` | 6 | Code analysis: parse_source, detect_smells, generate_tests |
 
 ### Step 2: Check for overlaps
 
 ```bash
 # Find op name collisions between two packs
 comm -12 \
-  <(grep "^  - name:" data/packs/ops/fs_ops.yaml | sed 's/.*name: //' | sort) \
-  <(grep "^  - name:" data/packs/ops/power_tools_ops.yaml | sed 's/.*name: //' | sort)
+  <(grep "^  - name:" data/packs/ops/fs.ops.yaml | sed 's/.*name: //' | sort) \
+  <(grep "^  - name:" data/packs/ops/power_tools.ops.yaml | sed 's/.*name: //' | sort)
 ```
 
 If there are collisions, decide:
@@ -382,7 +382,7 @@ cross-domain reasoning.
 ### When to compose
 
 - **"How do I set up tmux to manage my macOS files?"** — needs facts from
-  both `power_tools.yaml` (tmux) and `macos_fs.yaml` (filesystem)
+  both `power_tools.yaml` (tmux) and `macos_fs.facts.yaml` (filesystem)
 - **"Compare git's ecosystem to PostgreSQL's"** — needs facts from
   `power_tools.yaml` and `db_facts.yaml`
 
@@ -698,7 +698,7 @@ developer power tools (git, tmux, jq, awk, etc.).
 
 Before writing any YAML, we audited existing packs:
 
-**Already covered by `data/packs/ops/fs_ops.yaml`:**
+**Already covered by `data/packs/ops/fs.ops.yaml`:**
 - File I/O (ls, cat, mv, find, cp, rm, mkdir)
 - Basic text processing (sed s///, head, tail, sort, grep, diff)
 - Archives (zip, tar, extract, pack)
@@ -719,7 +719,7 @@ Before writing any YAML, we audited existing packs:
 - `grep` → fs_ops has `search_content` and `filter`. Power tools doesn't duplicate
 - `sort` → fs_ops has `sort_by`. Power tools doesn't duplicate
 
-### 6b. Ops pack (`data/packs/ops/power_tools_ops.yaml`)
+### 6b. Ops pack (`data/packs/ops/power_tools.ops.yaml`)
 
 64 ops across 7 categories. Key design decisions:
 - **Git ops** use domain types: `Repo`, `Commit`, `Branch`, `StagingArea`, `Diff`
@@ -1005,7 +1005,7 @@ The file type dictionary is the **single source of truth** for:
 | `category` | yes | string | One of: `image`, `video`, `audio`, `document`, `archive`, `source_code`, `data`, `config`, `markup`, `database`, `font`, `executable`, `disk_image`, `ebook` |
 | `description` | yes | string | Human-readable description |
 | `type_expr` | yes | string | TypeExpr string (parsed via `TypeExpr::parse`). See Section 1 Step 3 for grammar. |
-| `relevant_ops` | no | list | Op names from `data/packs/ops/fs_ops.yaml` / `data/packs/ops/power_tools_ops.yaml` |
+| `relevant_ops` | no | list | Op names from `data/packs/ops/fs.ops.yaml` / `data/packs/ops/power_tools.ops.yaml` |
 | `tools` | no | list | External CLI tools (not engine ops) |
 
 ### Step 3: Choose the right `type_expr`
@@ -1036,7 +1036,7 @@ the parser accepts it immediately. No Rust changes needed.
 
 ### Step 4: Map relevant ops
 
-Check which ops from `data/packs/ops/fs_ops.yaml` and `data/packs/ops/power_tools_ops.yaml`
+Check which ops from `data/packs/ops/fs.ops.yaml` and `data/packs/ops/power_tools.ops.yaml`
 make sense for your file type:
 
 ```bash
@@ -1065,7 +1065,7 @@ Common op mappings:
 python3 -c "
 import yaml
 all_ops = set()
-for f in ['data/packs/ops/fs_ops.yaml', 'data/packs/ops/power_tools_ops.yaml']:
+for f in ['data/packs/ops/fs.ops.yaml', 'data/packs/ops/power_tools.ops.yaml']:
     with open(f) as fh:
         for op in yaml.safe_load(fh)['ops']:
             all_ops.add(op['name'])
@@ -1192,8 +1192,8 @@ my_domain_words:
 
 ### Adding a New Op (Automatic NL Recognition)
 
-When you add a new op to any ops YAML pack (`data/packs/ops/fs_ops.yaml`,
-`data/packs/ops/power_tools_ops.yaml`, etc.), it is **automatically** recognized by
+When you add a new op to any ops YAML pack (`data/packs/ops/fs.ops.yaml`,
+`data/packs/ops/power_tools.ops.yaml`, etc.), it is **automatically** recognized by
 the NL layer:
 
 1. `is_canonical_op()` derives its set from the registry at load time
@@ -1207,7 +1207,7 @@ No separate registration step needed. Just add the op to the YAML pack.
 Op descriptions live in the ops YAML packs themselves (not in a separate file):
 
 ```yaml
-# In data/packs/ops/fs_ops.yaml:
+# In data/packs/ops/fs.ops.yaml:
 - name: walk_tree
   description: "find — recursively walk directory tree (flattened)"
 ```
@@ -1221,7 +1221,7 @@ The NL layer uses these descriptions for:
 - **Vocab YAML**: `data/nl/nl_vocab.yaml` (synonyms, contractions, ordinals, approvals, rejections, stopwords)
 - **Dictionary YAML**: `data/nl/nl_dictionary.yaml` (~2473 frequency-weighted words)
 - **Rust loader**: `src/nl/vocab.rs` (thin serde loader, `OnceLock` singleton)
-- **Op descriptions**: `data/packs/ops/fs_ops.yaml`, `data/packs/ops/power_tools_ops.yaml` (description field on each op)
+- **Op descriptions**: `data/packs/ops/fs.ops.yaml`, `data/packs/ops/power_tools.ops.yaml` (description field on each op)
 - **Consumers**: `src/nl/normalize.rs` (synonyms, contractions, ordinals), `src/nl/intent.rs` (approvals, rejections), `src/nl/slots.rs` (stopwords), `src/nl/typo.rs` (dictionary), `src/nl/mod.rs` (op explanations), `src/nl/dialogue.rs` (display names)
 
 ---
@@ -1235,11 +1235,11 @@ first-class Racket operations. Unlike manually-authored ops, they are
 ### Architecture
 
 ```
-data/packs/facts/macos_cli_facts.yaml     ← Layer 1: CLI tool descriptions
+data/packs/facts/macos_cli.facts.yaml     ← Layer 1: CLI tool descriptions
         │
         ▼
-data/packs/ops/racket_ops.yaml           ← Layer 2: 6 anchor ops (category: shell)
-data/packs/facts/racket_facts.yaml         ← Layer 2: 12 shell entities
+data/packs/ops/racket.ops.yaml           ← Layer 2: 6 anchor ops (category: shell)
+data/packs/facts/racket.facts.yaml         ← Layer 2: 12 shell entities
         │
         ▼
 src/racket_strategy.rs         ← Inference phases 3 & 4
@@ -1253,7 +1253,7 @@ src/racket_executor.rs         ← Layer 3: Racket code generation
 
 ### Adding a New CLI Tool
 
-**Step 1: Add the entity to `data/packs/facts/macos_cli_facts.yaml`**
+**Step 1: Add the entity to `data/packs/facts/macos_cli.facts.yaml`**
 
 ```yaml
 entities:
@@ -1310,10 +1310,10 @@ compact_properties:
       submode_no_clobber: "-n"
 ```
 
-**Step 4: Add the entity to `data/packs/facts/racket_facts.yaml`** (if it's a new anchor)
+**Step 4: Add the entity to `data/packs/facts/racket.facts.yaml`** (if it's a new anchor)
 
 If the tool introduces a **new output-format class**, it needs an anchor op
-in `data/packs/ops/racket_ops.yaml` and an entity in `data/packs/facts/racket_facts.yaml`. If it
+in `data/packs/ops/racket.ops.yaml` and an entity in `data/packs/facts/racket.facts.yaml`. If it
 shares a class with an existing anchor (e.g., `shell_text_lines` like `ls`),
 it will be **automatically discovered** via type-symmetric inference — no
 anchor needed.
@@ -1401,7 +1401,7 @@ power_tools_ops).
 
 ### Relationship to Existing Ops
 
-Shell-callable forms **coexist** with `data/packs/ops/fs_ops.yaml` and `data/packs/ops/power_tools_ops.yaml`.
+Shell-callable forms **coexist** with `data/packs/ops/fs.ops.yaml` and `data/packs/ops/power_tools.ops.yaml`.
 There are zero name collisions (`shell_ls` vs `list_dir`). See
 [SUBSUMPTION.md](SUBSUMPTION.md) for the full mapping and migration roadmap.
 
@@ -1421,9 +1421,9 @@ POSIX single-quote escaping (`'...'` with embedded quotes escaped as
 
 ### Reference
 
-- **CLI fact pack**: `data/packs/facts/macos_cli_facts.yaml` (12 entities, 45 submodes)
-- **Shell anchor ops**: `data/packs/ops/racket_ops.yaml` (6 ops with `category: shell`)
-- **Shell entities**: `data/packs/facts/racket_facts.yaml` (12 entities with shell properties)
+- **CLI fact pack**: `data/packs/facts/macos_cli.facts.yaml` (12 entities, 45 submodes)
+- **Shell anchor ops**: `data/packs/ops/racket.ops.yaml` (6 ops with `category: shell`)
+- **Shell entities**: `data/packs/facts/racket.facts.yaml` (12 entities with shell properties)
 - **Submode discovery**: `src/racket_strategy.rs` (`discover_shell_submodes()`)
 - **Racket generation**: `src/racket_executor.rs` (`shell_preamble()`, `generate_shell_call()`)
 - **Tests**: `tests/shell_callable_tests.rs` (41 tests)

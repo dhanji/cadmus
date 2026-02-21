@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-21T03:19:01Z | Size: 50.7k chars
+> Updated: 2026-02-21T10:03:42Z | Size: 52.7k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -583,3 +583,51 @@
 - `tests/compact_facts_tests.rs` — 16 new tests
 - `tests/shell_callable_tests.rs:189-199` — Fixed fragile test (inferred_from depends on iteration order)
 - Total: 1224 tests, 0 failures, 0 warnings
+
+### YAML Plan Refactor (commit `b7e8ed4`)
+- `src/workflow.rs` renamed to `src/plan.rs`
+- `data/workflows/` renamed to `data/plans/`
+- `tests/workflow_tests.rs` renamed to `tests/plan_tests.rs`
+- All identifiers renamed: WorkflowDef→PlanDef, CompiledWorkflow→CompiledPlan, parse_workflow→parse_plan, etc.
+- CLI flag: `--workflow` → `--plan`
+- NL intent: `CreateWorkflow` → `CreatePlan`
+
+### New YAML Plan Format
+- Top-level key IS the plan name (snake_case function name)
+- `inputs:` is a list of typed parameters: `- name: Type`
+- `output:` declares return type (optional)
+- `steps:` unchanged
+- Example:
+  ```yaml
+  find_pdfs:
+    inputs:
+      - path: Dir
+      - keyword: Pattern
+    output: Seq(Entry(Name, File(PDF)))
+    steps:
+      - list_dir
+      - find_matching:
+          pattern: "*.pdf"
+  ```
+
+### PlanInput struct (`src/plan.rs`)
+- `PlanInput { name, type_str, default }` — typed input parameter
+- `PlanInput::typed(name, type_str)` — explicit type
+- `PlanInput::bare(name)` — type inferred from name
+- `PlanInput::from_legacy(name, value)` — value becomes default, type inferred
+- `PlanDef.input_defaults()` → HashMap for $var expansion
+- `PlanDef.input_names()` → HashSet for validation
+- `PlanDef.get_input(name)` → Option<&PlanInput>
+
+### Type Annotation Parsing (`src/plan.rs:1193`)
+- `parse_type_annotation()` — shorthands first (Dir→Dir(Bytes), File→File(Bytes)), then TypeExpr::parse(), then prim fallback
+- `resolve_input_type()` — typed inputs use parse_type_annotation, legacy inputs use infer_input_type
+
+### NL Dialogue Changes
+- `build_plan()` creates PlanInput objects (was HashMap)
+- `plan_to_yaml()` serializes typed inputs (was key: "value")
+- `generate_plan_name()` returns snake_case op name (was human-readable description)
+- Arithmetic ops put literal values in step params (not $var references)
+- `infer_type_str_from_name()` maps input names to type strings
+
+### Test Count: 1223 passed, 1 failed (pre-existing flaky)

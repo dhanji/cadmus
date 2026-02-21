@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 #[test]
 fn test_racket_facts_property_count() {
-    let path = PathBuf::from("data/packs/facts/racket_facts.yaml");
+    let path = PathBuf::from("data/packs/facts/racket.facts.yaml");
     let idx = load_fact_pack(&path).expect("should load racket_facts");
     assert_eq!(
         idx.pack.properties.len(),
@@ -20,7 +20,7 @@ fn test_racket_facts_property_count() {
 
 #[test]
 fn test_macos_cli_facts_property_count() {
-    let path = PathBuf::from("data/packs/facts/macos_cli_facts.yaml");
+    let path = PathBuf::from("data/packs/facts/macos_cli.facts.yaml");
     let idx = load_fact_pack(&path).expect("should load macos_cli_facts");
     assert_eq!(
         idx.pack.properties.len(),
@@ -31,7 +31,7 @@ fn test_macos_cli_facts_property_count() {
 
 #[test]
 fn test_putin_stalin_property_count() {
-    let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
+    let path = PathBuf::from("data/packs/facts/putin_stalin.facts.yaml");
     let idx = load_fact_pack(&path).expect("should load putin_stalin");
     assert_eq!(
         idx.pack.properties.len(),
@@ -46,7 +46,7 @@ fn test_putin_stalin_property_count() {
 
 #[test]
 fn test_putin_stalin_ordinals_preserved() {
-    let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
+    let path = PathBuf::from("data/packs/facts/putin_stalin.facts.yaml");
     let idx = load_fact_pack(&path).unwrap();
 
     // Every property in putin_stalin has an ordinal
@@ -80,7 +80,7 @@ fn test_putin_stalin_ordinals_preserved() {
 
 #[test]
 fn test_putin_stalin_notes_preserved() {
-    let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
+    let path = PathBuf::from("data/packs/facts/putin_stalin.facts.yaml");
     let idx = load_fact_pack(&path).unwrap();
 
     // Every property in putin_stalin has a note
@@ -111,7 +111,7 @@ fn test_putin_stalin_notes_preserved() {
 
 #[test]
 fn test_racket_facts_index_queries() {
-    let path = PathBuf::from("data/packs/facts/racket_facts.yaml");
+    let path = PathBuf::from("data/packs/facts/racket.facts.yaml");
     let idx = load_fact_pack(&path).unwrap();
 
     // Check property index: op_add should have racket_symbol
@@ -137,7 +137,7 @@ fn test_racket_facts_index_queries() {
 
 #[test]
 fn test_macos_cli_facts_index_queries() {
-    let path = PathBuf::from("data/packs/facts/macos_cli_facts.yaml");
+    let path = PathBuf::from("data/packs/facts/macos_cli.facts.yaml");
     let idx = load_fact_pack(&path).unwrap();
 
     // Check git submodes
@@ -163,7 +163,7 @@ fn test_macos_cli_facts_index_queries() {
 
 #[test]
 fn test_putin_stalin_index_queries() {
-    let path = PathBuf::from("data/packs/facts/putin_stalin.yaml");
+    let path = PathBuf::from("data/packs/facts/putin_stalin.facts.yaml");
     let idx = load_fact_pack(&path).unwrap();
 
     // Check ordinal comparison via index
@@ -194,7 +194,7 @@ fn test_putin_stalin_index_queries() {
 
 #[test]
 fn test_racket_facts_keyword_properties() {
-    let path = PathBuf::from("data/packs/facts/racket_facts.yaml");
+    let path = PathBuf::from("data/packs/facts/racket.facts.yaml");
     let idx = load_fact_pack(&path).unwrap();
 
     // op_add has 6 keyword properties
@@ -218,7 +218,7 @@ fn test_racket_facts_keyword_properties() {
 
 #[test]
 fn test_macos_cli_git_submodes() {
-    let path = PathBuf::from("data/packs/facts/macos_cli_facts.yaml");
+    let path = PathBuf::from("data/packs/facts/macos_cli.facts.yaml");
     let idx = load_fact_pack(&path).unwrap();
 
     // cli_git should have many submodes

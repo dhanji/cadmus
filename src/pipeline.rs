@@ -24,7 +24,7 @@ mod tests {
         Goal {
             description: "Compare Putin and Stalin as autocrats".into(),
             entities: vec!["putin".into(), "stalin".into()],
-            fact_pack_paths: vec!["data/packs/facts/putin_stalin.yaml".into()],
+            fact_pack_paths: vec!["data/packs/facts/putin_stalin.facts.yaml".into()],
         }
     }
 
@@ -75,7 +75,7 @@ mod tests {
         let goal = Goal {
             description: "test".into(),
             entities: vec!["a".into()],
-            fact_pack_paths: vec!["data/nonexistent.yaml".into()],
+            fact_pack_paths: vec!["data/nonexistent.facts.yaml".into()],
         };
         let result = run(&goal);
         assert!(result.is_err());
@@ -87,7 +87,7 @@ mod tests {
     fn test_pipeline_zero_evidence() {
         let dir = std::path::PathBuf::from("tmp");
         std::fs::create_dir_all(&dir).ok();
-        let path = dir.join("no_evidence.yaml");
+        let path = dir.join("no_evidence.facts.yaml");
         std::fs::write(
             &path,
             r#"

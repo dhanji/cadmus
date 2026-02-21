@@ -10,8 +10,8 @@ use cadmus::workflow::{CompiledStep, CompiledWorkflow, WorkflowDef};
 use cadmus::type_expr::TypeExpr;
 use std::collections::HashMap;
 
-const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
-const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket.facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket.ops.yaml");
 
 fn make_registry() -> cadmus::registry::OperationRegistry {
     let mut reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();
@@ -229,7 +229,7 @@ fn generate_complex_programs() {
         print_program(
             "Program 8: Arithmetic Chain (all discovered)",
             "Take 6 times 7, subtract 2, divide by 5, square it",
-            "multiply→subtract→divide→expt. First 3 ops are ALL\n                DISCOVERED from the fact pack, not in racket_ops.yaml.",
+            "multiply→subtract→divide→expt. First 3 ops are ALL\n                DISCOVERED from the fact pack, not in racket.ops.yaml.",
             &script,
         );
     }
@@ -308,7 +308,7 @@ fn generate_complex_programs() {
         print_program(
             "Program 12: Greater-Than (discovered, op-symmetric)",
             "Is 10 greater than 7?",
-            "greater_than is DISCOVERED via op-symmetric from less_than.\n                Not in racket_ops.yaml.",
+            "greater_than is DISCOVERED via op-symmetric from less_than.\n                Not in racket.ops.yaml.",
             &script,
         );
     }

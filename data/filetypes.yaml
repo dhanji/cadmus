@@ -12,7 +12,7 @@
 #                  data, config, markup, database, font, executable, disk_image, ebook
 #   description  — human-readable description
 #   type_expr    — TypeExpr string (parsed via TypeExpr::parse)
-#   relevant_ops — ops from fs_ops.yaml / power_tools_ops.yaml that work on this type
+#   relevant_ops — ops from fs.ops.yaml / power_tools.ops.yaml that work on this type
 #   tools        — external CLI tools useful for this type (not engine ops)
 
 categories:

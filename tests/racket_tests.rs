@@ -22,8 +22,8 @@ use cadmus::type_expr::TypeExpr;
 use cadmus::nl;
 use std::collections::HashMap;
 
-const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
-const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
+const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket.ops.yaml");
+const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket.facts.yaml");
 
 fn make_racket_reg() -> cadmus::registry::OperationRegistry {
     let mut reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();
@@ -110,7 +110,7 @@ fn test_racket_add_has_meta() {
 
 #[test]
 fn test_racket_subtract_not_in_ops_pack() {
-    // subtract is discovered from the fact pack, not listed in racket_ops.yaml
+    // subtract is discovered from the fact pack, not listed in racket.ops.yaml
     let reg = build_racket_registry();
     assert!(reg.get_poly("subtract").is_none(),
         "subtract should NOT be in the ops pack — it's discovered from the fact pack");

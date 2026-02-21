@@ -1,18 +1,18 @@
 # Subsumption Plan: Shell-Callable Racket Forms
 
-How the shell-callable Racket forms relate to the legacy `fs_ops.yaml`
-and `power_tools_ops.yaml` packs, and the completed migration.
+How the shell-callable Racket forms relate to the legacy `fs.ops.yaml`
+and `power_tools.ops.yaml` packs, and the completed migration.
 
 ---
 
 ## Architecture Overview
 
 ```
-Layer 1: CLI Fact Pack          data/packs/facts/macos_cli_facts.yaml
+Layer 1: CLI Fact Pack          data/packs/facts/macos_cli.facts.yaml
          (58 tools, 141 submodes, 11 output-format classes)
               │
               ▼
-Layer 2: Anchor Ops + Inference  data/packs/ops/racket_ops.yaml (category: shell)
+Layer 2: Anchor Ops + Inference  data/packs/ops/racket.ops.yaml (category: shell)
          (11 anchors → 58 base ops → 141 submode ops)
               │
               ▼
@@ -80,9 +80,9 @@ When `op_to_racket()` encounters an op, it checks three tiers in order:
 
 | Source                        | Ops  | Notes                                    |
 |-------------------------------|------|------------------------------------------|
-| `data/packs/ops/fs_ops.yaml`    |   49 | Compatibility aliases (embedded)         |
-| `data/packs/ops/power_tools_ops.yaml` | 64 | Compatibility aliases (embedded)   |
-| `data/packs/ops/racket_ops.yaml`       |   63 | 52 pure Racket + 11 shell anchors       |
+| `data/packs/ops/fs.ops.yaml`    |   49 | Compatibility aliases (embedded)         |
+| `data/packs/ops/power_tools.ops.yaml` | 64 | Compatibility aliases (embedded)   |
+| `data/packs/ops/racket.ops.yaml`       |   63 | 52 pure Racket + 11 shell anchors       |
 | Shell (inferred from facts)  | 200+ | 58 base ops + 141 submodes              |
 | **Total registry**           | 350+ | After all inference phases               |
 
@@ -90,7 +90,7 @@ When `op_to_racket()` encounters an op, it checks three tiers in order:
 
 ## Subsumption Map (Complete)
 
-### fs_ops.yaml → Shell-Callable Forms (49 ops, all covered)
+### fs.ops.yaml → Shell-Callable Forms (49 ops, all covered)
 
 | Category | Ops | Shell Target | Status |
 |----------|-----|-------------|--------|
@@ -99,7 +99,7 @@ When `op_to_racket()` encounters an op, it checks three tiers in order:
 | **Newly subsumed** (18) | create_link, set_permissions, set_owner, replace, get_mtime, get_permissions, get_file_type, spotlight_search, get_xattr, set_xattr, remove_xattr, remove_quarantine, open_with, clipboard_copy, clipboard_paste, read_plist, write_plist, upload, sync, unique | shell_ln, shell_chmod, shell_chown, shell_sed, shell_stat, shell_file, shell_mdfind, shell_xattr, shell_open, shell_pbcopy, shell_pbpaste, shell_plutil, shell_curl, shell_rsync, shell_sort | **Subsumed** |
 | **Racket-native** (6) | filter, find_matching, flatten_tree, concat_seq, map_entries, unique (in pipeline) | Racket primitives | **Native** |
 
-### power_tools_ops.yaml → Shell-Callable Forms (64 ops, all covered)
+### power_tools.ops.yaml → Shell-Callable Forms (64 ops, all covered)
 
 | Category | Ops | Shell Target | Status |
 |----------|-----|-------------|--------|
@@ -158,15 +158,15 @@ When `op_to_racket()` encounters an op, it checks three tiers in order:
 data/
   packs/
     facts/
-      macos_cli_facts.yaml   ← Primary: 58 CLI tool entities, 141 submodes
-      racket_facts.yaml      ← 72 entities (Racket + shell ops)
+      macos_cli.facts.yaml   ← Primary: 58 CLI tool entities, 141 submodes
+      racket.facts.yaml      ← 72 entities (Racket + shell ops)
       power_tools.yaml       ← Developer tools comparison data
-      putin_stalin.yaml      ← Autocrats comparison data
-      macos_fs.yaml          ← macOS filesystem knowledge
+      putin_stalin.facts.yaml      ← Autocrats comparison data
+      macos_fs.facts.yaml          ← macOS filesystem knowledge
     ops/
-      racket_ops.yaml        ← 52 pure Racket + 11 shell anchors
-      fs_ops.yaml            ← 49 filesystem typed operations
-      power_tools_ops.yaml   ← 64 dev tools typed operations
+      racket.ops.yaml        ← 52 pure Racket + 11 shell anchors
+      fs.ops.yaml            ← 49 filesystem typed operations
+      power_tools.ops.yaml   ← 64 dev tools typed operations
 ```
 
 The ops pack files are compiled into the binary via `include_str!` and
@@ -193,4 +193,4 @@ resolve them. Execution is routed through the subsumption map to shell ops.
 | 2025-02-19 | 5 new output-format classes (shell_exec, shell_vcs, shell_structured, shell_session, shell_network) |
 | 2025-02-19 | 46 new CLI tool entities (58 total), 141 submodes (up from 45) |
 | 2025-02-19 | RESIDUAL_FS_OPS emptied — all ops fully subsumed or Racket-native |
-| 2025-02-19 | fs_ops.yaml and power_tools_ops.yaml moved to data/packs/ops/ |
+| 2025-02-19 | fs.ops.yaml and power_tools.ops.yaml moved to data/packs/ops/ |

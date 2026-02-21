@@ -909,13 +909,13 @@ use cadmus::nl::{NlResponse, process_input};
 /// Build a Racket registry with inference + shell submodes (shared helper).
 fn build_racket_registry() -> cadmus::registry::OperationRegistry {
     let mut reg = cadmus::registry::load_ops_pack_str(
-        include_str!("../data/packs/ops/racket_ops.yaml")
-    ).expect("racket_ops.yaml");
+        include_str!("../data/packs/ops/racket.ops.yaml")
+    ).expect("racket.ops.yaml");
     let facts = cadmus::racket_strategy::load_racket_facts_from_str(
-        include_str!("../data/packs/facts/racket_facts.yaml")
-    ).expect("racket_facts.yaml");
+        include_str!("../data/packs/facts/racket.facts.yaml")
+    ).expect("racket.facts.yaml");
     cadmus::racket_strategy::promote_inferred_ops(&mut reg, &facts);
-    let cli_yaml = include_str!("../data/packs/facts/macos_cli_facts.yaml");
+    let cli_yaml = include_str!("../data/packs/facts/macos_cli.facts.yaml");
     if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(cli_yaml) {
         let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
         cadmus::racket_strategy::discover_shell_submodes(&mut reg, &facts, &cli_facts);
@@ -2001,14 +2001,14 @@ fn test_yaml_dictionary_unknown_passthrough() {
 #[test]
 fn test_yaml_op_description_from_registry() {
     let desc = cadmus::fs_types::get_op_description("walk_tree");
-    assert!(desc.is_some(), "walk_tree should have a description from fs_ops.yaml");
+    assert!(desc.is_some(), "walk_tree should have a description from fs.ops.yaml");
     assert!(desc.unwrap().contains("walk"), "description should mention walking: {}", desc.unwrap());
 }
 
 #[test]
 fn test_yaml_op_description_power_tools() {
     let desc = cadmus::fs_types::get_op_description("git_log");
-    assert!(desc.is_some(), "git_log should have a description from power_tools_ops.yaml");
+    assert!(desc.is_some(), "git_log should have a description from power_tools.ops.yaml");
     assert!(desc.unwrap().contains("git"), "description should mention git: {}", desc.unwrap());
 }
 
@@ -2023,9 +2023,9 @@ fn test_yaml_op_description_unknown_returns_none() {
 #[test]
 fn test_yaml_canonical_ops_derived() {
     assert!(cadmus::nl::normalize::is_canonical_op("list_dir"),
-        "list_dir should be canonical (from fs_ops.yaml)");
+        "list_dir should be canonical (from fs.ops.yaml)");
     assert!(cadmus::nl::normalize::is_canonical_op("git_log"),
-        "git_log should be canonical (from power_tools_ops.yaml)");
+        "git_log should be canonical (from power_tools.ops.yaml)");
     assert!(!cadmus::nl::normalize::is_canonical_op("nonexistent_xyz"),
         "nonexistent op should not be canonical");
 }
@@ -2057,7 +2057,7 @@ fn test_yaml_full_pipeline_explain_op() {
     let r = cadmus::nl::process_input("what is walk_tree", &mut state);
     match r {
         cadmus::nl::NlResponse::Explanation { text, .. } => {
-            // Description should come from fs_ops.yaml
+            // Description should come from fs.ops.yaml
             assert!(!text.is_empty(), "explanation should not be empty");
         }
         other => panic!("expected Explanation, got: {:?}", other),
