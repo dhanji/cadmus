@@ -59,7 +59,7 @@ fn run_chat_mode() {
     use cadmus::nl::dialogue::DialogueState;
 
     println!();
-    println!("{}", ui::banner("CADMUS", VERSION, "Natural Language"));
+    println!("{}", ui::banner("cadmus", VERSION, "reasoning inference engine"));
     println!();
     println!("  {} {}", ui::dim("try:"), ui::dim_white("zip up everything in ~/Downloads"));
     println!("  {}  {}", ui::dim("   "), ui::dim_white("find all PDFs in ~/Documents"));
@@ -208,7 +208,7 @@ fn run_chat_mode() {
 
 fn run_plan_mode(path: &Path, run: bool) {
     println!();
-    println!("{}", ui::banner("CADMUS", VERSION, &format!("Plan {} Racket", ui::icon::ARROW_RIGHT)));
+    println!("{}", ui::banner("cadmus", VERSION, &format!("Plan {} Racket", ui::icon::ARROW_RIGHT)));
     println!();
 
     // Load
@@ -381,7 +381,7 @@ fn run_plan_mode(path: &Path, run: bool) {
 
 fn run_demo_mode() {
     println!();
-    println!("{}", ui::banner("CADMUS", VERSION, "Strategy Demo"));
+    println!("{}", ui::banner("cadmus", VERSION, "Strategy Demo"));
     println!();
 
     // -----------------------------------------------------------------------
