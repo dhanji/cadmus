@@ -10,7 +10,7 @@ use cadmus::pipeline;
 use cadmus::type_expr::TypeExpr;
 use cadmus::types::Goal;
 use cadmus::ui;
-use cadmus::workflow;
+use cadmus::plan;
 
 const VERSION: &str = "v0.7.0";
 
@@ -23,25 +23,25 @@ fn main() {
         return;
     }
 
-    // --workflow <path> mode: load and execute a workflow YAML file
-    if let Some(pos) = args.iter().position(|a| a == "--workflow") {
+    // --plan <path> mode: load and execute a plan YAML file
+    if let Some(pos) = args.iter().position(|a| a == "--plan") {
         let path = args.get(pos + 1).unwrap_or_else(|| {
-            eprintln!("{}", ui::error("Missing workflow path"));
+            eprintln!("{}", ui::error("Missing plan path"));
             eprintln!();
-            eprintln!("  {} cadmus --workflow <path.yaml> [--run]", ui::dim("usage:"));
+            eprintln!("  {} cadmus --plan <path.yaml> [--run]", ui::dim("usage:"));
             eprintln!();
-            eprintln!("  {} cadmus --workflow data/workflows/find_pdfs.yaml", ui::dim("$"));
-            eprintln!("  {} cadmus --workflow data/workflows/find_pdfs.yaml --run", ui::dim("$"));
+            eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml", ui::dim("$"));
+            eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml --run", ui::dim("$"));
             process::exit(1);
         });
 
         let run = args.iter().any(|a| a == "--run");
-        run_workflow_mode(Path::new(path), run);
+        run_plan_mode(Path::new(path), run);
         return;
     }
 
     if args.iter().any(|a| a == "--run") {
-        eprintln!("{}", ui::error("--run requires --workflow <path.yaml>"));
+        eprintln!("{}", ui::error("--run requires --plan <path.yaml>"));
         process::exit(1);
     }
 
@@ -97,20 +97,20 @@ fn run_chat_mode() {
         let response = nl::process_input(input, &mut state);
 
         match response {
-            nl::NlResponse::PlanCreated { workflow_yaml, summary: _, prompt: _ } => {
+            nl::NlResponse::PlanCreated { plan_yaml, summary: _, prompt: _ } => {
                 println!();
                 println!("  {}", ui::status_ok("Plan created"));
                 println!();
-                println!("{}", ui::yaml_block(&workflow_yaml));
+                println!("{}", ui::yaml_block(&plan_yaml));
                 println!();
                 println!("  {}", ui::dim("approve, edit, or reject?"));
                 println!();
             }
-            nl::NlResponse::PlanEdited { workflow_yaml, diff_description, .. } => {
+            nl::NlResponse::PlanEdited { plan_yaml, diff_description, .. } => {
                 println!();
                 println!("  {}", ui::status_info(&format!("Edited: {}", diff_description)));
                 println!();
-                println!("{}", ui::yaml_block(&workflow_yaml));
+                println!("{}", ui::yaml_block(&plan_yaml));
                 println!();
                 println!("  {}", ui::dim("approve?"));
                 println!();
@@ -203,17 +203,17 @@ fn run_chat_mode() {
 }
 
 // ---------------------------------------------------------------------------
-// Workflow mode
+// Plan mode
 // ---------------------------------------------------------------------------
 
-fn run_workflow_mode(path: &Path, run: bool) {
+fn run_plan_mode(path: &Path, run: bool) {
     println!();
-    println!("{}", ui::banner("CADMUS", VERSION, &format!("Workflow {} Racket", ui::icon::ARROW_RIGHT)));
+    println!("{}", ui::banner("CADMUS", VERSION, &format!("Plan {} Racket", ui::icon::ARROW_RIGHT)));
     println!();
 
     // Load
     println!("  {}", ui::status_active("Loading"));
-    let def = match workflow::load_workflow(path) {
+    let def = match plan::load_plan(path) {
         Ok(def) => def,
         Err(e) => {
             println!("  {}", ui::status_fail("Load failed"));
@@ -222,10 +222,14 @@ fn run_workflow_mode(path: &Path, run: bool) {
         }
     };
 
-    println!("  {}", ui::kv("workflow", &def.workflow));
+    println!("  {}", ui::kv("plan", &def.name));
     println!("  {}", ui::kv("source", &path.display().to_string()));
-    for (k, v) in &def.inputs {
-        println!("  {}", ui::kv_dim(k, v));
+    for input in &def.inputs {
+        if let Some(hint) = &input.type_hint {
+            println!("  {}", ui::kv_dim(&input.name, hint));
+        } else {
+            println!("  {}", ui::kv_dim(&input.name, "(inferred)"));
+        }
     }
     println!();
 
@@ -233,9 +237,9 @@ fn run_workflow_mode(path: &Path, run: bool) {
     println!("  {}", ui::subsection(&format!("Steps ({})", def.steps.len())));
     for (i, s) in def.steps.iter().enumerate() {
         let args_str = match &s.args {
-            workflow::StepArgs::None => String::new(),
-            workflow::StepArgs::Scalar(v) => format!("{} {}", ui::icon::ARROW_RIGHT, v),
-            workflow::StepArgs::Map(m) => {
+            plan::StepArgs::None => String::new(),
+            plan::StepArgs::Scalar(v) => format!("{} {}", ui::icon::ARROW_RIGHT, v),
+            plan::StepArgs::Map(m) => {
                 let pairs: Vec<String> = m.iter()
                     .map(|(k, v)| format!("{}={}", k, v))
                     .collect();
@@ -249,7 +253,7 @@ fn run_workflow_mode(path: &Path, run: bool) {
     // Compile
     println!("  {}", ui::status_active("Compiling"));
     let registry = cadmus::fs_types::build_full_registry();
-    let compiled = match workflow::compile_workflow(&def, &registry) {
+    let compiled = match plan::compile_plan(&def, &registry) {
         Ok(c) => c,
         Err(e) => {
             println!("  {}", ui::status_fail("Compile failed"));
@@ -265,7 +269,7 @@ fn run_workflow_mode(path: &Path, run: bool) {
     println!("  {}", ui::kv_dim("input", &compiled.input_type.to_string()));
     for cs in &compiled.steps {
         let type_info = format!("{} {} {}", cs.input_type, ui::icon::ARROW_RIGHT, cs.output_type);
-        let is_map = cadmus::workflow::step_needs_map(cs, &registry);
+        let is_map = cadmus::plan::step_needs_map(cs, &registry);
         if is_map {
             println!("{}", ui::step_each(cs.index + 1, &cs.op, &type_info));
         } else {
@@ -279,7 +283,7 @@ fn run_workflow_mode(path: &Path, run: bool) {
     println!();
 
     // Dry-run trace
-    match workflow::execute_workflow(&compiled, &registry) {
+    match plan::execute_plan(&compiled, &registry) {
         Ok(trace) => {
             println!("  {}", ui::subsection(&format!("Dry-Run Trace ({} steps)", trace.steps.len())));
             for ts in &trace.steps {

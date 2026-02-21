@@ -1,0 +1,14 @@
+# Plan: Arithmetic Chain
+# ==========================
+# Chain: add(4, 35) → multiply(_, 2) → subtract(_, 10)
+# Each step takes previous output as first arg, param as second.
+
+complex-arith:
+  steps:
+    - add:
+        x: "4"
+        y: "35"
+    - multiply:
+        y: "2"
+    - subtract:
+        y: "10"

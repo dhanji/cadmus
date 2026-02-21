@@ -183,7 +183,7 @@ pub mod icon {
 /// Print a compact banner.
 ///
 /// ```text
-/// ▰ CADMUS v0.6.0 — Workflow DSL
+/// ▰ CADMUS v0.6.0 — Plan DSL
 /// ```
 pub fn banner(name: &str, version: &str, subtitle: &str) -> String {
     if subtitle.is_empty() {
@@ -319,7 +319,7 @@ pub fn code_block_numbered(code: &str, start_line: usize) -> String {
     out
 }
 
-/// Dim YAML block (for workflow plans shown to user).
+/// Dim YAML block (for plan plans shown to user).
 pub fn yaml_block(yaml: &str) -> String {
     let border = dim("─────────────────────────────────────────");
     let mut out = String::new();
@@ -517,10 +517,10 @@ mod tests {
 
     #[test]
     fn test_banner_with_subtitle() {
-        let b = banner("CADMUS", "v0.6.0", "Workflow DSL");
+        let b = banner("CADMUS", "v0.6.0", "Plan DSL");
         assert!(b.contains("CADMUS"));
         assert!(b.contains("v0.6.0"));
-        assert!(b.contains("Workflow DSL"));
+        assert!(b.contains("Plan DSL"));
     }
 
     #[test]
@@ -605,8 +605,8 @@ mod tests {
 
     #[test]
     fn test_yaml_block() {
-        let block = yaml_block("workflow: test\nsteps:\n  - walk_tree");
-        assert!(block.contains("workflow: test"));
+        let block = yaml_block("test-plan:\n  steps:\nsteps:\n  - walk_tree");
+        assert!(block.contains("test-plan:"));
         assert!(block.contains("walk_tree"));
     }
 

@@ -16,14 +16,14 @@ fn first_value_param(params: &HashMap<String, String>) -> Option<&str> {
 // Racket Executor
 // ---------------------------------------------------------------------------
 //
-// Converts a CompiledWorkflow into a runnable Racket script.
+// Converts a CompiledPlan into a runnable Racket script.
 //
 // Design:
 //   1. Each op maps to a Racket s-expression via `op_to_racket()`
 //   2. `generate_racket_script()` produces a #!/usr/bin/env racket script
 //      with `#lang racket` preamble and let*-bindings for multi-step chains
-//   3. Single-step workflows emit a bare expression (no let overhead)
-//   4. Multi-step workflows use (let* ([step-1 ...] [step-2 ...]) ...)
+//   3. Single-step plans emit a bare expression (no let overhead)
+//   4. Multi-step plans use (let* ([step-1 ...] [step-2 ...]) ...)
 //
 // The executor is data-driven: it reads the Racket symbol and arity from
 // the OperationRegistry (populated from racket.ops.yaml) instead of
@@ -35,7 +35,7 @@ use std::collections::HashMap;
 
 
 use crate::registry::OperationRegistry;
-use crate::workflow::{CompiledWorkflow, CompiledStep, WorkflowDef};
+use crate::plan::{CompiledPlan, CompiledStep, PlanDef, PlanInput};
 
 // ---------------------------------------------------------------------------
 // Shell op helpers
@@ -99,9 +99,9 @@ fn extract_shell_meta(op: &str, registry: &OperationRegistry) -> Option<(String,
     base_command.map(|cmd| (cmd, flags))
 }
 
-/// Check if any step in a compiled workflow uses a shell op or subsumed fs_op
+/// Check if any step in a compiled plan uses a shell op or subsumed fs_op
 /// (all of which need the shell preamble).
-fn has_shell_ops(compiled: &CompiledWorkflow, registry: &OperationRegistry) -> bool {
+fn has_shell_ops(compiled: &CompiledPlan, registry: &OperationRegistry) -> bool {
     compiled.steps.iter().any(|s| {
         is_shell_op(&s.op, registry)
             || crate::type_lowering::is_subsumed(&s.op)
@@ -118,7 +118,7 @@ fn has_shell_ops(compiled: &CompiledWorkflow, registry: &OperationRegistry) -> b
 /// Uses two sources of truth (no new fields needed):
 ///   1. If the op is subsumed, look up the shell op's `return_type` in its
 ///      metasig from the registry (e.g., shell_find → "List(String)").
-///   2. Fall back to the CompiledStep's `output_type` from the workflow
+///   2. Fall back to the CompiledStep's `output_type` from the plan
 ///      compiler (e.g., `Seq(Entry(Name, Bytes))`).
 ///
 /// Racket-native ops (filter, find_matching, sort_by in pipeline) also
@@ -140,7 +140,7 @@ pub fn is_seq_output(step: &CompiledStep, registry: &OperationRegistry) -> bool 
         }
     }
 
-    // Path 2: Fall back to the CompiledStep's output_type from the workflow
+    // Path 2: Fall back to the CompiledStep's output_type from the plan
     // compiler. This covers Racket-native ops and any op not in the
     // subsumption map.
     step.output_type.is_seq_or_list()
@@ -166,7 +166,7 @@ pub fn is_seq_output(step: &CompiledStep, registry: &OperationRegistry) -> bool 
 fn subsumed_op_to_racket(
     step: &CompiledStep,
     entry: &crate::type_lowering::SubsumptionEntry,
-    input_values: &HashMap<String, String>,
+    input_values: &[PlanInput],
     prev_binding: Option<&str>,
     registry: &OperationRegistry,
     prev_is_seq: bool,
@@ -272,7 +272,7 @@ fn subsumed_op_to_racket(
 fn racket_native_op_to_racket(
     step: &CompiledStep,
     kind: &crate::type_lowering::RacketNativeKind,
-    input_values: &HashMap<String, String>,
+    _input_values: &[PlanInput],
     prev_binding: Option<&str>,
 ) -> Result<RacketExpr, RacketError> {
     use crate::type_lowering::RacketNativeKind;
@@ -350,9 +350,7 @@ fn racket_native_op_to_racket(
         RacketNativeKind::Append => {
             // (append lst1 lst2) — concatenate two lists
             // Second list comes from inputs if available
-            let other = input_values.values().next()
-                .map(|v| format!("(list \"{}\")", v))
-                .unwrap_or_else(|| "'()".to_string());
+            let other = "'()".to_string();
             Ok(RacketExpr {
                 expr: format!("(append {} {})", prev, other),
                 uses_prev: true,
@@ -393,19 +391,13 @@ fn racket_native_op_to_racket(
 
 /// Resolve the path operand for a filesystem op.
 /// Returns a Racket expression: either a variable name (prev binding)
-/// or a quoted string literal from the workflow inputs.
-fn fs_path_operand(prev: Option<&str>, inputs: &HashMap<String, String>) -> String {
+/// or a quoted string literal from the plan inputs.
+fn fs_path_operand(prev: Option<&str>, _inputs: &[PlanInput]) -> String {
     if let Some(p) = prev {
         return p.to_string();
     }
-    for key in &["path", "file", "archive", "pathref", "textdir"] {
-        if let Some(v) = inputs.get(*key) {
-            return racket_string(v);
-        }
-    }
-    inputs.values().next()
-        .map(|v| racket_string(v))
-        .unwrap_or_else(|| racket_string("."))
+    // No literal values in inputs — use default
+    racket_string(".")
 }
 
 
@@ -443,13 +435,13 @@ pub struct RacketExpr {
 ///
 /// `prev_binding` is the variable name holding the previous step's result
 /// (e.g., "step-1"). For the first step, this is None and the expression
-/// uses the workflow's input values directly.
+/// uses the plan's input values directly.
 ///
 /// `prev_is_seq` indicates whether the previous step's output is a list/sequence
 /// (checked via `is_seq_output`). Used to bridge Seq→String type mismatches.
 pub fn op_to_racket(
     step: &CompiledStep,
-    input_values: &HashMap<String, String>,
+    input_values: &[PlanInput],
     prev_binding: Option<&str>,
     registry: &OperationRegistry,
     prev_is_seq: bool,
@@ -610,7 +602,7 @@ pub fn op_to_racket(
 // Script generation
 // ---------------------------------------------------------------------------
 
-/// Generate a complete Racket script from a compiled workflow.
+/// Generate a complete Racket script from a compiled plan.
 ///
 /// The script uses `#lang racket` and follows this structure:
 /// - Single-step: bare expression wrapped in `(displayln ...)`
@@ -618,8 +610,8 @@ pub fn op_to_racket(
 ///
 /// This is the Racket analogue of `executor::generate_script()`.
 pub fn generate_racket_script(
-    compiled: &CompiledWorkflow,
-    def: &WorkflowDef,
+    compiled: &CompiledPlan,
+    def: &PlanDef,
     registry: &OperationRegistry,
 ) -> Result<String, RacketError> {
     let mut script = String::new();
@@ -647,7 +639,7 @@ pub fn generate_racket_script(
         return Ok(script);
     }
 
-    // Single-step workflow: bare expression, print result
+    // Single-step plan: bare expression, print result
     if num_steps == 1 {
         let step = &compiled.steps[0];
         script.push_str(&format!(";; Step 1: {}\n", step.op));
@@ -656,7 +648,7 @@ pub fn generate_racket_script(
         return Ok(script);
     }
 
-    // Multi-step workflow: use let* bindings
+    // Multi-step plan: use let* bindings
     script.push_str("(let*\n");
     script.push_str("  (\n");
 
@@ -668,7 +660,7 @@ pub fn generate_racket_script(
         // Type-driven each-mode detection: if the step's input is Seq(X)
         // but the op's registered signature expects a non-Seq first input,
         // we need to wrap in (map ...).
-        let is_map = crate::workflow::step_needs_map(step, registry);
+        let is_map = crate::plan::step_needs_map(step, registry);
 
         script.push_str(&format!("    ;; Step {}: {}{}\n", step_num, step.op,
             if is_map { " (map)" } else { "" }));
@@ -740,7 +732,7 @@ pub fn generate_racket_script(
 /// Priority: prev_binding > first param value > first input value
 fn get_one_operand(
     step: &CompiledStep,
-    input_values: &HashMap<String, String>,
+    _input_values: &[PlanInput],
     prev_binding: Option<&str>,
 ) -> Result<String, RacketError> {
     if let Some(prev) = prev_binding {
@@ -752,10 +744,6 @@ fn get_one_operand(
         return Ok(racket_value(val));
     }
 
-    // Fall back to first input value
-    if let Some(val) = input_values.values().next() {
-        return Ok(racket_value(val));
-    }
 
     Err(RacketError::MissingParam {
         op: step.op.clone(),
@@ -772,7 +760,7 @@ fn get_one_operand(
 /// 4. prev_binding as first operand + first param/input as second
 fn get_two_operands(
     step: &CompiledStep,
-    input_values: &HashMap<String, String>,
+    _input_values: &[PlanInput],
     prev_binding: Option<&str>,
 ) -> Result<(String, String), RacketError> {
     let params = &step.params;
@@ -794,16 +782,6 @@ fn get_two_operands(
         if let Some(val) = params.values().next() {
             return Ok((prev.to_string(), racket_value(val)));
         }
-        if let Some(val) = input_values.values().next() {
-            return Ok((prev.to_string(), racket_value(val)));
-        }
-    }
-
-    // Try to get two values from inputs
-    let mut vals: Vec<&String> = input_values.values().collect();
-    vals.sort(); // deterministic order
-    if vals.len() >= 2 {
-        return Ok((racket_value(vals[0]), racket_value(vals[1])));
     }
 
     // Single param with two space-separated values (e.g., "4 35")
@@ -854,7 +832,7 @@ fn racket_string(s: &str) -> String {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use crate::workflow::CompiledStep;
+    use crate::plan::CompiledStep;
     use crate::type_expr::TypeExpr;
     use crate::registry::load_ops_pack_str;
     use crate::racket_strategy::{load_racket_facts_from_str, promote_inferred_ops};
@@ -877,8 +855,8 @@ mod tests {
         }
     }
 
-    fn make_inputs(pairs: Vec<(&str, &str)>) -> HashMap<String, String> {
-        pairs.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    fn make_inputs(pairs: Vec<(&str, &str)>) -> Vec<PlanInput> {
+        pairs.into_iter().map(|(k, _v)| PlanInput::bare(k)).collect()
     }
 
     // --- op_to_racket tests ---
@@ -985,8 +963,8 @@ mod tests {
     fn test_racket_filter_with_pred() {
         let reg = make_registry();
         let step = make_step("racket_filter", vec![("predicate", "even?")]);
-        let inputs = make_inputs(vec![("lst", "'(1 2 3 4 5)")]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, Some("'(1 2 3 4 5)"), &reg, false).unwrap();
         assert_eq!(expr.expr, "(filter even? '(1 2 3 4 5))");
     }
 
@@ -1050,7 +1028,7 @@ mod tests {
     #[test]
     fn test_single_step_script() {
         let reg = make_registry();
-        let compiled = CompiledWorkflow {
+        let compiled = CompiledPlan {
             name: "add numbers".to_string(),
             input_type: TypeExpr::prim("Number"),
             input_description: "4".to_string(),
@@ -1066,9 +1044,10 @@ mod tests {
             ],
             output_type: TypeExpr::prim("Number"),
         };
-        let def = WorkflowDef {
-            workflow: "add numbers".to_string(),
-            inputs: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
+        let def = PlanDef {
+            name: "add numbers".to_string(),
+            inputs: vec![],
+            output: None,
             steps: vec![],
         };
         let script = generate_racket_script(&compiled, &def, &reg).unwrap();
@@ -1081,7 +1060,7 @@ mod tests {
     #[test]
     fn test_multi_step_script() {
         let reg = make_registry();
-        let compiled = CompiledWorkflow {
+        let compiled = CompiledPlan {
             name: "add then display".to_string(),
             input_type: TypeExpr::prim("Number"),
             input_description: "4".to_string(),
@@ -1105,9 +1084,10 @@ mod tests {
             ],
             output_type: TypeExpr::prim("Number"),
         };
-        let def = WorkflowDef {
-            workflow: "add then multiply".to_string(),
-            inputs: HashMap::new(),
+        let def = PlanDef {
+            name: "add then multiply".to_string(),
+            inputs: vec![],
+            output: None,
             steps: vec![],
         };
         let script = generate_racket_script(&compiled, &def, &reg).unwrap();
@@ -1119,18 +1099,19 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_workflow_script() {
+    fn test_empty_plan_script() {
         let reg = make_registry();
-        let compiled = CompiledWorkflow {
+        let compiled = CompiledPlan {
             name: "empty".to_string(),
             input_type: TypeExpr::prim("Number"),
             input_description: "".to_string(),
             steps: vec![],
             output_type: TypeExpr::prim("Number"),
         };
-        let def = WorkflowDef {
-            workflow: "empty".to_string(),
-            inputs: HashMap::new(),
+        let def = PlanDef {
+            name: "empty".to_string(),
+            inputs: vec![],
+            output: None,
             steps: vec![],
         };
         let script = generate_racket_script(&compiled, &def, &reg).unwrap();
@@ -1435,9 +1416,9 @@ mod tests {
             params: HashMap::new(),
             ..Default::default()
         };
-        let inputs = make_inputs(vec![("pathref", "~/readme.md")]);
-        // prev_is_seq=false, no prev_binding: should use input path directly
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let inputs = make_inputs(vec![]);
+        // Use prev_binding to provide the path
+        let expr = op_to_racket(&step, &inputs, Some("\"~/readme.md\""), &reg, false).unwrap();
         assert!(expr.expr.contains("shell-quote"),
             "stat single step should use shell-quote: {}", expr.expr);
         assert!(expr.expr.contains("~/readme.md"),
@@ -1479,9 +1460,9 @@ mod tests {
             params: vec![("pattern".to_string(), "TODO".to_string())].into_iter().collect(),
             ..Default::default()
         };
-        let inputs = make_inputs(vec![("textdir", "~/Projects")]);
-        // prev_is_seq=false, no prev: should use input path directly
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let inputs = make_inputs(vec![]);
+        // Use prev_binding to provide the path
+        let expr = op_to_racket(&step, &inputs, Some("\"~/Projects\""), &reg, false).unwrap();
         assert!(expr.expr.contains("~/Projects"),
             "search_content first step should use input path: {}", expr.expr);
     }

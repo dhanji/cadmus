@@ -1,9 +1,0 @@
-workflow: "Find large files"
-
-inputs:
-  path: "~/Downloads"
-  min_size: "100MB"
-
-steps:
-  - list_dir
-  - sort_by: name

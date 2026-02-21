@@ -6,20 +6,20 @@
 /// Helper: assert PlanCreated and that the YAML compiles
 fn assert_plan_compiles(response: &NlResponse, expected_ops: &[&str]) {
     match response {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
             for op in expected_ops {
                 assert!(
-                    workflow_yaml.contains(op),
-                    "workflow should contain '{}': {}",
-                    op, workflow_yaml
+                    plan_yaml.contains(op),
+                    "plan should contain '{}': {}",
+                    op, plan_yaml
                 );
             }
-            let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
+            let parsed = cadmus::plan::parse_plan(plan_yaml)
                 .expect("should parse");
             let registry = cadmus::fs_types::build_full_registry();
-            cadmus::workflow::compile_workflow(&parsed, &registry)
+            cadmus::plan::compile_plan(&parsed, &registry)
                 .unwrap_or_else(|e| panic!(
-                    "workflow should compile: {:?}\nYAML:\n{}", e, workflow_yaml
+                    "plan should compile: {:?}\nYAML:\n{}", e, plan_yaml
                 ));
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -118,10 +118,10 @@ fn no_panic(input: &str) -> NlResponse {
 fn test_chaos_slangy_find_pdfs() {
     let r = no_panic("yo can you like find all my pdfs on the desktop real quick");
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("find_matching") || workflow_yaml.contains("walk_tree")
-                || workflow_yaml.contains("list_dir"),
-                "should produce a file-finding workflow: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("find_matching") || plan_yaml.contains("walk_tree")
+                || plan_yaml.contains("list_dir"),
+                "should produce a file-finding plan: {}", plan_yaml);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected response for slangy input: {:?}", other),
@@ -177,17 +177,17 @@ fn test_chaos_multi_sentence() {
 #[test]
 fn test_chaos_ambiguous_no_op() {
     let r = no_panic("just do something with files idk");
-    // Should NOT produce a broken workflow — either clarify or error
+    // Should NOT produce a broken plan — either clarify or error
     match &r {
         NlResponse::NeedsClarification { .. } => {} // good
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
             // If it creates a plan, it should at least compile
-            let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
+            let parsed = cadmus::plan::parse_plan(plan_yaml)
                 .expect("should parse");
             let registry = cadmus::fs_types::build_full_registry();
-            cadmus::workflow::compile_workflow(&parsed, &registry)
+            cadmus::plan::compile_plan(&parsed, &registry)
                 .unwrap_or_else(|e| panic!(
-                    "if plan created, it must compile: {:?}\nYAML:\n{}", e, workflow_yaml
+                    "if plan created, it must compile: {:?}\nYAML:\n{}", e, plan_yaml
                 ));
         }
         _ => {} // Error is also acceptable
@@ -264,7 +264,7 @@ fn test_chaos_html_injection() {
 }
 
 // ===========================================================================
-// I4: Diverse ops end-to-end — NL → workflow → script
+// I4: Diverse ops end-to-end — NL → plan → script
 // ===========================================================================
 
 /// Helper: NL input → PlanCreated → compile → generate Racket script, return script
@@ -273,33 +273,33 @@ fn nl_e2e_script(input: &str) -> String {
     let mut state = DialogueState::new();
     let r = process_input(input, &mut state);
     match r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            let parsed = cadmus::workflow::parse_workflow(&workflow_yaml)
-                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            let parsed = cadmus::plan::parse_plan(&plan_yaml)
+                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
             let registry = cadmus::fs_types::build_full_registry();
-            let compiled = cadmus::workflow::compile_workflow(&parsed, &registry)
-                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
+            let compiled = cadmus::plan::compile_plan(&parsed, &registry)
+                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
             let racket_reg = build_racket_registry();
             cadmus::racket_executor::generate_racket_script(&compiled, &parsed, &racket_reg)
-                .unwrap_or_else(|e| panic!("script gen failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml))
+                .unwrap_or_else(|e| panic!("script gen failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml))
         }
         other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
     }
 }
 
-/// Helper: NL input → PlanCreated, return workflow YAML (no script gen)
+/// Helper: NL input → PlanCreated, return plan YAML (no script gen)
 fn nl_e2e_yaml(input: &str) -> String {
     let mut state = DialogueState::new();
     let r = process_input(input, &mut state);
     match r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
             // Verify it at least compiles
-            let parsed = cadmus::workflow::parse_workflow(&workflow_yaml)
-                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
+            let parsed = cadmus::plan::parse_plan(&plan_yaml)
+                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
             let registry = cadmus::fs_types::build_full_registry();
-            cadmus::workflow::compile_workflow(&parsed, &registry)
-                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, workflow_yaml));
-            workflow_yaml
+            cadmus::plan::compile_plan(&parsed, &registry)
+                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
+            plan_yaml
         }
         other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
     }
@@ -471,9 +471,9 @@ fn test_path_typo_correction_preserves_tilde_path() {
     let mut state = DialogueState::new();
     let r = process_input("findd files in ~/Documents", &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Documents"),
-                "~/Documents should survive typo correction: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Documents"),
+                "~/Documents should survive typo correction: {}", plan_yaml);
         }
         // NeedsClarification is also acceptable if "findd" wasn't corrected
         NlResponse::NeedsClarification { .. } => {}
@@ -487,10 +487,10 @@ fn test_path_quoted_with_typo_in_context() {
     let mut state = DialogueState::new();
     let r = process_input(r#"findd files in "NO NAME""#, &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
             // The quoted path should survive — either as "NO NAME" or /Volumes/NO NAME
-            assert!(workflow_yaml.contains("NO NAME") || workflow_yaml.contains("no name"),
-                "quoted path should survive: {}", workflow_yaml);
+            assert!(plan_yaml.contains("NO NAME") || plan_yaml.contains("no name"),
+                "quoted path should survive: {}", plan_yaml);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected: {:?}", other),
@@ -499,17 +499,17 @@ fn test_path_quoted_with_typo_in_context() {
 
 #[test]
 fn test_path_dir_alias_in_edit_context() {
-    // Create a workflow, then edit with "also skip desktop"
+    // Create a plan, then edit with "also skip desktop"
     // "desktop" in skip context should NOT resolve to ~/Desktop as a path
     let mut state = DialogueState::new();
     let _ = process_input("walk ~/tmp", &mut state);
 
     let r = process_input("skip desktop", &mut state);
     match &r {
-        NlResponse::PlanEdited { workflow_yaml, .. } => {
+        NlResponse::PlanEdited { plan_yaml, .. } => {
             // The skip should add a filter for "desktop" (the name), not ~/Desktop
-            assert!(!workflow_yaml.contains("~/Desktop"),
-                "skip should use 'desktop' as pattern, not ~/Desktop: {}", workflow_yaml);
+            assert!(!plan_yaml.contains("~/Desktop"),
+                "skip should use 'desktop' as pattern, not ~/Desktop: {}", plan_yaml);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected for skip desktop: {:?}", other),
@@ -522,9 +522,9 @@ fn test_path_noun_pattern_with_explicit_pattern() {
     let mut state = DialogueState::new();
     let r = process_input("find *.log files on desktop", &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("*.log") || workflow_yaml.contains(".log"),
-                "explicit pattern should be present: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("*.log") || plan_yaml.contains(".log"),
+                "explicit pattern should be present: {}", plan_yaml);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected: {:?}", other),
@@ -537,9 +537,9 @@ fn test_path_multiple_paths_in_input() {
     let mut state = DialogueState::new();
     let r = process_input("rename ~/old.txt to ~/new.txt", &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("old.txt") || workflow_yaml.contains("new.txt"),
-                "should capture paths: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("old.txt") || plan_yaml.contains("new.txt"),
+                "should capture paths: {}", plan_yaml);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         NlResponse::Error { .. } => {} // type mismatch is a known bug
@@ -553,9 +553,9 @@ fn test_path_url_preserved() {
     let mut state = DialogueState::new();
     let r = process_input("download https://example.com/file.tar.gz", &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("https://example.com/file.tar.gz"),
-                "URL should be preserved: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("https://example.com/file.tar.gz"),
+                "URL should be preserved: {}", plan_yaml);
         }
         other => panic!("unexpected: {:?}", other),
     }
@@ -567,9 +567,9 @@ fn test_path_home_expansion_not_mangled() {
     let mut state = DialogueState::new();
     let r = process_input("list files in ~/Documents", &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Documents"),
-                "~/Documents should be preserved: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Documents"),
+                "~/Documents should be preserved: {}", plan_yaml);
         }
         other => panic!("unexpected: {:?}", other),
     }
@@ -583,12 +583,12 @@ fn test_path_home_expansion_not_mangled() {
 fn test_conv_create_edit_skip_approve() {
     let mut state = DialogueState::new();
 
-    // Step 1: Create an add workflow
+    // Step 1: Create an add plan
     let r1 = process_input("add 10 and 20", &mut state);
     match &r1 {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("add"),
-                "should have add: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("add"),
+                "should have add: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -601,21 +601,21 @@ fn test_conv_create_edit_skip_approve() {
             let s = script.as_ref().unwrap();
             assert!(s.contains("#lang racket"), "should be a Racket program: {}", s);
             assert!(s.contains("(+"), "should contain add: {}", s);
-            assert!(state.current_workflow.is_none(), "approve should consume workflow");
+            assert!(state.current_plan.is_none(), "approve should consume plan");
         }
         other => panic!("expected Approved, got: {:?}", other),
     }
 }
 
 #[test]
-fn test_conv_approve_without_workflow() {
+fn test_conv_approve_without_plan() {
     let mut state = DialogueState::new();
     let r = process_input("yes", &mut state);
     match &r {
         NlResponse::NeedsClarification { needs } => {
             assert!(!needs.is_empty(), "should explain there's nothing to approve");
         }
-        other => panic!("expected NeedsClarification for approve without workflow, got: {:?}", other),
+        other => panic!("expected NeedsClarification for approve without plan, got: {:?}", other),
     }
 }
 
@@ -623,14 +623,14 @@ fn test_conv_approve_without_workflow() {
 fn test_conv_approve_after_reject() {
     let mut state = DialogueState::new();
 
-    // Create workflow
+    // Create plan
     let _ = process_input("list files in /tmp", &mut state);
-    assert!(state.current_workflow.is_some());
+    assert!(state.current_plan.is_some());
 
     // Reject it
     let r1 = process_input("nah", &mut state);
     assert!(matches!(r1, NlResponse::Rejected));
-    assert!(state.current_workflow.is_none());
+    assert!(state.current_plan.is_none());
 
     // Try to approve — should fail
     let r2 = process_input("yes", &mut state);
@@ -645,13 +645,13 @@ fn test_conv_edit_after_approve() {
     // Create and approve
     let _ = process_input("list files in /tmp", &mut state);
     let _ = process_input("yes", &mut state);
-    assert!(state.current_workflow.is_none(), "approve should consume workflow");
+    assert!(state.current_plan.is_none(), "approve should consume plan");
 
     // Try to edit — should fail gracefully
     let r = process_input("skip .git", &mut state);
     match &r {
         NlResponse::NeedsClarification { .. } => {} // good
-        NlResponse::PlanCreated { .. } => {} // also acceptable — might create new workflow
+        NlResponse::PlanCreated { .. } => {} // also acceptable — might create new plan
         other => panic!("edit after approve should clarify or create new: {:?}", other),
     }
 }
@@ -660,7 +660,7 @@ fn test_conv_edit_after_approve() {
 fn test_conv_ten_sequential_edits() {
     let mut state = DialogueState::new();
 
-    // Create a workflow
+    // Create a plan
     let r = process_input("find pdfs in ~/Documents", &mut state);
     assert!(matches!(r, NlResponse::PlanCreated { .. }),
         "should create plan: {:?}", r);
@@ -682,13 +682,13 @@ fn test_conv_ten_sequential_edits() {
     for (i, edit) in edits.iter().enumerate() {
         let r = process_input(edit, &mut state);
         match &r {
-            NlResponse::PlanEdited { workflow_yaml, .. } => {
+            NlResponse::PlanEdited { plan_yaml, .. } => {
                 // Should still parse and compile
-                let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
-                    .unwrap_or_else(|e| panic!("edit {} should parse: {:?}\nYAML:\n{}", i, e, workflow_yaml));
+                let parsed = cadmus::plan::parse_plan(plan_yaml)
+                    .unwrap_or_else(|e| panic!("edit {} should parse: {:?}\nYAML:\n{}", i, e, plan_yaml));
                 let registry = cadmus::fs_types::build_full_registry();
-                cadmus::workflow::compile_workflow(&parsed, &registry)
-                    .unwrap_or_else(|e| panic!("edit {} should compile: {:?}\nYAML:\n{}", i, e, workflow_yaml));
+                cadmus::plan::compile_plan(&parsed, &registry)
+                    .unwrap_or_else(|e| panic!("edit {} should compile: {:?}\nYAML:\n{}", i, e, plan_yaml));
             }
             other => {
                 // Some edits might not apply cleanly — that's ok as long as no panic
@@ -698,14 +698,14 @@ fn test_conv_ten_sequential_edits() {
     }
 
     // Should still be able to approve
-    if state.current_workflow.is_some() {
+    if state.current_plan.is_some() {
         let r = process_input("approve", &mut state);
         match &r {
             NlResponse::Approved { script } => {
                 // Filesystem ops (find_matching, filter) don't have Racket equivalents,
-                // so the Racket generator returns None for this workflow. That's correct.
+                // so the Racket generator returns None for this plan. That's correct.
                 // The important thing is we get Approved (not a panic or error).
-                let _ = script; // may be None for shell-only workflows
+                let _ = script; // may be None for shell-only plans
             }
             other => panic!("should approve after edits: {:?}", other),
         }
@@ -713,20 +713,20 @@ fn test_conv_ten_sequential_edits() {
 }
 
 #[test]
-fn test_conv_overwrite_workflow() {
+fn test_conv_overwrite_plan() {
     let mut state = DialogueState::new();
 
-    // Create first workflow
+    // Create first plan
     let r1 = process_input("list files in /tmp", &mut state);
     assert!(matches!(r1, NlResponse::PlanCreated { .. }));
 
-    // Create second workflow — should overwrite
+    // Create second plan — should overwrite
     let r2 = process_input("find pdfs in ~/Documents", &mut state);
     match &r2 {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            // Should be the new workflow, not the old one
-            assert!(workflow_yaml.contains("Documents") || workflow_yaml.contains("pdf"),
-                "should be the new workflow: {}", workflow_yaml);
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            // Should be the new plan, not the old one
+            assert!(plan_yaml.contains("Documents") || plan_yaml.contains("pdf"),
+                "should be the new plan: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated for overwrite, got: {:?}", other),
     }
@@ -739,9 +739,9 @@ fn test_conv_reject_then_create_new() {
     // Create and reject
     let _ = process_input("list files in /tmp", &mut state);
     let _ = process_input("nah", &mut state);
-    assert!(state.current_workflow.is_none());
+    assert!(state.current_plan.is_none());
 
-    // Create new workflow — should work
+    // Create new plan — should work
     let r = process_input("find pdfs in ~/Documents", &mut state);
     assert!(matches!(r, NlResponse::PlanCreated { .. }),
         "should create new plan after reject: {:?}", r);
@@ -924,7 +924,7 @@ fn build_racket_registry() -> cadmus::registry::OperationRegistry {
 }
 
 // ---------------------------------------------------------------------------
-// Diverse phrasings → CreateWorkflow
+// Diverse phrasings → CreatePlan
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -939,8 +939,8 @@ fn test_nl_zip_up_tilde_path() {
     let mut state = DialogueState::new();
     let r = process_input("zip up ~/Downloads", &mut state);
     assert_plan_created(&r, &["pack_archive"]);
-    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
-        assert!(workflow_yaml.contains("~/Downloads"), "yaml: {}", workflow_yaml);
+    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
+        assert!(plan_yaml.contains("~/Downloads"), "yaml: {}", plan_yaml);
     }
 }
 
@@ -1022,12 +1022,12 @@ fn test_nl_typo_extract_archive() {
 fn test_nl_typo_walk_tree() {
     let mut state = DialogueState::new();
     let r = process_input("wlak the direcotry tree in /tmp", &mut state);
-    // Even with typos, should produce a valid workflow
+    // Even with typos, should produce a valid plan
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
             assert!(
-                workflow_yaml.contains("walk_tree") || workflow_yaml.contains("list_dir"),
-                "should have a dir operation: {}", workflow_yaml
+                plan_yaml.contains("walk_tree") || plan_yaml.contains("list_dir"),
+                "should have a dir operation: {}", plan_yaml
             );
         }
         NlResponse::NeedsClarification { .. } => {
@@ -1180,15 +1180,15 @@ fn test_nl_reject_start_over() {
 fn test_nl_edit_skip_subdirectory() {
     let mut state = DialogueState::new();
 
-    // Create a workflow first
+    // Create a plan first
     let r1 = process_input("zip up everything in ~/Downloads", &mut state);
     assert!(matches!(r1, NlResponse::PlanCreated { .. }));
 
     // Edit: skip a subdirectory
     let r2 = process_input("skip any subdirectory named .git", &mut state);
     match r2 {
-        NlResponse::PlanEdited { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("filter"), "should have filter: {}", workflow_yaml);
+        NlResponse::PlanEdited { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("filter"), "should have filter: {}", plan_yaml);
         }
         other => panic!("expected PlanEdited, got: {:?}", other),
     }
@@ -1198,17 +1198,17 @@ fn test_nl_edit_skip_subdirectory() {
 fn test_nl_edit_remove_step() {
     let mut state = DialogueState::new();
 
-    // Create a workflow with multiple steps
+    // Create a plan with multiple steps
     let r1 = process_input("find all files in ~/Documents", &mut state);
     assert!(matches!(r1, NlResponse::PlanCreated { .. }));
 
-    let step_count_before = state.current_workflow.as_ref().unwrap().steps.len();
+    let step_count_before = state.current_plan.as_ref().unwrap().steps.len();
 
     // Remove a step
     let r2 = process_input("remove step 2", &mut state);
     match r2 {
         NlResponse::PlanEdited { .. } => {
-            let step_count_after = state.current_workflow.as_ref().unwrap().steps.len();
+            let step_count_after = state.current_plan.as_ref().unwrap().steps.len();
             assert_eq!(step_count_after, step_count_before - 1);
         }
         other => panic!("expected PlanEdited, got: {:?}", other),
@@ -1216,11 +1216,11 @@ fn test_nl_edit_remove_step() {
 }
 
 #[test]
-fn test_nl_edit_without_workflow() {
+fn test_nl_edit_without_plan() {
     let mut state = DialogueState::new();
     let r = process_input("skip any subdirectory named foo", &mut state);
     assert!(matches!(r, NlResponse::NeedsClarification { .. }),
-        "edit without workflow should need clarification: {:?}", r);
+        "edit without plan should need clarification: {:?}", r);
 }
 
 // ---------------------------------------------------------------------------
@@ -1234,13 +1234,13 @@ fn test_nl_full_conversation_zip() {
     // Turn 1: Create
     let r1 = process_input("zip up everything in ~/Downloads", &mut state);
     assert!(matches!(&r1, NlResponse::PlanCreated { .. }));
-    assert!(state.current_workflow.is_some());
+    assert!(state.current_plan.is_some());
 
     // Turn 2: Ask about an op
     let r2 = process_input("what's walk mean", &mut state);
     assert!(matches!(&r2, NlResponse::Explanation { .. }));
-    // Workflow should still be there
-    assert!(state.current_workflow.is_some());
+    // Plan should still be there
+    assert!(state.current_plan.is_some());
 
     // Turn 3: Edit
     let r3 = process_input("skip any subdirectory named .git", &mut state);
@@ -1262,12 +1262,12 @@ fn test_nl_conversation_create_reject_recreate() {
     // Reject
     let r2 = process_input("nah", &mut state);
     assert!(matches!(r2, NlResponse::Rejected));
-    assert!(state.current_workflow.is_none());
+    assert!(state.current_plan.is_none());
 
     // Create again
     let r3 = process_input("list ~/Documents", &mut state);
     assert!(matches!(&r3, NlResponse::PlanCreated { .. }));
-    assert!(state.current_workflow.is_some());
+    assert!(state.current_plan.is_some());
 }
 
 #[test]
@@ -1285,8 +1285,8 @@ fn test_nl_conversation_multiple_edits() {
     let r2 = process_input("skip any subdirectory named node_modules", &mut state);
     assert!(matches!(&r2, NlResponse::PlanEdited { .. }));
 
-    // The workflow should have multiple filter steps
-    let wf = state.current_workflow.as_ref().unwrap();
+    // The plan should have multiple filter steps
+    let wf = state.current_plan.as_ref().unwrap();
     let filter_count = wf.steps.iter().filter(|s| s.op == "filter").count();
     assert!(filter_count >= 2, "should have at least 2 filter steps, got {}", filter_count);
 }
@@ -1360,13 +1360,13 @@ fn test_hardening_ok_search_todo_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("ok search for TODO in ~/src", &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
-            let yaml_lower = workflow_yaml.to_lowercase();
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            let yaml_lower = plan_yaml.to_lowercase();
             assert!(!yaml_lower.contains("pattern: \"ok\"") && !yaml_lower.contains("pattern: ok"),
-                "'ok' should NOT be the search pattern: {}", workflow_yaml);
+                "'ok' should NOT be the search pattern: {}", plan_yaml);
             // "todo" should be the keyword
             assert!(yaml_lower.contains("todo"),
-                "should contain 'todo' as keyword: {}", workflow_yaml);
+                "should contain 'todo' as keyword: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -1377,10 +1377,10 @@ fn test_hardening_so_find_pdfs_no_so_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("so find all PDFs in ~/Documents", &mut state);
     match &r {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
             // "so" should not appear as a keyword/pattern
-            assert!(!workflow_yaml.contains("pattern: \"so\"") && !workflow_yaml.contains("pattern: so\n"),
-                "'so' should NOT be a keyword: {}", workflow_yaml);
+            assert!(!plan_yaml.contains("pattern: \"so\"") && !plan_yaml.contains("pattern: so\n"),
+                "'so' should NOT be a keyword: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -1447,11 +1447,11 @@ fn test_hardening_tilde_dir_still_works() {
 // -- Dictionary expansion: slang doesn't break things --
 
 #[test]
-fn test_hardening_slang_doesnt_create_workflow() {
+fn test_hardening_slang_doesnt_create_plan() {
     let mut state = DialogueState::new();
     let r = process_input("yikes whoa that's crazy", &mut state);
     assert!(!matches!(r, NlResponse::PlanCreated { .. }),
-        "slang should NOT create workflow: {:?}", r);
+        "slang should NOT create plan: {:?}", r);
 }
 
 #[test]
@@ -1460,7 +1460,7 @@ fn test_hardening_gonna_wanna_passthrough() {
     // "gonna" and "wanna" should not be corrected to domain ops
     let r = process_input("I'm gonna wanna compress file.txt", &mut state);
     assert!(matches!(r, NlResponse::PlanCreated { .. }),
-        "should still create workflow with slang: {:?}", r);
+        "should still create plan with slang: {:?}", r);
     assert_yaml_compiles(&r);
 }
 
@@ -1499,12 +1499,12 @@ fn test_nl_edited_yaml_compiles() {
 
 fn assert_plan_created(response: &NlResponse, expected_ops: &[&str]) {
     match response {
-        NlResponse::PlanCreated { workflow_yaml, .. } => {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
             for op in expected_ops {
                 assert!(
-                    workflow_yaml.contains(op),
-                    "workflow should contain '{}': {}",
-                    op, workflow_yaml
+                    plan_yaml.contains(op),
+                    "plan should contain '{}': {}",
+                    op, plan_yaml
                 );
             }
         }
@@ -1513,21 +1513,21 @@ fn assert_plan_created(response: &NlResponse, expected_ops: &[&str]) {
 }
 
 fn assert_yaml_compiles(response: &NlResponse) {
-    if let NlResponse::PlanCreated { workflow_yaml, .. } = response {
-        let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
+    if let NlResponse::PlanCreated { plan_yaml, .. } = response {
+        let parsed = cadmus::plan::parse_plan(plan_yaml)
             .expect("should parse");
         let registry = cadmus::fs_types::build_full_registry();
-        cadmus::workflow::compile_workflow(&parsed, &registry)
+        cadmus::plan::compile_plan(&parsed, &registry)
             .expect("should compile");
     }
 }
 
 fn assert_yaml_compiles_edited(response: &NlResponse) {
-    if let NlResponse::PlanEdited { workflow_yaml, .. } = response {
-        let parsed = cadmus::workflow::parse_workflow(workflow_yaml)
+    if let NlResponse::PlanEdited { plan_yaml, .. } = response {
+        let parsed = cadmus::plan::parse_plan(plan_yaml)
             .expect("should parse");
         let registry = cadmus::fs_types::build_full_registry();
-        cadmus::workflow::compile_workflow(&parsed, &registry)
+        cadmus::plan::compile_plan(&parsed, &registry)
             .expect("should compile");
     }
 }
@@ -1554,11 +1554,11 @@ fn test_redteam_never_mind_rejects() {
 fn test_redteam_search_todo_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("search for TODO in ~/src", &mut state);
-    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
-        assert!(workflow_yaml.contains("todo") || workflow_yaml.contains("TODO"),
-            "search pattern should contain 'todo', got:\n{}", workflow_yaml);
-        assert!(!workflow_yaml.contains("good"),
-            "search pattern should NOT contain 'good', got:\n{}", workflow_yaml);
+    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
+        assert!(plan_yaml.contains("todo") || plan_yaml.contains("TODO"),
+            "search pattern should contain 'todo', got:\n{}", plan_yaml);
+        assert!(!plan_yaml.contains("good"),
+            "search pattern should NOT contain 'good', got:\n{}", plan_yaml);
     } else {
         panic!("expected PlanCreated, got: {:?}", r);
     }
@@ -1568,9 +1568,9 @@ fn test_redteam_search_todo_keyword() {
 fn test_redteam_search_fixme_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("search for FIXME in ~/src", &mut state);
-    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
-        assert!(workflow_yaml.contains("fixme") || workflow_yaml.contains("FIXME"),
-            "search pattern should contain 'fixme', got:\n{}", workflow_yaml);
+    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
+        assert!(plan_yaml.contains("fixme") || plan_yaml.contains("FIXME"),
+            "search pattern should contain 'fixme', got:\n{}", plan_yaml);
     } else {
         panic!("expected PlanCreated, got: {:?}", r);
     }
@@ -1675,14 +1675,14 @@ fn test_redteam_yeah_that_works_approves() {
         "yeah that works should approve, got: {:?}", r);
 }
 
-// -- BUG-011: casual English shouldn't create workflows --
+// -- BUG-011: casual English shouldn't create plans --
 
 #[test]
-fn test_redteam_mind_not_workflow() {
+fn test_redteam_mind_not_plan() {
     let mut state = DialogueState::new();
     let r = process_input("I have something in mind", &mut state);
     assert!(!matches!(r, NlResponse::PlanCreated { .. }),
-        "casual English should NOT create workflow, got: {:?}", r);
+        "casual English should NOT create plan, got: {:?}", r);
 }
 
 // -- Adversarial inputs --
@@ -1743,9 +1743,9 @@ fn test_redteam_create_overwrite_approve() {
     // Second create overwrites first
     let r2 = process_input("list ~/Desktop", &mut state);
     assert!(matches!(r2, NlResponse::PlanCreated { .. }));
-    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r2 {
-        assert!(workflow_yaml.contains("list_dir"),
-            "second plan should be list_dir: {}", workflow_yaml);
+    if let NlResponse::PlanCreated { plan_yaml, .. } = &r2 {
+        assert!(plan_yaml.contains("list_dir"),
+            "second plan should be list_dir: {}", plan_yaml);
     }
     let r3 = process_input("yes", &mut state);
     assert!(matches!(r3, NlResponse::Approved { .. }));
@@ -1849,19 +1849,19 @@ fn test_filetype_plist_detected_as_path() {
     assert_yaml_compiles(&r);
 }
 
-// --- Workflow type inference with new extensions ---
+// --- Plan type inference with new extensions ---
 
 #[test]
 fn test_filetype_flac_infers_audio_type() {
     let mut state = DialogueState::new();
     let r = process_input("copy song.flac to ~/backup/", &mut state);
-    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
+    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
         // Should compile — the dictionary gives File(Audio) for .flac
-        let def: cadmus::workflow::WorkflowDef =
-            serde_yaml::from_str(workflow_yaml).unwrap();
+        let def: cadmus::plan::PlanDef =
+            serde_yaml::from_str(plan_yaml).unwrap();
         let reg = cadmus::fs_types::build_full_registry();
-        let compiled = cadmus::workflow::compile_workflow(&def, &reg);
-        assert!(compiled.is_ok(), "flac workflow should compile: {:?}", compiled.err());
+        let compiled = cadmus::plan::compile_plan(&def, &reg);
+        assert!(compiled.is_ok(), "flac plan should compile: {:?}", compiled.err());
     }
 }
 
@@ -1869,12 +1869,12 @@ fn test_filetype_flac_infers_audio_type() {
 fn test_filetype_scheme_infers_text_type() {
     let mut state = DialogueState::new();
     let r = process_input("search for define in program.scm", &mut state);
-    if let NlResponse::PlanCreated { workflow_yaml, .. } = &r {
-        let def: cadmus::workflow::WorkflowDef =
-            serde_yaml::from_str(workflow_yaml).unwrap();
+    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
+        let def: cadmus::plan::PlanDef =
+            serde_yaml::from_str(plan_yaml).unwrap();
         let reg = cadmus::fs_types::build_full_registry();
-        let compiled = cadmus::workflow::compile_workflow(&def, &reg);
-        assert!(compiled.is_ok(), "scheme workflow should compile: {:?}", compiled.err());
+        let compiled = cadmus::plan::compile_plan(&def, &reg);
+        assert!(compiled.is_ok(), "scheme plan should compile: {:?}", compiled.err());
     }
 }
 
@@ -1938,9 +1938,9 @@ fn test_yaml_vocab_synonyms_loaded() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("zip up everything in ~/Downloads", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("pack_archive"),
-                "should have pack_archive in YAML from synonym, got: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("pack_archive"),
+                "should have pack_archive in YAML from synonym, got: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2043,9 +2043,9 @@ fn test_yaml_full_pipeline_walk_tree() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("walk the directory tree in ~/Documents", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("walk_tree"),
-                "should have walk_tree from YAML synonyms: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("walk_tree"),
+                "should have walk_tree from YAML synonyms: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2074,15 +2074,15 @@ fn test_nl_find_screenshots_on_my_desktop() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("Find all screenshots on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("*.png"),
-                "should have *.png pattern for screenshots: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("walk_tree"),
-                "should have walk_tree step: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("find_matching"),
-                "should have find_matching step: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_yaml);
+            assert!(plan_yaml.contains("*.png"),
+                "should have *.png pattern for screenshots: {}", plan_yaml);
+            assert!(plan_yaml.contains("walk_tree"),
+                "should have walk_tree step: {}", plan_yaml);
+            assert!(plan_yaml.contains("find_matching"),
+                "should have find_matching step: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2093,11 +2093,11 @@ fn test_nl_list_videos_in_my_downloads() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("list videos in my downloads", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Downloads"),
-                "should have ~/Downloads path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("*.mp4") || workflow_yaml.contains("*.mov"),
-                "should have video pattern: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Downloads"),
+                "should have ~/Downloads path: {}", plan_yaml);
+            assert!(plan_yaml.contains("*.mp4") || plan_yaml.contains("*.mov"),
+                "should have video pattern: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2108,11 +2108,11 @@ fn test_nl_find_pdfs_in_documents() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find PDFs in documents", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Documents"),
-                "should have ~/Documents path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("*.pdf"),
-                "should have *.pdf pattern: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Documents"),
+                "should have ~/Documents path: {}", plan_yaml);
+            assert!(plan_yaml.contains("*.pdf"),
+                "should have *.pdf pattern: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2123,14 +2123,14 @@ fn test_nl_zip_up_photos_on_my_desktop() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("zip up photos on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("pack_archive"),
-                "should have pack_archive step: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_yaml);
+            assert!(plan_yaml.contains("pack_archive"),
+                "should have pack_archive step: {}", plan_yaml);
             // photos → *.png pattern used as filter
-            assert!(workflow_yaml.contains("*.png") || workflow_yaml.contains("filter"),
-                "should have photo filter: {}", workflow_yaml);
+            assert!(plan_yaml.contains("*.png") || plan_yaml.contains("filter"),
+                "should have photo filter: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2142,9 +2142,9 @@ fn test_nl_bare_desktop_resolves_path() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("list desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2156,12 +2156,12 @@ fn test_nl_find_stuff_no_noun_pattern() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find stuff on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_yaml);
             // "stuff" becomes a keyword, used as *stuff* pattern in find_matching
-            assert!(workflow_yaml.contains("*stuff*"),
-                "should have *stuff* keyword pattern: {}", workflow_yaml);
+            assert!(plan_yaml.contains("*stuff*"),
+                "should have *stuff* keyword pattern: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2173,11 +2173,11 @@ fn test_nl_explicit_path_with_noun() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find screenshots in ~/Projects", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Projects"),
-                "should have ~/Projects path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("*.png"),
-                "should have *.png pattern: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Projects"),
+                "should have ~/Projects path: {}", plan_yaml);
+            assert!(plan_yaml.contains("*.png"),
+                "should have *.png pattern: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2188,11 +2188,11 @@ fn test_nl_find_logs_on_desktop() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find logs on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("*.log"),
-                "should have *.log pattern: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_yaml);
+            assert!(plan_yaml.contains("*.log"),
+                "should have *.log pattern: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2205,11 +2205,11 @@ fn test_nl_quoted_path_no_name() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input(r#"list all the files in "NO NAME""#, &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("NO NAME"),
-                "should have 'NO NAME' as path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("list_dir"),
-                "should have list_dir step: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("NO NAME"),
+                "should have 'NO NAME' as path: {}", plan_yaml);
+            assert!(plan_yaml.contains("list_dir"),
+                "should have list_dir step: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2220,11 +2220,11 @@ fn test_nl_quoted_path_with_find() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input(r#"find PDFs in "My Backup Drive""#, &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { workflow_yaml, .. } => {
-            assert!(workflow_yaml.contains("My Backup Drive"),
-                "should have 'My Backup Drive' as path: {}", workflow_yaml);
-            assert!(workflow_yaml.contains("*.pdf"),
-                "should have *.pdf pattern: {}", workflow_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("My Backup Drive"),
+                "should have 'My Backup Drive' as path: {}", plan_yaml);
+            assert!(plan_yaml.contains("*.pdf"),
+                "should have *.pdf pattern: {}", plan_yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }

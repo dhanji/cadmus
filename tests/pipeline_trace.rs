@@ -1,11 +1,11 @@
-// Full pipeline trace: NL → Intent → Workflow YAML → Compiled Steps → Racket
+// Full pipeline trace: NL → Intent → Plan YAML → Compiled Steps → Racket
 // Run with: cargo test --test pipeline_trace -- --nocapture
 
 use cadmus::nl::normalize;
 use cadmus::nl::intent::{self, Intent};
 use cadmus::nl::slots;
 use cadmus::nl::dialogue;
-use cadmus::workflow;
+use cadmus::plan;
 use cadmus::fs_types;
 use cadmus::racket_executor;
 
@@ -35,8 +35,8 @@ fn trace_full_pipeline() {
     let parsed_intent = intent::parse_intent(&normalized);
     println!("\n  1b. Intent recognition:");
     match &parsed_intent {
-        Intent::CreateWorkflow { op, rest } => {
-            println!("      intent: CreateWorkflow");
+        Intent::CreatePlan { op, rest } => {
+            println!("      intent: CreatePlan");
             println!("      op:     {:?}", op);
             println!("      rest:   {:?}", rest);
         }
@@ -51,20 +51,20 @@ fn trace_full_pipeline() {
     println!("      patterns:    {:?}", extracted.patterns);
 
     // ═══════════════════════════════════════════════════════════
-    //  STAGE 2: Intent + Slots → WorkflowDef (YAML structure)
+    //  STAGE 2: Intent + Slots → PlanDef (YAML structure)
     // ═══════════════════════════════════════════════════════════
     println!("\n══════════════════════════════════════════════════════════");
-    println!("  STAGE 2: Intent + Slots → WorkflowDef");
+    println!("  STAGE 2: Intent + Slots → PlanDef");
     println!("══════════════════════════════════════════════════════════\n");
 
-    if let Intent::CreateWorkflow { ref op, .. } = parsed_intent {
-        match dialogue::build_workflow(op, &extracted, Some("Extract comic archive")) {
+    if let Intent::CreatePlan { ref op, .. } = parsed_intent {
+        match dialogue::build_plan(op, &extracted, Some("Extract comic archive")) {
             Ok(wf) => {
-                println!("  Generated WorkflowDef:");
-                println!("    workflow: {:?}", wf.workflow);
+                println!("  Generated PlanDef:");
+                println!("    name: {:?}", wf.name);
                 println!("    inputs:");
-                for (k, v) in &wf.inputs {
-                    println!("      {}: {:?}", k, v);
+                for input in &wf.inputs {
+                    println!("      {}: {:?}", input.name, input.type_hint);
                 }
                 println!("    steps:");
                 for (i, s) in wf.steps.iter().enumerate() {
@@ -73,20 +73,24 @@ fn trace_full_pipeline() {
 
                 // This is what would be serialized to YAML
                 println!("\n  Equivalent YAML:");
-                println!("    workflow: {:?}", wf.workflow);
-                println!("    inputs:");
-                for (k, v) in &wf.inputs {
-                    println!("      {}: {:?}", k, v);
+                println!("    {}:", wf.name);
+                println!("      inputs:");
+                for input in &wf.inputs {
+                    if let Some(ref hint) = input.type_hint {
+                        println!("        - {}: \"{}\"", input.name, hint);
+                    } else {
+                        println!("        - {}", input.name);
+                    }
                 }
-                println!("    steps:");
+                println!("      steps:");
                 for s in &wf.steps {
                     match &s.args {
-                        workflow::StepArgs::None => println!("      - {}", s.op),
-                        workflow::StepArgs::Scalar(v) => println!("      - {}: {}", s.op, v),
-                        workflow::StepArgs::Map(m) => {
-                            println!("      - {}:", s.op);
+                        plan::StepArgs::None => println!("        - {}", s.op),
+                        plan::StepArgs::Scalar(v) => println!("        - {}: {}", s.op, v),
+                        plan::StepArgs::Map(m) => {
+                            println!("        - {}:", s.op);
                             for (k, v) in m {
-                                println!("          {}: {}", k, v);
+                                println!("            {}: {}", k, v);
                             }
                         }
                     }
@@ -97,19 +101,19 @@ fn trace_full_pipeline() {
     }
 
     // ═══════════════════════════════════════════════════════════
-    //  STAGE 3: WorkflowDef → Compiled Steps (Type Unification)
+    //  STAGE 3: PlanDef → Compiled Steps (Type Unification)
     // ═══════════════════════════════════════════════════════════
     println!("\n══════════════════════════════════════════════════════════");
-    println!("  STAGE 3: WorkflowDef → Compiled Steps (Type Unification)");
+    println!("  STAGE 3: PlanDef → Compiled Steps (Type Unification)");
     println!("══════════════════════════════════════════════════════════\n");
 
-    // Use a direct CBZ workflow to show format resolution
+    // Use a direct CBZ plan to show format resolution
     let yaml = r#"
-workflow: "Extract a CBZ comic"
-inputs:
-  path: "issue_001.cbz"
-steps:
-  - extract_archive
+extract-a-cbz-comic:
+  inputs:
+    - path: "File(Archive(File(Image), Cbz))"
+  steps:
+    - extract_archive
 "#;
     println!("  Input YAML:");
     for line in yaml.trim().lines() {
@@ -117,16 +121,16 @@ steps:
     }
     println!();
 
-    let def = workflow::parse_workflow(yaml).unwrap();
+    let def = plan::parse_plan(yaml).unwrap();
     let registry = fs_types::build_full_registry();
-    let compiled = workflow::compile_workflow(&def, &registry).unwrap();
+    let compiled = plan::compile_plan(&def, &registry).unwrap();
 
     println!("  Compilation result:");
     println!("    input_type:  {}", compiled.input_type);
     println!("    output_type: {}", compiled.output_type);
     println!();
     for cs in &compiled.steps {
-        let is_map = workflow::step_needs_map(cs, &registry);
+        let is_map = plan::step_needs_map(cs, &registry);
         println!("    Step {}: {}{}", cs.index + 1, cs.op,
             if is_map { " [MAP]" } else { "" });
         println!("      input:  {}", cs.input_type);
@@ -175,24 +179,24 @@ steps:
     println!("  All Format Resolution Paths");
     println!("══════════════════════════════════════════════════════════\n");
 
-    let cases = vec![
-        ("issue.cbz",       "Cbz → zip → unzip -o"),
-        ("issue.cbr",       "Cbr → rar → unrar x"),
-        ("archive.tar.gz",  "TarGz → tar_gz → tar -xzf"),
-        ("archive.tar.bz2", "TarBz2 → tar_bz2 → tar -xjf"),
-        ("archive.tar.xz",  "TarXz → tar_xz → tar -xJf"),
+    let cases: Vec<(&str, &str, &str)> = vec![
+        ("issue.cbz",       "File(Archive(File(Image), Cbz))",  "Cbz → zip → unzip -o"),
+        ("issue.cbr",       "File(Archive(File(Image), Cbr))",  "Cbr → rar → unrar x"),
+        ("archive.tar.gz",  "File(Archive(Bytes, TarGz))",      "TarGz → tar_gz → tar -xzf"),
+        ("archive.tar.bz2", "File(Archive(Bytes, TarBz2))",     "TarBz2 → tar_bz2 → tar -xjf"),
+        ("archive.tar.xz",  "File(Archive(Bytes, TarXz))",      "TarXz → tar_xz → tar -xJf"),
     ];
 
-    for (ext, expected_chain) in &cases {
+    for (ext, type_hint, expected_chain) in &cases {
         let yaml = format!(r#"
-workflow: "test"
-inputs:
-  path: "{}"
-steps:
-  - extract_archive
-"#, ext);
-        let def = workflow::parse_workflow(&yaml).unwrap();
-        let compiled = workflow::compile_workflow(&def, &registry).unwrap();
+test:
+  inputs:
+    - path: "{}"
+  steps:
+    - extract_archive
+"#, type_hint);
+        let def = plan::parse_plan(&yaml).unwrap();
+        let compiled = plan::compile_plan(&def, &registry).unwrap();
         let script = racket_executor::generate_racket_script(&compiled, &def, &registry).unwrap();
 
         let tool_line = script.lines()
@@ -212,20 +216,20 @@ steps:
     println!("  Full 5-Step Comic Repack Pipeline");
     println!("══════════════════════════════════════════════════════════\n");
 
-    let yaml = std::fs::read_to_string("data/workflows/repack_comics.yaml").unwrap();
-    println!("  Source YAML (data/workflows/repack_comics.yaml):");
+    let yaml = std::fs::read_to_string("data/plans/repack_comics.yaml").unwrap();
+    println!("  Source YAML (data/plans/repack_comics.yaml):");
     for line in yaml.trim().lines() {
         println!("    {}", line);
     }
     println!();
 
-    let def = workflow::parse_workflow(&yaml).unwrap();
-    let compiled = workflow::compile_workflow(&def, &registry).unwrap();
+    let def = plan::parse_plan(&yaml).unwrap();
+    let compiled = plan::compile_plan(&def, &registry).unwrap();
 
     println!("  Compiled pipeline:");
-    println!("    input: {} (type: {})\n", def.inputs["path"], compiled.input_type);
+    println!("    input: path (type: {})\n", compiled.input_type);
     for cs in &compiled.steps {
-        let is_map = workflow::step_needs_map(cs, &registry);
+        let is_map = plan::step_needs_map(cs, &registry);
         println!("    Step {}: {}{}", cs.index + 1, cs.op,
             if is_map { " [MAP over each element]" } else { "" });
         println!("      {} → {}", cs.input_type, cs.output_type);
@@ -240,8 +244,8 @@ steps:
         println!("    {}", line);
     }
 
-    println!("\n  Note: In the multi-step pipeline, input is '/comics' (a directory),");
+    println!("\n  Note: In the multi-step pipeline, input is a directory (bare 'path'),");
     println!("  so the format type variable stays unbound → falls back to generic tar.");
-    println!("  With a known-extension input like 'issue.cbz', it resolves to unzip.");
+    println!("  With a typed input like File(Archive(File(Image), Cbz)), it resolves to unzip.");
     println!();
 }

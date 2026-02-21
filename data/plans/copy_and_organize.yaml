@@ -1,0 +1,14 @@
+# Plan: Copy and Organize
+# ===========================
+# Copy files matching a pattern to a new directory, then sort by name.
+
+copy-and-organize:
+  inputs:
+    - source
+    - dest
+    - pattern
+  steps:
+    - walk_tree
+    - filter:
+        extension: ".pdf"
+    - sort_by: name

@@ -1,0 +1,14 @@
+# Plan: Archive Source Files
+# ==============================
+# Walk a directory, find matching files, filter, sort, and pack into archive.
+# 5-step Dir → Seq → Archive chain.
+
+archive-sources:
+  inputs:
+    - path
+  steps:
+    - walk_tree
+    - find_matching:
+        pattern: "*.rs"
+    - sort_by: name
+    - pack_archive

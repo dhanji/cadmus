@@ -1,7 +1,7 @@
 //! Natural Language UX layer.
 //!
 //! A deterministic, low-latency adapter that converts chatty user input
-//! into structured workflow YAML / Goal DSL instructions for Cadmus.
+//! into structured plan YAML / Goal DSL instructions for Cadmus.
 //! Operates in four stages:
 //!
 //! 1. **Normalization** — case fold, punctuation strip, ordinal canonicalization,
@@ -31,19 +31,19 @@ use slots::ExtractedSlots;
 /// The response from processing a user input through the NL layer.
 #[derive(Debug, Clone)]
 pub enum NlResponse {
-    /// A new workflow plan was created.
+    /// A new plan plan was created.
     PlanCreated {
-        /// The workflow YAML string.
-        workflow_yaml: String,
+        /// The plan YAML string.
+        plan_yaml: String,
         /// Human-readable summary of what the plan does.
         summary: String,
         /// The prompt to show the user.
         prompt: String,
     },
-    /// An existing workflow plan was edited.
+    /// An existing plan plan was edited.
     PlanEdited {
-        /// The revised workflow YAML string.
-        workflow_yaml: String,
+        /// The revised plan YAML string.
+        plan_yaml: String,
         /// Description of what changed.
         diff_description: String,
         /// The prompt to show the user.
@@ -56,7 +56,7 @@ pub enum NlResponse {
     },
     /// The user approved the current plan.
     Approved {
-        /// The generated shell script (if workflow was compiled successfully).
+        /// The generated shell script (if plan was compiled successfully).
         script: Option<String>,
     },
     /// The user rejected the current plan.
@@ -70,8 +70,8 @@ pub enum NlResponse {
     ParamSet {
         /// Description of what was set.
         description: String,
-        /// The revised workflow YAML (if a workflow exists).
-        workflow_yaml: Option<String>,
+        /// The revised plan YAML (if a plan exists).
+        plan_yaml: Option<String>,
     },
     /// An error occurred.
     Error {
@@ -125,8 +125,8 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
 
     // 7. Dispatch based on intent
     match intent_result {
-        Intent::CreateWorkflow { op, rest: _ } => {
-            handle_create_workflow(op, &extracted, state)
+        Intent::CreatePlan { op, rest: _ } => {
+            handle_create_plan(op, &extracted, state)
         }
         Intent::EditStep { action, rest: _ } => {
             handle_edit_step(action, &extracted, state)
@@ -135,13 +135,13 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
             handle_explain(&subject)
         }
         Intent::Approve => {
-            if let Some(wf) = state.current_workflow.take() {
-                // Generate a Racket program from the workflow.
+            if let Some(wf) = state.current_plan.take() {
+                // Generate a Racket program from the plan.
                 // Use a full registry that includes shell ops so that
                 // subsumed fs_ops can route through extract_shell_meta().
                 let script = {
                     let registry = crate::fs_types::build_full_registry();
-                    match crate::workflow::compile_workflow(&wf, &registry) {
+                    match crate::plan::compile_plan(&wf, &registry) {
                         Ok(compiled) => {
                             // Build a Racket registry with shell ops included.
                             // This runs the same inference pipeline as build_full_registry
@@ -184,7 +184,7 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
             }
         }
         Intent::Reject => {
-            state.current_workflow = None;
+            state.current_plan = None;
             NlResponse::Rejected
         }
         Intent::AskQuestion { tokens } => {
@@ -203,17 +203,17 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
 // Intent handlers
 // ---------------------------------------------------------------------------
 
-fn handle_create_workflow(
+fn handle_create_plan(
     op: Option<String>,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
 ) -> NlResponse {
-    match dialogue::build_workflow(&op, slots, None) {
+    match dialogue::build_plan(&op, slots, None) {
         Ok(wf) => {
-            let yaml = dialogue::workflow_to_yaml(&wf);
+            let yaml = dialogue::plan_to_yaml(&wf);
 
             // Validate: try to compile through the engine
-            match validate_workflow_yaml(&yaml) {
+            match validate_plan_yaml(&yaml) {
                 Ok(()) => {
                     let summary = format_summary(&wf);
                     let prompt = format!("{}\n\n{}\n\n{}",
@@ -222,17 +222,17 @@ fn handle_create_workflow(
                         "Approve? Or edit plan?"
                     );
 
-                    state.current_workflow = Some(wf);
+                    state.current_plan = Some(wf);
                     state.focus.push(FocusEntry::WholePlan);
 
                     NlResponse::PlanCreated {
-                        workflow_yaml: yaml,
+                        plan_yaml: yaml,
                         summary,
                         prompt,
                     }
                 }
                 Err(e) => NlResponse::Error {
-                    message: format!("Generated workflow failed validation: {}", e),
+                    message: format!("Generated plan failed validation: {}", e),
                 },
             }
         }
@@ -252,7 +252,7 @@ fn handle_edit_step(
     slots: &ExtractedSlots,
     state: &mut DialogueState,
 ) -> NlResponse {
-    let wf = match &state.current_workflow {
+    let wf = match &state.current_plan {
         Some(wf) => wf.clone(),
         None => {
             return NlResponse::NeedsClarification {
@@ -266,25 +266,25 @@ fn handle_edit_step(
 
     match dialogue::apply_edit(&wf, &action, slots, state) {
         Ok((edited_wf, diff_desc)) => {
-            let yaml = dialogue::workflow_to_yaml(&edited_wf);
+            let yaml = dialogue::plan_to_yaml(&edited_wf);
 
-            match validate_workflow_yaml(&yaml) {
+            match validate_plan_yaml(&yaml) {
                 Ok(()) => {
                     let prompt = format!("{}\n\n{}\n\nApprove?",
                         diff_desc,
                         yaml,
                     );
 
-                    state.current_workflow = Some(edited_wf);
+                    state.current_plan = Some(edited_wf);
 
                     NlResponse::PlanEdited {
-                        workflow_yaml: yaml,
+                        plan_yaml: yaml,
                         diff_description: diff_desc,
                         prompt,
                     }
                 }
                 Err(e) => NlResponse::Error {
-                    message: format!("Edited workflow failed validation: {}", e),
+                    message: format!("Edited plan failed validation: {}", e),
                 },
             }
         }
@@ -333,7 +333,7 @@ fn handle_set_param(
     _slots: &ExtractedSlots,
     state: &mut DialogueState,
 ) -> NlResponse {
-    let wf = match &state.current_workflow {
+    let wf = match &state.current_plan {
         Some(wf) => wf.clone(),
         None => {
             return NlResponse::NeedsClarification {
@@ -347,16 +347,21 @@ fn handle_set_param(
         _ => "Parameter updated.".to_string(),
     };
 
-    // For now, just acknowledge — full param editing would modify workflow inputs
+    // For now, just acknowledge — full param editing would modify plan inputs
     if let (Some(p), Some(v)) = (param, value) {
         let mut edited = wf;
-        edited.inputs.insert(p.clone(), v.clone());
-        let yaml = dialogue::workflow_to_yaml(&edited);
-        state.current_workflow = Some(edited);
+        // Update existing input or add new one
+        if let Some(existing) = edited.inputs.iter_mut().find(|i| i.name == *p) {
+            existing.type_hint = Some(v.clone());
+        } else {
+            edited.inputs.push(crate::plan::PlanInput::bare(p.clone()));
+        }
+        let yaml = dialogue::plan_to_yaml(&edited);
+        state.current_plan = Some(edited);
 
         NlResponse::ParamSet {
             description: desc,
-            workflow_yaml: Some(yaml),
+            plan_yaml: Some(yaml),
         }
     } else {
         NlResponse::NeedsClarification {
@@ -379,12 +384,12 @@ fn update_focus(state: &mut DialogueState, slots: &ExtractedSlots) {
     }
 }
 
-/// Validate a workflow YAML string by parsing and compiling it.
-fn validate_workflow_yaml(yaml: &str) -> Result<(), String> {
-    let parsed = crate::workflow::parse_workflow(yaml)
+/// Validate a plan YAML string by parsing and compiling it.
+fn validate_plan_yaml(yaml: &str) -> Result<(), String> {
+    let parsed = crate::plan::parse_plan(yaml)
         .map_err(|e| format!("Parse error: {}", e))?;
     let registry = crate::fs_types::build_full_registry();
-    crate::workflow::compile_workflow(&parsed, &registry)
+    crate::plan::compile_plan(&parsed, &registry)
         .map_err(|e| format!("Compile error: {}", e))?;
     Ok(())
 }
@@ -406,17 +411,19 @@ fn casual_ack(turn: usize) -> &'static str {
     ACKS[turn % ACKS.len()]
 }
 
-/// Generate a human-readable summary of a workflow.
-fn format_summary(wf: &crate::workflow::WorkflowDef) -> String {
+/// Generate a human-readable summary of a plan.
+fn format_summary(wf: &crate::plan::PlanDef) -> String {
     let steps_desc: Vec<String> = wf.steps.iter()
         .map(|s| s.op.replace('_', " "))
         .collect();
 
-    let path = wf.inputs.get("path").map(|s| s.as_str()).unwrap_or(".");
+    let path = wf.get_input("path")
+        .and_then(|i| i.type_hint.as_deref())
+        .unwrap_or(".");
 
     format!(
         "Plan: {} — {} step(s) operating on {}:\n  {}",
-        wf.workflow,
+        wf.name,
         wf.steps.len(),
         path,
         steps_desc.join(" → "),
@@ -441,7 +448,7 @@ fn get_op_explanation(op: &str) -> String {
 mod tests {
     use super::*;
 
-    // -- Full round-trip: create workflow --
+    // -- Full round-trip: create plan --
 
     #[test]
     fn test_process_zip_up_downloads() {
@@ -449,11 +456,11 @@ mod tests {
         let response = process_input("zip up everything in my downloads", &mut state);
 
         match response {
-            NlResponse::PlanCreated { workflow_yaml, summary: _, prompt } => {
-                assert!(workflow_yaml.contains("walk_tree"));
-                assert!(workflow_yaml.contains("pack_archive"));
+            NlResponse::PlanCreated { plan_yaml, summary: _, prompt } => {
+                assert!(plan_yaml.contains("walk_tree"));
+                assert!(plan_yaml.contains("pack_archive"));
                 assert!(prompt.contains("Approve"));
-                assert!(state.current_workflow.is_some());
+                assert!(state.current_plan.is_some());
             }
             other => panic!("expected PlanCreated, got: {:?}", other),
         }
@@ -465,8 +472,8 @@ mod tests {
         let response = process_input("find all PDFs in ~/Documents", &mut state);
 
         match response {
-            NlResponse::PlanCreated { workflow_yaml, .. } => {
-                assert!(workflow_yaml.contains("walk_tree") || workflow_yaml.contains("find_matching"));
+            NlResponse::PlanCreated { plan_yaml, .. } => {
+                assert!(plan_yaml.contains("walk_tree") || plan_yaml.contains("find_matching"));
             }
             other => panic!("expected PlanCreated, got: {:?}", other),
         }
@@ -478,8 +485,8 @@ mod tests {
         let response = process_input("list ~/Downloads", &mut state);
 
         match response {
-            NlResponse::PlanCreated { workflow_yaml, .. } => {
-                assert!(workflow_yaml.contains("list_dir"));
+            NlResponse::PlanCreated { plan_yaml, .. } => {
+                assert!(plan_yaml.contains("list_dir"));
             }
             other => panic!("expected PlanCreated, got: {:?}", other),
         }
@@ -536,14 +543,14 @@ mod tests {
     #[test]
     fn test_process_nah_start_over() {
         let mut state = DialogueState::new();
-        // First create a workflow
+        // First create a plan
         process_input("zip up ~/Downloads", &mut state);
-        assert!(state.current_workflow.is_some());
+        assert!(state.current_plan.is_some());
 
         // Then reject
         let response = process_input("nah", &mut state);
         assert!(matches!(response, NlResponse::Rejected));
-        assert!(state.current_workflow.is_none());
+        assert!(state.current_plan.is_none());
     }
 
     // -- Edit --
@@ -552,16 +559,16 @@ mod tests {
     fn test_process_skip_subdirectory() {
         let mut state = DialogueState::new();
 
-        // First create a workflow
+        // First create a plan
         let r1 = process_input("zip up everything in ~/Downloads", &mut state);
         assert!(matches!(r1, NlResponse::PlanCreated { .. }));
 
         // Then edit it
         let r2 = process_input("skip any subdirectory named foo", &mut state);
         match r2 {
-            NlResponse::PlanEdited { workflow_yaml, .. } => {
-                assert!(workflow_yaml.contains("filter"),
-                    "should have filter step: {}", workflow_yaml);
+            NlResponse::PlanEdited { plan_yaml, .. } => {
+                assert!(plan_yaml.contains("filter"),
+                    "should have filter step: {}", plan_yaml);
             }
             other => panic!("expected PlanEdited, got: {:?}", other),
         }
@@ -572,13 +579,13 @@ mod tests {
     #[test]
     fn test_process_with_typos() {
         let mut state = DialogueState::new();
-        // Use a realistic command with a path so the workflow compiles
+        // Use a realistic command with a path so the plan compiles
         let response = process_input("extrct the archve at ~/comic.cbz", &mut state);
 
         match response {
-            NlResponse::PlanCreated { workflow_yaml, .. } => {
-                assert!(workflow_yaml.contains("extract_archive"),
-                    "typo should be corrected: {}", workflow_yaml);
+            NlResponse::PlanCreated { plan_yaml, .. } => {
+                assert!(plan_yaml.contains("extract_archive"),
+                    "typo should be corrected: {}", plan_yaml);
             }
             other => panic!("expected PlanCreated, got: {:?}", other),
         }
@@ -602,13 +609,13 @@ mod tests {
         // Turn 1: Create
         let r1 = process_input("zip up everything in ~/Downloads", &mut state);
         assert!(matches!(r1, NlResponse::PlanCreated { .. }));
-        assert!(state.current_workflow.is_some());
+        assert!(state.current_plan.is_some());
 
         // Turn 2: Edit
         let r2 = process_input("skip any subdirectory named .git", &mut state);
         match &r2 {
-            NlResponse::PlanEdited { workflow_yaml, .. } => {
-                assert!(workflow_yaml.contains("filter"));
+            NlResponse::PlanEdited { plan_yaml, .. } => {
+                assert!(plan_yaml.contains("filter"));
             }
             other => panic!("expected PlanEdited, got: {:?}", other),
         }
@@ -636,9 +643,9 @@ mod tests {
         let mut state = DialogueState::new();
         let response = process_input("zip up everything in ~/Downloads", &mut state);
 
-        if let NlResponse::PlanCreated { workflow_yaml, .. } = response {
+        if let NlResponse::PlanCreated { plan_yaml, .. } = response {
             // Parse it back
-            let parsed = crate::workflow::parse_workflow(&workflow_yaml);
+            let parsed = crate::plan::parse_plan(&plan_yaml);
             assert!(parsed.is_ok(), "should parse: {:?}", parsed.err());
         }
     }
@@ -646,7 +653,7 @@ mod tests {
     // -- Edit on empty state --
 
     #[test]
-    fn test_edit_without_workflow() {
+    fn test_edit_without_plan() {
         let mut state = DialogueState::new();
         let response = process_input("skip any subdirectory named foo", &mut state);
         // Should get clarification, not an error
@@ -675,11 +682,11 @@ mod tests {
     #[test]
     fn test_approve_after_error_needs_clarification() {
         let mut state = DialogueState::new();
-        // This should fail validation (no workflow stored)
+        // This should fail validation (no plan stored)
         let r1 = process_input("do the thing", &mut state);
         assert!(matches!(r1, NlResponse::NeedsClarification { .. }),
             "do the thing should need clarification: {:?}", r1);
-        assert!(state.current_workflow.is_none());
+        assert!(state.current_plan.is_none());
         // Now approve should also need clarification
         let r2 = process_input("approve", &mut state);
         assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
@@ -693,7 +700,7 @@ mod tests {
         assert!(matches!(r1, NlResponse::PlanCreated { .. }));
         let r2 = process_input("yes", &mut state);
         assert!(matches!(r2, NlResponse::Approved { .. }), "first approve should succeed: {:?}", r2);
-        // Second approve should fail — workflow was cleared
+        // Second approve should fail — plan was cleared
         let r3 = process_input("yes", &mut state);
         assert!(matches!(r3, NlResponse::NeedsClarification { .. }),
             "second approve should need clarification, got: {:?}", r3);

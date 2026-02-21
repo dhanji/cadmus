@@ -4,7 +4,7 @@
 # Loaded at runtime by src/filetypes.rs — no Rust recompilation needed.
 #
 # To add a new file type: just add an entry below. That's it.
-# The NL layer, workflow compiler, and type inference all read from here.
+# The NL layer, plan compiler, and type inference all read from here.
 #
 # Schema:
 #   ext          — file extension without dot (e.g. "rs", "tar.gz")
@@ -32,7 +32,7 @@ categories:
   - ebook
 
 # Archive format families: maps type-system format primitives to their
-# tool family. Used by the workflow compiler to resolve generic ops like
+# tool family. Used by the plan compiler to resolve generic ops like
 # extract_archive → extract_zip when the format type variable is bound.
 #
 # Cbz/Cbr are comic book archives — same underlying format as Zip/Rar.

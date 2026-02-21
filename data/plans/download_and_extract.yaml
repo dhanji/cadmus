@@ -1,0 +1,10 @@
+# Plan: Download and Extract
+# ==============================
+# Given an archive file, extract its contents and sort them.
+
+download-and-extract:
+  inputs:
+    - archive
+  steps:
+    - extract_archive
+    - sort_by: name

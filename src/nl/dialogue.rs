@@ -3,18 +3,18 @@
 //!
 //! Maintains lightweight state across conversation turns:
 //! - **FocusStack** — ranked entries for anaphora resolution ("it", "that")
-//! - **DialogueState** — current workflow, focus stack, turn count, last intent
-//! - **Delta transforms** — apply edits to existing WorkflowDef
-//! - **DSL generation** — build WorkflowDef from intent + slots
+//! - **DialogueState** — current plan, focus stack, turn count, last intent
+//! - **Delta transforms** — apply edits to existing PlanDef
+//! - **DSL generation** — build PlanDef from intent + slots
 //!
-//! CRITICAL: All generated WorkflowDefs are validated by feeding them through
-//! `workflow::compile_workflow()`. The NL layer never bypasses the engine.
+//! CRITICAL: All generated PlanDefs are validated by feeding them through
+//! `plan::compile_plan()`. The NL layer never bypasses the engine.
 
 use std::collections::HashMap;
 
 use crate::nl::intent::{Intent, EditAction};
 use crate::nl::slots::{ExtractedSlots, SlotValue, StepRef, Anchor, Modifier};
-use crate::workflow::{WorkflowDef, RawStep, StepArgs};
+use crate::plan::{PlanDef, RawStep, StepArgs, PlanInput};
 
 // ---------------------------------------------------------------------------
 // Focus stack for anaphora resolution
@@ -29,7 +29,7 @@ pub enum FocusEntry {
     MentionedOp { op: String },
     /// The last path/artifact that was mentioned.
     Artifact { path: String },
-    /// The whole workflow/plan.
+    /// The whole plan.
     WholePlan,
 }
 
@@ -68,7 +68,7 @@ impl FocusStack {
         ))
     }
 
-    /// Resolve "the plan" / "the workflow" — returns WholePlan if present.
+    /// Resolve "the plan" — returns WholePlan if present.
     pub fn resolve_plan(&self) -> Option<&FocusEntry> {
         self.entries.iter().find(|e| matches!(e, FocusEntry::WholePlan))
     }
@@ -111,8 +111,8 @@ impl FocusStack {
 /// The full dialogue state maintained across conversation turns.
 #[derive(Debug, Clone)]
 pub struct DialogueState {
-    /// The current workflow being built/edited (None if no workflow yet).
-    pub current_workflow: Option<WorkflowDef>,
+    /// The current plan being built/edited (None if no plan yet).
+    pub current_plan: Option<PlanDef>,
     /// Focus stack for anaphora resolution.
     pub focus: FocusStack,
     /// Number of turns in this conversation.
@@ -124,7 +124,7 @@ pub struct DialogueState {
 impl DialogueState {
     pub fn new() -> Self {
         Self {
-            current_workflow: None,
+            current_plan: None,
             focus: FocusStack::new(),
             turn_count: 0,
             last_intent: None,
@@ -144,11 +144,11 @@ impl DialogueState {
 /// Errors from dialogue operations.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DialogueError {
-    /// Tried to edit but there's no current workflow.
+    /// Tried to edit but there's no current plan.
     NeedsContext(String),
     /// The edit target doesn't exist.
     InvalidTarget(String),
-    /// Can't build a workflow from the given intent.
+    /// Can't build a plan from the given intent.
     CannotBuild(String),
 }
 
@@ -157,28 +157,28 @@ impl std::fmt::Display for DialogueError {
         match self {
             DialogueError::NeedsContext(msg) => write!(f, "No current plan to edit: {}", msg),
             DialogueError::InvalidTarget(msg) => write!(f, "Invalid target: {}", msg),
-            DialogueError::CannotBuild(msg) => write!(f, "Cannot build workflow: {}", msg),
+            DialogueError::CannotBuild(msg) => write!(f, "Cannot build plan: {}", msg),
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Workflow generation from intent + slots
+// Plan generation from intent + slots
 // ---------------------------------------------------------------------------
 
-/// Build a WorkflowDef from a CreateWorkflow intent and extracted slots.
-pub fn build_workflow(
+/// Build a PlanDef from a CreatePlan intent and extracted slots.
+pub fn build_plan(
     op: &Option<String>,
     slots: &ExtractedSlots,
     description: Option<&str>,
-) -> Result<WorkflowDef, DialogueError> {
+) -> Result<PlanDef, DialogueError> {
     let primary_op = op.as_deref()
         .or(slots.primary_op.as_deref())
         .ok_or_else(|| DialogueError::CannotBuild(
             "No operation detected. Try something like 'zip up ~/Downloads'.".to_string()
         ))?;
 
-    let mut inputs = HashMap::new();
+    let mut inputs: Vec<PlanInput> = Vec::new();
     let mut steps = Vec::new();
 
     // Determine the target path
@@ -213,7 +213,7 @@ pub fn build_workflow(
             if has_flatten || (has_each && has_archive_context) {
                 // ── Compound repack goal ──
                 // Type-directed: list → filter → sort → extract each → flatten → enumerate → pack
-                inputs.insert("path".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("path"));
 
                 steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
 
@@ -241,7 +241,7 @@ pub fn build_workflow(
                 steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::Map(pack_params) });
             } else {
                 // ── Simple pack: walk → filter → pack ──
-                inputs.insert("path".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("path"));
                 steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
                 if let Some(pattern) = slots.patterns.first() {
                     let mut params = HashMap::new();
@@ -252,13 +252,13 @@ pub fn build_workflow(
             }
         }
         "extract_archive" => {
-            inputs.insert("file".to_string(), target_path.clone());
+            inputs.push(PlanInput::bare("file"));
             steps.push(RawStep { op: "extract_archive".to_string(), args: StepArgs::None });
         }
 
         // List/walk operations
         "list_dir" => {
-            inputs.insert("path".to_string(), target_path.clone());
+            inputs.push(PlanInput::bare("path"));
             steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
             if !slots.patterns.is_empty() {
                 let mut params = HashMap::new();
@@ -274,7 +274,7 @@ pub fn build_workflow(
             }
         }
         "walk_tree" => {
-            inputs.insert("path".to_string(), target_path.clone());
+            inputs.push(PlanInput::bare("path"));
             steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
             if !slots.patterns.is_empty() {
                 let mut params = HashMap::new();
@@ -289,7 +289,7 @@ pub fn build_workflow(
 
         // Find/search operations
         "find_matching" => {
-            inputs.insert("path".to_string(), target_path.clone());
+            inputs.push(PlanInput::bare("path"));
             steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
             let mut params = HashMap::new();
             if let Some(pattern) = slots.patterns.first() {
@@ -311,14 +311,14 @@ pub fn build_workflow(
             let is_file_target = is_file_path(&target_path);
             if is_file_target {
                 // Use parent dir, then filter to the specific file
-                inputs.insert("textdir".to_string(), dir_of(&target_path));
+                inputs.push(PlanInput::bare("textdir"));
                 steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
                 let fname = filename_of(&target_path);
                 let mut filter_params = HashMap::new();
                 filter_params.insert("pattern".to_string(), fname);
                 steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(filter_params) });
             } else {
-                inputs.insert("textdir".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("textdir"));
                 steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
             }
             steps.push(RawStep {
@@ -329,7 +329,7 @@ pub fn build_workflow(
 
         // Sort
         "sort_by" => {
-            inputs.insert("path".to_string(), target_path.clone());
+            inputs.push(PlanInput::bare("path"));
             steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
             let sort_key = slots.keywords.first()
                 .cloned()
@@ -339,7 +339,7 @@ pub fn build_workflow(
 
         // Filter
         "filter" => {
-            inputs.insert("path".to_string(), target_path.clone());
+            inputs.push(PlanInput::bare("path"));
             steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
             let mut params = HashMap::new();
             if let Some(pattern) = slots.patterns.first() {
@@ -374,17 +374,15 @@ pub fn build_workflow(
             }
 
             if all_numbers.len() >= 2 {
-                inputs.insert("x".to_string(), all_numbers[0].clone());
-                inputs.insert("y".to_string(), all_numbers[1].clone());
+                // Arithmetic: embed values directly in step params (no inputs needed)
             } else if all_numbers.len() == 1 {
-                inputs.insert("x".to_string(), all_numbers[0].clone());
-                inputs.insert("y".to_string(), "0".to_string());
+                all_numbers.push("0".to_string());
             }
 
             let mut params = HashMap::new();
-            if inputs.contains_key("x") {
-                params.insert("x".to_string(), format!("${}", "x"));
-                params.insert("y".to_string(), format!("${}", "y"));
+            if all_numbers.len() >= 2 {
+                params.insert("x".to_string(), all_numbers[0].clone());
+                params.insert("y".to_string(), all_numbers[1].clone());
             }
             steps.push(RawStep { op: primary_op.to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
         }
@@ -394,14 +392,14 @@ pub fn build_workflow(
             // Categorize the op to choose the right input type
             if is_url_op(other) {
                 // URL ops: git_clone, download, wget_download
-                inputs.insert("url".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("url"));
             } else if is_git_repo_op(other) {
                 // Git ops that work on a repo (not clone)
-                inputs.insert("repo".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("repo"));
             } else if is_entry_op(other) {
                 // Entry ops: rename, move_entry, delete
                 // These need Entry(Name, a) input — build a pipeline
-                inputs.insert("path".to_string(), dir_of(&target_path));
+                inputs.push(PlanInput::bare("path"));
                 steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
                 // Filter to the specific file
                 let filter_name = filename_of(&target_path);
@@ -424,43 +422,44 @@ pub fn build_workflow(
                 }
                 steps.push(RawStep { op: other.to_string(), args: op_args });
                 // Skip the default step push below
-                let workflow_name = description
+                let plan_name = description
                     .map(|d| d.to_string())
-                    .unwrap_or_else(|| generate_workflow_name(primary_op, &slots));
-                return Ok(WorkflowDef { workflow: workflow_name, inputs, steps });
+                    .unwrap_or_else(|| generate_plan_name(primary_op, &slots));
+                return Ok(PlanDef { name: plan_name, inputs, output: None, steps });
             } else if is_path_op(other) {
                 // Ops that take Path primitive (stat, du_size, chmod, etc.)
                 // Use "pathref" input name so type inference yields Path, not Dir(Bytes)
-                inputs.insert("pathref".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("pathref"));
             } else if is_seq_op(other) {
                 // Ops that take Seq(a) — need a pipeline to produce the sequence
                 if is_file_path(&target_path) {
                     // File target: read_file → op (e.g. count lines)
-                    inputs.insert("file".to_string(), target_path.clone());
+                    inputs.push(PlanInput::bare("file"));
                     steps.push(RawStep { op: "read_file".to_string(), args: StepArgs::None });
                 } else {
                     // Directory target: list_dir → op (e.g. count files)
-                    inputs.insert("path".to_string(), target_path.clone());
+                    inputs.push(PlanInput::bare("path"));
                     steps.push(RawStep { op: "list_dir".to_string(), args: StepArgs::None });
                 }
             } else if is_file_path(&target_path) {
                 // File ops with a file target: use "file" input name
-                inputs.insert("file".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("file"));
             } else {
                 // Default: directory input
-                inputs.insert("path".to_string(), target_path.clone());
+                inputs.push(PlanInput::bare("path"));
             }
             steps.push(RawStep { op: other.to_string(), args: StepArgs::None });
         }
     }
 
-    let workflow_name = description
+    let plan_name = description
         .map(|d| d.to_string())
-        .unwrap_or_else(|| generate_workflow_name(primary_op, &slots));
+        .unwrap_or_else(|| generate_plan_name(primary_op, &slots));
 
-    Ok(WorkflowDef {
-        workflow: workflow_name,
+    Ok(PlanDef {
+        name: plan_name,
         inputs,
+        output: None,
         steps,
     })
 }
@@ -616,8 +615,8 @@ fn filename_of(path: &str) -> String {
     }
 }
 
-/// Generate a human-readable workflow name from the operation and slots.
-fn generate_workflow_name(op: &str, slots: &ExtractedSlots) -> String {
+/// Generate a human-readable plan name from the operation and slots.
+fn generate_plan_name(op: &str, slots: &ExtractedSlots) -> String {
     // Derive a short display name from the ops YAML description.
     // Descriptions look like "zip/tar -c — pack entries into archive"
     // or "find — recursively walk directory tree (flattened)".
@@ -646,17 +645,17 @@ fn generate_workflow_name(op: &str, slots: &ExtractedSlots) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Delta transforms: edit existing WorkflowDef
+// Delta transforms: edit existing PlanDef
 // ---------------------------------------------------------------------------
 
-/// Apply an edit action to an existing WorkflowDef.
+/// Apply an edit action to an existing PlanDef.
 pub fn apply_edit(
-    workflow: &WorkflowDef,
+    plan: &PlanDef,
     action: &EditAction,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
-) -> Result<(WorkflowDef, String), DialogueError> {
-    let mut wf = workflow.clone();
+) -> Result<(PlanDef, String), DialogueError> {
+    let mut wf = plan.clone();
 
     match action {
         EditAction::Skip => apply_skip(&mut wf, slots, state),
@@ -670,10 +669,10 @@ pub fn apply_edit(
 
 /// Add a filter step to skip items matching a pattern/name.
 fn apply_skip(
-    wf: &mut WorkflowDef,
+    wf: &mut PlanDef,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
-) -> Result<(WorkflowDef, String), DialogueError> {
+) -> Result<(PlanDef, String), DialogueError> {
     // Determine what to skip
     // Filter out edit-action words — the user says "skip .git" but "skip" itself
     // ends up as a keyword. We want the actual target, not the action verb.
@@ -719,19 +718,19 @@ fn apply_skip(
     Ok((wf.clone(), desc))
 }
 
-/// Remove a step from the workflow.
+/// Remove a step from the plan.
 fn apply_remove(
-    wf: &mut WorkflowDef,
+    wf: &mut PlanDef,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
-) -> Result<(WorkflowDef, String), DialogueError> {
+) -> Result<(PlanDef, String), DialogueError> {
     // Try to resolve the step. If the primary_op is an edit-action verb
-    // (e.g. "remove" → "delete" via synonym), it won't match any workflow step.
+    // (e.g. "remove" → "delete" via synonym), it won't match any plan step.
     // In that case, default to the last step — "remove the step" means "remove the last step".
     let step_idx = match resolve_step_index(wf, slots) {
         Ok(idx) => idx,
         Err(_) => {
-            // Check if the "op" is actually an edit-action verb, not a real workflow op
+            // Check if the "op" is actually an edit-action verb, not a real plan op
             let action_verbs = ["delete", "remove", "drop", "cut"];
             let is_action_verb = slots.primary_op.as_ref()
                 .map(|op| action_verbs.contains(&op.as_str()))
@@ -755,12 +754,12 @@ fn apply_remove(
     Ok((wf.clone(), desc))
 }
 
-/// Add a new step to the workflow.
+/// Add a new step to the plan.
 fn apply_add(
-    wf: &mut WorkflowDef,
+    wf: &mut PlanDef,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
-) -> Result<(WorkflowDef, String), DialogueError> {
+) -> Result<(PlanDef, String), DialogueError> {
     let op = slots.primary_op.as_deref()
         .or_else(|| slots.keywords.first().map(|s| s.as_str()))
         .ok_or_else(|| DialogueError::InvalidTarget(
@@ -790,10 +789,10 @@ fn apply_add(
 
 /// Move a step to a new position.
 fn apply_move(
-    wf: &mut WorkflowDef,
+    wf: &mut PlanDef,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
-) -> Result<(WorkflowDef, String), DialogueError> {
+) -> Result<(PlanDef, String), DialogueError> {
     let from_idx = resolve_step_index(wf, slots)?;
     let step = wf.steps.remove(from_idx);
     let op = step.op.clone();
@@ -819,10 +818,10 @@ fn apply_move(
 
 /// Change a step's parameters.
 fn apply_change(
-    wf: &mut WorkflowDef,
+    wf: &mut PlanDef,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
-) -> Result<(WorkflowDef, String), DialogueError> {
+) -> Result<(PlanDef, String), DialogueError> {
     let step_idx = resolve_step_index(wf, slots)?;
 
     // Update the step's args with new values from slots
@@ -872,10 +871,10 @@ fn apply_change(
 
 /// Insert a step (alias for add, but with explicit position).
 fn apply_insert(
-    wf: &mut WorkflowDef,
+    wf: &mut PlanDef,
     slots: &ExtractedSlots,
     state: &mut DialogueState,
-) -> Result<(WorkflowDef, String), DialogueError> {
+) -> Result<(PlanDef, String), DialogueError> {
     apply_add(wf, slots, state)
 }
 
@@ -884,7 +883,7 @@ fn apply_insert(
 // ---------------------------------------------------------------------------
 
 /// Resolve a step index from extracted slots.
-fn resolve_step_index(wf: &WorkflowDef, slots: &ExtractedSlots) -> Result<usize, DialogueError> {
+fn resolve_step_index(wf: &PlanDef, slots: &ExtractedSlots) -> Result<usize, DialogueError> {
     if let Some(step_ref) = slots.step_refs.first() {
         resolve_step_ref(wf, step_ref)
     } else if let Some(op) = &slots.primary_op {
@@ -901,7 +900,7 @@ fn resolve_step_index(wf: &WorkflowDef, slots: &ExtractedSlots) -> Result<usize,
 }
 
 /// Resolve a StepRef to a 0-indexed position.
-fn resolve_step_ref(wf: &WorkflowDef, step_ref: &StepRef) -> Result<usize, DialogueError> {
+fn resolve_step_ref(wf: &PlanDef, step_ref: &StepRef) -> Result<usize, DialogueError> {
     match step_ref {
         StepRef::Number(n) => {
             let idx = (*n as usize).saturating_sub(1);
@@ -909,7 +908,7 @@ fn resolve_step_ref(wf: &WorkflowDef, step_ref: &StepRef) -> Result<usize, Dialo
                 Ok(idx)
             } else {
                 Err(DialogueError::InvalidTarget(
-                    format!("Step {} doesn't exist (workflow has {} steps).", n, wf.steps.len())
+                    format!("Step {} doesn't exist (plan has {} steps).", n, wf.steps.len())
                 ))
             }
         }
@@ -924,7 +923,7 @@ fn resolve_step_ref(wf: &WorkflowDef, step_ref: &StepRef) -> Result<usize, Dialo
         StepRef::First => Ok(0),
         StepRef::Last => {
             if wf.steps.is_empty() {
-                Err(DialogueError::InvalidTarget("Workflow has no steps.".to_string()))
+                Err(DialogueError::InvalidTarget("Plan has no steps.".to_string()))
             } else {
                 Ok(wf.steps.len() - 1)
             }
@@ -957,41 +956,42 @@ fn build_step_from_slots(op: &str, slots: &ExtractedSlots) -> RawStep {
 }
 
 // ---------------------------------------------------------------------------
-// Workflow serialization to YAML
+// Plan serialization to YAML
 // ---------------------------------------------------------------------------
 
-/// Serialize a WorkflowDef to YAML string.
-pub fn workflow_to_yaml(wf: &WorkflowDef) -> String {
+/// Serialize a PlanDef to YAML string.
+pub fn plan_to_yaml(wf: &PlanDef) -> String {
     let mut lines = Vec::new();
 
-    lines.push(format!("workflow: {:?}", wf.workflow));
-    lines.push(String::new());
-    lines.push("inputs:".to_string());
+    lines.push(format!("{}:", wf.name));
 
-    // Sort inputs for deterministic output
-    let mut input_keys: Vec<&String> = wf.inputs.keys().collect();
-    input_keys.sort();
-    for key in input_keys {
-        lines.push(format!("  {}: {:?}", key, wf.inputs[key]));
+    if !wf.inputs.is_empty() {
+        lines.push("  inputs:".to_string());
+        for input in &wf.inputs {
+            if let Some(hint) = &input.type_hint {
+                lines.push(format!("    - {}: {}", input.name, hint));
+            } else {
+                lines.push(format!("    - {}", input.name));
+            }
+        }
     }
 
-    lines.push(String::new());
-    lines.push("steps:".to_string());
+    lines.push("  steps:".to_string());
 
     for step in &wf.steps {
         match &step.args {
             StepArgs::None => {
-                lines.push(format!("  - {}", step.op));
+                lines.push(format!("    - {}", step.op));
             }
             StepArgs::Scalar(s) => {
-                lines.push(format!("  - {}: {}", step.op, s));
+                lines.push(format!("    - {}: {}", step.op, s));
             }
             StepArgs::Map(m) => {
-                lines.push(format!("  - {}:", step.op));
+                lines.push(format!("    - {}:", step.op));
                 let mut keys: Vec<&String> = m.keys().collect();
                 keys.sort();
                 for key in keys {
-                    lines.push(format!("      {}: {:?}", key, m[key]));
+                    lines.push(format!("        {}: {:?}", key, m[key]));
                 }
             }
         }
@@ -1011,65 +1011,65 @@ mod tests {
     use crate::nl::intent;
     use crate::nl::slots;
 
-    // -- Workflow generation --
+    // -- Plan generation --
 
     #[test]
-    fn test_build_workflow_pack_archive() {
+    fn test_build_plan_pack_archive() {
         let normalized = normalize::normalize("zip up everything in ~/Downloads");
         let parsed = intent::parse_intent(&normalized);
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
         match parsed {
-            Intent::CreateWorkflow { op, .. } => {
-                let wf = build_workflow(&op, &extracted, None).unwrap();
-                assert_eq!(wf.inputs["path"], "~/Downloads");
+            Intent::CreatePlan { op, .. } => {
+                let wf = build_plan(&op, &extracted, None).unwrap();
+                assert!(wf.has_input("path"));
                 assert!(wf.steps.iter().any(|s| s.op == "walk_tree"));
                 assert!(wf.steps.iter().any(|s| s.op == "pack_archive"));
             }
-            other => panic!("expected CreateWorkflow, got: {:?}", other),
+            other => panic!("expected CreatePlan, got: {:?}", other),
         }
     }
 
     #[test]
-    fn test_build_workflow_extract() {
+    fn test_build_plan_extract() {
         let normalized = normalize::normalize("extract the archive at ~/comic.cbz");
         let parsed = intent::parse_intent(&normalized);
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
         match parsed {
-            Intent::CreateWorkflow { op, .. } => {
-                let wf = build_workflow(&op, &extracted, None).unwrap();
+            Intent::CreatePlan { op, .. } => {
+                let wf = build_plan(&op, &extracted, None).unwrap();
                 assert!(wf.steps.iter().any(|s| s.op == "extract_archive"));
             }
-            other => panic!("expected CreateWorkflow, got: {:?}", other),
+            other => panic!("expected CreatePlan, got: {:?}", other),
         }
     }
 
     #[test]
-    fn test_build_workflow_find_pdfs() {
+    fn test_build_plan_find_pdfs() {
         let normalized = normalize::normalize("find all PDFs in ~/Documents");
         let parsed = intent::parse_intent(&normalized);
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
         match parsed {
-            Intent::CreateWorkflow { op, .. } => {
-                let wf = build_workflow(&op, &extracted, None).unwrap();
+            Intent::CreatePlan { op, .. } => {
+                let wf = build_plan(&op, &extracted, None).unwrap();
                 assert!(wf.steps.iter().any(|s| s.op == "walk_tree" || s
                     .op == "find_matching"));
             }
-            other => panic!("expected CreateWorkflow, got: {:?}", other),
+            other => panic!("expected CreatePlan, got: {:?}", other),
         }
     }
 
     #[test]
-    fn test_build_workflow_list_comics() {
+    fn test_build_plan_list_comics() {
         let normalized = normalize::normalize("list all the comics in ~/Downloads");
         let parsed = intent::parse_intent(&normalized);
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
         match parsed {
-            Intent::CreateWorkflow { op, .. } => {
-                let wf = build_workflow(&op, &extracted, None).unwrap();
+            Intent::CreatePlan { op, .. } => {
+                let wf = build_plan(&op, &extracted, None).unwrap();
                 assert!(wf.steps.iter().any(|s| s.op == "list_dir"),
                     "should have list_dir: {:?}", wf.steps);
                 assert!(wf.steps.iter().any(|s| s.op == "filter"),
@@ -1084,12 +1084,12 @@ mod tests {
                     other => panic!("filter should have map args, got: {:?}", other),
                 }
             }
-            other => panic!("expected CreateWorkflow, got: {:?}", other),
+            other => panic!("expected CreatePlan, got: {:?}", other),
         }
     }
 
     #[test]
-    fn test_build_workflow_list_comic_books_bigram() {
+    fn test_build_plan_list_comic_books_bigram() {
         let normalized = normalize::normalize("list comic books in ~/Downloads");
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
         assert!(!extracted.patterns.is_empty(),
@@ -1106,14 +1106,14 @@ mod tests {
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
         match parsed {
-            Intent::CreateWorkflow { op, .. } => {
-                let wf = build_workflow(&op, &extracted, None).unwrap();
+            Intent::CreatePlan { op, .. } => {
+                let wf = build_plan(&op, &extracted, None).unwrap();
                 assert!(wf.steps.iter().any(|s| s.op == "list_dir"),
                     "should have list_dir: {:?}", wf.steps);
                 assert!(wf.steps.iter().any(|s| s.op == "filter"),
                     "unknown noun 'scripts' should still produce a filter: {:?}", wf.steps);
             }
-            other => panic!("expected CreateWorkflow, got: {:?}", other),
+            other => panic!("expected CreatePlan, got: {:?}", other),
         }
     }
 
@@ -1125,21 +1125,21 @@ mod tests {
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
         match parsed {
-            Intent::CreateWorkflow { op, .. } => {
-                let wf = build_workflow(&op, &extracted, None).unwrap();
+            Intent::CreatePlan { op, .. } => {
+                let wf = build_plan(&op, &extracted, None).unwrap();
                 assert!(wf.steps.iter().any(|s| s.op == "list_dir"),
                     "should have list_dir: {:?}", wf.steps);
                 assert!(!wf.steps.iter().any(|s| s.op == "filter"),
                     "'list files' should NOT add a filter: {:?}", wf.steps);
             }
-            other => panic!("expected CreateWorkflow, got: {:?}", other),
+            other => panic!("expected CreatePlan, got: {:?}", other),
         }
     }
 
     #[test]
-    fn test_build_workflow_no_op_error() {
+    fn test_build_plan_no_op_error() {
         let extracted = slots::extract_slots(&[]);
-        let result = build_workflow(&None, &extracted, None);
+        let result = build_plan(&None, &extracted, None);
         assert!(result.is_err());
         match result.unwrap_err() {
             DialogueError::CannotBuild(_) => {}
@@ -1147,44 +1147,38 @@ mod tests {
         }
     }
 
-    // -- Workflow YAML serialization --
+    // -- Plan YAML serialization --
 
     #[test]
-    fn test_workflow_to_yaml_roundtrip() {
-        let wf = WorkflowDef {
-            workflow: "Test workflow".to_string(),
-            inputs: {
-                let mut m = HashMap::new();
-                m.insert("path".to_string(), "~/Downloads".to_string());
-                m
-            },
+    fn test_plan_to_yaml_roundtrip() {
+        let wf = PlanDef {
+            name: "test-plan".to_string(),
+            inputs: vec![PlanInput::bare("path")],
+            output: None,
             steps: vec![
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
             ],
         };
 
-        let yaml = workflow_to_yaml(&wf);
-        assert!(yaml.contains("workflow:"));
+        let yaml = plan_to_yaml(&wf);
+        assert!(yaml.contains("test-plan:"));
         assert!(yaml.contains("walk_tree"));
         assert!(yaml.contains("sort_by: name"));
 
         // Verify it can be parsed back
-        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let parsed = crate::plan::parse_plan(&yaml).unwrap();
         assert_eq!(parsed.steps.len(), 2);
         assert_eq!(parsed.steps[0].op, "walk_tree");
         assert_eq!(parsed.steps[1].op, "sort_by");
     }
 
     #[test]
-    fn test_workflow_to_yaml_with_map_args() {
-        let wf = WorkflowDef {
-            workflow: "Filter test".to_string(),
-            inputs: {
-                let mut m = HashMap::new();
-                m.insert("path".to_string(), "/tmp".to_string());
-                m
-            },
+    fn test_plan_to_yaml_with_map_args() {
+        let wf = PlanDef {
+            name: "filter-test".to_string(),
+            inputs: vec![PlanInput::bare("path")],
+            output: None,
             steps: vec![
                 RawStep { op: "list_dir".to_string(), args: StepArgs::None },
                 RawStep {
@@ -1198,33 +1192,33 @@ mod tests {
             ],
         };
 
-        let yaml = workflow_to_yaml(&wf);
+        let yaml = plan_to_yaml(&wf);
         assert!(yaml.contains("filter:"));
         assert!(yaml.contains("pattern:"));
     }
 
-    // -- Generated workflow compiles through engine --
+    // -- Generated plan compiles through engine --
 
     #[test]
-    fn test_generated_workflow_compiles() {
+    fn test_generated_plan_compiles() {
         let normalized = normalize::normalize("zip up everything in ~/Downloads");
         let parsed = intent::parse_intent(&normalized);
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
         match parsed {
-            Intent::CreateWorkflow { op, .. } => {
-                let wf = build_workflow(&op, &extracted, None).unwrap();
-                let yaml = workflow_to_yaml(&wf);
+            Intent::CreatePlan { op, .. } => {
+                let wf = build_plan(&op, &extracted, None).unwrap();
+                let yaml = plan_to_yaml(&wf);
 
-                // Parse it back through the workflow engine
-                let parsed_back = crate::workflow::parse_workflow(&yaml).unwrap();
+                // Parse it back through the plan engine
+                let parsed_back = crate::plan::parse_plan(&yaml).unwrap();
 
                 // Compile it through the engine
                 let registry = crate::fs_types::build_full_registry();
-                let compiled = crate::workflow::compile_workflow(&parsed_back, &registry);
-                assert!(compiled.is_ok(), "workflow should compile: {:?}", compiled.err());
+                let compiled = crate::plan::compile_plan(&parsed_back, &registry);
+                assert!(compiled.is_ok(), "plan should compile: {:?}", compiled.err());
             }
-            other => panic!("expected CreateWorkflow, got: {:?}", other),
+            other => panic!("expected CreatePlan, got: {:?}", other),
         }
     }
 
@@ -1235,23 +1229,25 @@ mod tests {
         let mut state = DialogueState::new();
         let slots = slots::extract_slots(&["skip".to_string(), "foo".to_string()]);
         let _result = apply_edit(
-            &WorkflowDef {
-                workflow: "test".to_string(),
-                inputs: HashMap::new(),
+            &PlanDef {
+                name: "test".to_string(),
+                inputs: vec![],
+            output: None,
                 steps: vec![],
             },
             &EditAction::Skip,
             &slots,
             &mut state,
         );
-        // Skip on empty workflow should still work (inserts at position 0)
+        // Skip on empty plan should still work (inserts at position 0)
         // But skip with no keyword should fail
         // With no keywords at all, skip should fail
         let slots_empty = slots::extract_slots(&[]);
         let result_empty = apply_edit(
-            &WorkflowDef {
-                workflow: "test".to_string(),
-                inputs: HashMap::new(),
+            &PlanDef {
+                name: "test".to_string(),
+                inputs: vec![],
+            output: None,
                 steps: vec![],
             },
             &EditAction::Skip,
@@ -1264,9 +1260,10 @@ mod tests {
     #[test]
     fn test_edit_skip_adds_filter() {
         let mut state = DialogueState::new();
-        let wf = WorkflowDef {
-            workflow: "test".to_string(),
-            inputs: HashMap::new(),
+        let wf = PlanDef {
+            name: "test".to_string(),
+            inputs: vec![],
+            output: None,
             steps: vec![
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "pack_archive".to_string(), args: StepArgs::None },
@@ -1292,9 +1289,10 @@ mod tests {
     #[test]
     fn test_edit_remove_step() {
         let mut state = DialogueState::new();
-        let wf = WorkflowDef {
-            workflow: "test".to_string(),
-            inputs: HashMap::new(),
+        let wf = PlanDef {
+            name: "test".to_string(),
+            inputs: vec![],
+            output: None,
             steps: vec![
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "filter".to_string(), args: StepArgs::None },
@@ -1313,9 +1311,10 @@ mod tests {
     #[test]
     fn test_edit_move_step() {
         let mut state = DialogueState::new();
-        let wf = WorkflowDef {
-            workflow: "test".to_string(),
-            inputs: HashMap::new(),
+        let wf = PlanDef {
+            name: "test".to_string(),
+            inputs: vec![],
+            output: None,
             steps: vec![
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
@@ -1383,7 +1382,7 @@ mod tests {
     #[test]
     fn test_dialogue_state_new() {
         let state = DialogueState::new();
-        assert!(state.current_workflow.is_none());
+        assert!(state.current_plan.is_none());
         assert_eq!(state.turn_count, 0);
         assert!(state.last_intent.is_none());
     }
@@ -1396,20 +1395,17 @@ mod tests {
         assert_eq!(state.turn_count, 2);
     }
 
-    // -- Delta-edited workflow re-compiles --
+    // -- Delta-edited plan re-compiles --
 
     #[test]
-    fn test_edited_workflow_recompiles() {
+    fn test_edited_plan_recompiles() {
         let mut state = DialogueState::new();
 
-        // Create initial workflow
-        let wf = WorkflowDef {
-            workflow: "test".to_string(),
-            inputs: {
-                let mut m = HashMap::new();
-                m.insert("path".to_string(), "~/Downloads".to_string());
-                m
-            },
+        // Create initial plan
+        let wf = PlanDef {
+            name: "test".to_string(),
+            inputs: vec![PlanInput::bare("path")],
+            output: None,
             steps: vec![
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "pack_archive".to_string(), args: StepArgs::None },
@@ -1422,74 +1418,74 @@ mod tests {
         let (edited, _) = apply_skip(&mut wf.clone(), &extracted, &mut state).unwrap();
 
         // Serialize and re-compile
-        let yaml = workflow_to_yaml(&edited);
-        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let yaml = plan_to_yaml(&edited);
+        let parsed = crate::plan::parse_plan(&yaml).unwrap();
         let registry = crate::fs_types::build_full_registry();
-        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
-        assert!(compiled.is_ok(), "edited workflow should compile: {:?}", compiled.err());
+        let compiled = crate::plan::compile_plan(&parsed, &registry);
+        assert!(compiled.is_ok(), "edited plan should compile: {:?}", compiled.err());
     }
 
     // -- B3 bugfix: input type inference --
 
     #[test]
-    fn test_build_workflow_compress_file_compiles() {
-        // "compress my_file.txt" should produce a workflow that compiles
+    fn test_build_plan_compress_file_compiles() {
+        // "compress my_file.txt" should produce a plan that compiles
         let normalized = normalize::normalize("compress my_file.txt");
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
         let op = Some("gzip_compress".to_string());
-        let wf = build_workflow(&op, &extracted, None).unwrap();
+        let wf = build_plan(&op, &extracted, None).unwrap();
         // Should use "file" input name for file ops
-        assert!(wf.inputs.contains_key("file"), "should have 'file' input: {:?}", wf.inputs);
-        assert_eq!(wf.inputs["file"], "my_file.txt");
-        let yaml = workflow_to_yaml(&wf);
-        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        assert!(wf.has_input("file"), "should have 'file' input: {:?}", wf.inputs);
+        assert!(wf.has_input("file"));
+        let yaml = plan_to_yaml(&wf);
+        let parsed = crate::plan::parse_plan(&yaml).unwrap();
         let registry = crate::fs_types::build_full_registry();
-        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
-        assert!(compiled.is_ok(), "compress file workflow should compile: {:?}", compiled.err());
+        let compiled = crate::plan::compile_plan(&parsed, &registry);
+        assert!(compiled.is_ok(), "compress file plan should compile: {:?}", compiled.err());
     }
 
     #[test]
-    fn test_build_workflow_hash_yaml_compiles() {
+    fn test_build_plan_hash_yaml_compiles() {
         let normalized = normalize::normalize("hash config.yaml");
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
         let op = Some("openssl_hash".to_string());
-        let wf = build_workflow(&op, &extracted, None).unwrap();
-        assert!(wf.inputs.contains_key("file"), "should have 'file' input: {:?}", wf.inputs);
-        let yaml = workflow_to_yaml(&wf);
-        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let wf = build_plan(&op, &extracted, None).unwrap();
+        assert!(wf.has_input("file"), "should have 'file' input: {:?}", wf.inputs);
+        let yaml = plan_to_yaml(&wf);
+        let parsed = crate::plan::parse_plan(&yaml).unwrap();
         let registry = crate::fs_types::build_full_registry();
-        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
-        assert!(compiled.is_ok(), "hash yaml workflow should compile: {:?}", compiled.err());
+        let compiled = crate::plan::compile_plan(&parsed, &registry);
+        assert!(compiled.is_ok(), "hash yaml plan should compile: {:?}", compiled.err());
     }
 
     #[test]
-    fn test_build_workflow_search_content_dir_compiles() {
+    fn test_build_plan_search_content_dir_compiles() {
         // "search for TODO" with no file target should use textdir
         let normalized = normalize::normalize("search for TODO");
         let extracted = slots::extract_slots(&normalized.canonical_tokens);
         let op = Some("search_content".to_string());
-        let wf = build_workflow(&op, &extracted, None).unwrap();
-        assert!(wf.inputs.contains_key("textdir"), "should have 'textdir' input: {:?}", wf.inputs);
-        let yaml = workflow_to_yaml(&wf);
-        let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+        let wf = build_plan(&op, &extracted, None).unwrap();
+        assert!(wf.has_input("textdir"), "should have 'textdir' input: {:?}", wf.inputs);
+        let yaml = plan_to_yaml(&wf);
+        let parsed = crate::plan::parse_plan(&yaml).unwrap();
         let registry = crate::fs_types::build_full_registry();
-        let compiled = crate::workflow::compile_workflow(&parsed, &registry);
-        assert!(compiled.is_ok(), "search content workflow should compile: {:?}", compiled.err());
+        let compiled = crate::plan::compile_plan(&parsed, &registry);
+        assert!(compiled.is_ok(), "search content plan should compile: {:?}", compiled.err());
     }
 
     #[test]
-    fn test_build_workflow_dir_ops_still_compile() {
+    fn test_build_plan_dir_ops_still_compile() {
         // walk_tree, list_dir, pack_archive should still use "path" input
         for op_name in &["walk_tree", "list_dir", "pack_archive"] {
             let extracted = slots::extract_slots(&["~/Downloads".to_string()]);
             let op = Some(op_name.to_string());
-            let wf = build_workflow(&op, &extracted, None).unwrap();
-            assert!(wf.inputs.contains_key("path"), "{} should have 'path' input: {:?}", op_name, wf.inputs);
-            let yaml = workflow_to_yaml(&wf);
-            let parsed = crate::workflow::parse_workflow(&yaml).unwrap();
+            let wf = build_plan(&op, &extracted, None).unwrap();
+            assert!(wf.has_input("path"), "{} should have 'path' input: {:?}", op_name, wf.inputs);
+            let yaml = plan_to_yaml(&wf);
+            let parsed = crate::plan::parse_plan(&yaml).unwrap();
             let registry = crate::fs_types::build_full_registry();
-            let compiled = crate::workflow::compile_workflow(&parsed, &registry);
-            assert!(compiled.is_ok(), "{} workflow should compile: {:?}", op_name, compiled.err());
+            let compiled = crate::plan::compile_plan(&parsed, &registry);
+            assert!(compiled.is_ok(), "{} plan should compile: {:?}", op_name, compiled.err());
         }
     }
 
@@ -1503,12 +1499,12 @@ mod tests {
                 .iter().map(|s| s.to_string()).collect::<Vec<_>>()
         );
 
-        // Build a base workflow with walk_tree
+        // Build a base plan with walk_tree
         let base_extracted = crate::nl::slots::extract_slots(
             &["walk_tree", "~/Downloads"]
                 .iter().map(|s| s.to_string()).collect::<Vec<_>>()
         );
-        let mut wf = build_workflow(&Some("walk_tree".to_string()), &base_extracted, None).unwrap();
+        let mut wf = build_plan(&Some("walk_tree".to_string()), &base_extracted, None).unwrap();
         wf.steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::None });
 
         let (edited, desc) = apply_skip(&mut wf.clone(), &extracted, &mut state).unwrap();
@@ -1531,7 +1527,7 @@ mod tests {
         let extracted = crate::nl::slots::extract_slots(
             &["skip"].iter().map(|s| s.to_string()).collect::<Vec<_>>()
         );
-        let mut wf = build_workflow(&Some("walk_tree".to_string()), &extracted, None).unwrap();
+        let mut wf = build_plan(&Some("walk_tree".to_string()), &extracted, None).unwrap();
         let result = apply_skip(&mut wf, &extracted, &mut state);
         assert!(result.is_err(), "skip without target should error");
     }
@@ -1539,15 +1535,15 @@ mod tests {
     #[test]
     fn test_remove_the_step_defaults_to_last() {
         // "remove the step" → tokens ["delete", "the", "step"]
-        // "delete" becomes primary_op, but it's an action verb, not a workflow op
+        // "delete" becomes primary_op, but it's an action verb, not a plan op
         let mut state = DialogueState::new();
 
-        // Build a 3-step workflow
+        // Build a 3-step plan
         let extracted = crate::nl::slots::extract_slots(
             &["find_matching", "~/Documents"]
                 .iter().map(|s| s.to_string()).collect::<Vec<_>>()
         );
-        let wf = build_workflow(&Some("find_matching".to_string()), &extracted, None).unwrap();
+        let wf = build_plan(&Some("find_matching".to_string()), &extracted, None).unwrap();
         let original_len = wf.steps.len();
         assert!(original_len >= 2, "need at least 2 steps, got {}", original_len);
 
@@ -1571,7 +1567,7 @@ mod tests {
             &["find_matching", "~/Documents"]
                 .iter().map(|s| s.to_string()).collect::<Vec<_>>()
         );
-        let wf = build_workflow(&Some("find_matching".to_string()), &extracted, None).unwrap();
+        let wf = build_plan(&Some("find_matching".to_string()), &extracted, None).unwrap();
         let first_op = wf.steps[0].op.clone();
 
         // "remove step 1" — has a step ref

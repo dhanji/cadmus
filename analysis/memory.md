@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-21T10:03:42Z | Size: 52.7k chars
+> Updated: 2026-02-21T21:01:27Z | Size: 53.3k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -58,17 +58,17 @@
 - **Total: 187 tests** (148 unit + 7 fs_integration + 14 generic_planner + 18 original), all passing, zero warnings.
 - **Key design**: TypeExpr is additive — existing TypeId-based strategies unchanged. Poly registry sits alongside monomorphic registry.
 
-### Workflow YAML DSL
-- `src/workflow.rs` [1-1200] - `WorkflowDef`, `RawStep`, `StepArgs`, `CompiledStep`, `CompiledWorkflow`, `WorkflowError`
-  - `parse_workflow()` - custom serde deserializer for step syntax (bare string / scalar / map)
-  - `compile_workflow()` - threads types through step chain, each mode, multi-input unification
-  - `execute_workflow()` - produces `DryRunTrace` from compiled workflow
-  - `run_workflow()` / `run_workflow_str()` - convenience functions
+### Plan YAML DSL
+- `src/plan.rs` [1-1200] - `PlanDef`, `RawStep`, `StepArgs`, `CompiledStep`, `CompiledPlan`, `PlanError`
+  - `parse_plan()` - custom serde deserializer for step syntax (bare string / scalar / map)
+  - `compile_plan()` - threads types through step chain, each mode, multi-input unification
+  - `execute_plan()` - produces `DryRunTrace` from compiled plan
+  - `run_plan()` / `run_plan_str()` - convenience functions
   - `infer_input_type()` - heuristic type inference from input name/value
-- `data/workflows/` - example workflow YAML files (find_pdfs, extract_cbz, find_large_files)
-- `tests/workflow_tests.rs` - 11 integration tests
-- `src/main.rs` - `--workflow <path>` CLI flag, backward compatible no-args demo
-- Total tests: 221 (171 unit + 7 fs_integration + 14 generic_planner + 18 integration + 11 workflow)
+- `data/plans/` - example plan YAML files (find_pdfs, extract_cbz, find_large_files)
+- `tests/plan_tests.rs` - 11 integration tests
+- `src/main.rs` - `--plan <path>` CLI flag, backward compatible no-args demo
+- Total tests: 221 (171 unit + 7 fs_integration + 14 generic_planner + 18 integration + 11 plan)
 
 ### YAML Ops Pack System
 - `src/registry.rs` [546-695] - `load_ops_pack_str()`, `load_ops_pack()`, `load_ops_pack_str_into()`, `OpsPack`, `OpDef`, `OpDefProperties`, `OpsPackError`
@@ -87,14 +87,14 @@
 
 ### Test Counts
 - 263 total tests after Phases 1-5 commit (bbaa444)
-- 187 unit + 27 fs_integration + 14 reasoner_tests + 18 tiramisu + 17 workflow
+- 187 unit + 27 fs_integration + 14 reasoner_tests + 18 tiramisu + 17 plan
 
-### Workflow Type Inference
-- `src/workflow.rs:562` - `infer_input_type()` now handles URLs (http/https/ftp), .log/.csv/.json/.yaml/.yml/.toml/.xml/.html/.css/.sh extensions
+### Plan Type Inference
+- `src/plan.rs:562` - `infer_input_type()` now handles URLs (http/https/ftp), .log/.csv/.json/.yaml/.yml/.toml/.xml/.html/.css/.sh extensions
 
 ### Documentation Files
-- `ARCHITECTURE.md` [1..340] — concise architecture description: type system, registry (mono+poly), YAML ops packs, fact packs, both planners, strategies, algebra, theory, workflow DSL, module map
-- `PLAYBOOK.md` [1..705] — step-by-step guide: adding ops packs, fact packs, workflows, common mistakes, database domain worked example, quick reference schemas
+- `ARCHITECTURE.md` [1..340] — concise architecture description: type system, registry (mono+poly), YAML ops packs, fact packs, both planners, strategies, algebra, theory, plan DSL, module map
+- `PLAYBOOK.md` [1..705] — step-by-step guide: adding ops packs, fact packs, plans, common mistakes, database domain worked example, quick reference schemas
 
 ### Power Tools Pack Feature (plan `power-tools-pack`)
 - `src/fact_pack.rs` [131..213] — `FactPack::merge()` with entity/axis/relation dedup, `FactPack::merge_all()`, `FactPack::empty()`, `Relation::id()` helper
@@ -102,43 +102,43 @@
 - `src/types.rs` [139..166] — `Goal.fact_pack_paths: Vec<String>` (replaces `fact_pack_path`), `Goal::with_single_fact_pack()` convenience
 - `data/power_tools_ops.yaml` — 64 ops: 20 git, 6 tmux/screen, 8 jq/yq/csv, 8 awk/sed/cut/tr/paste/tee/column, 10 ps/kill/df/du/lsof/file/uname/uptime, 6 ssh/scp/wget/nc/ping/dig, 6 gzip/xz/base64/openssl
 - `data/power_tools.yaml` — 10 entities, 5 axes, 80 claims, 24 evidence, 30+ properties, 8 relations, 5 uncertainties. Entity groups: tmux vs screen, rg vs grep vs ag, jq vs yq, awk vs sed, git solo
-- `data/workflows/git_log_search.yaml` — git_log → filter → sort_by
-- `data/workflows/process_logs.yaml` — awk_extract → sed_script
-- `src/fs_types.rs` [29..60] — `build_fs_registry()` (fs-only) and `build_full_registry()` (fs+power_tools). Workflow system uses full registry.
-- `src/workflow.rs` [598..650] — Extended `infer_input_type()` with Repo, File(Json), File(Yaml), File(Csv) types
+- `data/plans/git_log_search.yaml` — git_log → filter → sort_by
+- `data/plans/process_logs.yaml` — awk_extract → sed_script
+- `src/fs_types.rs` [29..60] — `build_fs_registry()` (fs-only) and `build_full_registry()` (fs+power_tools). Plan system uses full registry.
+- `src/plan.rs` [598..650] — Extended `infer_input_type()` with Repo, File(Json), File(Yaml), File(Csv) types
 - `tests/power_tools_tests.rs` — 20 integration tests (ops, facts, composition)
 - `PLAYBOOK.md` — Added Section 0 (Audit Existing Packs), Section 3a (Fact Pack Composition), Section 6 (Power Tools Worked Example)
-- **Total: 298 tests** (200 unit + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 workflow), all passing, zero warnings
+- **Total: 298 tests** (200 unit + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 plan), all passing, zero warnings
 
 ### NL UX Layer Feature (plan `nl-ux-layer`)
-- `src/nl/mod.rs` [1..647] — Orchestrator: `process_input()`, `NlResponse` (8 variants: PlanCreated, PlanEdited, Explanation, Approved, Rejected, NeedsClarification, ParamSet, Error), `casual_ack()`, `get_op_explanation()`, `validate_workflow_yaml()`
+- `src/nl/mod.rs` [1..647] — Orchestrator: `process_input()`, `NlResponse` (8 variants: PlanCreated, PlanEdited, Explanation, Approved, Rejected, NeedsClarification, ParamSet, Error), `casual_ack()`, `get_op_explanation()`, `validate_plan_yaml()`
 - `src/nl/normalize.rs` [1..860] — `normalize()`, `NormalizedInput`, `CANONICAL_OPS` (113 ops), `is_canonical_op()`, `build_synonym_table()` (200+ entries), `apply_synonyms()` greedy longest-match, `tokenize()` with path case preservation, `expand_contractions()` (37 patterns), `canonicalize_ordinal()`. 26 tests.
 - `src/nl/typo.rs` [1..518] — `SymSpellDict`, `build_domain_dict()` (~280 words), `correct()`, `correct_tokens()`, `generate_deletes()`, `edit_distance()` (Damerau-Levenshtein). Max edit distance 2, prefix length 7. 21 tests.
-- `src/nl/intent.rs` [1..907] — `Intent` enum (8 variants: CreateWorkflow, EditStep, ExplainOp, Approve, Reject, AskQuestion, SetParam, NeedsClarification), `EditAction` enum (6 variants), `parse_intent()`, `recognize()`. Closed grammar with ranked patterns. 39 tests.
+- `src/nl/intent.rs` [1..907] — `Intent` enum (8 variants: CreatePlan, EditStep, ExplainOp, Approve, Reject, AskQuestion, SetParam, NeedsClarification), `EditAction` enum (6 variants), `parse_intent()`, `recognize()`. Closed grammar with ranked patterns. 39 tests.
 - `src/nl/slots.rs` [1..597] — `SlotValue` (7 variants: Path, OpName, StepRef, Pattern, Param, Modifier, Keyword), `StepRef`, `Modifier`, `Anchor`, `ExtractedSlots`, `extract_slots()`, `fuzzy_match_op()`, `edit_distance_bounded()`. 24 tests.
-- `src/nl/dialogue.rs` [1..997] — `FocusStack`, `FocusEntry` (4 variants), `DialogueState`, `DialogueError`, `build_workflow()`, `apply_edit()` (skip/remove/add/move/change/insert), `workflow_to_yaml()`. 17 tests.
+- `src/nl/dialogue.rs` [1..997] — `FocusStack`, `FocusEntry` (4 variants), `DialogueState`, `DialogueError`, `build_plan()`, `apply_edit()` (skip/remove/add/move/change/insert), `plan_to_yaml()`. 17 tests.
 - `tests/nl_tests.rs` [1..466] — 41 integration tests: 11 diverse phrasings, typo correction, 4 explanations, 7 approve + 4 reject, 3 edits, 3 multi-turn conversations, 5 YAML compilation checks
 - `src/main.rs` — `--chat` mode added (stdin line-by-line NL processing)
-- **Total: 481 tests** (342 unit + 41 nl_integration + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 workflow), all passing, zero warnings
-- **Key design**: NL layer always produces WorkflowDef YAML → feeds through workflow::compile_workflow() → engine validates and type-checks. Never bypasses the reasoner.
+- **Total: 481 tests** (342 unit + 41 nl_integration + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 plan), all passing, zero warnings
+- **Key design**: NL layer always produces PlanDef YAML → feeds through plan::compile_plan() → engine validates and type-checks. Never bypasses the reasoner.
 
 ### NL Bugfixes (plan: nl-bugfixes)
 - `src/nl/typo.rs` [337..370] - Added ~60 common English words to SymSpell dictionary to prevent false corrections ("the"→"tee", "thing"→"tee", "that"→"what", "scrap"→"script")
 - `src/nl/slots.rs` [259..310] - `is_path()` expanded: bare filenames with known extensions, trailing-slash dirs, URL-like paths. New `is_file_extension()` with ~60 extensions
-- `src/nl/dialogue.rs` [193..355] - `build_workflow()` rewritten: categorizes ops as file/dir/entry/url/git, uses correct input names. New helpers: `is_url_op()`, `is_git_repo_op()`, `is_entry_op()`, `is_file_path()`, `dir_of()`, `filename_of()`
-- `src/workflow.rs` [631..643] - Added `textdir` input type → `Dir(File(Text))` for search_content pipelines
+- `src/nl/dialogue.rs` [193..355] - `build_plan()` rewritten: categorizes ops as file/dir/entry/url/git, uses correct input names. New helpers: `is_url_op()`, `is_git_repo_op()`, `is_entry_op()`, `is_file_path()`, `dir_of()`, `filename_of()`
+- `src/plan.rs` [631..643] - Added `textdir` input type → `Dir(File(Text))` for search_content pipelines
 - `src/nl/normalize.rs` [379..395] - Added 7 single-word git synonyms: clone, commit, checkout, merge, fetch, pull, push
-- `src/nl/intent.rs` [384..399] - Compound sentence detection: "skip that, compress X instead" → CreateWorkflow
+- `src/nl/intent.rs` [384..399] - Compound sentence detection: "skip that, compress X instead" → CreatePlan
 - `src/nl/intent.rs` [214..221] - Added "scrap that/it" to reject patterns
 - `src/nl/intent.rs` [531..546] - Removed "do" from question starters
-- `src/nl/mod.rs` [129..145] - Approve/reject now check state.current_workflow before firing
+- `src/nl/mod.rs` [129..145] - Approve/reject now check state.current_plan before firing
 - 525 total tests, 44 new tests added, all passing, zero warnings
 
 ### Red-team findings for NL layer
 - `src/nl/typo.rs` — "mind"→"find" (ed1), "never"→"need" (ed2), "todo"→"good" (ed2 via DL transposition), "fixme" lost. Root cause: these common words aren't in SymSpell dict
 - `src/nl/intent.rs:168-200` — `is_approve()` doesn't match comma-separated phrases like "perfect, ship it" because tokens are ["perfect", "ship", "it"] and multi_approvals has "ship it" not "perfect ship it"
 - `src/nl/intent.rs:202-227` — `is_reject()` has "never mind" but tokens become "need find" after typo correction
-- `src/nl/mod.rs:129-135` — Approve handler doesn't clear `state.current_workflow`, allowing double-approve
+- `src/nl/mod.rs:129-135` — Approve handler doesn't clear `state.current_plan`, allowing double-approve
 - `src/nl/dialogue.rs:485` — `apply_skip` uses `slots.keywords.first()` which returns "skip" (the action word) instead of ".git" (the target)
 - `src/nl/dialogue.rs:668-682` — `resolve_step_index` falls through to op-name lookup when no step_ref, so "remove the step" looks for op "delete" instead of defaulting to last step
 - `src/nl/normalize.rs` — "remove" maps to "delete" (synonym), so "remove the step" becomes "delete the step" in canonical tokens
@@ -147,7 +147,7 @@
 - `BUGS.md` — 12 bugs documented, 10 fixed, 1 deferred (multi-input ops), 1 by-design
 - `src/nl/typo.rs` — Added ~20 more words to SymSpell dict (mind, never, todo, fixme, etc.)
 - `src/nl/intent.rs` — Added 12 rejection patterns, compound approval logic with filler phrases
-- `src/nl/mod.rs` — Clear current_workflow on approve (fixes double-approve)
+- `src/nl/mod.rs` — Clear current_plan on approve (fixes double-approve)
 - `src/nl/dialogue.rs` — apply_skip filters 25 action words; apply_remove defaults to last step for action-verb ops
 - `tests/nl_tests.rs` — 21 new red-team integration tests
 - **567 total tests, all passing, zero warnings**
@@ -156,19 +156,19 @@
 - `src/nl/intent.rs` [447-460] - Filler prefix skipping in `try_edit()` (also/and/then/now/plus/etc.)
 - `src/nl/intent.rs` [209-213] - Single-word tail check in compound approval (`is_approve()`)
 - `src/nl/slots.rs` [142-144] - 15 conversational fillers added to stopwords in `extract_slots()`
-- `src/workflow.rs` [558-590] - `has_known_file_extension()` helper function
-- `src/workflow.rs` [665-681] - Image file check + catch-all extension check before directory heuristic
+- `src/plan.rs` [558-590] - `has_known_file_extension()` helper function
+- `src/plan.rs` [665-681] - Image file check + catch-all extension check before directory heuristic
 - `src/nl/dialogue.rs` [379-399] - `is_file_path()` synced with expanded extension list
 - `src/nl/typo.rs` [240-955] - Dictionary expanded from ~388 to ~2000 unique words
 - `BUGS.md` - 16 bugs total: 14 fixed, 1 deferred (BUG-009), 1 by-design (BUG-012)
 - **591 total tests**, all passing, zero warnings
-  - Unit: 406, NL integration: 87, FS integration: 27, Generic planner: 14, Integration: 18, Power tools: 20, Workflow: 19
+  - Unit: 406, NL integration: 87, FS integration: 27, Generic planner: 14, Integration: 18, Power tools: 20, Plan: 19
 
 ### File Type Dictionary (Phase 5)
 - `data/filetypes.yaml` — 197 entries, 14 categories, YAML-driven single source of truth
 - `src/filetypes.rs` — thin loader, OnceLock singleton, `dictionary()` → `lookup()`, `lookup_by_path()`, `is_known_extension()`, `has_known_extension()`, `extensions_for_category()`, `describe_file_type()`, `all_extensions()`
 - `src/lib.rs:16` — `pub mod filetypes;`
-- `src/workflow.rs:553` — `infer_input_type()` now uses `filetypes::dictionary().lookup_by_path()` instead of hardcoded chains
+- `src/plan.rs:553` — `infer_input_type()` now uses `filetypes::dictionary().lookup_by_path()` instead of hardcoded chains
 - `src/nl/slots.rs:308` — `is_file_extension()` delegates to `filetypes::dictionary().is_known_extension()`
 - `src/nl/dialogue.rs:379` — `is_file_path()` delegates to `filetypes::dictionary().has_known_extension()`
 - Three hardcoded extension lists eliminated, replaced with single YAML source
@@ -189,9 +189,9 @@
 ### Semantic Correctness Audit (Phase 7)
 - `tests/semantic_tests.rs` — 46 integration tests tracing goal→plan→execution across all 4 strategies
 - `SEMANTICS.md` — comprehensive analysis document
-- **Bug fixed**: `src/main.rs` used `build_fs_registry()` instead of `build_full_registry()` in `--workflow` CLI mode, breaking power_tools workflows (git_log_search, process_logs)
+- **Bug fixed**: `src/main.rs` used `build_fs_registry()` instead of `build_full_registry()` in `--plan` CLI mode, breaking power_tools plans (git_log_search, process_logs)
 - **Finding**: Coding strategy's `execute_plan()` in `src/strategy.rs` only returns root node result; intermediate CodeSmell/Refactoring/TypeSignature lost in `assemble()`
-- **Finding**: 3 workflow YAMLs have incomplete step sequences: find_large_files (min_size unused), find_duplicates (no dedup), copy_and_organize (no copy step)
+- **Finding**: 3 plan YAMLs have incomplete step sequences: find_large_files (min_size unused), find_duplicates (no dedup), copy_and_organize (no copy step)
 - **Finding**: Polymorphic type system allows `Dir(Bytes)` → `Seq(Entry(Name, File(Image)))` via variable unification — this is by design, not a bug
 - **Total tests**: 716 (all passing, zero warnings)
 - **Commit**: `8754949`
@@ -205,27 +205,27 @@
   - Archive format detection from TypeExpr: `File(Archive(a, Cbz))` → "Cbz"
   - `shell_quote()` detects `$WORK_DIR` prefix → double quotes for variable expansion
   - `generate_script()` uses intermediate temp files: `$WORK_DIR/step_N.txt`
-  - Single-step workflows: standalone command (no temp file overhead)
+  - Single-step plans: standalone command (no temp file overhead)
   - Multi-step: `set -e`, `mktemp -d`, cleanup trap, step comments
   - Each-mode: `while IFS= read -r _line; do ... done < prev > next`
   - `run_script()` executes via `/bin/sh -c`
 
 ### CLI Changes
-- `src/main.rs` - Added `--execute` flag for workflow mode
-  - `--workflow <path>` always shows generated script
-  - `--workflow <path> --execute` runs the script
-  - `--execute` without `--workflow` prints error
+- `src/main.rs` - Added `--execute` flag for plan mode
+  - `--plan <path>` always shows generated script
+  - `--plan <path> --execute` runs the script
+  - `--execute` without `--plan` prints error
   - Chat mode: Approved → shows script → prompts "Run this? (y/n)"
 
 ### NL Changes
 - `src/nl/mod.rs` - `NlResponse::Approved` changed from unit to struct variant
   - Now carries `script: Option<String>`
-  - On approve: compiles workflow → generates script → returns in Approved
+  - On approve: compiles plan → generates script → returns in Approved
   - All test assertions updated to use `NlResponse::Approved { .. }`
 
 ### Test Files
 - `tests/executor_tests.rs` [1-454] - 38 integration tests
-  - 11 workflow→script tests (all YAML files)
+  - 11 plan→script tests (all YAML files)
   - 7 script structure tests (shebang, set -e, trap, work_dir, etc.)
   - 7 real execution tests (ls /tmp, echo, failing command, temp files)
   - 4 NL→script integration tests
@@ -241,7 +241,7 @@
 - Binary: `target/release/cadmus`
 - All `use reasoning_engine::` → `use cadmus::` across src/ and tests/
 - Banners: "CADMUS v0.x.0" (3 locations in src/main.rs)
-- Usage: `cadmus --workflow <path.yaml> [--execute]`
+- Usage: `cadmus --plan <path.yaml> [--execute]`
 - Generic uses of "reasoning" preserved (comparative, cross-entity, cross-domain, etc.)
 - 795 tests, zero warnings, 5 commits on main
 
@@ -261,7 +261,7 @@
 
 ### NL: Path resolution chain (commit `86320e8`)
 - `src/nl/dialogue.rs` — `resolve_path()` function: bare names → `/Volumes/<name>` if exists, else pass through
-- Called from `build_workflow()` right after extracting `target_path` from slots
+- Called from `build_plan()` right after extracting `target_path` from slots
 - Handles SD cards, USB drives, external volumes on macOS
 - 836 total tests, 8 commits on main
 
@@ -271,7 +271,7 @@
   1. `src/executor.rs:112-133` — `shell_quote()` $WORK_DIR injection: now validates safe ASCII chars after prefix
   2. `src/executor.rs:112-133` — `shell_quote()` unicode bypass: `is_ascii_alphanumeric()` instead of `is_alphanumeric()`
   3. `src/executor.rs:234-265` — filter `exclude` param: executor now handles with `grep -v`
-  4. `src/workflow.rs:562-568`, `src/nl/dialogue.rs:338-398` — type inference reordered: `pathref`→Path before extension lookup, `repo`→Repo before dir check; added `is_path_op()` and `is_seq_op()` in `build_workflow`
+  4. `src/plan.rs:562-568`, `src/nl/dialogue.rs:338-398` — type inference reordered: `pathref`→Path before extension lookup, `repo`→Repo before dir check; added `is_path_op()` and `is_seq_op()` in `build_plan`
 - **Test categories**: shell injection (25), chaos (19), conversation flows (8), E2E ops (19), path edge cases (7)
 - Known remaining issue: `count` op expects `Seq(a)` but file types like `Csv` don't unify with `Seq(a)` — accepted as design limitation
 
@@ -281,15 +281,15 @@
 - `src/registry.rs` [437-476] — `MetaSignature` struct (params, return_type, invariants, category, effects), `MetaParam` struct. `register_poly_with_meta()` method. `OpDef.meta: Option<MetaSignature>`. Backward compatible.
 - `src/racket_executor.rs` — `op_to_racket()` maps 47 ops to Racket s-expressions. `generate_racket_script()` produces `#!/usr/bin/env racket` + `#lang racket`. Single-step: bare `(displayln ...)`. Multi-step: `let*` bindings. 24 unit tests.
 - `src/racket_strategy.rs` — `infer_symmetric_op()` derives type signature from partner's metasig (invariants NOT transferred). `promote_inferred_ops()` upgrades stubs. `load_keyword_map()` builds NL→op mapping from fact pack. `build_racket_registry()`. 17 unit tests.
-- `src/nl/dialogue.rs` [299-338] — Arithmetic handler in `build_workflow()`: extracts numbers from step_refs, builds workflow with x/y params.
-- `src/nl/intent.rs` [407-418] — Arithmetic detection in `try_edit()`: if first token is canonical op AND rest looks like numbers, falls through to CreateWorkflow.
-- `src/workflow.rs` [581-589] — Number type inference: numeric values or x/y/a/b/n/m/left/right → `TypeExpr::prim("Number")`.
-- `src/workflow.rs` [266-281] — `raw_step_to_op_params()` public helper.
+- `src/nl/dialogue.rs` [299-338] — Arithmetic handler in `build_plan()`: extracts numbers from step_refs, builds plan with x/y params.
+- `src/nl/intent.rs` [407-418] — Arithmetic detection in `try_edit()`: if first token is canonical op AND rest looks like numbers, falls through to CreatePlan.
+- `src/plan.rs` [581-589] — Number type inference: numeric values or x/y/a/b/n/m/left/right → `TypeExpr::prim("Number")`.
+- `src/plan.rs` [266-281] — `raw_step_to_op_params()` public helper.
 - `src/fs_types.rs` [49-72] — `build_full_registry()` now merges racket_ops.yaml alongside fs_ops and power_tools.
 - `data/nl/nl_vocab.yaml` [662-689] — Arithmetic synonyms: add/addition/plus/sum/total, subtract/subtraction/minus, multiply, divide, add together, add up, take away.
 - `data/nl/nl_dictionary.yaml` — racket_arithmetic section with 14 words for SymSpell.
-- `data/workflows/add_numbers.yaml`, `data/workflows/subtract_numbers.yaml` — Example workflow YAMLs.
-- `src/main.rs` — `--racket` flag: `cadmus --workflow path.yaml --racket` produces Racket script.
+- `data/plans/add_numbers.yaml`, `data/plans/subtract_numbers.yaml` — Example plan YAMLs.
+- `src/main.rs` — `--racket` flag: `cadmus --plan path.yaml --racket` produces Racket script.
 - `tests/racket_tests.rs` — 30 integration tests: ops loading, fact pack, keyword resolution, inference, script generation, NL E2E, full pipeline.
 - **Total: 988 tests** (74 new: 44 unit + 30 integration), all passing, zero warnings.
 
@@ -428,7 +428,7 @@
 ### Racket Seq Threading Issue
 - **Problem**: When a shell-bridge step (walk_tree→shell_find) returns `List(String)` and the next step is a residual op (pack_archive) or binary subsumed op (search_content/grep), the codegen passes the list variable to `shell-quote` which expects a `String`
 - **Key insight**: `CompiledStep` has `input_type` and `output_type` as `TypeExpr` but the Racket executor currently ignores them
-- **Existing each mechanism**: `src/workflow.rs` has `is_each` on `CompiledStep` and `StepArgs::is_each()` — the shell executor wraps in `while IFS= read -r _line` loops, the Racket executor wraps in `(map (lambda (_line) ...) prev)`
+- **Existing each mechanism**: `src/plan.rs` has `is_each` on `CompiledStep` and `StepArgs::is_each()` — the shell executor wraps in `while IFS= read -r _line` loops, the Racket executor wraps in `(map (lambda (_line) ...) prev)`
 - **Residual ops path**: `src/racket_executor.rs:490-500` — uses `fs_path_operand(prev_binding, input_values)` which returns the raw binding name
 - **Subsumed binary ops path**: `src/racket_executor.rs:155-170` — `search_content` (arity==2) passes `path` to `shell-quote` but `path` could be a list
 - **Type info available**: `CompiledStep.output_type` has rich types like `Seq(Entry(Name, Bytes))`, can check for `Seq(...)` constructor
@@ -453,7 +453,7 @@
 ### Stress Pipeline Tests
 - `tests/stress_pipeline.rs` [1-1281] - 80 stress tests across all 7 pipeline subsystems
   - I1: NL end-to-end (21 tests) - `stress_nl_*`
-  - I2: Workflow compiler (7 tests) - `stress_workflow_*`
+  - I2: Plan compiler (7 tests) - `stress_plan_*`
   - I3: Racket codegen (12 tests) - `stress_racket_*`
   - I4: Generic planner (7 tests) - `stress_planner_*`, `stress_expr_planner_*`
   - I5: Inference engine (10 tests) - `stress_inference_*`
@@ -469,23 +469,23 @@
 - `filter` is racket-native only, NOT dual-behavior
 - `sort_by`, `head`, `tail`, `count`, `unique` are dual-behavior ops
 - `walk_tree` on default Dir produces `Seq(Entry(Name, Bytes))`, not `Seq(Entry(Name, File(Text)))`
-- `parse_workflow` catches empty steps before `compile_workflow` runs
+- `parse_plan` catches empty steps before `compile_plan` runs
 - Generic planner uses `TypeId` (string-based), not `TypeExpr` — need custom registries for planner tests
 
 ### Type Chain Promotion Fix
-- `src/workflow.rs` [375-410] - `is_dir_bytes()`, `steps_need_file_text()` helpers
-- `src/workflow.rs` [459-463] - Auto-promotion in `compile_workflow()`: Dir(Bytes) → Dir(File(Text)) when downstream steps need File(Text)
+- `src/plan.rs` [375-410] - `is_dir_bytes()`, `steps_need_file_text()` helpers
+- `src/plan.rs` [459-463] - Auto-promotion in `compile_plan()`: Dir(Bytes) → Dir(File(Text)) when downstream steps need File(Text)
 - FILE_CONTENT_OPS: `search_content`, `read_file` trigger promotion
 - NL layer already used `textdir` input name for search_content (line 271 of dialogue.rs)
 - `list_dir`, `sort_by` etc. do NOT trigger promotion — Dir(Bytes) preserved
 - `read_file: each` unwraps File(Text) → Text, so you can't chain read_file:each → search_content (search_content reads files itself)
 
 ### Generalized Type Promotion (commit 2513fd6)
-- `src/workflow.rs` [0..4800] - `contains_bytes()`, `replace_bytes_with_var()`, `try_promote_bytes()` — unification-based type promotion
+- `src/plan.rs` [0..4800] - `contains_bytes()`, `replace_bytes_with_var()`, `try_promote_bytes()` — unification-based type promotion
 - Old special-case helpers `is_dir_bytes()` and `steps_need_file_text()` removed
 - Algorithm: replace `Bytes` with fresh `Var("_promote")`, simulate type chain forward, let unification discover what `_promote` should be
-- `src/workflow.rs:553-555` — promotion call site in `compile_workflow()`, shadows `input_type` with promoted version
-- `Substitution` now imported in workflow.rs
+- `src/plan.rs:553-555` — promotion call site in `compile_plan()`, shadows `input_type` with promoted version
+- `Substitution` now imported in plan.rs
 - 4 new tests in `tests/stress_pipeline.rs`: `stress_promotion_no_bytes_no_promotion`, `stress_promotion_bytes_with_polymorphic_only_no_binding`, `stress_promotion_discovered_via_unification`, `stress_promotion_each_mode_read_file`
 - Total: 1231 tests, 0 failures, 0 warnings
 
@@ -508,21 +508,21 @@
   - Axis helpers: axis_header(), axis_footer(), claim(), evidence(), similarity(), contrast_line(), uncertainty(), summary_line(), gap_line(), inference_line(), conflict_line()
   - Write helpers: write_step(), write_kv() for Display impls
   - 30 unit tests
-- `src/main.rs` — Complete rewrite of all 3 modes (chat, workflow, demo) using ui:: helpers
+- `src/main.rs` — Complete rewrite of all 3 modes (chat, plan, demo) using ui:: helpers
   - VERSION constant "v0.7.0"
   - All bubbly emojis (✅❌🔍🔧📋📎🔗⚔❓📝📐🤔⚡⚠) replaced with geometric icons
   - Chat mode: compact banner, colored ◆ prompt, YAML in dim code block
-  - Workflow mode: progressive status chain (● Loading → ✓ Compiled → ● Executing → ✓ Done)
+  - Plan mode: progressive status chain (● Loading → ✓ Compiled → ● Executing → ✓ Done)
   - Demo mode: geometric section headers, axis tree formatting
   - Error paths: red ✗ badges
-- `src/workflow.rs:912` — CompiledWorkflow Display uses ui:: helpers
+- `src/plan.rs:912` — CompiledPlan Display uses ui:: helpers
 - `src/fs_strategy.rs:119-150` — DryRunTrace and TraceStep Display use ui:: helpers
 - 1266 total tests, 0 failures, 0 warnings
 
 ### Archive Codegen Fix (plan `archive-codegen-fix`)
-- `src/workflow.rs` [471-517] — `step_needs_map()`, `lookup_op_inputs()` — type-driven each-mode detection. Compares step.input_type against op signature. OnceLock fallback to full registry.
-- `src/workflow.rs` [751-812] — `extract_archive_format()`, `resolve_archive_op()` — format resolution. Extracts fmt from TypeExpr, looks up format_family in filetypes.yaml, rewrites generic op to format-specific.
-- `src/workflow.rs` — `is_each` removed from `CompiledStep` struct
+- `src/plan.rs` [471-517] — `step_needs_map()`, `lookup_op_inputs()` — type-driven each-mode detection. Compares step.input_type against op signature. OnceLock fallback to full registry.
+- `src/plan.rs` [751-812] — `extract_archive_format()`, `resolve_archive_op()` — format resolution. Extracts fmt from TypeExpr, looks up format_family in filetypes.yaml, rewrites generic op to format-specific.
+- `src/plan.rs` — `is_each` removed from `CompiledStep` struct
 - `src/racket_executor.rs` [625-660] — `generate_racket_script()` uses `step_needs_map` instead of `is_each`. Map steps pass `_line` as prev_binding with `prev_is_seq=false`.
 - `data/filetypes.yaml` [35-55] — `format_families` section: Cbz→zip, Cbr→rar, TarGz→tar_gz, etc.
 - `src/filetypes.rs` [303-315] — `FileTypeDictionary.format_family()` method
@@ -531,7 +531,7 @@
 - `data/packs/facts/macos_cli_facts.yaml` — cli_unzip, cli_zip, cli_unrar, cli_7z entities with submodes
 - `data/packs/ops/racket_ops.yaml` [541-599] — shell_unzip, shell_zip, shell_unrar, shell_7z anchor ops
 - `tests/archive_codegen_tests.rs` — 19 tests
-- `data/workflows/repack_comics.yaml` — example comic repack workflow
+- `data/plans/repack_comics.yaml` — example comic repack plan
 - `src/main.rs` [310-325] — Racket registry now runs discover_shell_submodes (Phase 4)
 - **Total: 1285 tests**, all passing, zero warnings
 
@@ -550,9 +550,9 @@
 - Total tests: 1297 (was 1295)
 
 ### Isolate Flag (ops-layer collision prevention)
-- `src/workflow.rs:545-563` - `CompiledStep` now has `pub isolate: bool` field
-- `src/workflow.rs:844-854` - `needs_isolation()` helper: returns true for `extract_*` ops
-- `src/workflow.rs:785-797` - Compiler sets `isolate = is_each && needs_isolation(&resolved_op)`
+- `src/plan.rs:545-563` - `CompiledStep` now has `pub isolate: bool` field
+- `src/plan.rs:844-854` - `needs_isolation()` helper: returns true for `extract_*` ops
+- `src/plan.rs:785-797` - Compiler sets `isolate = is_each && needs_isolation(&resolved_op)`
 - `src/type_expr.rs:27-33` - `TypeExpr` now implements `Default` (returns `Primitive("Bytes")`)
 - `src/racket_executor.rs:680-720` - Racket codegen checks `step.isolate` (not `is_extract_op`)
 - `src/executor.rs:991-1017` - Bash codegen: `_td=$(mktemp -d)` + replaces `$WORK_DIR/extracted` with `$_td`
@@ -567,7 +567,7 @@
 - `src/main.rs` — `--execute` and `--racket` flags removed. New `--run` flag executes via `racket -e`. Racket is sole codegen target.
 - `src/shell_helpers.rs` — `ExecFailed` variant, `sed_escape()`, `primary_input()` removed. `shell_quote()`, `glob_to_grep()`, `CodegenError` kept (used by racket_executor).
 - `tests/nl_tests.rs` — `nl_e2e_script()` rewritten to use `racket_executor::generate_racket_script()`. `build_racket_registry()` helper added.
-- CLI usage: `cadmus --workflow <path.yaml> [--run]` (was `[--execute] [--racket]`)
+- CLI usage: `cadmus --plan <path.yaml> [--run]` (was `[--execute] [--racket]`)
 - **Total: 1202 tests** (was 1301), 0 failures, 0 warnings
 
 ### Compact Properties Format (plan `compact-fact-packs`)
@@ -585,12 +585,12 @@
 - Total: 1224 tests, 0 failures, 0 warnings
 
 ### YAML Plan Refactor (commit `b7e8ed4`)
-- `src/workflow.rs` renamed to `src/plan.rs`
-- `data/workflows/` renamed to `data/plans/`
-- `tests/workflow_tests.rs` renamed to `tests/plan_tests.rs`
-- All identifiers renamed: WorkflowDef→PlanDef, CompiledWorkflow→CompiledPlan, parse_workflow→parse_plan, etc.
-- CLI flag: `--workflow` → `--plan`
-- NL intent: `CreateWorkflow` → `CreatePlan`
+- `src/plan.rs` renamed to `src/plan.rs`
+- `data/plans/` renamed to `data/plans/`
+- `tests/plan_tests.rs` renamed to `tests/plan_tests.rs`
+- All identifiers renamed: PlanDef→PlanDef, CompiledPlan→CompiledPlan, parse_plan→parse_plan, etc.
+- CLI flag: `--plan` → `--plan`
+- NL intent: `CreatePlan` → `CreatePlan`
 
 ### New YAML Plan Format
 - Top-level key IS the plan name (snake_case function name)
@@ -631,3 +631,29 @@
 - `infer_type_str_from_name()` maps input names to type strings
 
 ### Test Count: 1223 passed, 1 failed (pre-existing flaky)
+
+### Plan YAML DSL (was Workflow)
+- `src/plan.rs` [1-1400+] - `PlanDef`, `PlanInput`, `RawStep`, `StepArgs`, `CompiledStep`, `CompiledPlan`, `PlanError`
+  - `parse_plan()` - custom serde deserializer for function-framing YAML format
+  - `compile_plan()` - threads types through step chain, each mode, multi-input unification
+  - `execute_plan()` - produces `DryRunTrace` from compiled plan
+  - `infer_input_type()` - infers TypeExpr from PlanInput name + optional type_hint
+  - `resolve_type_hint()` [1199-1245] - resolves explicit type hints including Archive(content, format) and format primitives
+  - `PlanInput::bare("name")`, `PlanInput::typed("name", "Type")`
+- Data files: `data/plans/` (24 YAML files in function-framing format)
+- CLI: `cadmus --plan <path.yaml> [--run]`
+- NL: `plan_to_yaml()` in `src/nl/dialogue.rs` emits function-framing format
+
+### Function-framing YAML format
+```yaml
+plan-name:
+  inputs:
+    - bare_name
+    - typed_name: "Type"
+  output:
+    - type_name
+  steps:
+    - op_name
+    - op_name: each
+    - op_name: { k: v }
+```

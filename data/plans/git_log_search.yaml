@@ -1,0 +1,14 @@
+# Plan: Git Log Search
+# ========================
+# Search git commit history for a pattern.
+# Uses power_tools ops: git_log → filter → sort_by.
+
+git-log-search:
+  inputs:
+    - repo
+    - pattern
+  steps:
+    - git_log
+    - filter:
+        pattern: "$pattern"
+    - sort_by: date

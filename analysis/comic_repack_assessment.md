@@ -19,7 +19,7 @@
 ## Live Test
 
 ```yaml
-workflow: "Repack comic books"
+plan: "Repack comic books"
 inputs:
   path: "/comics"
 steps:
@@ -32,7 +32,7 @@ steps:
       output: "combined.cbz"
 ```
 
-**Tested with `cadmus --workflow ... --racket`.** The workflow compiles and
+**Tested with `cadmus --plan ... --racket`.** The plan compiles and
 type-checks. The generated Racket script has significant bugs.
 
 ### Generated Racket (actual output)
@@ -197,7 +197,7 @@ Dir(File(Archive(File(Image), Cbz)))
   → pack_archive → File(Archive(Seq(Entry(Name, File(Image))), fmt))
 ```
 
-The workflow compiler accepts this because `pack_archive`'s polymorphic `a`
+The plan compiler accepts this because `pack_archive`'s polymorphic `a`
 unifies with `Seq(Entry(Name, File(Image)))`. The type system is
 **permissive** here — it doesn't enforce that the archive contents should be
 flat files rather than nested sequences.
@@ -222,7 +222,7 @@ boundary — which is fine, as long as the codegen is correct.
 ## Verdict
 
 **Cadmus cannot accomplish this task in its current state via the Racket
-path.** The workflow compiles and type-checks (the type system and workflow
+path.** The plan compiles and type-checks (the type system and plan
 compiler are sound), but the Racket codegen has 7 bugs that would produce a
 non-functional script.
 

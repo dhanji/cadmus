@@ -6,8 +6,8 @@
 //   1. Ops pack loading and registry
 //   2. Fact pack loading and keyword resolution
 //   3. Inference bridge (symmetric ops)
-//   4. NL → workflow → Racket script pipeline
-//   5. Workflow YAML → Racket script generation
+//   4. NL → plan → Racket script pipeline
+//   5. Plan YAML → Racket script generation
 
 use cadmus::registry::load_ops_pack_str;
 use cadmus::racket_strategy::{
@@ -17,7 +17,7 @@ use cadmus::racket_strategy::{
     InferenceKind, infer_type_symmetric_op,
 };
 use cadmus::racket_executor::{generate_racket_script, op_to_racket};
-use cadmus::workflow::{WorkflowDef, CompiledStep, CompiledWorkflow};
+use cadmus::plan::{PlanDef, CompiledStep, CompiledPlan};
 use cadmus::type_expr::TypeExpr;
 use cadmus::nl;
 use std::collections::HashMap;
@@ -220,7 +220,7 @@ fn test_infer_abs_fails_no_partner() {
 
 #[test]
 fn test_add_4_and_35_script() {
-    let compiled = CompiledWorkflow {
+    let compiled = CompiledPlan {
         name: "Add 4 and 35".to_string(),
         input_type: TypeExpr::prim("Number"),
         input_description: "4".to_string(),
@@ -236,9 +236,10 @@ fn test_add_4_and_35_script() {
         ],
         output_type: TypeExpr::prim("Number"),
     };
-    let def = WorkflowDef {
-        workflow: "Add 4 and 35".to_string(),
-        inputs: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
+    let def = PlanDef {
+        name: "Add 4 and 35".to_string(),
+        inputs: vec![],
+        output: None,
         steps: vec![],
     };
     let racket_reg = make_racket_reg();
@@ -249,7 +250,7 @@ fn test_add_4_and_35_script() {
 
 #[test]
 fn test_subtract_6_minus_2_script() {
-    let compiled = CompiledWorkflow {
+    let compiled = CompiledPlan {
         name: "Subtract 2 from 6".to_string(),
         input_type: TypeExpr::prim("Number"),
         input_description: "6".to_string(),
@@ -265,9 +266,10 @@ fn test_subtract_6_minus_2_script() {
         ],
         output_type: TypeExpr::prim("Number"),
     };
-    let def = WorkflowDef {
-        workflow: "Subtract 2 from 6".to_string(),
-        inputs: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
+    let def = PlanDef {
+        name: "Subtract 2 from 6".to_string(),
+        inputs: vec![],
+        output: None,
         steps: vec![],
     };
     let racket_reg = make_racket_reg();
@@ -276,25 +278,23 @@ fn test_subtract_6_minus_2_script() {
 }
 
 #[test]
-fn test_workflow_yaml_add_numbers() {
-    let yaml = include_str!("../data/workflows/add_numbers.yaml");
-    let def: WorkflowDef = serde_yaml::from_str(yaml).unwrap();
-    assert_eq!(def.workflow, "Add 4 and 35");
-    assert_eq!(def.inputs.get("x"), Some(&"4".to_string()));
-    assert_eq!(def.inputs.get("y"), Some(&"35".to_string()));
+fn test_plan_yaml_add_numbers() {
+    let yaml = include_str!("../data/plans/add_numbers.yaml");
+    let def: PlanDef = serde_yaml::from_str(yaml).unwrap();
+    assert_eq!(def.name, "add-numbers");
+    assert!(def.inputs.is_empty(), "arithmetic plans have no inputs");
 }
 
 #[test]
-fn test_workflow_yaml_subtract_numbers() {
-    let yaml = include_str!("../data/workflows/subtract_numbers.yaml");
-    let def: WorkflowDef = serde_yaml::from_str(yaml).unwrap();
-    assert_eq!(def.workflow, "Subtract 2 from 6");
-    assert_eq!(def.inputs.get("x"), Some(&"6".to_string()));
-    assert_eq!(def.inputs.get("y"), Some(&"2".to_string()));
+fn test_plan_yaml_subtract_numbers() {
+    let yaml = include_str!("../data/plans/subtract_numbers.yaml");
+    let def: PlanDef = serde_yaml::from_str(yaml).unwrap();
+    assert_eq!(def.name, "subtract-numbers");
+    assert!(def.inputs.is_empty(), "arithmetic plans have no inputs");
 }
 
 // =========================================================================
-// 5. NL → Workflow E2E
+// 5. NL → Plan E2E
 // =========================================================================
 
 #[test]
@@ -303,12 +303,12 @@ fn test_nl_add_4_and_35_together() {
     let response = nl::process_input("Add 4 and 35 together", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
             // The YAML should contain the add op
-            assert!(yaml.contains("add"), "workflow should contain add op, got:\n{}", yaml);
+            assert!(yaml.contains("add"), "plan should contain add op, got:\n{}", yaml);
             // Should have the numbers
             assert!(yaml.contains("4") || yaml.contains("35"),
-                "workflow should reference the numbers, got:\n{}", yaml);
+                "plan should reference the numbers, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -320,10 +320,10 @@ fn test_nl_subtract_2_from_6() {
     let response = nl::process_input("Subtract 2 from 6", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
-            assert!(yaml.contains("subtract"), "workflow should contain subtract op, got:\n{}", yaml);
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+            assert!(yaml.contains("subtract"), "plan should contain subtract op, got:\n{}", yaml);
             assert!(yaml.contains("6") || yaml.contains("2"),
-                "workflow should reference the numbers, got:\n{}", yaml);
+                "plan should reference the numbers, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -335,37 +335,25 @@ fn test_nl_add_produces_racket_script() {
     let response = nl::process_input("Add 4 and 35 together", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
-            // Parse the workflow YAML
-            let def: WorkflowDef = serde_yaml::from_str(yaml)
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+            // Parse the plan YAML
+            let def: PlanDef = serde_yaml::from_str(yaml)
                 .expect("generated YAML should parse");
 
             // Build a registry with racket ops
             let _reg = cadmus::fs_types::build_full_registry();
 
-            // Try to compile — this may fail because the workflow compiler
+            // Try to compile — this may fail because the plan compiler
             // expects filesystem types. Instead, generate the Racket script
-            // directly from the workflow def.
-            // For arithmetic, we build a CompiledWorkflow manually.
-            let compiled = CompiledWorkflow {
-                name: def.workflow.clone(),
+            // directly from the plan def.
+            // For arithmetic, we build a CompiledPlan manually.
+            let compiled = CompiledPlan {
+                name: def.name.clone(),
                 input_type: TypeExpr::prim("Number"),
-                input_description: def.inputs.values().next().cloned().unwrap_or_default(),
+                input_description: String::new(),
                 steps: def.steps.iter().enumerate().map(|(i, raw)| {
-                    let (op, params) = cadmus::workflow::raw_step_to_op_params(raw);
-                    // Merge workflow inputs into params (expand $vars)
-                    let mut resolved = HashMap::new();
-                    for (k, v) in &params {
-                        if v.starts_with('$') {
-                            if let Some(val) = def.inputs.get(&v[1..]) {
-                                resolved.insert(k.clone(), val.clone());
-                            } else {
-                                resolved.insert(k.clone(), v.clone());
-                            }
-                        } else {
-                            resolved.insert(k.clone(), v.clone());
-                        }
-                    }
+                    let (op, params) = cadmus::plan::raw_step_to_op_params(raw);
+                    let resolved = params;
                     CompiledStep {
                         index: i,
                         op,
@@ -394,8 +382,8 @@ fn test_nl_multiply_3_and_7() {
     let response = nl::process_input("Multiply 3 and 7", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
-            assert!(yaml.contains("multiply"), "workflow should contain multiply op, got:\n{}", yaml);
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+            assert!(yaml.contains("multiply"), "plan should contain multiply op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -407,8 +395,8 @@ fn test_nl_divide_10_by_2() {
     let response = nl::process_input("Divide 10 by 2", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
-            assert!(yaml.contains("divide"), "workflow should contain divide op, got:\n{}", yaml);
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+            assert!(yaml.contains("divide"), "plan should contain divide op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -420,7 +408,7 @@ fn test_nl_plus_synonym() {
     let response = nl::process_input("Plus 10 and 20", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
             assert!(yaml.contains("add"), "plus should resolve to add op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -433,7 +421,7 @@ fn test_nl_sum_synonym() {
     let response = nl::process_input("Sum 5 and 10", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
             assert!(yaml.contains("add"), "sum should resolve to add op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -446,7 +434,7 @@ fn test_nl_minus_synonym() {
     let response = nl::process_input("Minus 3 from 10", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
             assert!(yaml.contains("subtract"), "minus should resolve to subtract op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -467,14 +455,14 @@ fn test_unknown_racket_op_error() {
         params: HashMap::new(),
     ..Default::default()
     };
-    let inputs = HashMap::new();
+    let inputs: Vec<cadmus::plan::PlanInput> = vec![];
     let racket_reg = make_racket_reg();
     let result = op_to_racket(&step, &inputs, None, &racket_reg, false);
     assert!(result.is_err());
 }
 
 // =========================================================================
-// 7. Full pipeline: NL → Workflow → Inference → Racket Script
+// 7. Full pipeline: NL → Plan → Inference → Racket Script
 // =========================================================================
 
 #[test]
@@ -483,14 +471,14 @@ fn test_full_pipeline_add() {
     let mut state = nl::dialogue::DialogueState::new();
     let response = nl::process_input("Add 4 and 35 together", &mut state);
 
-    // 2. Extract workflow
+    // 2. Extract plan
     let yaml = match &response {
-        nl::NlResponse::PlanCreated { workflow_yaml: yaml, .. } => yaml.clone(),
+        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => yaml.clone(),
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
 
-    // 3. Verify it's a valid workflow
-    let def: WorkflowDef = serde_yaml::from_str(&yaml).unwrap();
+    // 3. Verify it's a valid plan
+    let def: PlanDef = serde_yaml::from_str(&yaml).unwrap();
     assert!(!def.steps.is_empty());
 
     // 4. Load fact pack and run inference
@@ -518,7 +506,7 @@ fn test_full_pipeline_subtract_with_inference() {
     assert!(sub[0].meta.invariants.is_empty(), "invariants should not transfer");
 
     // 4. Generate Racket script for (- 6 2)
-    let compiled = CompiledWorkflow {
+    let compiled = CompiledPlan {
         name: "Subtract 2 from 6".to_string(),
         input_type: TypeExpr::prim("Number"),
         input_description: "6".to_string(),
@@ -532,9 +520,10 @@ fn test_full_pipeline_subtract_with_inference() {
         }],
         output_type: TypeExpr::prim("Number"),
     };
-    let def = WorkflowDef {
-        workflow: "Subtract 2 from 6".to_string(),
-        inputs: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
+    let def = PlanDef {
+        name: "Subtract 2 from 6".to_string(),
+        inputs: vec![],
+        output: None,
         steps: vec![],
     };
     let racket_reg = make_racket_reg();

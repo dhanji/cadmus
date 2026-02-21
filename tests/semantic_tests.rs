@@ -6,7 +6,7 @@
 // pipeline across all strategies. Each test traces:
 //
 //   1. Goal: What the user asked for (natural language or structured)
-//   2. Plan: What the engine generated (workflow YAML, plan nodes)
+//   2. Plan: What the engine generated (plan YAML, plan nodes)
 //   3. Execution: What the dry-run trace produces (type chain, ops)
 //
 // The key question: does the generated plan actually accomplish the stated goal?
@@ -14,8 +14,8 @@
 use cadmus::nl;
 use cadmus::nl::dialogue::DialogueState;
 use cadmus::nl::NlResponse;
-use cadmus::workflow::{
-    parse_workflow, compile_workflow, run_workflow, run_workflow_str,
+use cadmus::plan::{
+    parse_plan, compile_plan, run_plan, run_plan_str,
 };
 use cadmus::fs_types::build_full_registry;
 use cadmus::fs_strategy::run_fs_goal;
@@ -28,17 +28,17 @@ use cadmus::coding_strategy;
 use std::path::PathBuf;
 
 // ===========================================================================
-// STRATEGY 1: NL Pipeline → Workflow → Execution (Filesystem)
+// STRATEGY 1: NL Pipeline → Plan → Execution (Filesystem)
 // ===========================================================================
 //
 // Full chain: natural language → normalize → typo correct → intent → slots
-//           → dialogue (build_workflow) → YAML → compile → execute → trace
+//           → dialogue (build_plan) → YAML → compile → execute → trace
 
-/// Helper: run NL input through the full pipeline and return the workflow YAML.
+/// Helper: run NL input through the full pipeline and return the plan YAML.
 fn nl_to_yaml(input: &str) -> String {
     let mut state = DialogueState::new();
     match nl::process_input(input, &mut state) {
-        NlResponse::PlanCreated { workflow_yaml, .. } => workflow_yaml,
+        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
         other => panic!("Expected PlanCreated for '{}', got: {:?}", input, other),
     }
 }
@@ -46,8 +46,8 @@ fn nl_to_yaml(input: &str) -> String {
 /// Helper: run NL input through the full pipeline, compile, and return the trace.
 fn nl_to_trace(input: &str) -> String {
     let yaml = nl_to_yaml(input);
-    let trace = run_workflow_str(&yaml)
-        .unwrap_or_else(|e| panic!("Workflow from '{}' failed: {}\nYAML:\n{}", input, e, yaml));
+    let trace = run_plan_str(&yaml)
+        .unwrap_or_else(|e| panic!("Plan from '{}' failed: {}\nYAML:\n{}", input, e, yaml));
     trace.to_string()
 }
 
@@ -87,9 +87,9 @@ fn test_semantic_zip_downloads_execution() {
 #[test]
 fn test_semantic_zip_downloads_type_soundness() {
     let yaml = nl_to_yaml("zip up everything in ~/Downloads");
-    let def = parse_workflow(&yaml).unwrap();
+    let def = parse_plan(&yaml).unwrap();
     let registry = build_full_registry();
-    let compiled = compile_workflow(&def, &registry).unwrap();
+    let compiled = compile_plan(&def, &registry).unwrap();
 
     // Input type should be Dir(Bytes)
     assert_eq!(compiled.input_type.to_string(), "Dir(Bytes)",
@@ -172,19 +172,19 @@ fn test_semantic_extract_cbz_plan() {
 fn test_semantic_extract_cbz_execution() {
     let trace = nl_to_trace("extract the archive at ~/comic.cbz");
 
-    // Format resolution: extract_archive + Cbz → extract_zip
-    assert!(trace.contains("extract_zip"), "trace: {}", trace);
-    // CBZ is recognized as archive containing images
-    assert!(trace.contains("Archive"), "should recognize archive: {}", trace);
+    // With function-framing, NL inputs are bare names — format resolution
+    // happens at runtime, not compile time. The generic op is kept.
+    assert!(trace.contains("extract_archive"), "trace: {}", trace);
+    assert!(trace.contains("Archive") || trace.contains("File"), "should recognize file type: {}", trace);
     assert!(trace.contains("Seq(Entry(Name"), "should produce entries: {}", trace);
 }
 
 #[test]
 fn test_semantic_extract_cbz_type_soundness() {
     let yaml = nl_to_yaml("extract the archive at ~/comic.cbz");
-    let def = parse_workflow(&yaml).unwrap();
+    let def = parse_plan(&yaml).unwrap();
     let registry = build_full_registry();
-    let compiled = compile_workflow(&def, &registry).unwrap();
+    let compiled = compile_plan(&def, &registry).unwrap();
 
     // Input should be recognized as archive file
     let input = compiled.input_type.to_string();
@@ -243,10 +243,10 @@ fn test_semantic_typo_walk_tree() {
 
 #[test]
 fn test_semantic_typo_still_compiles() {
-    // Even with typos, the generated workflow should compile
+    // Even with typos, the generated plan should compile
     let yaml = nl_to_yaml("extrct the archve at ~/comic.cbz");
-    let result = run_workflow_str(&yaml);
-    assert!(result.is_ok(), "typo-corrected workflow should compile: {:?}", result.err());
+    let result = run_plan_str(&yaml);
+    assert!(result.is_ok(), "typo-corrected plan should compile: {:?}", result.err());
 }
 
 // ---------------------------------------------------------------------------
@@ -257,10 +257,10 @@ fn test_semantic_typo_still_compiles() {
 fn test_semantic_multiturn_create_edit_approve() {
     let mut state = DialogueState::new();
 
-    // Turn 1: Create a zip workflow
+    // Turn 1: Create a zip plan
     let r1 = nl::process_input("zip up everything in ~/Downloads", &mut state);
     let yaml1 = match &r1 {
-        NlResponse::PlanCreated { workflow_yaml, .. } => workflow_yaml.clone(),
+        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml.clone(),
         other => panic!("T1: expected PlanCreated, got: {:?}", other),
     };
     assert!(yaml1.contains("walk_tree"), "T1 should have walk_tree");
@@ -269,7 +269,7 @@ fn test_semantic_multiturn_create_edit_approve() {
     // Turn 2: Edit — add a filter to skip .git
     let r2 = nl::process_input("skip any subdirectory named .git", &mut state);
     let yaml2 = match &r2 {
-        NlResponse::PlanEdited { workflow_yaml, .. } => workflow_yaml.clone(),
+        NlResponse::PlanEdited { plan_yaml, .. } => plan_yaml.clone(),
         other => panic!("T2: expected PlanEdited, got: {:?}", other),
     };
     assert!(yaml2.contains("filter"), "T2 should add filter: {}", yaml2);
@@ -277,9 +277,9 @@ fn test_semantic_multiturn_create_edit_approve() {
     assert!(yaml2.contains("walk_tree"), "T2 should keep walk_tree: {}", yaml2);
     assert!(yaml2.contains("pack_archive"), "T2 should keep pack_archive: {}", yaml2);
 
-    // Verify the edited workflow compiles
-    let trace = run_workflow_str(&yaml2);
-    assert!(trace.is_ok(), "edited workflow should compile: {:?}\nYAML:\n{}", trace.err(), yaml2);
+    // Verify the edited plan compiles
+    let trace = run_plan_str(&yaml2);
+    assert!(trace.is_ok(), "edited plan should compile: {:?}\nYAML:\n{}", trace.err(), yaml2);
 
     // Turn 3: Approve
     let r3 = nl::process_input("lgtm", &mut state);
@@ -293,7 +293,7 @@ fn test_semantic_multiturn_preserves_path() {
     // Create with specific path
     let r1 = nl::process_input("zip up ~/my_project", &mut state);
     let yaml1 = match &r1 {
-        NlResponse::PlanCreated { workflow_yaml, .. } => workflow_yaml.clone(),
+        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml.clone(),
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
     assert!(yaml1.contains("my_project"), "should preserve path: {}", yaml1);
@@ -301,7 +301,7 @@ fn test_semantic_multiturn_preserves_path() {
     // Edit should preserve the path
     let r2 = nl::process_input("skip .DS_Store files", &mut state);
     let yaml2 = match &r2 {
-        NlResponse::PlanEdited { workflow_yaml, .. } => workflow_yaml.clone(),
+        NlResponse::PlanEdited { plan_yaml, .. } => plan_yaml.clone(),
         other => panic!("expected PlanEdited, got: {:?}", other),
     };
     assert!(yaml2.contains("my_project"), "edit should preserve path: {}", yaml2);
@@ -337,21 +337,21 @@ fn test_semantic_empty_input_handled() {
 }
 
 // ---------------------------------------------------------------------------
-// Negative: workflow with unknown op fails at compile time
+// Negative: plan with unknown op fails at compile time
 // ---------------------------------------------------------------------------
 
 #[test]
 fn test_semantic_unknown_op_compile_error() {
     let yaml = r#"
-workflow: "bad"
-inputs:
-  path: "/tmp"
-steps:
-  - totally_fake_op
+bad:
+  inputs:
+    - path
+  steps:
+    - totally_fake_op
 "#;
-    let def = parse_workflow(yaml).unwrap();
+    let def = parse_plan(yaml).unwrap();
     let registry = build_full_registry();
-    let result = compile_workflow(&def, &registry);
+    let result = compile_plan(&def, &registry);
     assert!(result.is_err(), "unknown op should fail at compile time");
     let err = format!("{}", result.unwrap_err());
     assert!(err.contains("unknown operation") || err.contains("totally_fake_op"),
@@ -584,12 +584,12 @@ fn test_semantic_fs_type_mismatch_fails() {
 }
 
 // ===========================================================================
-// WORKFLOW YAML FILES: semantic correctness of pre-built workflows
+// PLAN YAML FILES: semantic correctness of pre-built plans
 // ===========================================================================
 
 #[test]
-fn test_semantic_workflow_extract_cbz_yaml() {
-    let trace = run_workflow(&PathBuf::from("data/workflows/extract_cbz.yaml")).unwrap();
+fn test_semantic_plan_extract_cbz_yaml() {
+    let trace = run_plan(&PathBuf::from("data/plans/extract_cbz.yaml")).unwrap();
     let display = trace.to_string();
 
     // Goal: extract images from CBZ
@@ -600,8 +600,8 @@ fn test_semantic_workflow_extract_cbz_yaml() {
 }
 
 #[test]
-fn test_semantic_workflow_find_pdfs_yaml() {
-    let trace = run_workflow(&PathBuf::from("data/workflows/find_pdfs.yaml")).unwrap();
+fn test_semantic_plan_find_pdfs_yaml() {
+    let trace = run_plan(&PathBuf::from("data/plans/find_pdfs.yaml")).unwrap();
     let display = trace.to_string();
 
     // Goal: find PDFs containing keyword
@@ -612,8 +612,8 @@ fn test_semantic_workflow_find_pdfs_yaml() {
 }
 
 #[test]
-fn test_semantic_workflow_cleanup_temp_yaml() {
-    let trace = run_workflow(&PathBuf::from("data/workflows/cleanup_temp.yaml")).unwrap();
+fn test_semantic_plan_cleanup_temp_yaml() {
+    let trace = run_plan(&PathBuf::from("data/plans/cleanup_temp.yaml")).unwrap();
     let display = trace.to_string();
 
     // Goal: find old temp files
@@ -623,8 +623,8 @@ fn test_semantic_workflow_cleanup_temp_yaml() {
 }
 
 #[test]
-fn test_semantic_workflow_spotlight_yaml() {
-    let trace = run_workflow(&PathBuf::from("data/workflows/spotlight_find.yaml")).unwrap();
+fn test_semantic_plan_spotlight_yaml() {
+    let trace = run_plan(&PathBuf::from("data/plans/spotlight_find.yaml")).unwrap();
     let display = trace.to_string();
 
     // Goal: Spotlight search
@@ -634,36 +634,37 @@ fn test_semantic_workflow_spotlight_yaml() {
 }
 
 #[test]
-fn test_semantic_workflow_download_extract_yaml() {
-    let trace = run_workflow(&PathBuf::from("data/workflows/download_and_extract.yaml")).unwrap();
+fn test_semantic_plan_download_extract_yaml() {
+    let trace = run_plan(&PathBuf::from("data/plans/download_and_extract.yaml")).unwrap();
     let display = trace.to_string();
 
-    // Goal: extract archive contents
-    // Plan: extract_archive → sort_by
-    assert!(display.contains("extract_zip"), "trace: {}", display);
+    // Goal: extract archive contents (bare 'archive' input — no format resolution)
+    // Plan: extract_archive → sort_by (generic op, format resolved at runtime)
+    assert!(display.contains("extract_archive"), "trace: {}", display);
     assert!(display.contains("sort_by"), "trace: {}", display);
 
-    // Type chain: File(Archive(Bytes, Zip)) → Seq(Entry(Name, Bytes))
-    assert!(display.contains("Archive"), "should recognize archive: {}", display);
+    // Type chain: File(Bytes) → archive type inferred from op signature
+    assert!(display.contains("Archive") || display.contains("File"),
+        "should recognize file type: {}", display);
 }
 
-// Power tools workflows
+// Power tools plans
 #[test]
-fn test_semantic_workflow_git_log_yaml() {
-    let trace = run_workflow(&PathBuf::from("data/workflows/git_log_search.yaml")).unwrap();
+fn test_semantic_plan_git_log_yaml() {
+    let trace = run_plan(&PathBuf::from("data/plans/git_log_search.yaml")).unwrap();
     let display = trace.to_string();
 
     // Goal: search git log for pattern
     // Plan: git_log → filter($pattern) → sort_by(date)
     assert!(display.contains("git_log"), "trace: {}", display);
     assert!(display.contains("filter"), "trace: {}", display);
-    // Variable expansion: $pattern → fix(auth)
-    assert!(display.contains("fix(auth)"), "should expand $pattern: {}", display);
+    // Variable reference: $pattern passed through as-is (no value expansion)
+    assert!(display.contains("$pattern"), "should have $pattern reference: {}", display);
 }
 
 #[test]
-fn test_semantic_workflow_process_logs_yaml() {
-    let trace = run_workflow(&PathBuf::from("data/workflows/process_logs.yaml")).unwrap();
+fn test_semantic_plan_process_logs_yaml() {
+    let trace = run_plan(&PathBuf::from("data/plans/process_logs.yaml")).unwrap();
     let display = trace.to_string();
 
     // Goal: extract and transform log data
@@ -673,7 +674,7 @@ fn test_semantic_workflow_process_logs_yaml() {
 }
 
 // ===========================================================================
-// CROSS-CUTTING: NL → Workflow → Compile → Execute round-trip
+// CROSS-CUTTING: NL → Plan → Compile → Execute round-trip
 // ===========================================================================
 
 /// For each NL input, verify the full chain compiles and the trace is non-empty.
@@ -691,9 +692,9 @@ fn test_semantic_roundtrip_battery() {
 
     for input in inputs {
         let yaml = nl_to_yaml(input);
-        let result = run_workflow_str(&yaml);
+        let result = run_plan_str(&yaml);
         assert!(result.is_ok(),
-            "NL input '{}' should produce valid workflow.\nYAML:\n{}\nError: {:?}",
+            "NL input '{}' should produce valid plan.\nYAML:\n{}\nError: {:?}",
             input, yaml, result.err());
 
         let trace = result.unwrap();
@@ -760,7 +761,7 @@ fn test_semantic_double_approve() {
     let r1 = nl::process_input("yes", &mut state);
     assert!(matches!(r1, NlResponse::Approved { .. }));
 
-    // Second approve should fail — workflow was cleared
+    // Second approve should fail — plan was cleared
     let r2 = nl::process_input("yes", &mut state);
     assert!(matches!(r2, NlResponse::NeedsClarification { .. }),
         "double approve should need clarification: {:?}", r2);
@@ -780,31 +781,31 @@ fn test_semantic_reject_clears_state() {
 }
 
 #[test]
-fn test_semantic_workflow_empty_steps_rejected() {
+fn test_semantic_plan_empty_steps_rejected() {
     let yaml = r#"
-workflow: "empty"
+name: "empty"
 inputs:
   path: "/tmp"
 steps: []
 "#;
-    let result = parse_workflow(yaml);
+    let result = parse_plan(yaml);
     assert!(result.is_err(), "empty steps should be rejected");
 }
 
 #[test]
-fn test_semantic_workflow_type_mismatch_caught() {
+fn test_semantic_plan_type_mismatch_caught() {
     // list_dir produces Seq(Entry(Name, Bytes))
     // extract_archive takes File(Archive(...)) — type mismatch
     let yaml = r#"
-workflow: "bad chain"
-inputs:
-  path: "~/docs"
-steps:
-  - list_dir
-  - extract_archive
+bad-chain:
+  inputs:
+    - path
+  steps:
+    - list_dir
+    - extract_archive
 "#;
-    let def = parse_workflow(yaml).unwrap();
+    let def = parse_plan(yaml).unwrap();
     let registry = build_full_registry();
-    let result = compile_workflow(&def, &registry);
+    let result = compile_plan(&def, &registry);
     assert!(result.is_err(), "type mismatch should be caught at compile time");
 }

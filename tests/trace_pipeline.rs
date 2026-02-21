@@ -5,14 +5,14 @@ use cadmus::nl::normalize;
 use cadmus::nl::typo;
 use cadmus::nl::intent;
 use cadmus::nl::slots;
-use cadmus::nl::dialogue::{build_workflow, workflow_to_yaml};
+use cadmus::nl::dialogue::{build_plan, plan_to_yaml};
 use cadmus::racket_strategy::{
     build_racket_registry, load_racket_facts_from_str,
     promote_inferred_ops, InferenceKind,
 };
 use cadmus::racket_executor::generate_racket_script;
 use cadmus::registry::load_ops_pack_str;
-use cadmus::workflow::{CompiledStep, CompiledWorkflow, raw_step_to_op_params};
+use cadmus::plan::{CompiledStep, CompiledPlan, raw_step_to_op_params};
 use cadmus::type_expr::TypeExpr;
 use std::collections::HashMap;
 
@@ -73,18 +73,18 @@ fn trace_input(input: &str) {
     println!("  Slots:        {:?}", extracted.slots);
     println!();
 
-    // ── Step 4: Workflow Generation ──
-    println!("━━━ Step 4: Workflow YAML Generation ━━━");
+    // ── Step 4: Plan Generation ──
+    println!("━━━ Step 4: Plan YAML Generation ━━━");
     println!();
 
     let op = match &intent_result {
-        intent::Intent::CreateWorkflow { op, .. } => op.clone(),
+        intent::Intent::CreatePlan { op, .. } => op.clone(),
         _ => None,
     };
 
-    match build_workflow(&op, &extracted, None) {
+    match build_plan(&op, &extracted, None) {
         Ok(wf) => {
-            let yaml = workflow_to_yaml(&wf);
+            let yaml = plan_to_yaml(&wf);
             for line in yaml.lines() {
                 println!("  {}", line);
             }
@@ -162,23 +162,15 @@ fn trace_input(input: &str) {
             println!("━━━ Step 6: Executable Racket Code ━━━");
             println!();
 
-            let compiled = CompiledWorkflow {
-                name: wf.workflow.clone(),
+            let compiled = CompiledPlan {
+                name: wf.name.clone(),
                 input_type: TypeExpr::prim("Number"),
-                input_description: wf.inputs.values().next().cloned().unwrap_or_default(),
+                input_description: wf.inputs.first().map(|i| i.name.clone()).unwrap_or_default(),
                 steps: wf.steps.iter().enumerate().map(|(i, raw)| {
                     let (op_name, params) = raw_step_to_op_params(raw);
                     let mut resolved = HashMap::new();
                     for (k, v) in &params {
-                        if v.starts_with('$') {
-                            if let Some(val) = wf.inputs.get(&v[1..]) {
-                                resolved.insert(k.clone(), val.clone());
-                            } else {
-                                resolved.insert(k.clone(), v.clone());
-                            }
-                        } else {
-                            resolved.insert(k.clone(), v.clone());
-                        }
+                        resolved.insert(k.clone(), v.clone());
                     }
                     CompiledStep {
                         index: i,
@@ -207,7 +199,7 @@ fn trace_input(input: &str) {
             }
         }
         Err(e) => {
-            println!("  ❌ Workflow generation failed: {}", e);
+            println!("  ❌ Plan generation failed: {}", e);
         }
     }
 

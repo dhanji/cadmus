@@ -16,7 +16,7 @@ data/
   comparison.ops.yaml   ← comparative reasoning ops (6 ops)
   coding.ops.yaml       ← code analysis ops (6 ops)
   macos_fs.facts.yaml         ← macOS fact pack (tool knowledge, claims)
-  workflows/            ← workflow YAML definitions
+  plans/            ← plan YAML definitions
 ```
 
 The `TypeExpr` grammar (`Primitive`, `Constructor`, `Var`) is open — new
@@ -39,7 +39,7 @@ types are just strings. `Option(a)` is a first-class constructor alongside
 
 ## Phase 1: Unblock Tree + File Lifecycle ✅ COMPLETE
 
-**Priority: Critical — these block basic workflows**
+**Priority: Critical — these block basic plans**
 
 ### 1a. `flatten_tree` op
 
@@ -64,7 +64,7 @@ walk_tree_hierarchy<a>: Dir(a) → Tree(Entry(Name, a))  # tree — preserves ne
 ```
 
 Decision: probably change `walk_tree` to return `Seq` and rename the current
-one to `walk_tree_hierarchy`. Most workflows want flat results.
+one to `walk_tree_hierarchy`. Most plans want flat results.
 
 ### 1b. File lifecycle ops
 
@@ -108,36 +108,36 @@ Add claims for `cp`, `rm`, `mkdir`, `ln`, `chmod`, `chown` to `macos_fs.facts.ya
 under the `tools/core_utils` sub-axis. Include common flags, type signatures,
 and platform notes (e.g., `cp -R` vs `ditto` for preserving macOS metadata).
 
-### 1d. Workflow examples
+### 1d. Plan examples
 
 ```yaml
 # Copy and reorganize
-workflow: "Copy PDFs to archive"
-inputs:
-  source: "~/Documents"
-  dest: "~/Archive/pdfs"
-steps:
-  - list_dir
-  - find_matching:
-      pattern: "*.pdf"
-  - copy: $dest
+copy-pdfs-to-archive:
+  inputs:
+    - source
+    - dest
+  steps:
+    - list_dir
+    - find_matching:
+        pattern: "*.pdf"
+    - copy: $dest
 
 # Clean up temp files
-workflow: "Delete old temp files"
-inputs:
-  path: "/tmp"
-steps:
-  - walk_tree
-  - find_matching:
-      pattern: "*.tmp"
-  - delete: each
+delete-old-temp-files:
+  inputs:
+    - path
+  steps:
+    - walk_tree
+    - find_matching:
+        pattern: "*.tmp"
+    - delete: each
 ```
 
 ---
 
 ## Phase 2: Content Transformation ✅ COMPLETE
 
-**Priority: High — needed for text processing workflows**
+**Priority: High — needed for text processing plans**
 
 ### 2a. Text ops
 
@@ -188,25 +188,25 @@ New primitives referenced:
 Add claims for `head`, `tail`, `wc`, `uniq`, `diff`, `shasum`, `md5`, `sed`
 (sed already has a claim but no op).
 
-### 2d. Workflow examples
+### 2d. Plan examples
 
 ```yaml
-workflow: "Find duplicate files by checksum"
-inputs:
-  path: "~/Downloads"
-steps:
-  - walk_tree
-  - checksum: each
-  - sort_by: hash
-  # (future: group_by would be useful here)
+find-duplicate-files-by-checksum:
+  inputs:
+    - path
+  steps:
+    - walk_tree
+    - checksum: each
+    - sort_by: hash
+    # (future: group_by would be useful here)
 
-workflow: "Preview large log"
-inputs:
-  file: "app.log"
-steps:
-  - read_file
-  - tail:
-      count: 100
+preview-large-log:
+  inputs:
+    - file
+  steps:
+    - read_file
+    - tail:
+        count: 100
 ```
 
 ---
@@ -244,7 +244,7 @@ get_file_type:   Metadata → FileType
 ```
 
 New primitives:
-- `Size` — already referenced in workflow DSL's `infer_input_type`
+- `Size` — already referenced in plan DSL's `infer_input_type`
 - `Timestamp` — modification/creation time
 - `FileType` — MIME type or file kind
 
@@ -257,7 +257,7 @@ compare_size:    Size, Size → Bool
 compare_time:    Timestamp, Timestamp → Bool
 ```
 
-Or more generally, a `predicate` step type in the workflow DSL:
+Or more generally, a `predicate` step type in the plan DSL:
 
 ```yaml
 steps:
@@ -266,7 +266,7 @@ steps:
       min_size: "100MB"
 ```
 
-This is where the workflow DSL's param system earns its keep — `min_size`
+This is where the plan DSL's param system earns its keep — `min_size`
 is a filter parameter, not a type-level concept. The planner doesn't need
 to understand "100MB"; it just needs to know that `filter` preserves the
 sequence type.
@@ -286,7 +286,7 @@ spotlight_search: Pattern → Seq(Entry(Name, Bytes))
 ```
 
 This is interesting because it's a *leaf* op that produces a sequence
-without needing a directory input. The workflow DSL would need to handle
+without needing a directory input. The plan DSL would need to handle
 this — currently the first step always consumes the input literal.
 
 ### 4b. Extended attributes
@@ -360,7 +360,7 @@ Expand `macos_fs.facts.yaml` with claims for:
 
 ## Phase 5: Network + Download ✅ COMPLETE
 
-**Priority: Medium — common in automation workflows**
+**Priority: Medium — common in automation plans**
 
 ```
 download:     URL → File(Bytes)
@@ -424,7 +424,7 @@ propagate as constraints:
 
 ---
 
-## Phase 7: Workflow DSL Extensions
+## Phase 7: Plan DSL Extensions
 
 **Priority: Lower — current linear pipeline covers most cases**
 
@@ -451,7 +451,7 @@ steps:
         - skip
 ```
 
-This is a significant complexity increase. Defer unless workflows
+This is a significant complexity increase. Defer unless plans
 clearly need it.
 
 ### 7b. Named intermediates
@@ -526,7 +526,7 @@ decompress: File(Compressed(a, Algorithm)) → File(a)
 ```
 
 This is more correct but adds complexity. The current model where
-`TarGz` is a format tag works fine for most workflows. Only split
+`TarGz` is a format tag works fine for most plans. Only split
 if users need to reason about compression algorithms independently.
 
 ---
@@ -541,7 +541,7 @@ if users need to reason about compression algorithms independently.
 | 4. macOS-specific | Medium | Medium | fs_types.rs, macos_fs.facts.yaml |
 | 5. Network | Small | Medium | fs_types.rs, macos_fs.facts.yaml |
 | 6. Fact↔Planner | Medium | High | fs_strategy.rs, generic_planner.rs |
-| 7. DSL extensions | Large | Medium | workflow.rs |
+| 7. DSL extensions | Large | Medium | plan.rs |
 | 8. Compression | Small | Low | fs_types.rs |
 
 Phases 1-3 are all just adding ops to `build_fs_registry()` and claims
@@ -551,5 +551,5 @@ Pure vocabulary expansion.
 Phase 6 is the most architecturally interesting — it connects the fact
 pack to the planner, making claims actionable rather than decorative.
 
-Phase 7 is the most complex — it changes the workflow DSL from a linear
+Phase 7 is the most complex — it changes the plan DSL from a linear
 pipeline to a control-flow graph.
