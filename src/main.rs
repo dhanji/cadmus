@@ -23,21 +23,16 @@ fn main() {
         let path = args.get(pos + 1).unwrap_or_else(|| {
             eprintln!("{}", ui::error("Missing plan path"));
             eprintln!();
-            eprintln!("  {} cadmus --plan <path.yaml> [--run]", ui::dim("usage:"));
+            eprintln!("  {} cadmus --plan <path.yaml> [--dry-run]", ui::dim("usage:"));
             eprintln!();
-            eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml", ui::dim("$"));
-            eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml --run", ui::dim("$"));
+            eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml", ui::dim("  $"));
+            eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml --dry-run", ui::dim("  $"));
             process::exit(1);
         });
 
-        let run = args.iter().any(|a| a == "--run");
-        run_plan_mode(Path::new(path), run);
+        let dry_run = args.iter().any(|a| a == "--dry-run");
+        run_plan_mode(Path::new(path), dry_run);
         return;
-    }
-
-    if args.iter().any(|a| a == "--run") {
-        eprintln!("{}", ui::error("--run requires --plan <path.yaml>"));
-        process::exit(1);
     }
 
     // --demo mode: run strategy demos
@@ -227,7 +222,7 @@ fn run_chat_mode() {
 // Plan mode
 // ---------------------------------------------------------------------------
 
-fn run_plan_mode(path: &Path, run: bool) {
+fn run_plan_mode(path: &Path, dry_run: bool) {
     println!();
     println!("{}", ui::banner("cadmus", VERSION, &format!("Plan {} Racket", ui::icon::ARROW_RIGHT)));
     println!();
@@ -357,7 +352,7 @@ fn run_plan_mode(path: &Path, run: bool) {
     println!("{}", ui::code_block(&script));
     println!();
 
-    if run {
+    if !dry_run {
         println!("  {}", ui::status_active("Running..."));
         println!();
 
@@ -387,7 +382,7 @@ fn run_plan_mode(path: &Path, run: bool) {
             }
         }
     } else {
-        println!("  {}", ui::dim("use --run to execute, or `racket <file.rkt>`"));
+        println!("  {}", ui::dim("dry run complete — use without --dry-run to execute"));
     }
     println!();
 }
