@@ -1,5 +1,6 @@
 use std::env;
 use std::path::Path;
+use std::io::Write;
 use std::process;
 
 use cadmus::coding_strategy;
@@ -47,6 +48,30 @@ fn main() {
 
     // Default: run all three strategy demos
     run_demo_mode();
+}
+
+// ---------------------------------------------------------------------------
+// Racket execution helper
+// ---------------------------------------------------------------------------
+
+/// Run a Racket script by writing it to a temp file and invoking `racket <file>`.
+/// `#lang racket` requires file-based execution (not `racket -e`).
+fn run_racket_script(script: &str) -> Result<std::process::Output, std::io::Error> {
+    let tmp_dir = std::env::temp_dir();
+    let tmp_path = tmp_dir.join(format!("cadmus_{}.rkt", std::process::id()));
+    {
+        let mut f = std::fs::File::create(&tmp_path)?;
+        f.write_all(script.as_bytes())?;
+        f.flush()?;
+    }
+
+    let output = std::process::Command::new("racket")
+        .arg(&tmp_path)
+        .output()?;
+
+    let _ = std::fs::remove_file(&tmp_path);
+
+    Ok(output)
 }
 
 // ---------------------------------------------------------------------------
@@ -139,11 +164,7 @@ fn run_chat_mode() {
                         if answer == "y" || answer == "yes" {
                             println!();
                             println!("  {}", ui::status_active("Running..."));
-                            match std::process::Command::new("racket")
-                                .arg("-e")
-                                .arg(s)
-                                .output()
-                            {
+                            match run_racket_script(s) {
                                 Ok(output) => {
                                     let stdout_str = String::from_utf8_lossy(&output.stdout);
                                     let stderr_str = String::from_utf8_lossy(&output.stderr);
@@ -340,11 +361,7 @@ fn run_plan_mode(path: &Path, run: bool) {
         println!("  {}", ui::status_active("Running..."));
         println!();
 
-        match std::process::Command::new("racket")
-            .arg("-e")
-            .arg(&script)
-            .output()
-        {
+        match run_racket_script(&script) {
             Ok(output) => {
                 let stdout_str = String::from_utf8_lossy(&output.stdout);
                 let stderr_str = String::from_utf8_lossy(&output.stderr);
