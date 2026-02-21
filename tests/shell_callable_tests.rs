@@ -21,7 +21,7 @@ use cadmus::racket_strategy::{
 };
 use cadmus::registry::{load_ops_pack_str, OperationRegistry};
 use cadmus::type_expr::TypeExpr;
-use cadmus::plan::{CompiledStep, CompiledPlan, PlanDef, PlanInput};
+use cadmus::workflow::{CompiledStep, CompiledWorkflow, WorkflowDef};
 
 const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
 const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket_facts.yaml");
@@ -418,17 +418,16 @@ fn test_shell_quote_prevents_injection() {
 #[test]
 fn test_script_preamble_emitted_for_shell_ops() {
     let reg = make_full_registry();
-    let compiled = CompiledPlan {
+    let compiled = CompiledWorkflow {
         name: "list files".to_string(),
         input_type: TypeExpr::prim("String"),
         input_description: "/tmp".to_string(),
         steps: vec![make_step("shell_ls", vec![("path", "/tmp")])],
         output_type: TypeExpr::cons("List", vec![TypeExpr::prim("String")]),
     };
-    let def = PlanDef {
-        name: "list files".to_string(),
-        inputs: vec![PlanInput::from_legacy("path", "/tmp")],
-        output: None,
+    let def = WorkflowDef {
+        workflow: "list files".to_string(),
+        inputs: vec![("path".into(), "/tmp".into())].into_iter().collect(),
         steps: vec![],
     };
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
@@ -441,7 +440,7 @@ fn test_script_preamble_emitted_for_shell_ops() {
 #[test]
 fn test_script_no_preamble_for_pure_racket() {
     let reg = make_full_registry();
-    let compiled = CompiledPlan {
+    let compiled = CompiledWorkflow {
         name: "add numbers".to_string(),
         input_type: TypeExpr::prim("Number"),
         input_description: "4".to_string(),
@@ -455,10 +454,9 @@ fn test_script_no_preamble_for_pure_racket() {
         }],
         output_type: TypeExpr::prim("Number"),
     };
-    let def = PlanDef {
-        name: "add numbers".to_string(),
-        inputs: vec![PlanInput::from_legacy("x", "4"), PlanInput::from_legacy("y", "35")],
-        output: None,
+    let def = WorkflowDef {
+        workflow: "add numbers".to_string(),
+        inputs: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
         steps: vec![],
     };
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
@@ -468,7 +466,7 @@ fn test_script_no_preamble_for_pure_racket() {
 #[test]
 fn test_mixed_pipeline_script() {
     let reg = make_full_registry();
-    let compiled = CompiledPlan {
+    let compiled = CompiledWorkflow {
         name: "list and count".to_string(),
         input_type: TypeExpr::prim("String"),
         input_description: "/tmp".to_string(),
@@ -492,10 +490,9 @@ fn test_mixed_pipeline_script() {
         ],
         output_type: TypeExpr::prim("Number"),
     };
-    let def = PlanDef {
-        name: "list and count".to_string(),
-        inputs: vec![PlanInput::from_legacy("path", "/tmp")],
-        output: None,
+    let def = WorkflowDef {
+        workflow: "list and count".to_string(),
+        inputs: vec![("path".into(), "/tmp".into())].into_iter().collect(),
         steps: vec![],
     };
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();

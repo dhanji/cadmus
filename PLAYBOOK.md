@@ -1,4 +1,4 @@
-# Playbook: Adding Ops, Fact Packs, and Plans
+# Playbook: Adding Ops, Fact Packs, and Workflows
 
 Step-by-step recipes for extending Cadmus with new domains.
 
@@ -441,16 +441,16 @@ let output = pipeline::run(&goal)?;
 
 ---
 
-## 4. Adding a Plan
+## 4. Adding a Workflow
 
-Plans are linear pipelines of operations defined in YAML.
+Workflows are linear pipelines of operations defined in YAML.
 
 ### Step 1: Create the YAML file
 
-Create `data/plans/<name>.yaml`:
+Create `data/workflows/<name>.yaml`:
 
 ```yaml
-plan: "Organize downloads by type"
+workflow: "Organize downloads by type"
 inputs:
   path: "~/Downloads"
   pattern: "*.pdf"
@@ -474,7 +474,7 @@ Variable expansion: `$name` references a key from `inputs`.
 
 ### Step 3: Type inference for inputs
 
-The plan compiler infers types from input names and values:
+The workflow compiler infers types from input names and values:
 
 | Input pattern | Inferred type | Example |
 |---------------|---------------|---------|
@@ -492,13 +492,13 @@ The plan compiler infers types from input names and values:
 ### Step 4: Run it
 
 ```bash
-cargo run -- --plan data/plans/my_plan.yaml
+cargo run -- --workflow data/workflows/my_workflow.yaml
 ```
 
 Or programmatically:
 
 ```rust
-let trace = plan::load_and_run(Path::new("data/plans/my_plan.yaml"))?;
+let trace = workflow::load_and_run(Path::new("data/workflows/my_workflow.yaml"))?;
 println!("{}", trace);
 ```
 
@@ -506,11 +506,11 @@ println!("{}", trace);
 
 ```rust
 #[test]
-fn test_my_plan() {
-    let yaml = include_str!("../data/plans/my_plan.yaml");
-    let def: PlanDef = serde_yaml::from_str(yaml).unwrap();
-    let compiled = compile_plan(&def, &build_full_registry()).unwrap();
-    let trace = execute_plan(&compiled).unwrap();
+fn test_my_workflow() {
+    let yaml = include_str!("../data/workflows/my_workflow.yaml");
+    let def: WorkflowDef = serde_yaml::from_str(yaml).unwrap();
+    let compiled = compile_workflow(&def, &build_full_registry()).unwrap();
+    let trace = execute_workflow(&compiled).unwrap();
     assert!(trace.to_string().contains("walk_tree"));
 }
 ```
@@ -753,7 +753,7 @@ let goal = Goal {
 
 ### 6e. Registry wiring
 
-Power tools ops are merged into the plan registry via `build_full_registry()`:
+Power tools ops are merged into the workflow registry via `build_full_registry()`:
 
 ```rust
 // src/fs_types.rs
@@ -765,7 +765,7 @@ pub fn build_full_registry() -> OperationRegistry {
 ```
 
 The fs_strategy planner uses `build_fs_registry()` (fs-only) to keep the
-search space manageable. The plan system uses `build_full_registry()`
+search space manageable. The workflow system uses `build_full_registry()`
 for the complete op set.
 
 ---
@@ -930,10 +930,10 @@ uncertainties:
   - { axis, text }
 ```
 
-### Plan YAML schema
+### Workflow YAML schema
 
 ```yaml
-plan: string
+workflow: string
 inputs:
   key: value
 steps:
@@ -981,7 +981,7 @@ the YAML file.
 The file type dictionary is the **single source of truth** for:
 - **NL path detection** — `slots.rs` and `dialogue.rs` use it to recognize
   file extensions in user input (e.g. "copy photo.heic" → detects `.heic`)
-- **Plan type inference** — `plan.rs` uses it to infer `TypeExpr`
+- **Workflow type inference** — `workflow.rs` uses it to infer `TypeExpr`
   from file extensions (e.g. `.json` → `File(Json)`, `.cbz` → `File(Archive(File(Image), Cbz))`)
 - **Tool hints** — `describe_file_type()` returns ops and external tools
   for any extension
@@ -1107,7 +1107,7 @@ matches `tar.gz`, not `gz`.
 
 - **YAML file**: `data/filetypes.yaml` (197 entries, 14 categories)
 - **Rust loader**: `src/filetypes.rs` (thin serde loader, `OnceLock` singleton)
-- **Consumers**: `src/plan.rs` (type inference), `src/nl/slots.rs` (path detection), `src/nl/dialogue.rs` (path detection)
+- **Consumers**: `src/workflow.rs` (type inference), `src/nl/slots.rs` (path detection), `src/nl/dialogue.rs` (path detection)
 - **Query API**: `filetypes::dictionary()` → `lookup()`, `lookup_by_path()`, `is_known_extension()`, `has_known_extension()`, `extensions_for_category()`, `describe_file_type()`, `all_extensions()`
 
 ---
@@ -1198,7 +1198,7 @@ the NL layer:
 
 1. `is_canonical_op()` derives its set from the registry at load time
 2. `get_op_explanation()` reads the `description` field from the ops YAML
-3. `generate_plan_name()` derives display names from the `description` field
+3. `generate_workflow_name()` derives display names from the `description` field
 
 No separate registration step needed. Just add the op to the YAML pack.
 
@@ -1214,7 +1214,7 @@ Op descriptions live in the ops YAML packs themselves (not in a separate file):
 
 The NL layer uses these descriptions for:
 - `get_op_explanation()` — answering "what does walk_tree mean?"
-- `generate_plan_name()` — generating plan display names
+- `generate_workflow_name()` — generating workflow display names
 
 ### Reference
 

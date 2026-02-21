@@ -1,10 +1,10 @@
-use cadmus::plan;
+use cadmus::workflow;
 use cadmus::fs_types;
 
 #[test]
 fn trace_promote() {
     let yaml = r#"
-plan: "Repack comics"
+workflow: "Repack comics"
 inputs:
   path: "/comics"
 steps:
@@ -18,9 +18,9 @@ steps:
   - pack_archive:
       output: "combined.cbz"
 "#;
-    let def = plan::parse_plan(yaml).unwrap();
+    let def = workflow::parse_workflow(yaml).unwrap();
     let registry = fs_types::build_full_registry();
-    match plan::compile_plan(&def, &registry) {
+    match workflow::compile_workflow(&def, &registry) {
         Ok(compiled) => {
             println!("SUCCESS!");
             println!("input_type:  {}", compiled.input_type);

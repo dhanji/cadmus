@@ -13,14 +13,14 @@ This document traces the semantic fidelity of Cadmus's
 strategy, we ask: *does the generated plan actually accomplish the stated goal?*
 
 The engine has four strategies:
-1. **NL → Filesystem Plan** — natural language to typed plan YAML
+1. **NL → Filesystem Workflow** — natural language to typed workflow YAML
 2. **Comparison** — fact-pack entity comparison with theory layer
 3. **Coding** — code analysis, smell detection, refactoring planning
 4. **Filesystem** — type-directed planning via generic planner
 
 ---
 
-## Strategy 1: NL Pipeline → Plan → Execution
+## Strategy 1: NL Pipeline → Workflow → Execution
 
 ### Pipeline
 
@@ -31,9 +31,9 @@ raw input → normalize (case fold, strip punct, expand contractions, ordinals, 
           → parse intent (grammar matching)
           → extract slots (paths, patterns, keywords, anchors)
           → dialogue dispatch (create/edit/explain/approve/reject)
-          → build_plan() → YAML
-          → compile_plan() → type-checked pipeline
-          → execute_plan() → dry-run trace
+          → build_workflow() → YAML
+          → compile_workflow() → type-checked pipeline
+          → execute_workflow() → dry-run trace
 ```
 
 ### Traced Examples
@@ -44,7 +44,7 @@ raw input → normalize (case fold, strip punct, expand contractions, ordinals, 
 |-------|--------|
 | **Goal** | Archive all files in ~/Downloads |
 | **Normalize** | `zip up everything in ~/downloads` → synonym: `pack_archive` |
-| **Intent** | `CreatePlan { op: pack_archive }` |
+| **Intent** | `CreateWorkflow { op: pack_archive }` |
 | **Slots** | `target_path: ~/Downloads` |
 | **Plan (YAML)** | `walk_tree → pack_archive` with `path: ~/Downloads` |
 | **Compile** | `Dir(Bytes) → Seq(Entry(Name, Bytes)) → File(Archive(Bytes, ...))` |
@@ -57,7 +57,7 @@ raw input → normalize (case fold, strip punct, expand contractions, ordinals, 
 | Stage | Output |
 |-------|--------|
 | **Goal** | Locate PDF files recursively |
-| **Intent** | `CreatePlan { op: find_matching }` |
+| **Intent** | `CreateWorkflow { op: find_matching }` |
 | **Plan** | `walk_tree → find_matching(*.pdf) → sort_by(name)` |
 | **Type chain** | `Dir(Bytes) → Seq(Entry(Name, Bytes)) → Seq(Entry(Name, Bytes))` |
 
@@ -82,7 +82,7 @@ raw input → normalize (case fold, strip punct, expand contractions, ordinals, 
 | **Plan** | `list_dir` with `path: ~/Downloads` |
 | **Type chain** | `Dir(Bytes) → Seq(Entry(Name, Bytes))` |
 
-**Verdict: ✅ Correct.** Single-step plan, type-sound.
+**Verdict: ✅ Correct.** Single-step workflow, type-sound.
 
 #### "search for hello in ~/docs"
 
@@ -101,7 +101,7 @@ raw input → normalize (case fold, strip punct, expand contractions, ordinals, 
 | `extrct the archve at ~/comic.cbz` | `extract the archive at ~/comic.cbz` | ✅ `extract_archive` |
 | `wlk the tre at ~/Documents` | `walk the tree at ~/Documents` | ✅ `walk_tree` |
 
-Both typo-laden inputs produce correct, compilable plans.
+Both typo-laden inputs produce correct, compilable workflows.
 
 ### Multi-Turn Conversation
 
@@ -112,17 +112,17 @@ Turn 1: "zip up everything in ~/Downloads"
 Turn 2: "skip any subdirectory named .git"
   → PlanEdited: walk_tree → filter(exclude: .git) → pack_archive
   → Path preserved: ~/Downloads still in inputs
-  → Plan still compiles after edit
+  → Workflow still compiles after edit
 
 Turn 3: "lgtm"
   → Approved
 ```
 
-**Verdict: ✅ Correct.** Edits insert filter steps at the right position (after walk_tree), preserve the original path, and the edited plan compiles.
+**Verdict: ✅ Correct.** Edits insert filter steps at the right position (after walk_tree), preserve the original path, and the edited workflow compiles.
 
 ### NL Round-Trip Battery
 
-All 7 tested NL inputs produce valid, compilable plans:
+All 7 tested NL inputs produce valid, compilable workflows:
 
 | Input | Primary Op | Compiles |
 |-------|-----------|----------|
@@ -268,11 +268,11 @@ Result: Err (no producer)
 
 ---
 
-## Plan YAML Files: Semantic Audit
+## Workflow YAML Files: Semantic Audit
 
-### All 11 Plans
+### All 11 Workflows
 
-| Plan | Steps | Compiles | Semantically Correct | Notes |
+| Workflow | Steps | Compiles | Semantically Correct | Notes |
 |----------|-------|----------|---------------------|-------|
 | `extract_cbz.yaml` | extract_archive | ✅ | ✅ | CBZ → images |
 | `find_pdfs.yaml` | list_dir → find_matching → sort_by | ✅ | ✅ | Finds PDFs by pattern |
@@ -286,15 +286,15 @@ Result: Err (no producer)
 | `git_log_search.yaml` | git_log → filter → sort_by | ✅ | ✅ | Git log with $pattern expansion |
 | `process_logs.yaml` | awk_extract → sed_script | ✅ | ✅ | Text pipeline |
 
-### Plan Design Gaps (Not Compiler Bugs)
+### Workflow Design Gaps (Not Compiler Bugs)
 
-1. **`find_large_files.yaml`**: Has `min_size: 100MB` input but no filter step references it. The plan lists and sorts but doesn't filter by size.
+1. **`find_large_files.yaml`**: Has `min_size: 100MB` input but no filter step references it. The workflow lists and sorts but doesn't filter by size.
 
-2. **`find_duplicates.yaml`**: Has `extension: *` filter (no-op) and no checksum or dedup operation. The plan walks and sorts but doesn't actually find duplicates.
+2. **`find_duplicates.yaml`**: Has `extension: *` filter (no-op) and no checksum or dedup operation. The workflow walks and sorts but doesn't actually find duplicates.
 
-3. **`copy_and_organize.yaml`**: Has `dest: /tmp/organized` input but no copy/move step. The plan walks and filters the source but doesn't copy to the destination.
+3. **`copy_and_organize.yaml`**: Has `dest: /tmp/organized` input but no copy/move step. The workflow walks and filters the source but doesn't copy to the destination.
 
-These are aspirational plans — they describe the intent in their names but the step sequences are incomplete. The type system and compiler correctly process what's there; the gap is in the plan definitions themselves.
+These are aspirational workflows — they describe the intent in their names but the step sequences are incomplete. The type system and compiler correctly process what's there; the gap is in the workflow definitions themselves.
 
 ---
 
@@ -302,13 +302,13 @@ These are aspirational plans — they describe the intent in their names but the
 
 ### `main.rs` Registry Mismatch
 
-**Bug:** The `--plan` CLI mode used `build_fs_registry()` (fs_ops only) instead of `build_full_registry()` (fs_ops + power_tools). This caused `git_log_search.yaml` and `process_logs.yaml` to fail with "unknown operation" errors in CLI mode.
+**Bug:** The `--workflow` CLI mode used `build_fs_registry()` (fs_ops only) instead of `build_full_registry()` (fs_ops + power_tools). This caused `git_log_search.yaml` and `process_logs.yaml` to fail with "unknown operation" errors in CLI mode.
 
-**Root cause:** `run_plan_mode()` in `main.rs` manually compiled plans with the wrong registry. The `run_plan()` function in `plan.rs` already used `build_full_registry()`, so tests passed.
+**Root cause:** `run_workflow_mode()` in `main.rs` manually compiled workflows with the wrong registry. The `run_workflow()` function in `workflow.rs` already used `build_full_registry()`, so tests passed.
 
 **Fix:** Changed `build_fs_registry()` → `build_full_registry()` in `main.rs`.
 
-**Impact:** 2 of 11 plan YAML files were broken in CLI mode but worked in tests.
+**Impact:** 2 of 11 workflow YAML files were broken in CLI mode but worked in tests.
 
 ---
 
@@ -325,13 +325,13 @@ These are aspirational plans — they describe the intent in their names but the
 
 ### Key Properties Verified
 
-1. **Type soundness**: Every compiled plan has a valid type chain from input to output. The compiler catches type mismatches at compile time (e.g., `list_dir → extract_archive` fails).
+1. **Type soundness**: Every compiled workflow has a valid type chain from input to output. The compiler catches type mismatches at compile time (e.g., `list_dir → extract_archive` fails).
 
-2. **NL fidelity**: Natural language inputs map to the correct operations. Synonym expansion, typo correction, and intent parsing produce semantically appropriate plans.
+2. **NL fidelity**: Natural language inputs map to the correct operations. Synonym expansion, typo correction, and intent parsing produce semantically appropriate workflows.
 
-3. **Typo resilience**: Misspelled inputs (`extrct`, `archve`, `wlk`, `tre`) are corrected to valid ops and produce compilable plans.
+3. **Typo resilience**: Misspelled inputs (`extrct`, `archve`, `wlk`, `tre`) are corrected to valid ops and produce compilable workflows.
 
-4. **Multi-turn coherence**: Edits preserve the original path and intent. Filter steps are inserted at the correct position. The edited plan compiles.
+4. **Multi-turn coherence**: Edits preserve the original path and intent. Filter steps are inserted at the correct position. The edited workflow compiles.
 
 5. **Error handling**: Ambiguous input → `NeedsClarification`. Unknown ops → compile error. Missing fact packs → load error. Double approve → clarification. Edit without plan → clarification.
 
@@ -339,6 +339,6 @@ These are aspirational plans — they describe the intent in their names but the
 
 1. **Coding strategy intermediate results**: `smells`, `refactorings`, `type_info` are empty because `execute_plan()` only returns the root node result.
 
-2. **Three plan YAML files have incomplete step sequences**: `find_large_files`, `find_duplicates`, `copy_and_organize` describe more than they implement.
+2. **Three workflow YAML files have incomplete step sequences**: `find_large_files`, `find_duplicates`, `copy_and_organize` describe more than they implement.
 
-3. **No runtime execution**: All filesystem plans produce dry-run traces, not actual file operations. This is by design (safety), but means semantic correctness is verified at the type level, not the I/O level.
+3. **No runtime execution**: All filesystem workflows produce dry-run traces, not actual file operations. This is by design (safety), but means semantic correctness is verified at the type level, not the I/O level.

@@ -1,0 +1,7 @@
+workflow: "Extract CBZ images"
+
+inputs:
+  path: "comic.cbz"
+
+steps:
+  - extract_archive

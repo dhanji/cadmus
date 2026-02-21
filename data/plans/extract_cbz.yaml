@@ -1,6 +1,0 @@
-extract_cbz:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-  output: Seq(Entry(Name, File(Image)))
-  steps:
-    - extract_archive

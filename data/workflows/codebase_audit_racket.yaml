@@ -1,0 +1,87 @@
+# Workflow: Full Codebase Audit (Racket)
+# =======================================
+# A 20-step pipeline using only ops the Racket backend handles.
+# All ops are polymorphic over Seq(Entry(Name, Bytes)).
+#
+# walk_tree → shell bridge (find)
+# find_matching, filter → Racket-native (filter + regexp-match?)
+# sort_by → Racket-native (sort string<?)
+# unique → Racket-native (remove-duplicates)
+# count → Racket-native (length)
+
+workflow: "Full codebase audit pipeline"
+
+inputs:
+  path: "~/src/cadmus"
+
+steps:
+  # --- Phase 1: Discovery ---
+  - walk_tree
+
+  # --- Phase 2: Progressive filtering ---
+  # Find all Rust files
+  - find_matching:
+      pattern: "*.rs"
+
+  # Keep only test-related files
+  - filter:
+      pattern: "test"
+
+  # Sort alphabetically
+  - sort_by: name
+
+  # Deduplicate
+  - unique
+
+  # Narrow to integration tests
+  - filter:
+      pattern: "integration"
+
+  # Sort again
+  - sort_by: name
+
+  # Deduplicate
+  - unique
+
+  # --- Phase 3: Module-level drill-down ---
+  # Filter for NL module tests
+  - filter:
+      pattern: "nl"
+
+  # Sort
+  - sort_by: name
+
+  # Dedup
+  - unique
+
+  # --- Phase 4: Cross-reference ---
+  # Filter for stress tests
+  - filter:
+      pattern: "stress"
+
+  # Sort
+  - sort_by: name
+
+  # Dedup
+  - unique
+
+  # --- Phase 5: Final narrowing ---
+  # Filter for pipeline-related
+  - filter:
+      pattern: "pipeline"
+
+  # Sort
+  - sort_by: name
+
+  # Dedup
+  - unique
+
+  # --- Phase 6: Metrics ---
+  # Final sort
+  - sort_by: name
+
+  # Final dedup
+  - unique
+
+  # Count results
+  - count

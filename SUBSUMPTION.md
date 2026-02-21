@@ -171,7 +171,7 @@ data/
 
 The ops pack files are compiled into the binary via `include_str!` and
 serve to register the old op
-names (list_dir, git_log, etc.) so the plan compiler and NL layer can
+names (list_dir, git_log, etc.) so the workflow compiler and NL layer can
 resolve them. Execution is routed through the subsumption map to shell ops.
 
 ---

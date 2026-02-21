@@ -16,7 +16,7 @@ use crate::registry::{OperationRegistry, load_ops_pack_str, load_ops_pack_str_in
 /// These ops are now registered as compatibility aliases — the actual
 /// execution is routed through the shell-callable subsumption map in
 /// `src/type_lowering.rs`. The YAML is kept embedded so that old op names
-/// (list_dir, walk_tree, etc.) remain resolvable by the plan compiler
+/// (list_dir, walk_tree, etc.) remain resolvable by the workflow compiler
 /// and NL layer.
 const FS_OPS_YAML: &str = include_str!("../data/packs/ops/fs_ops.yaml");
 
@@ -40,7 +40,7 @@ pub fn build_fs_registry() -> OperationRegistry {
 
 /// Build a full registry with both filesystem and power tools ops.
 ///
-/// Used by the plan system and other contexts that need the complete
+/// Used by the workflow system and other contexts that need the complete
 /// set of operations. Loads embedded compatibility aliases from the old
 /// YAML packs, then runs inference to discover shell-callable forms.
 /// The embedded racket ops pack YAML, used as fallback when the file

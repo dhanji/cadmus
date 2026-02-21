@@ -1,8 +1,8 @@
 //! Intent recognition via a small closed grammar over canonical edit instructions.
 //!
 //! Intents:
-//! - **CreatePlan** — user wants to build a new plan (zip, find, list, etc.)
-//! - **EditStep** — user wants to modify an existing plan step
+//! - **CreateWorkflow** — user wants to build a new workflow (zip, find, list, etc.)
+//! - **EditStep** — user wants to modify an existing workflow step
 //! - **ExplainOp** — user asks what an operation means
 //! - **Approve** — user approves the current plan
 //! - **Reject** — user rejects / wants to start over
@@ -12,7 +12,7 @@
 //! The parser uses a ranked pattern list with greedy longest-match.
 //! When multiple parses are possible, a small n-gram frequency table over
 //! canonical intent/slot patterns biases selection. Otherwise, deterministic
-//! backoff applies (CreatePlan if op detected, AskQuestion otherwise).
+//! backoff applies (CreateWorkflow if op detected, AskQuestion otherwise).
 
 use crate::nl::normalize::{self, NormalizedInput, is_canonical_op};
 
@@ -23,14 +23,14 @@ use crate::nl::normalize::{self, NormalizedInput, is_canonical_op};
 /// A recognized user intent with extracted context.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Intent {
-    /// User wants to create a new plan.
-    CreatePlan {
+    /// User wants to create a new workflow.
+    CreateWorkflow {
         /// The primary operation detected (canonical name).
         op: Option<String>,
         /// Raw tokens that weren't part of the op (potential targets/params).
         rest: Vec<String>,
     },
-    /// User wants to edit an existing plan step.
+    /// User wants to edit an existing workflow step.
     EditStep {
         /// The edit action (add, remove, move, skip, change, insert).
         action: EditAction,
@@ -121,8 +121,8 @@ pub fn parse_intent(normalized: &NormalizedInput) -> Intent {
         return intent;
     }
 
-    // 5. Check for create-plan patterns (op name detected)
-    if let Some(intent) = try_create_plan(tokens) {
+    // 5. Check for create-workflow patterns (op name detected)
+    if let Some(intent) = try_create_workflow(tokens) {
         return intent;
     }
 
@@ -133,12 +133,12 @@ pub fn parse_intent(normalized: &NormalizedInput) -> Intent {
         };
     }
 
-    // 7. Deterministic backoff: if any op name is present, assume CreatePlan
+    // 7. Deterministic backoff: if any op name is present, assume CreateWorkflow
     for token in tokens {
         if is_canonical_op(token) {
             let op = token.clone();
             let rest: Vec<String> = tokens.iter().filter(|t| *t != token).cloned().collect();
-            return Intent::CreatePlan {
+            return Intent::CreateWorkflow {
                 op: Some(op),
                 rest,
             };
@@ -373,7 +373,7 @@ fn try_edit(tokens: &[String]) -> Option<Intent> {
     // Compound sentence detection: "skip that, compress X instead"
     // If the tokens contain both an edit-like prefix AND a canonical op name
     // with "instead"/"rather", this is a replacement — not an edit.
-    // Let it fall through to try_create_plan.
+    // Let it fall through to try_create_workflow.
     let has_instead = tokens.iter().any(|t| t == "instead" || t == "rather");
     let has_op = tokens.iter().any(|t| is_canonical_op(t));
     if has_instead && has_op {
@@ -406,18 +406,18 @@ fn try_edit(tokens: &[String]) -> Option<Intent> {
         if keywords.contains(&first.as_str()) {
             // If the first token is also a canonical op AND the remaining tokens
             // look like arithmetic operands (numbers, "and", "together", "from", "by"),
-            // this is a create-plan, not an edit.
+            // this is a create-workflow, not an edit.
             if is_canonical_op(first) {
                 let rest_tokens = &tokens[start + 1..];
                 let looks_arithmetic = rest_tokens.iter().all(|t|
                     t.parse::<f64>().is_ok() || matches!(t.as_str(), "and" | "together" | "from" | "by" | "with" | "to" | "of")
                 );
                 if looks_arithmetic && rest_tokens.iter().any(|t| t.parse::<f64>().is_ok()) {
-                    return None; // Let it fall through to try_create_plan
+                    return None; // Let it fall through to try_create_workflow
                 }
             }
-            // But not if it's clearly a create-plan (e.g., "delete files in ~/tmp")
-            // Heuristic: if there's a path-like token, it might be a create-plan
+            // But not if it's clearly a create-workflow (e.g., "delete files in ~/tmp")
+            // Heuristic: if there's a path-like token, it might be a create-workflow
             // But if there's a step reference or "step" keyword, it's definitely an edit
             let has_step_ref = tokens.iter().any(|t| {
                 t == "step" || t == "previous" || t == "next" || t == "last"
@@ -498,11 +498,11 @@ fn try_set_param(tokens: &[String]) -> Option<Intent> {
 }
 
 // ---------------------------------------------------------------------------
-// Create-plan patterns
+// Create-workflow patterns
 // ---------------------------------------------------------------------------
 
-/// Try to parse a create-plan intent.
-fn try_create_plan(tokens: &[String]) -> Option<Intent> {
+/// Try to parse a create-workflow intent.
+fn try_create_workflow(tokens: &[String]) -> Option<Intent> {
     // Look for a canonical op name in the tokens
     let mut op = None;
     let mut rest = Vec::new();
@@ -515,7 +515,7 @@ fn try_create_plan(tokens: &[String]) -> Option<Intent> {
         }
     }
 
-    // Also check for action verbs that imply plan creation
+    // Also check for action verbs that imply workflow creation
     let create_verbs = [
         "make", "create", "build", "generate", "produce", "run",
         "do", "execute", "perform", "start", "begin", "please",
@@ -526,7 +526,7 @@ fn try_create_plan(tokens: &[String]) -> Option<Intent> {
     let has_create_verb = tokens.iter().any(|t| create_verbs.contains(&t.as_str()));
 
     if op.is_some() {
-        return Some(Intent::CreatePlan { op, rest });
+        return Some(Intent::CreateWorkflow { op, rest });
     }
 
     // If there's a create verb but no op, check if there's a path
@@ -536,7 +536,7 @@ fn try_create_plan(tokens: &[String]) -> Option<Intent> {
             t.starts_with("~/") || t.starts_with('/') || t.contains('.')
         });
         if has_path {
-            return Some(Intent::CreatePlan { op: None, rest: tokens.to_vec() });
+            return Some(Intent::CreateWorkflow { op: None, rest: tokens.to_vec() });
         }
     }
 
@@ -780,18 +780,18 @@ mod tests {
         }
     }
 
-    // -- CreatePlan --
+    // -- CreateWorkflow --
 
     #[test]
     fn test_create_zip_up_downloads() {
         let intent = recognize("zip up everything in my downloads");
         match intent {
-            Intent::CreatePlan { op, rest } => {
+            Intent::CreateWorkflow { op, rest } => {
                 assert_eq!(op, Some("pack_archive".to_string()));
                 assert!(rest.iter().any(|t| t == "everything" || t == "in" || t == "my" || t == "downloads"),
                     "rest: {:?}", rest);
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 
@@ -799,10 +799,10 @@ mod tests {
     fn test_create_find_pdfs() {
         let intent = recognize("find all PDFs in ~/Documents");
         match intent {
-            Intent::CreatePlan { op, .. } => {
+            Intent::CreateWorkflow { op, .. } => {
                 assert!(op.is_some(), "should detect an op");
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 
@@ -810,11 +810,11 @@ mod tests {
     fn test_create_list_dir() {
         let intent = recognize("list ~/Downloads");
         match intent {
-            Intent::CreatePlan { op, rest } => {
+            Intent::CreateWorkflow { op, rest } => {
                 assert_eq!(op, Some("list_dir".to_string()));
                 assert!(rest.iter().any(|t| t.contains("Downloads")), "rest: {:?}", rest);
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 
@@ -822,11 +822,11 @@ mod tests {
     fn test_create_walk_tree() {
         let intent = recognize("walk the directory tree in /tmp");
         match intent {
-            Intent::CreatePlan { op, rest } => {
+            Intent::CreateWorkflow { op, rest } => {
                 assert_eq!(op, Some("walk_tree".to_string()));
                 assert!(rest.iter().any(|t| t == "/tmp"), "rest: {:?}", rest);
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 
@@ -834,11 +834,11 @@ mod tests {
     fn test_create_extract_archive() {
         let intent = recognize("extract the archive at ~/comic.cbz");
         match intent {
-            Intent::CreatePlan { op, rest } => {
+            Intent::CreateWorkflow { op, rest } => {
                 assert_eq!(op, Some("extract_archive".to_string()));
                 assert!(rest.iter().any(|t| t.contains("comic.cbz")), "rest: {:?}", rest);
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 
@@ -846,10 +846,10 @@ mod tests {
     fn test_create_grep_for_errors() {
         let intent = recognize("grep for errors in /var/log/app.log");
         match intent {
-            Intent::CreatePlan { op, .. } => {
+            Intent::CreateWorkflow { op, .. } => {
                 assert_eq!(op, Some("search_content".to_string()));
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 
@@ -953,22 +953,22 @@ mod tests {
     fn test_compound_skip_compress_instead() {
         let intent = recognize("actually skip that, compress my documents instead");
         match intent {
-            Intent::CreatePlan { op, .. } => {
+            Intent::CreateWorkflow { op, .. } => {
                 assert_eq!(op, Some("gzip_compress".to_string()),
                     "should detect gzip_compress, got: {:?}", op);
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 
     #[test]
-    fn test_compress_file_still_creates_plan() {
+    fn test_compress_file_still_creates_workflow() {
         let intent = recognize("compress my_file.txt");
         match intent {
-            Intent::CreatePlan { op, .. } => {
+            Intent::CreateWorkflow { op, .. } => {
                 assert_eq!(op, Some("gzip_compress".to_string()));
             }
-            other => panic!("expected CreatePlan, got: {:?}", other),
+            other => panic!("expected CreateWorkflow, got: {:?}", other),
         }
     }
 

@@ -1,5 +1,5 @@
 // End-to-end tests for the comic book repack NL pipeline.
-// Verifies: NL prompt → normalize → intent → slots → build_plan → compile → Racket codegen
+// Verifies: NL prompt → normalize → intent → slots → build_workflow → compile → Racket codegen
 //
 // Run: cargo test --test nl_comic_trace -- --nocapture
 
@@ -10,28 +10,28 @@ use cadmus::nl::dialogue;
 use cadmus::nl::dialogue::DialogueState;
 use cadmus::nl;
 use cadmus::nl::NlResponse;
-use cadmus::plan;
+use cadmus::workflow;
 use cadmus::fs_types;
 use cadmus::racket_executor;
 
 // ===========================================================================
-// Helper: full NL → plan YAML
+// Helper: full NL → workflow YAML
 // ===========================================================================
 
 fn nl_to_yaml(input: &str) -> String {
     let mut state = DialogueState::new();
     match nl::process_input(input, &mut state) {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
+        NlResponse::PlanCreated { workflow_yaml, .. } => workflow_yaml,
         other => panic!("Expected PlanCreated for '{}', got: {:?}", input, other),
     }
 }
 
-fn nl_to_compiled(input: &str) -> (plan::PlanDef, plan::CompiledPlan) {
+fn nl_to_compiled(input: &str) -> (workflow::WorkflowDef, workflow::CompiledWorkflow) {
     let yaml = nl_to_yaml(input);
-    let def = plan::parse_plan(&yaml)
+    let def = workflow::parse_workflow(&yaml)
         .unwrap_or_else(|e| panic!("Parse failed for '{}': {}\nYAML:\n{}", input, e, yaml));
     let registry = fs_types::build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .unwrap_or_else(|e| panic!("Compile failed for '{}': {}\nYAML:\n{}", input, e, yaml));
     (def, compiled)
 }
@@ -85,13 +85,12 @@ fn test_nl_comic_repack_full_pipeline() {
         "pack_archive should resolve to pack_zip");
 
     // Verify input path
-    // In the new plan format, inputs are typed parameters (not values).
-    // The NL layer infers Dir type for "path".
-    assert!(def.get_input("path").is_some(), "Should have 'path' input");
+    assert_eq!(def.inputs.get("path").map(|s| s.as_str()), Some("/comics"),
+        "Input path should be /comics");
 
     // Verify extract_archive is in map mode
     let registry = fs_types::build_full_registry();
-    assert!(plan::step_needs_map(&compiled.steps[3], &registry),
+    assert!(workflow::step_needs_map(&compiled.steps[3], &registry),
         "extract_zip should be in map mode (operating on Seq of archives)");
 
     // Verify extract step has isolate=true (filesystem isolation for map mode)
@@ -101,7 +100,7 @@ fn test_nl_comic_repack_full_pipeline() {
         "flatten_seq should NOT have isolate (no filesystem side effects)");
 
     // Verify flatten_seq is NOT in map mode
-    assert!(!plan::step_needs_map(&compiled.steps[4], &registry),
+    assert!(!workflow::step_needs_map(&compiled.steps[4], &registry),
         "flatten_seq should NOT be in map mode");
 }
 
@@ -156,7 +155,7 @@ fn test_nl_simple_extract_still_works() {
 
     let (_def, compiled) = nl_to_compiled(input);
 
-    // Should be a simple 1-step plan
+    // Should be a simple 1-step workflow
     assert!(compiled.steps.len() <= 2,
         "Simple extract should have 1-2 steps, got {}: {:?}",
         compiled.steps.len(),
@@ -193,8 +192,8 @@ fn test_nl_repack_without_format_hint() {
     assert!(ops.contains(&"flatten_seq"), "Should have flatten_seq: {:?}", ops);
 
     // Input path should be /archives
-    assert!(def.get_input("path").is_some(),
-        "Should have 'path' input");
+    assert_eq!(def.inputs.get("path").map(|s| s.as_str()), Some("/archives"),
+        "Input path should be /archives");
 }
 
 // ===========================================================================
@@ -231,13 +230,13 @@ fn trace_nl_comic_repack() {
     println!("modifiers:   {:?}", extracted.modifiers);
     println!("all slots:   {:?}", extracted.slots);
 
-    // Stage 4: Build plan
-    println!("\n=== BUILD PLAN ===");
+    // Stage 4: Build workflow
+    println!("\n=== BUILD WORKFLOW ===");
     match &parsed {
-        intent::Intent::CreatePlan { op, .. } => {
-            match dialogue::build_plan(op, &extracted, Some("Repack comics")) {
+        intent::Intent::CreateWorkflow { op, .. } => {
+            match dialogue::build_workflow(op, &extracted, Some("Repack comics")) {
                 Ok(wf) => {
-                    println!("plan: {:?}", wf.name);
+                    println!("workflow: {:?}", wf.workflow);
                     println!("inputs: {:?}", wf.inputs);
                     for (i, s) in wf.steps.iter().enumerate() {
                         println!("  step {}: {} {:?}", i+1, s.op, s.args);
@@ -246,12 +245,12 @@ fn trace_nl_comic_repack() {
                     // Stage 5: Compile
                     println!("\n=== COMPILE ===");
                     let registry = fs_types::build_full_registry();
-                    match plan::compile_plan(&wf, &registry) {
+                    match workflow::compile_workflow(&wf, &registry) {
                         Ok(compiled) => {
                             println!("input_type:  {}", compiled.input_type);
                             println!("output_type: {}", compiled.output_type);
                             for cs in &compiled.steps {
-                                let is_map = plan::step_needs_map(cs, &registry);
+                                let is_map = workflow::step_needs_map(cs, &registry);
                                 println!("  step {}: {}{}{} :: {} -> {}",
                                     cs.index+1, cs.op,
                                     if is_map { " [MAP]" } else { "" },
@@ -272,6 +271,6 @@ fn trace_nl_comic_repack() {
                 Err(e) => println!("BUILD ERROR: {:?}", e),
             }
         }
-        other => println!("NOT A CreatePlan: {:?}", other),
+        other => println!("NOT A CreateWorkflow: {:?}", other),
     }
 }

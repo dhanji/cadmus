@@ -910,7 +910,7 @@ tech_computing_nouns:
   branch: 60
   repository: 20
   pipeline: 20
-  plan: 40
+  workflow: 40
   container: 20
   docker: 20
   kubernetes: 20

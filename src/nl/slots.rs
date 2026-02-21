@@ -22,7 +22,7 @@ pub enum SlotValue {
     Path(String),
     /// A canonical operation name.
     OpName(String),
-    /// A reference to a plan step (by number or relative position).
+    /// A reference to a workflow step (by number or relative position).
     StepRef(StepRef),
     /// A glob or regex pattern (*.pdf, foo*, etc.)
     Pattern(String),
@@ -34,7 +34,7 @@ pub enum SlotValue {
     Keyword(String),
 }
 
-/// A reference to a plan step.
+/// A reference to a workflow step.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StepRef {
     /// Absolute step number (1-indexed).

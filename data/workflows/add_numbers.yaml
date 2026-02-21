@@ -1,0 +1,13 @@
+# Workflow: Add two numbers
+# Produces: (+ 4 35) → 39
+
+workflow: "Add 4 and 35"
+
+inputs:
+  x: "4"
+  y: "35"
+
+steps:
+  - add:
+      x: "$x"
+      y: "$y"

@@ -1,0 +1,16 @@
+# Workflow: Git Log Search
+# ========================
+# Search git commit history for a pattern.
+# Uses power_tools ops: git_log → filter → sort_by.
+
+workflow: "Search git log for pattern"
+
+inputs:
+  repo: "my-project.git"
+  pattern: "fix(auth)"
+
+steps:
+  - git_log
+  - filter:
+      pattern: "$pattern"
+  - sort_by: date

@@ -187,129 +187,48 @@ use crate::registry::OperationRegistry;
 use crate::type_expr::{Substitution, TypeExpr, unify};
 
 // ---------------------------------------------------------------------------
-// Plan YAML schema
+// Workflow YAML schema
 // ---------------------------------------------------------------------------
 //
-// A plan is a named function: inputs → steps → output.
+// A workflow is a linear pipeline of filesystem operations:
 //
-//   find_pdfs:
-//     inputs:
-//       - path: Dir
-//       - keyword: Pattern
-//     output: Seq(Entry(Name, File(PDF)))
-//     steps:
-//       - list_dir
-//       - find_matching:
-//           pattern: "*.pdf"
-//       - sort_by: name
+//   workflow: "Find PDFs containing keyword"
+//   inputs:
+//     path: "~/Documents"
+//     keyword: "contract"
+//   steps:
+//     - walk_tree
+//     - filter:
+//         extension: ".pdf"
+//     - read_file: each
+//     - search_content:
+//         pattern: $keyword
+//         mode: case-insensitive
+//     - sort_by: name
 //
-// The top-level key is the plan name (a function name).
-// Inputs are typed parameters. Output declares the return type.
-// Steps are the pipeline body.
-//
-// Input forms:
-//   - name: Type          → typed parameter
-//   - name                → bare name, type inferred from name heuristic
-//
-// Step forms (unchanged):
-//   - bare_op             → op with no args
-//   - op: scalar          → op with a mode/flag
-//   - op: { k: v, ... }  → op with named params
-//   - $name               → expand from inputs
-//   - No $                → literal value or flag
+// Rules:
+//   - Bare string → op with no args
+//   - op: scalar → op with a mode/flag
+//   - op: map → op with named params
+//   - $name → expand from inputs
+//   - No $ → literal value or flag
 
 // ---------------------------------------------------------------------------
 // Raw YAML types (what serde parses)
 // ---------------------------------------------------------------------------
 
-/// A typed input parameter for a plan.
-#[derive(Debug, Clone)]
-pub struct PlanInput {
-    /// Parameter name (e.g., "path", "keyword")
-    pub name: String,
-    /// Type annotation (e.g., "Dir", "Pattern", "Number").
-    /// If empty, type is inferred from the name heuristic.
-    pub type_str: String,
-    /// Optional default value for this parameter.
-    pub default: Option<String>,
-}
-
-impl PlanInput {
-    /// Create a typed input.
-    pub fn typed(name: &str, type_str: &str) -> Self {
-        Self { name: name.to_string(), type_str: type_str.to_string(), default: None }
-    }
-
-    /// Create a typed input with a default value.
-    pub fn with_default(name: &str, type_str: &str, default: &str) -> Self {
-        Self { name: name.to_string(), type_str: type_str.to_string(), default: Some(default.to_string()) }
-    }
-
-    /// Create an input with only a name (type inferred).
-    pub fn bare(name: &str) -> Self {
-        Self { name: name.to_string(), type_str: String::new(), default: None }
-    }
-
-    /// Create an input from a legacy name/value pair.
-    /// The value becomes the default, and type is inferred from name+value.
-    pub fn from_legacy(name: &str, value: &str) -> Self {
-        Self { name: name.to_string(), type_str: String::new(), default: Some(value.to_string()) }
-    }
-
-    /// Check if this input has an explicit type annotation.
-    pub fn has_type(&self) -> bool {
-        !self.type_str.is_empty()
-    }
-}
-
-/// Top-level plan definition as parsed from YAML.
-///
-/// New format (function framing):
-/// ```yaml
-/// find_pdfs:
-//   inputs:
-///     - path: Dir
-///     - keyword: Pattern
-///   output: Seq(Entry(Name, File(PDF)))
-//   steps:
-///     - list_dir
-///     - find_matching:
-///         pattern: "*.pdf"
-///     - sort_by: name
-/// ```
-#[derive(Debug, Clone)]
-pub struct PlanDef {
-    /// Plan name (the function name, e.g., "find_pdfs")
-    pub name: String,
-    /// Typed input parameters
-    pub inputs: Vec<PlanInput>,
-    /// Declared output type (e.g., "Seq(Entry(Name, File(PDF)))")
-    pub output: Option<String>,
-    /// Ordered pipeline steps (the function body)
+/// Top-level workflow definition as parsed from YAML.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkflowDef {
+    /// Human-readable name for this workflow
+    pub workflow: String,
+    /// Named inputs (path, keyword, etc.)
+    pub inputs: HashMap<String, String>,
+    /// Ordered pipeline steps
     pub steps: Vec<RawStep>,
 }
 
-impl PlanDef {
-    /// Build a HashMap of input names → default values for $var expansion.
-    /// Only includes inputs that have default values.
-    pub fn input_defaults(&self) -> HashMap<String, String> {
-        self.inputs.iter()
-            .filter_map(|inp| inp.default.as_ref().map(|d| (inp.name.clone(), d.clone())))
-            .collect()
-    }
-
-    /// Get all input names as a set for $var validation.
-    pub fn input_names(&self) -> std::collections::HashSet<String> {
-        self.inputs.iter().map(|inp| inp.name.clone()).collect()
-    }
-
-    /// Look up an input by name.
-    pub fn get_input(&self, name: &str) -> Option<&PlanInput> {
-        self.inputs.iter().find(|inp| inp.name == name)
-    }
-}
-
-/// A single step in the plan pipeline, as parsed from YAML.
+/// A single step in the workflow pipeline, as parsed from YAML.
 ///
 /// YAML forms:
 ///   - `walk_tree`           → bare string, no params
@@ -324,7 +243,7 @@ pub struct RawStep {
     pub args: StepArgs,
 }
 
-/// Arguments to a plan step.
+/// Arguments to a workflow step.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StepArgs {
     /// No arguments (bare string step)
@@ -450,138 +369,11 @@ impl<'de> Deserialize<'de> for RawStep {
 }
 
 // ---------------------------------------------------------------------------
-// Custom Deserialize for PlanInput
-// ---------------------------------------------------------------------------
-//
-// Each input in the YAML list is either:
-//   - A bare string: "name"           → PlanInput { name, type_str: "", default: None }
-//   - A single-key mapping: { name: Type } → PlanInput { name, type_str: Type, default: None }
-
-impl<'de> Deserialize<'de> for PlanInput {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, MapAccess, Visitor};
-
-        struct InputVisitor;
-
-        impl<'de> Visitor<'de> for InputVisitor {
-            type Value = PlanInput;
-
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a string (bare name) or a single-key mapping (name: Type)")
-            }
-
-            // Bare string: "name"
-            fn visit_str<E: de::Error>(self, v: &str) -> Result<PlanInput, E> {
-                Ok(PlanInput::bare(v))
-            }
-
-            // Single-key mapping: { name: Type }
-            fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<PlanInput, M::Error> {
-                let (name, value): (String, serde_yaml::Value) = map
-                    .next_entry()?
-                    .ok_or_else(|| de::Error::custom("empty input mapping"))?;
-
-                let type_str = match value {
-                    serde_yaml::Value::String(s) => s,
-                    serde_yaml::Value::Null => String::new(),
-                    other => format!("{}", serde_yaml::to_string(&other).unwrap_or_default().trim()),
-                };
-
-                Ok(PlanInput::typed(&name, &type_str))
-            }
-        }
-
-        deserializer.deserialize_any(InputVisitor)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Custom Deserialize for PlanDef (new function-framing format)
-// ---------------------------------------------------------------------------
-//
-// The YAML is a single-key mapping where the key is the plan name:
-//
-//   find_pdfs:
-//     inputs:
-//       - path: Dir
-//       - keyword: Pattern
-//     output: Seq(Entry(Name, File(PDF)))
-//     steps:
-//       - list_dir
-//       - find_matching:
-//           pattern: "*.pdf"
-//       - sort_by: name
-
-impl<'de> Deserialize<'de> for PlanDef {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, MapAccess, Visitor};
-
-        struct PlanVisitor;
-
-        impl<'de> Visitor<'de> for PlanVisitor {
-            type Value = PlanDef;
-
-            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                f.write_str("a plan definition: { name: { inputs: [...], output: Type, steps: [...] } }")
-            }
-
-            fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<PlanDef, M::Error> {
-                let (name, body): (String, serde_yaml::Value) = map
-                    .next_entry()?
-                    .ok_or_else(|| de::Error::custom("empty plan definition"))?;
-
-                let body_map = match body {
-                    serde_yaml::Value::Mapping(m) => m,
-                    _ => return Err(de::Error::custom("plan body must be a mapping")),
-                };
-
-                // Parse inputs
-                let inputs_val = body_map.get(&serde_yaml::Value::String("inputs".to_string()));
-                let inputs: Vec<PlanInput> = match inputs_val {
-                    Some(v) => serde_yaml::from_value(v.clone())
-                        .map_err(|e| de::Error::custom(format!("invalid inputs: {}", e)))?,
-                    None => Vec::new(),
-                };
-
-                // Parse output (optional)
-                let output = body_map.get(&serde_yaml::Value::String("output".to_string()))
-                    .and_then(|v| match v {
-                        serde_yaml::Value::String(s) => Some(s.clone()),
-                        serde_yaml::Value::Null => None,
-                        other => Some(serde_yaml::to_string(other).unwrap_or_default().trim().to_string()),
-                    });
-
-                // Parse steps
-                let steps_val = body_map.get(&serde_yaml::Value::String("steps".to_string()))
-                    .ok_or_else(|| de::Error::custom("plan must have 'steps'"))?;
-                let steps: Vec<RawStep> = serde_yaml::from_value(steps_val.clone())
-                    .map_err(|e| de::Error::custom(format!("invalid steps: {}", e)))?;
-
-                Ok(PlanDef {
-                    name,
-                    inputs,
-                    output,
-                    steps,
-                })
-            }
-        }
-
-        deserializer.deserialize_any(PlanVisitor)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Plan errors
+// Workflow errors
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub enum PlanError {
+pub enum WorkflowError {
     /// YAML parse error
     Parse(String),
     /// Unknown operation name
@@ -605,10 +397,10 @@ pub enum PlanError {
     PlanFailed { step: usize, op: String, reason: String },
 }
 
-impl fmt::Display for PlanError {
+impl fmt::Display for WorkflowError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Parse(msg) => write!(f, "plan parse error: {}", msg),
+            Self::Parse(msg) => write!(f, "workflow parse error: {}", msg),
             Self::UnknownOp { step, op } => {
                 write!(f, "step {}: unknown operation '{}'", step + 1, op)
             }
@@ -622,8 +414,8 @@ impl fmt::Display for PlanError {
             Self::UnknownVar { step, var_name } => {
                 write!(f, "step {}: unknown variable '${}'", step + 1, var_name)
             }
-            Self::EmptySteps => write!(f, "plan has no steps"),
-            Self::NoInputs => write!(f, "plan has no inputs"),
+            Self::EmptySteps => write!(f, "workflow has no steps"),
+            Self::NoInputs => write!(f, "workflow has no inputs"),
             Self::UnknownInputType { name } => {
                 write!(f, "cannot infer type for input '{}'", name)
             }
@@ -634,41 +426,40 @@ impl fmt::Display for PlanError {
     }
 }
 
-impl std::error::Error for PlanError {}
+impl std::error::Error for WorkflowError {}
 
 // ---------------------------------------------------------------------------
 // Loading
 // ---------------------------------------------------------------------------
 
-/// Load a plan definition from a YAML file.
-pub fn load_plan(path: &Path) -> Result<PlanDef, PlanError> {
+/// Load a workflow definition from a YAML file.
+pub fn load_workflow(path: &Path) -> Result<WorkflowDef, WorkflowError> {
     let content = std::fs::read_to_string(path)
-        .map_err(|e| PlanError::Parse(format!("cannot read {}: {}", path.display(), e)))?;
-    parse_plan(&content)
+        .map_err(|e| WorkflowError::Parse(format!("cannot read {}: {}", path.display(), e)))?;
+    parse_workflow(&content)
 }
 
-/// Parse a plan definition from a YAML string.
-pub fn parse_plan(yaml: &str) -> Result<PlanDef, PlanError> {
-    let def: PlanDef =
-        serde_yaml::from_str(yaml).map_err(|e| PlanError::Parse(e.to_string()))?;
-    validate_plan(&def)?;
+/// Parse a workflow definition from a YAML string.
+pub fn parse_workflow(yaml: &str) -> Result<WorkflowDef, WorkflowError> {
+    let def: WorkflowDef =
+        serde_yaml::from_str(yaml).map_err(|e| WorkflowError::Parse(e.to_string()))?;
+    validate_workflow(&def)?;
     Ok(def)
 }
 
-/// Validate a parsed plan for basic structural issues.
-fn validate_plan(def: &PlanDef) -> Result<(), PlanError> {
+/// Validate a parsed workflow for basic structural issues.
+fn validate_workflow(def: &WorkflowDef) -> Result<(), WorkflowError> {
     if def.steps.is_empty() {
-        return Err(PlanError::EmptySteps);
+        return Err(WorkflowError::EmptySteps);
     }
 
     // Check for unknown $var references
-    let input_names = def.input_names();
     for (i, step) in def.steps.iter().enumerate() {
         if let StepArgs::Map(params) = &step.args {
             for (_, v) in params {
                 if let Some(var_name) = v.strip_prefix('$') {
-                    if !input_names.contains(var_name) {
-                        return Err(PlanError::UnknownVar {
+                    if !def.inputs.contains_key(var_name) {
+                        return Err(WorkflowError::UnknownVar {
                             step: i,
                             var_name: var_name.to_string(),
                         });
@@ -678,8 +469,8 @@ fn validate_plan(def: &PlanDef) -> Result<(), PlanError> {
         }
         if let StepArgs::Scalar(s) = &step.args {
             if let Some(var_name) = s.strip_prefix('$') {
-                if !input_names.contains(var_name) {
-                    return Err(PlanError::UnknownVar {
+                if !def.inputs.contains_key(var_name) {
+                    return Err(WorkflowError::UnknownVar {
                         step: i,
                         var_name: var_name.to_string(),
                     });
@@ -692,7 +483,7 @@ fn validate_plan(def: &PlanDef) -> Result<(), PlanError> {
 }
 
 // ---------------------------------------------------------------------------
-// Plan compiler — resolve types step by step
+// Workflow compiler — resolve types step by step
 // ---------------------------------------------------------------------------
 
 /// Determine whether a compiled step needs element-wise mapping.
@@ -749,7 +540,7 @@ fn lookup_op_inputs(op: &str, registry: &crate::registry::OperationRegistry) -> 
     full.get_poly(op).map(|p| p.signature.inputs.clone())
 }
 
-/// A compiled plan step with resolved types.
+/// A compiled workflow step with resolved types.
 #[derive(Debug, Clone, Default)]
 pub struct CompiledStep {
     /// Step index (0-based)
@@ -770,12 +561,12 @@ pub struct CompiledStep {
     pub isolate: bool,
 }
 
-/// A fully compiled plan ready for execution.
+/// A fully compiled workflow ready for execution.
 #[derive(Debug)]
-pub struct CompiledPlan {
-    /// Plan name
+pub struct CompiledWorkflow {
+    /// Workflow name
     pub name: String,
-    /// The initial input type (from the plan's inputs)
+    /// The initial input type (from the workflow's inputs)
     pub input_type: TypeExpr,
     /// The initial input literal description
     pub input_description: String,
@@ -785,45 +576,44 @@ pub struct CompiledPlan {
     pub output_type: TypeExpr,
 }
 
-/// Compile a plan definition against the filesystem registry.
+/// Compile a workflow definition against the filesystem registry.
 ///
 /// This resolves the type of each step by threading the output of the
 /// previous step as the input to the next. The first step's input comes
-/// from the plan's `inputs`.
-pub fn compile_plan(
-    def: &PlanDef,
+/// from the workflow's `inputs`.
+pub fn compile_workflow(
+    def: &WorkflowDef,
     registry: &OperationRegistry,
-) -> Result<CompiledPlan, PlanError> {
+) -> Result<CompiledWorkflow, WorkflowError> {
     if def.steps.is_empty() {
-        return Err(PlanError::EmptySteps);
+        return Err(WorkflowError::EmptySteps);
     }
 
-    // Resolve the initial input type from the plan's typed inputs.
-    // We try each input and pick the one whose type best matches
-    // the first step's expected input. Fallback: first input.
+    // Infer the initial input type from the workflow's inputs.
+    // We try each input and pick the one whose inferred type best matches
+    // the first step's expected input. Fallback: first directory/file input.
     if def.inputs.is_empty() {
-        return Err(PlanError::NoInputs);
+        return Err(WorkflowError::NoInputs);
     }
 
     let first_op = registry.get_poly(&def.steps[0].op);
     let mut best_input: Option<(String, String, TypeExpr)> = None;
 
-    for inp in &def.inputs {
-        let ty = resolve_input_type(inp)?;
-        let desc = inp.default.as_deref().unwrap_or(&inp.name);
+    for (name, value) in &def.inputs {
+        let ty = infer_input_type(name, value)?;
         if let Some(op) = first_op {
             let (fresh, _) = op.signature.freshen("init");
-            for sig_inp in &fresh.inputs {
-                if unify(sig_inp, &ty).is_ok() {
-                    best_input = Some((inp.name.clone(), desc.to_string(), ty.clone()));
+            for inp in &fresh.inputs {
+                if unify(inp, &ty).is_ok() {
+                    best_input = Some((name.clone(), value.clone(), ty.clone()));
                     break;
                 }
             }
         }
         if best_input.is_none() {
-            // Fallback: pick the first input
+            // Fallback: pick the first input (deterministic via sorted keys)
             if best_input.is_none() {
-                best_input = Some((inp.name.clone(), desc.to_string(), ty));
+                best_input = Some((name.clone(), value.clone(), ty));
             }
         }
     }
@@ -845,13 +635,12 @@ pub fn compile_plan(
     let input_type = try_promote_bytes(&input_type, &def.steps, registry);
     let mut current_type = input_type.clone();
 
-    let defaults = def.input_defaults();
     let mut compiled_steps = Vec::new();
 
     for (i, step) in def.steps.iter().enumerate() {
         // Look up the operation in the registry
         let poly_op = registry.get_poly(&step.op).ok_or_else(|| {
-            PlanError::UnknownOp {
+            WorkflowError::UnknownOp {
                 step: i,
                 op: step.op.clone(),
             }
@@ -863,11 +652,11 @@ pub fn compile_plan(
         let mut params = HashMap::new();
         if let StepArgs::Map(map) = &step.args {
             for (k, v) in map {
-                params.insert(k.clone(), expand_var(v, &defaults));
+                params.insert(k.clone(), expand_var(v, &def.inputs));
             }
         } else if let StepArgs::Scalar(s) = &step.args {
             if s != "each" {
-                params.insert("mode".to_string(), expand_var(s, &defaults));
+                params.insert("mode".to_string(), expand_var(s, &def.inputs));
             }
         }
 
@@ -883,7 +672,7 @@ pub fn compile_plan(
         let (step_input, step_output) = if is_each {
             // current_type must be Seq(something)
             let inner = unwrap_seq(&current_type).ok_or_else(|| {
-                PlanError::TypeMismatch {
+                WorkflowError::TypeMismatch {
                     step: i,
                     op: step.op.clone(),
                     expected: "Seq(...)".to_string(),
@@ -893,7 +682,7 @@ pub fn compile_plan(
 
             let sig = &poly_op.signature;
             if sig.inputs.is_empty() {
-                return Err(PlanError::TypeMismatch {
+                return Err(WorkflowError::TypeMismatch {
                     step: i,
                     op: step.op.clone(),
                     expected: "op with at least 1 input".to_string(),
@@ -922,7 +711,7 @@ pub fn compile_plan(
                         (current_type.clone(), seq_output)
                     }
                     Err(_) => {
-                        return Err(PlanError::TypeMismatch {
+                        return Err(WorkflowError::TypeMismatch {
                             step: i,
                             op: step.op.clone(),
                             expected: format!("element value type matching {}", sig.inputs[0]),
@@ -931,7 +720,7 @@ pub fn compile_plan(
                     }
                 }
             } else {
-                return Err(PlanError::TypeMismatch {
+                return Err(WorkflowError::TypeMismatch {
                     step: i,
                     op: step.op.clone(),
                     expected: format!("element type matching {}", sig.inputs[0]),
@@ -970,16 +759,16 @@ pub fn compile_plan(
                                     let output = TypeExpr::seq(inner_seq_elem.clone());
                                     (current_type.clone(), output)
                                 } else {
-                                    return Err(PlanError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
+                                    return Err(WorkflowError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
                                 }
                             } else {
-                                return Err(PlanError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
+                                return Err(WorkflowError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
                             }
                         } else {
-                            return Err(PlanError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
+                            return Err(WorkflowError::TypeMismatch { step: i, op: step.op.clone(), expected: "Seq(Seq(a)) or Seq(Entry(K, Seq(V)))".to_string(), got: current_type.to_string() });
                         }
                     } else {
-                        return Err(PlanError::TypeMismatch {
+                        return Err(WorkflowError::TypeMismatch {
                         step: i,
                         op: step.op.clone(),
                         expected: format!("one of {:?}", sig.inputs.iter().map(|i| i.to_string()).collect::<Vec<_>>()),
@@ -1011,8 +800,8 @@ pub fn compile_plan(
         current_type = step_output;
     }
 
-    Ok(CompiledPlan {
-        name: def.name.clone(),
+    Ok(CompiledWorkflow {
+        name: def.workflow.clone(),
         input_type: input_type,
         input_description: input_desc,
         steps: compiled_steps,
@@ -1158,44 +947,7 @@ fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
     }
 }
 
-/// Resolve the TypeExpr for a PlanInput.
-///
-/// If the input has an explicit type annotation, parse it directly.
-/// Otherwise, fall back to the legacy name+value heuristic.
-fn resolve_input_type(input: &PlanInput) -> Result<TypeExpr, PlanError> {
-    if input.has_type() {
-        parse_type_annotation(&input.type_str).ok_or_else(|| {
-            PlanError::UnknownInputType { name: format!("{}: {}", input.name, input.type_str) }
-        })
-    } else if let Some(ref default) = input.default {
-        infer_input_type(&input.name, default)
-    } else {
-        infer_input_type(&input.name, "")
-    }
-}
-
-/// Parse a type annotation string into a TypeExpr.
-///
-/// Supports both simple names ("Dir", "Pattern", "Number") and
-/// full type expressions ("Seq(Entry(Name, File(PDF)))").
-fn parse_type_annotation(type_str: &str) -> Option<TypeExpr> {
-    // Shorthand type names that expand to constructors (checked first)
-    match type_str {
-        "" => None,
-        "Dir" => Some(TypeExpr::dir(TypeExpr::prim("Bytes"))),
-        "File" => Some(TypeExpr::file(TypeExpr::prim("Bytes"))),
-        _ => {
-            // Try parsing as a full TypeExpr (handles constructors like Seq(...))
-            if let Ok(ty) = TypeExpr::parse(type_str) {
-                return Some(ty);
-            }
-            // Fallback: treat as a primitive
-            Some(TypeExpr::prim(type_str))
-        }
-    }
-}
-
-/// Infer the TypeExpr for a plan input based on its name and value.
+/// Infer the TypeExpr for a workflow input based on its name and value.
 ///
 /// Heuristics:
 ///   1. URL check (before file extensions, since URLs may end in .zip)
@@ -1203,7 +955,7 @@ fn parse_type_annotation(type_str: &str) -> Option<TypeExpr> {
 ///   3. Directory heuristic (name hint, trailing slash, ~/ prefix)
 ///   4. Power tools types (repo, pattern, size)
 ///   5. Generic fallback → Bytes
-fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, PlanError> {
+fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, WorkflowError> {
     let name_lower = name.to_lowercase();
 
     // 0a. Numeric values — for arithmetic ops.
@@ -1276,17 +1028,17 @@ fn infer_input_type(name: &str, value: &str) -> Result<TypeExpr, PlanError> {
 }
 
 // ---------------------------------------------------------------------------
-// Plan executor — produce DryRunTrace from compiled plan
+// Workflow executor — produce DryRunTrace from compiled workflow
 // ---------------------------------------------------------------------------
 
-/// Execute a compiled plan and produce a combined DryRunTrace.
+/// Execute a compiled workflow and produce a combined DryRunTrace.
 ///
 /// Each compiled step becomes one or more trace steps showing what
 /// operations would be performed.
-pub fn execute_plan(
-    compiled: &CompiledPlan,
+pub fn execute_workflow(
+    compiled: &CompiledWorkflow,
     registry: &OperationRegistry,
-) -> Result<DryRunTrace, PlanError> {
+) -> Result<DryRunTrace, WorkflowError> {
     let mut trace_steps = Vec::new();
     let mut step_num = 0;
 
@@ -1349,8 +1101,8 @@ pub fn execute_plan(
     })
 }
 
-/// Build a linear ExprPlanNode chain from the compiled plan.
-fn build_plan_chain(compiled: &CompiledPlan, registry: &OperationRegistry) -> ExprPlanNode {
+/// Build a linear ExprPlanNode chain from the compiled workflow.
+fn build_plan_chain(compiled: &CompiledWorkflow, registry: &OperationRegistry) -> ExprPlanNode {
     let mut current = ExprPlanNode::Leaf {
         key: compiled.input_description.clone(),
         output_type: compiled.input_type.clone(),
@@ -1379,30 +1131,30 @@ fn build_plan_chain(compiled: &CompiledPlan, registry: &OperationRegistry) -> Ex
 // Convenience: load + compile + execute in one call
 // ---------------------------------------------------------------------------
 
-/// Load a plan YAML file, compile it, and produce a dry-run trace.
-pub fn run_plan(path: &Path) -> Result<DryRunTrace, PlanError> {
-    let def = load_plan(path)?;
+/// Load a workflow YAML file, compile it, and produce a dry-run trace.
+pub fn run_workflow(path: &Path) -> Result<DryRunTrace, WorkflowError> {
+    let def = load_workflow(path)?;
     let registry = build_full_registry();
-    let compiled = compile_plan(&def, &registry)?;
-    execute_plan(&compiled, &registry)
+    let compiled = compile_workflow(&def, &registry)?;
+    execute_workflow(&compiled, &registry)
 }
 
-/// Parse a plan YAML string, compile it, and produce a dry-run trace.
-pub fn run_plan_str(yaml: &str) -> Result<DryRunTrace, PlanError> {
-    let def = parse_plan(yaml)?;
+/// Parse a workflow YAML string, compile it, and produce a dry-run trace.
+pub fn run_workflow_str(yaml: &str) -> Result<DryRunTrace, WorkflowError> {
+    let def = parse_workflow(yaml)?;
     let registry = build_full_registry();
-    let compiled = compile_plan(&def, &registry)?;
-    execute_plan(&compiled, &registry)
+    let compiled = compile_workflow(&def, &registry)?;
+    execute_workflow(&compiled, &registry)
 }
 
 // ---------------------------------------------------------------------------
-// Display for CompiledPlan
+// Display for CompiledWorkflow
 // ---------------------------------------------------------------------------
 
-impl fmt::Display for CompiledPlan {
+impl fmt::Display for CompiledWorkflow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use crate::ui;
-        writeln!(f, "{}", ui::kv("plan", &self.name))?;
+        writeln!(f, "{}", ui::kv("workflow", &self.name))?;
         writeln!(f, "{}", ui::kv_dim("input", &format!("{} ({})", self.input_description, self.input_type)))?;
         for cs in &self.steps {
             let type_info = format!("{} {} {}", cs.input_type, ui::icon::ARROW_RIGHT, cs.output_type);
@@ -1428,13 +1180,13 @@ mod tests {
     #[test]
     fn test_parse_bare_string_step() {
         let yaml = r#"
-test:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-  steps:
-    - walk_tree
+workflow: "test"
+inputs:
+  path: "/tmp"
+steps:
+  - walk_tree
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         assert_eq!(def.steps.len(), 1);
         assert_eq!(def.steps[0].op, "walk_tree");
         assert_eq!(def.steps[0].args, StepArgs::None);
@@ -1443,13 +1195,13 @@ test:
     #[test]
     fn test_parse_scalar_step() {
         let yaml = r#"
-test:
-  inputs:
-    - path: Dir
-  steps:
-    - read_file: each
+workflow: "test"
+inputs:
+  path: "/tmp"
+steps:
+  - read_file: each
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         assert_eq!(def.steps[0].op, "read_file");
         assert_eq!(def.steps[0].args, StepArgs::Scalar("each".into()));
         assert!(def.steps[0].args.is_each());
@@ -1458,14 +1210,14 @@ test:
     #[test]
     fn test_parse_map_step() {
         let yaml = r#"
-test:
-  inputs:
-    - path: Dir
-  steps:
-    - filter:
-        extension: ".pdf"
+workflow: "test"
+inputs:
+  path: "/tmp"
+steps:
+  - filter:
+      extension: ".pdf"
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         assert_eq!(def.steps[0].op, "filter");
         match &def.steps[0].args {
             StepArgs::Map(m) => {
@@ -1478,21 +1230,21 @@ test:
     #[test]
     fn test_parse_var_expansion() {
         let yaml = r#"
-test:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-    - keyword: Pattern
-  steps:
-    - search_content:
-        pattern: $keyword
+workflow: "test"
+inputs:
+  path: "/tmp"
+  keyword: "hello"
+steps:
+  - search_content:
+      pattern: $keyword
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         match &def.steps[0].args {
             StepArgs::Map(m) => {
                 assert_eq!(m.get("pattern").unwrap(), "$keyword");
-                // $var expansion uses defaults — no default set, so $keyword passes through
-                let expanded = def.steps[0].args.get_param("pattern", &def.input_defaults());
-                assert_eq!(expanded, Some("$keyword".to_string()));
+                // Expansion happens at compile time, not parse time
+                let expanded = def.steps[0].args.get_param("pattern", &def.inputs);
+                assert_eq!(expanded, Some("hello".to_string()));
             }
             other => panic!("expected Map, got: {:?}", other),
         }
@@ -1501,17 +1253,17 @@ test:
     #[test]
     fn test_parse_unknown_var_rejected() {
         let yaml = r#"
-test:
-  inputs:
-    - path: Dir
-  steps:
-    - search_content:
-        pattern: $nonexistent
+workflow: "test"
+inputs:
+  path: "/tmp"
+steps:
+  - search_content:
+      pattern: $nonexistent
 "#;
-        let result = parse_plan(yaml);
+        let result = parse_workflow(yaml);
         assert!(result.is_err());
         match result.unwrap_err() {
-            PlanError::UnknownVar { step, var_name } => {
+            WorkflowError::UnknownVar { step, var_name } => {
                 assert_eq!(step, 0);
                 assert_eq!(var_name, "nonexistent");
             }
@@ -1522,41 +1274,39 @@ test:
     #[test]
     fn test_parse_empty_steps_rejected() {
         let yaml = r#"
-test:
-  inputs:
-    - path: Dir
-  steps: []
+workflow: "test"
+inputs:
+  path: "/tmp"
+steps: []
 "#;
-        let result = parse_plan(yaml);
+        let result = parse_workflow(yaml);
         assert!(result.is_err());
         match result.unwrap_err() {
-            PlanError::EmptySteps => {}
+            WorkflowError::EmptySteps => {}
             other => panic!("expected EmptySteps, got: {}", other),
         }
     }
 
     #[test]
-    fn test_parse_multi_step_plan() {
+    fn test_parse_multi_step_workflow() {
         let yaml = r#"
-find_pdfs:
-  inputs:
-    - path: Dir
-    - keyword: Pattern
-  output: Seq(Entry(Name, File(PDF)))
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".pdf"
-    - read_file: each
-    - search_content:
-        pattern: $keyword
-        mode: case-insensitive
-    - sort_by: name
+workflow: "Find PDFs containing keyword"
+inputs:
+  path: "~/Documents"
+  keyword: "contract"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".pdf"
+  - read_file: each
+  - search_content:
+      pattern: $keyword
+      mode: case-insensitive
+  - sort_by: name
 "#;
-        let def = parse_plan(yaml).unwrap();
-        assert_eq!(def.name, "find_pdfs");
+        let def = parse_workflow(yaml).unwrap();
+        assert_eq!(def.workflow, "Find PDFs containing keyword");
         assert_eq!(def.inputs.len(), 2);
-        assert_eq!(def.output.as_deref(), Some("Seq(Entry(Name, File(PDF)))"));
         assert_eq!(def.steps.len(), 5);
 
         assert_eq!(def.steps[0].op, "walk_tree");
@@ -1578,13 +1328,12 @@ find_pdfs:
     #[test]
     fn test_parse_missing_inputs_is_error() {
         let yaml = r#"
-test:
-  steps:
-    - walk_tree
+workflow: "test"
+steps:
+  - walk_tree
 "#;
-        let def = parse_plan(yaml).unwrap();
-        assert!(def.inputs.is_empty());
-        // compile_plan will fail with NoInputs, but parse succeeds
+        let result = parse_workflow(yaml);
+        assert!(result.is_err(), "missing inputs should fail: {:?}", result);
     }
 
     // -- Input type inference tests --
@@ -1630,15 +1379,15 @@ test:
     #[test]
     fn test_compile_single_step() {
         let yaml = r#"
-extract_cbz:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-  steps:
-    - extract_archive
+workflow: "Extract CBZ"
+inputs:
+  path: "comic.cbz"
+steps:
+  - extract_archive
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let compiled = compile_plan(&def, &registry).unwrap();
+        let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 1);
         // Format resolution: extract_archive + Cbz → extract_zip
@@ -1652,18 +1401,18 @@ extract_cbz:
     #[test]
     fn test_compile_unknown_op_rejected() {
         let yaml = r#"
-test:
-  inputs:
-    - path: Dir
-  steps:
-    - nonexistent_op
+workflow: "test"
+inputs:
+  path: "/tmp"
+steps:
+  - nonexistent_op
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let result = compile_plan(&def, &registry);
+        let result = compile_workflow(&def, &registry);
         assert!(result.is_err());
         match result.unwrap_err() {
-            PlanError::UnknownOp { step, op } => {
+            WorkflowError::UnknownOp { step, op } => {
                 assert_eq!(step, 0);
                 assert_eq!(op, "nonexistent_op");
             }
@@ -1674,17 +1423,17 @@ test:
     #[test]
     fn test_compile_walk_then_filter() {
         let yaml = r#"
-list_and_filter:
-  inputs:
-    - path: Dir
-  steps:
-    - list_dir
-    - filter:
-        extension: ".pdf"
+workflow: "List and filter"
+inputs:
+  path: "~/Documents"
+steps:
+  - list_dir
+  - filter:
+      extension: ".pdf"
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let compiled = compile_plan(&def, &registry).unwrap();
+        let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 2);
         assert_eq!(compiled.steps[0].op, "list_dir");
@@ -1697,16 +1446,16 @@ list_and_filter:
     #[test]
     fn test_compile_each_mode() {
         let yaml = r#"
-extract_and_read:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-  steps:
-    - extract_archive
-    - read_file: each
+workflow: "Extract and read"
+inputs:
+  archive: "photos.cbz"
+steps:
+  - extract_archive
+  - read_file: each
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let compiled = compile_plan(&def, &registry).unwrap();
+        let compiled = compile_workflow(&def, &registry).unwrap();
 
         assert_eq!(compiled.steps.len(), 2);
         // Step 1 should be a map step (input is Seq but op expects scalar)
@@ -1722,19 +1471,19 @@ extract_and_read:
         // stat takes Path, but walk_tree produces Seq(Entry(Name, Bytes))
         // stat after walk_tree should fail (Seq != Path)
         let yaml = r#"
-bad:
-  inputs:
-    - path: Dir
-  steps:
-    - walk_tree
-    - stat
+workflow: "bad"
+inputs:
+  path: "~/docs"
+steps:
+  - walk_tree
+  - stat
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let result = compile_plan(&def, &registry);
+        let result = compile_workflow(&def, &registry);
         assert!(result.is_err(), "stat after walk_tree should be a type mismatch");
         match result.unwrap_err() {
-            PlanError::TypeMismatch { step, op, .. } => {
+            WorkflowError::TypeMismatch { step, op, .. } => {
                 assert_eq!(step, 1);
                 assert_eq!(op, "stat");
             }
@@ -1747,16 +1496,16 @@ bad:
     #[test]
     fn test_execute_single_step() {
         let yaml = r#"
-extract_cbz:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-  steps:
-    - extract_archive
+workflow: "Extract CBZ"
+inputs:
+  path: "comic.cbz"
+steps:
+  - extract_archive
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let compiled = compile_plan(&def, &registry).unwrap();
-        let trace = execute_plan(&compiled, &registry).unwrap();
+        let compiled = compile_workflow(&def, &registry).unwrap();
+        let trace = execute_workflow(&compiled, &registry).unwrap();
 
         assert_eq!(trace.steps.len(), 2); // input + extract_archive
         assert_eq!(trace.steps[0].kind, StepKind::Leaf);
@@ -1767,17 +1516,17 @@ extract_cbz:
     #[test]
     fn test_execute_multi_step() {
         let yaml = r#"
-list_and_sort:
-  inputs:
-    - path: Dir
-  steps:
-    - list_dir
-    - sort_by: name
+workflow: "List and sort"
+inputs:
+  path: "~/Documents"
+steps:
+  - list_dir
+  - sort_by: name
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let compiled = compile_plan(&def, &registry).unwrap();
-        let trace = execute_plan(&compiled, &registry).unwrap();
+        let compiled = compile_workflow(&def, &registry).unwrap();
+        let trace = execute_workflow(&compiled, &registry).unwrap();
 
         assert_eq!(trace.steps.len(), 3); // input + list_dir + sort_by
         assert_eq!(trace.steps[0].kind, StepKind::Leaf);
@@ -1792,17 +1541,17 @@ list_and_sort:
         // Actually read_file takes File(a) and Entry value is File(Image)
         // so read_file: each on Seq(Entry(Name, File(Image))) should work
         let yaml = r#"
-extract_and_read:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-  steps:
-    - extract_archive
-    - read_file: each
+workflow: "Extract and read"
+inputs:
+  archive: "photos.cbz"
+steps:
+  - extract_archive
+  - read_file: each
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let compiled = compile_plan(&def, &registry).unwrap();
-        let trace = execute_plan(&compiled, &registry).unwrap();
+        let compiled = compile_workflow(&def, &registry).unwrap();
+        let trace = execute_workflow(&compiled, &registry).unwrap();
 
         // Find the MAP step
         let map_steps: Vec<&TraceStep> = trace.steps.iter()
@@ -1815,15 +1564,15 @@ extract_and_read:
     // -- End-to-end tests --
 
     #[test]
-    fn test_run_plan_str_cbz() {
+    fn test_run_workflow_str_cbz() {
         let yaml = r#"
-extract_cbz:
-  inputs:
-    - archive: File(Archive(File(Image), Cbz))
-  steps:
-    - extract_archive
+workflow: "Extract CBZ"
+inputs:
+  path: "comic.cbz"
+steps:
+  - extract_archive
 "#;
-        let trace = run_plan_str(yaml).unwrap();
+        let trace = run_workflow_str(yaml).unwrap();
         let display = trace.to_string();
         // Format resolution: extract_archive + Cbz → extract_zip
         assert!(display.contains("extract_zip"), "trace: {}", display);
@@ -1831,36 +1580,36 @@ extract_cbz:
     }
 
     #[test]
-    fn test_run_plan_str_walk_sort() {
+    fn test_run_workflow_str_walk_sort() {
         let yaml = r#"
-list_and_sort:
-  inputs:
-    - path: Dir
-  steps:
-    - list_dir
-    - sort_by: name
+workflow: "List and sort"
+inputs:
+  path: "~/docs"
+steps:
+  - list_dir
+  - sort_by: name
 "#;
-        let trace = run_plan_str(yaml).unwrap();
+        let trace = run_workflow_str(yaml).unwrap();
         let display = trace.to_string();
         assert!(display.contains("list_dir"), "trace: {}", display);
         assert!(display.contains("sort_by"), "trace: {}", display);
     }
 
     #[test]
-    fn test_compiled_plan_display() {
+    fn test_compiled_workflow_display() {
         let yaml = r#"
-list_and_sort:
-  inputs:
-    - path: Dir
-  steps:
-    - list_dir
-    - sort_by: name
+workflow: "List and sort"
+inputs:
+  path: "~/docs"
+steps:
+  - list_dir
+  - sort_by: name
 "#;
-        let def = parse_plan(yaml).unwrap();
+        let def = parse_workflow(yaml).unwrap();
         let registry = build_full_registry();
-        let compiled = compile_plan(&def, &registry).unwrap();
+        let compiled = compile_workflow(&def, &registry).unwrap();
         let display = format!("{}", compiled);
-        assert!(display.contains("list_and_sort"));
+        assert!(display.contains("List and sort"));
         assert!(display.contains("list_dir"));
         assert!(display.contains("sort_by"));
     }

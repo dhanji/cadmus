@@ -4,20 +4,20 @@ fn stress_type_chain_full_search_pipeline_with_path() {
     // path + walk_tree + filter + search_content (no read_file:each needed)
     // search_content reads files itself — it takes Seq(Entry(Name, File(Text)))
     let yaml = r#"
-search_pipeline:
-  inputs:
-    - path: Dir
-    - pattern: Pattern
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - search_content:
-        pattern: "$pattern"
+workflow: "Search pipeline"
+inputs:
+  path: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - search_content:
+      pattern: "$pattern"
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry);
+    let compiled = workflow::compile_workflow(&def, &registry);
     assert!(compiled.is_ok(),
         "search pipeline with path should compile after promotion: {:?}", compiled.err());
     let c = compiled.unwrap();
@@ -27,16 +27,16 @@ search_pipeline:
 fn stress_type_chain_path_list_dir_no_promotion() {
     // list_dir doesn't need File(Text), so Dir(Bytes) should NOT be promoted
     let yaml = r#"
-list_directory:
-  inputs:
-    - path: Dir
-  steps:
-    - list_dir
-    - sort_by: name
+workflow: "List directory"
+inputs:
+  path: "~/Documents"
+steps:
+  - list_dir
+  - sort_by: name
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .expect("list_dir should compile with Dir(Bytes)");
     // The input type should still be Dir(Bytes), not promoted
     assert_eq!(compiled.input_type.to_string(), "Dir(Bytes)",
@@ -46,7 +46,7 @@ list_directory:
 // Type chain investigation: Dir(Bytes) vs Dir(File(Text)) gap
 // ===========================================================================
 
-// The plan compiler infers Dir(Bytes) for `path: "~/Documents"` but
+// The workflow compiler infers Dir(Bytes) for `path: "~/Documents"` but
 // Dir(File(Text)) for `textdir: "~/Documents"`. Ops like search_content
 // and read_file:each need File(Text) elements, so the type chain breaks
 // when the input is named "path".
@@ -56,18 +56,18 @@ fn stress_type_chain_textdir_search_content_compiles() {
     // textdir → Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
     // → search_content: should compile
     let yaml = r#"
-search_with_textdir:
-  inputs:
-    - textdir: Dir(File(Text))
-    - pattern: Pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
+workflow: "Search with textdir"
+inputs:
+  textdir: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry);
+    let compiled = workflow::compile_workflow(&def, &registry);
     assert!(compiled.is_ok(),
         "textdir should give Dir(File(Text)) making search_content work: {:?}", compiled.err());
     let c = compiled.unwrap();
@@ -84,18 +84,18 @@ fn stress_type_chain_path_search_content_fails() {
     // → auto-promotes to Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
     // → search_content: should now SUCCEED thanks to type promotion
     let yaml = r#"
-search_with_path:
-  inputs:
-    - path: Dir
-    - pattern: Pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
+workflow: "Search with path"
+inputs:
+  path: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let result = plan::compile_plan(&def, &registry);
+    let result = workflow::compile_workflow(&def, &registry);
     // After type promotion fix, this should compile
     assert!(result.is_ok(),
         "path input should be auto-promoted to Dir(File(Text)) for search_content: {:?}",
@@ -107,18 +107,18 @@ fn stress_type_chain_textdir_read_file_each_compiles() {
     // textdir → Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
     // → read_file: each → Seq(Entry(Name, Text))
     let yaml = r#"
-read_all_files:
-  inputs:
-    - textdir: Dir(File(Text))
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - read_file: each
+workflow: "Read all files"
+inputs:
+  textdir: "~/Documents"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - read_file: each
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry);
+    let compiled = workflow::compile_workflow(&def, &registry);
     assert!(compiled.is_ok(),
         "textdir + read_file:each should compile: {:?}", compiled.err());
 }
@@ -128,18 +128,18 @@ fn stress_type_chain_path_read_file_each_fails() {
     // path → Dir(Bytes) BUT compiler sees read_file downstream
     // → auto-promotes to Dir(File(Text)) → walk_tree → filter → read_file: each → SUCCEEDS
     let yaml = r#"
-read_all_files_with_path:
-  inputs:
-    - path: Dir
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - read_file: each
+workflow: "Read all files with path"
+inputs:
+  path: "~/Documents"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - read_file: each
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let result = plan::compile_plan(&def, &registry);
+    let result = workflow::compile_workflow(&def, &registry);
     assert!(result.is_ok(),
         "path input should be auto-promoted for read_file:each: {:?}", result.err());
 }
@@ -150,15 +150,15 @@ fn stress_type_chain_nl_search_uses_textdir() {
     let mut state = DialogueState::new();
     let response = nl::process_input("search for TODO in ~/Documents", &mut state);
     match &response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("textdir"),
-                "NL search should use textdir input, got:\n{}", plan_yaml);
+        NlResponse::PlanCreated { workflow_yaml, .. } => {
+            assert!(workflow_yaml.contains("textdir"),
+                "NL search should use textdir input, got:\n{}", workflow_yaml);
             // Verify it compiles
-            let def: PlanDef = serde_yaml::from_str(plan_yaml).unwrap();
+            let def: WorkflowDef = serde_yaml::from_str(workflow_yaml).unwrap();
             let registry = build_full_registry();
-            let compiled = plan::compile_plan(&def, &registry);
+            let compiled = workflow::compile_workflow(&def, &registry);
             assert!(compiled.is_ok(),
-                "NL-generated search plan should compile: {:?}", compiled.err());
+                "NL-generated search workflow should compile: {:?}", compiled.err());
         }
         other => {
             // NL might not recognize this as search_content — that's OK
@@ -171,7 +171,7 @@ fn stress_type_chain_nl_search_uses_textdir() {
 #[test]
 fn stress_type_chain_nl_list_uses_path() {
     // list_dir should still use "path" (Dir(Bytes) is fine for listing)
-    let yaml = nl_to_yaml("list ~/Downloads").expect("should produce plan");
+    let yaml = nl_to_yaml("list ~/Downloads").expect("should produce workflow");
     assert!(!yaml.contains("textdir"),
         "list_dir should use path, not textdir: {}", yaml);
 }
@@ -187,18 +187,18 @@ fn stress_type_chain_nl_list_uses_path() {
 fn stress_promotion_no_bytes_no_promotion() {
     // Dir(File(Text)) should NOT trigger promotion (no Bytes to promote)
     let yaml = r#"
-already_typed:
-  inputs:
-    - textdir: Dir(File(Text))
-    - pattern: Pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
+workflow: "Already typed"
+inputs:
+  textdir: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .expect("should compile without promotion");
     // Input should still be Dir(File(Text)), not changed
     assert_eq!(compiled.input_type.to_string(), "Dir(File(Text))",
@@ -211,15 +211,15 @@ fn stress_promotion_bytes_with_polymorphic_only_no_binding() {
     // list_dir doesn't constrain `a` to anything specific, so _promote
     // stays unbound → no promotion
     let yaml = r#"
-list_only:
-  inputs:
-    - path: Dir
-  steps:
-    - list_dir
+workflow: "List only"
+inputs:
+  path: "~/Documents"
+steps:
+  - list_dir
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .expect("should compile with Dir(Bytes)");
     assert_eq!(compiled.input_type.to_string(), "Dir(Bytes)",
         "purely polymorphic chain should not promote Bytes");
@@ -231,18 +231,18 @@ fn stress_promotion_discovered_via_unification() {
     // walk_tree: Dir(a) → Seq(Entry(Name, a))  — _promote flows through as `a`
     // search_content: Seq(Entry(Name, File(Text))) — forces _promote = File(Text)
     let yaml = r#"
-search_via_promotion:
-  inputs:
-    - path: Dir
-    - pattern: Pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
+workflow: "Search via promotion"
+inputs:
+  path: "~/Documents"
+  pattern: "TODO"
+steps:
+  - walk_tree
+  - search_content:
+      pattern: "$pattern"
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .expect("promotion should discover File(Text)");
     // The input type should have been promoted
     assert_eq!(compiled.input_type.to_string(), "Dir(File(Text))",
@@ -256,18 +256,18 @@ fn stress_promotion_each_mode_read_file() {
     // For read_file to work, the Entry value must be File(something)
     // → _promote = File(Text) (since read_file needs File(a))
     let yaml = r#"
-read_files_via_promotion:
-  inputs:
-    - path: Dir
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - read_file: each
+workflow: "Read files via promotion"
+inputs:
+  path: "~/Documents"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - read_file: each
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .expect("promotion should make read_file:each work");
     assert!(compiled.input_type.to_string().contains("File"),
         "promotion should wrap Bytes in File(): {}", compiled.input_type);
@@ -278,8 +278,8 @@ read_files_via_promotion:
 // ==========================================================================
 //
 // Red-team the entire Cadmus pipeline:
-//   I1: End-to-end NL → plan → compile → Racket
-//   I2: Plan compiler edge cases
+//   I1: End-to-end NL → workflow → compile → Racket
+//   I2: Workflow compiler edge cases
 //   I3: Racket codegen edge cases
 //   I4: Generic planner stress
 //   I5: Inference engine stress
@@ -304,8 +304,8 @@ use cadmus::racket_strategy::{
 use cadmus::registry::{self, load_ops_pack_str, Literal, OperationRegistry};
 use cadmus::type_expr::{self, TypeExpr, UnifyError};
 use cadmus::type_lowering;
-use cadmus::plan::{
-    self, CompiledStep, CompiledPlan, PlanDef, StepArgs, PlanInput,
+use cadmus::workflow::{
+    self, CompiledStep, CompiledWorkflow, WorkflowDef, StepArgs,
 };
 
 const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket_ops.yaml");
@@ -346,31 +346,30 @@ fn make_step(index: usize, op: &str, params: Vec<(&str, &str)>) -> CompiledStep 
 
 
 
-fn make_plan(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) -> (CompiledPlan, PlanDef) {
-    let plan_inputs: Vec<PlanInput> = inputs.iter()
-        .map(|(k, v)| PlanInput::from_legacy(k, v))
+fn make_workflow(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) -> (CompiledWorkflow, WorkflowDef) {
+    let input_map: HashMap<String, String> = inputs.iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
-    let compiled = CompiledPlan {
+    let compiled = CompiledWorkflow {
         name: name.to_string(),
         input_type: TypeExpr::prim("Any"),
         input_description: inputs.first().map(|(_, v)| v.to_string()).unwrap_or_default(),
         steps,
         output_type: TypeExpr::prim("Any"),
     };
-    let def = PlanDef {
-        name: name.to_string(),
-        inputs: plan_inputs,
-        output: None,
+    let def = WorkflowDef {
+        workflow: name.to_string(),
+        inputs: input_map,
         steps: vec![],
     };
     (compiled, def)
 }
 
-/// Run NL input through the full pipeline and return the plan YAML if successful.
+/// Run NL input through the full pipeline and return the workflow YAML if successful.
 fn nl_to_yaml(input: &str) -> Result<String, String> {
     let mut state = DialogueState::new();
     match nl::process_input(input, &mut state) {
-        NlResponse::PlanCreated { plan_yaml, .. } => Ok(plan_yaml),
+        NlResponse::PlanCreated { workflow_yaml, .. } => Ok(workflow_yaml),
         NlResponse::Error { message } => Err(format!("Error: {}", message)),
         NlResponse::NeedsClarification { needs } => Err(format!("NeedsClarification: {:?}", needs)),
         NlResponse::Explanation { text } => Err(format!("Explanation: {}", text)),
@@ -379,82 +378,82 @@ fn nl_to_yaml(input: &str) -> Result<String, String> {
 }
 
 // ===========================================================================
-// I1: End-to-end NL → plan → compile → Racket stress tests
+// I1: End-to-end NL → workflow → compile → Racket stress tests
 // ===========================================================================
 
 // --- Happy path: 10+ NL inputs that should produce valid Racket scripts ---
 
 #[test]
 fn stress_nl_add_two_numbers() {
-    let yaml = nl_to_yaml("Add 4 and 35 together").expect("should produce plan");
+    let yaml = nl_to_yaml("Add 4 and 35 together").expect("should produce workflow");
     assert!(yaml.contains("add"), "yaml should contain add op: {}", yaml);
 }
 
 #[test]
 fn stress_nl_subtract() {
-    let yaml = nl_to_yaml("Subtract 2 from 6").expect("should produce plan");
+    let yaml = nl_to_yaml("Subtract 2 from 6").expect("should produce workflow");
     assert!(yaml.contains("subtract"), "yaml: {}", yaml);
 }
 
 #[test]
 fn stress_nl_multiply() {
-    let yaml = nl_to_yaml("Multiply 7 and 8").expect("should produce plan");
+    let yaml = nl_to_yaml("Multiply 7 and 8").expect("should produce workflow");
     assert!(yaml.contains("multiply"), "yaml: {}", yaml);
 }
 
 #[test]
 fn stress_nl_divide() {
-    let yaml = nl_to_yaml("Divide 100 by 4").expect("should produce plan");
+    let yaml = nl_to_yaml("Divide 100 by 4").expect("should produce workflow");
     assert!(yaml.contains("divide"), "yaml: {}", yaml);
 }
 
 #[test]
 fn stress_nl_list_directory() {
-    let yaml = nl_to_yaml("list ~/Downloads").expect("should produce plan");
+    let yaml = nl_to_yaml("list ~/Downloads").expect("should produce workflow");
     assert!(yaml.contains("list_dir"), "yaml: {}", yaml);
 }
 
 #[test]
 fn stress_nl_find_pdfs() {
-    let yaml = nl_to_yaml("find all PDFs in ~/Documents").expect("should produce plan");
+    let yaml = nl_to_yaml("find all PDFs in ~/Documents").expect("should produce workflow");
     assert!(yaml.contains("walk_tree") || yaml.contains("find_matching"),
         "yaml: {}", yaml);
 }
 
 #[test]
 fn stress_nl_zip_up() {
-    let yaml = nl_to_yaml("zip up everything in my downloads").expect("should produce plan");
+    let yaml = nl_to_yaml("zip up everything in my downloads").expect("should produce workflow");
     assert!(yaml.contains("pack_archive"), "yaml: {}", yaml);
 }
 
 #[test]
 fn stress_nl_sum_synonym() {
-    let yaml = nl_to_yaml("Sum 12 and 88").expect("should produce plan");
+    let yaml = nl_to_yaml("Sum 12 and 88").expect("should produce workflow");
     assert!(yaml.contains("add"), "sum should map to add: {}", yaml);
 }
 
 #[test]
 fn stress_nl_plus_synonym() {
-    let yaml = nl_to_yaml("Plus 1 and 99").expect("should produce plan");
+    let yaml = nl_to_yaml("Plus 1 and 99").expect("should produce workflow");
     assert!(yaml.contains("add"), "plus should map to add: {}", yaml);
 }
 
 #[test]
 fn stress_nl_minus_synonym() {
-    let yaml = nl_to_yaml("Minus 5 from 20").expect("should produce plan");
+    let yaml = nl_to_yaml("Minus 5 from 20").expect("should produce workflow");
     assert!(yaml.contains("subtract"), "minus should map to subtract: {}", yaml);
 }
 
 #[test]
 fn stress_nl_search_content() {
-    let yaml = nl_to_yaml("search for 'error' in ~/logs").expect("should produce plan");
+    let yaml = nl_to_yaml("search for 'error' in ~/logs").expect("should produce workflow");
     assert!(yaml.contains("search_content") || yaml.contains("walk_tree") || yaml.contains("find_matching"),
         "yaml: {}", yaml);
 }
 
 #[test]
 fn stress_nl_copy_files() {
-    let yaml = nl_to_yaml("copy ~/Documents/report.pdf to ~/Desktop").expect("should produce plan");
+    let yaml = nl_to_yaml("copy ~/Documents/report.pdf to ~/Desktop").expect("should produce workflow");
     assert!(yaml.contains("copy"), "yaml: {}", yaml);
 }
 
@@ -465,18 +464,18 @@ fn stress_nl_full_pipeline_add_produces_racket() {
     let mut state = DialogueState::new();
     let response = nl::process_input("Add 4 and 35 together", &mut state);
     let yaml = match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
+        NlResponse::PlanCreated { workflow_yaml, .. } => workflow_yaml,
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
 
-    // Parse the YAML back into a PlanDef
-    let def: PlanDef = serde_yaml::from_str(&yaml).unwrap();
-    assert!(!def.steps.is_empty(), "plan should have steps");
+    // Parse the YAML back into a WorkflowDef
+    let def: WorkflowDef = serde_yaml::from_str(&yaml).unwrap();
+    assert!(!def.steps.is_empty(), "workflow should have steps");
 
-    // Build a compiled plan and generate Racket
+    // Build a compiled workflow and generate Racket
     let reg = make_racket_reg();
-    let compiled = CompiledPlan {
-        name: def.name.clone(),
+    let compiled = CompiledWorkflow {
+        name: def.workflow.clone(),
         input_type: TypeExpr::prim("Number"),
         input_description: "4".to_string(),
         steps: vec![CompiledStep {
@@ -499,14 +498,14 @@ fn stress_nl_full_pipeline_subtract_produces_racket() {
     let mut state = DialogueState::new();
     let response = nl::process_input("Subtract 2 from 6", &mut state);
     let yaml = match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
+        NlResponse::PlanCreated { workflow_yaml, .. } => workflow_yaml,
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
 
-    let def: PlanDef = serde_yaml::from_str(&yaml).unwrap();
+    let def: WorkflowDef = serde_yaml::from_str(&yaml).unwrap();
     let reg = make_racket_reg();
-    let compiled = CompiledPlan {
-        name: def.name.clone(),
+    let compiled = CompiledWorkflow {
+        name: def.workflow.clone(),
         input_type: TypeExpr::prim("Number"),
         input_description: "6".to_string(),
         steps: vec![CompiledStep {
@@ -618,61 +617,61 @@ fn stress_nl_numbers_only() {
 }
 
 // ===========================================================================
-// I2: Plan compiler stress tests
+// I2: Workflow compiler stress tests
 // ===========================================================================
 
 // --- Happy: deep step chains ---
 
 #[test]
-fn stress_plan_8_step_fs_pipeline() {
+fn stress_workflow_8_step_fs_pipeline() {
     let yaml = r#"
-deep_fs_pipeline:
-  inputs:
-    - logfile: File(Text)
-    - sed_pattern: Pattern
-    - awk_prog: Pattern
-  steps:
-    - awk_extract:
-        program: "$awk_prog"
-    - sed_script:
-        script: "$sed_pattern"
-    - awk_extract:
-        program: "{print $1}"
-    - sed_script:
-        script: "s/WARN/INFO/g"
-    - awk_extract:
-        program: "{print $2}"
-    - sed_script:
-        script: "s/INFO/DEBUG/g"
-    - awk_extract:
-        program: "{print $1, $2}"
-    - sed_script:
-        script: "s/DEBUG/TRACE/g"
+workflow: "Deep FS pipeline"
+inputs:
+  logfile: "/var/log/app.log"
+  sed_pattern: "s/ERROR/WARN/g"
+  awk_prog: "{print $1, $3}"
+steps:
+  - awk_extract:
+      program: "$awk_prog"
+  - sed_script:
+      script: "$sed_pattern"
+  - awk_extract:
+      program: "{print $1}"
+  - sed_script:
+      script: "s/WARN/INFO/g"
+  - awk_extract:
+      program: "{print $2}"
+  - sed_script:
+      script: "s/INFO/DEBUG/g"
+  - awk_extract:
+      program: "{print $1, $2}"
+  - sed_script:
+      script: "s/DEBUG/TRACE/g"
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse 8-step plan");
+    let def = workflow::parse_workflow(yaml).expect("should parse 8-step workflow");
     assert_eq!(def.steps.len(), 8);
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
-        .expect("should compile 8-step plan");
+    let compiled = workflow::compile_workflow(&def, &registry)
+        .expect("should compile 8-step workflow");
     assert_eq!(compiled.steps.len(), 8);
 }
 
 #[test]
-fn stress_plan_var_resolution() {
+fn stress_workflow_var_resolution() {
     let yaml = r#"
-var_resolution:
-  inputs:
-    - path: Dir
-    - ext: String
-  steps:
-    - walk_tree
-    - filter:
-        extension: "$ext"
-    - sort_by: name
+workflow: "Var resolution"
+inputs:
+  path: "~/Documents"
+  ext: ".pdf"
+steps:
+  - walk_tree
+  - filter:
+      extension: "$ext"
+  - sort_by: name
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .expect("should compile with $var refs");
     assert_eq!(compiled.steps.len(), 3);
     // Verify the $ext variable was preserved in the step params
@@ -682,21 +681,21 @@ var_resolution:
 // --- Negative: unknown ops, type mismatches, empty steps ---
 
 #[test]
-fn stress_plan_unknown_op() {
+fn stress_workflow_unknown_op() {
     let yaml = r#"
-unknown_op:
-  inputs:
-    - path: Dir
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - nonexistent_op_xyz
-    - sort_by: name
+workflow: "Unknown op"
+inputs:
+  path: "~/Documents"
+steps:
+  - walk_tree
+  - filter:
+      extension: ".txt"
+  - nonexistent_op_xyz
+  - sort_by: name
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let result = plan::compile_plan(&def, &registry);
+    let result = workflow::compile_workflow(&def, &registry);
     assert!(result.is_err(), "should fail on unknown op");
     let err = result.unwrap_err();
     let msg = format!("{}", err);
@@ -705,69 +704,69 @@ unknown_op:
 }
 
 #[test]
-fn stress_plan_empty_steps() {
+fn stress_workflow_empty_steps() {
     let yaml = r#"
-empty:
-  inputs:
-    - path: Dir
-  steps:
+workflow: "Empty"
+inputs:
+  path: "~/Documents"
+steps: []
 "#;
-    let result = plan::parse_plan(yaml);
+    let result = workflow::parse_workflow(yaml);
     // Empty steps should fail at either parse or compile time
     assert!(result.is_err(), "empty steps should fail at parse time");
 }
 
 #[test]
-fn stress_plan_no_inputs() {
+fn stress_workflow_no_inputs() {
     let yaml = r#"
-no_inputs:
-  inputs: []
-  steps:
-    - walk_tree
+workflow: "No inputs"
+inputs: {}
+steps:
+  - walk_tree
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let result = plan::compile_plan(&def, &registry);
+    let result = workflow::compile_workflow(&def, &registry);
     assert!(result.is_err(), "no inputs should fail");
 }
 
 // --- Boundary: single step, all $var params ---
 
 #[test]
-fn stress_plan_single_step() {
+fn stress_workflow_single_step() {
     let yaml = r#"
-single_step:
-  inputs:
-    - path: Dir
-  steps:
-    - list_dir
+workflow: "Single step"
+inputs:
+  path: "~/Documents"
+steps:
+  - list_dir
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     let registry = build_full_registry();
-    let compiled = plan::compile_plan(&def, &registry)
+    let compiled = workflow::compile_workflow(&def, &registry)
         .expect("single step should compile");
     assert_eq!(compiled.steps.len(), 1);
 }
 
 #[test]
-fn stress_plan_many_inputs() {
+fn stress_workflow_many_inputs() {
     let yaml = r#"
-many_inputs:
-  inputs:
-    - path: Dir
-    - ext: String
-    - pattern: Pattern
-    - mode: String
-    - limit: String
-  steps:
-    - walk_tree
-    - filter:
-        extension: "$ext"
+workflow: "Many inputs"
+inputs:
+  path: "~/Documents"
+  ext: ".pdf"
+  pattern: "contract"
+  mode: "case-insensitive"
+  limit: "100"
+steps:
+  - walk_tree
+  - filter:
+      extension: "$ext"
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = workflow::parse_workflow(yaml).expect("should parse");
     assert_eq!(def.inputs.len(), 5);
     let registry = build_full_registry();
-    let _compiled = plan::compile_plan(&def, &registry)
+    let _compiled = workflow::compile_workflow(&def, &registry)
         .expect("should compile with many inputs");
 }
 
@@ -786,7 +785,7 @@ fn stress_racket_arithmetic_to_string_to_file() {
         make_step(2, "string_append", vec![("x", "The answer is: ")]),
         make_step(3, "string_upcase", vec![]),
     ];
-    let (compiled, def) = make_plan(
+    let (compiled, def) = make_workflow(
         "Multi-domain chain",
         vec![("x", "6"), ("y", "7")],
         steps,
@@ -810,7 +809,7 @@ fn stress_racket_list_processing_chain() {
         make_step(3, "racket_foldl", vec![("function", "+"), ("init", "0")]),
         make_step(4, "number_to_string", vec![]),
     ];
-    let (compiled, def) = make_plan(
+    let (compiled, def) = make_workflow(
         "Filter-sort-map-fold-format",
         vec![("lst", "'(1 2 3 4 5 6 7 8 9 10)")],
         steps,
@@ -834,7 +833,7 @@ fn stress_racket_set_operations_chain() {
         make_step(3, "set_to_list", vec![]),
         make_step(4, "length", vec![]),
     ];
-    let (compiled, def) = make_plan(
+    let (compiled, def) = make_workflow(
         "Set operations chain",
         vec![("a", "'(1 2 3 4 5)")],
         steps,
@@ -916,7 +915,7 @@ fn stress_racket_10_step_pipeline() {
         make_step(8, "number_to_string", vec![]),
         make_step(9, "string_upcase", vec![]),
     ];
-    let (compiled, def) = make_plan(
+    let (compiled, def) = make_workflow(
         "10-step arithmetic chain",
         vec![("x", "1"), ("y", "2")],
         steps,
@@ -935,7 +934,7 @@ fn stress_racket_single_step_no_let() {
     let steps = vec![
         make_step(0, "add", vec![("x", "4"), ("y", "35")]),
     ];
-    let (compiled, def) = make_plan("Single add", vec![("x", "4"), ("y", "35")], steps);
+    let (compiled, def) = make_workflow("Single add", vec![("x", "4"), ("y", "35")], steps);
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
     // Single-step should NOT use let*
     assert!(!script.contains("let*"), "single step should not use let*: {}", script);
@@ -943,11 +942,11 @@ fn stress_racket_single_step_no_let() {
 }
 
 #[test]
-fn stress_racket_empty_plan() {
+fn stress_racket_empty_workflow() {
     let reg = make_racket_reg();
-    let (compiled, def) = make_plan("Empty", vec![("x", "1")], vec![]);
+    let (compiled, def) = make_workflow("Empty", vec![("x", "1")], vec![]);
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
-    assert!(script.contains("no steps"), "empty plan should note no steps: {}", script);
+    assert!(script.contains("no steps"), "empty workflow should note no steps: {}", script);
 }
 
 // --- Shell ops with prev binding ---

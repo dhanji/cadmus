@@ -287,12 +287,12 @@ property values from the fact pack. Neither entity's data references the
 other — the theory layer performs the cross-entity reasoning. Produces
 `TheoryContext` consumed by the comparison strategy.
 
-## Plan DSL
+## Workflow DSL
 
-**`src/plan.rs`** (~1230 lines) — YAML plan definitions.
+**`src/workflow.rs`** (~1230 lines) — YAML workflow definitions.
 
 ```yaml
-plan: "Find PDFs"
+workflow: "Find PDFs"
 inputs:
   path: "~/Documents"
 steps:
@@ -306,15 +306,15 @@ Pipeline: parse → compile → execute.
 
 | Phase | Function | What |
 |-------|----------|------|
-| Parse | `PlanDef` (serde) | YAML → `RawStep` list |
-| Compile | `compile_plan()` | Type-check pipeline, infer input types, resolve `$var` references |
-| Execute | `execute_plan()` | Run through `FilesystemStrategy::dry_run()` |
+| Parse | `WorkflowDef` (serde) | YAML → `RawStep` list |
+| Compile | `compile_workflow()` | Type-check pipeline, infer input types, resolve `$var` references |
+| Execute | `execute_workflow()` | Run through `FilesystemStrategy::dry_run()` |
 
 Step forms:
 - Bare string: `walk_tree` → op with no args
 - Scalar: `read_file: each` → map mode, `sort_by: name` → flag
 - Map: `filter: { extension: ".pdf" }` → named params
-- `$name` → expand from plan inputs
+- `$name` → expand from workflow inputs
 
 ## Module Map
 
@@ -323,7 +323,7 @@ Step forms:
 | `type_expr` | 930 | Type grammar, parsing, unification |
 | `registry` | 1200 | Operation registry, YAML ops loader |
 | `generic_planner` | 1280 | Both planners (monomorphic + polymorphic) |
-| `plan` | 1230 | Plan YAML DSL |
+| `workflow` | 1230 | Workflow YAML DSL |
 | `theory` | 1230 | Cross-entity theory derivation |
 | `algebra` | 1030 | Plan canonicalization, rewrite rules |
 | `strategy` | 890 | `ReasonerStrategy` trait + `ComparisonStrategy` |
@@ -334,7 +334,7 @@ Step forms:
 | `types` | 310 | Core domain types (`Goal`, `Obligation`, `ReasoningOutput`) |
 | `planner` | 350 | Legacy obligation-based planner (pre-strategy) |
 | `pipeline` | 135 | Entry point — delegates to strategy |
-| `main` | 360 | CLI: `--plan` mode + strategy demos |
+| `main` | 360 | CLI: `--workflow` mode + strategy demos |
 | `lib` | 14 | Module declarations |
 
 ## Data Files
@@ -347,7 +347,7 @@ data/
   macos_fs.yaml            Fact pack: macOS tool knowledge (~40 claims)
   putin_stalin.yaml        Fact pack: political comparison domain
   tiramisu_cheesecake.yaml Fact pack: dessert comparison domain
-  plans/               9 plan YAML examples
+  workflows/               9 workflow YAML examples
 ```
 
 ## Dependencies
