@@ -1,0 +1,54 @@
+# Plan: Mega Project Audit
+# ============================
+# A 20-step pipeline that performs a comprehensive project audit.
+# Uses two parallel type chains stitched together:
+#
+# Chain A (Seq domain, 8 steps): Dir → walk → find → filter → sort → unique → count
+# Chain B (File(Text) domain, 12 steps): logfile → awk → sed → awk → sed → head → tail → ...
+#
+# Since the plan DSL is a linear pipeline, we do Chain B (the longer one).
+
+mega_audit:
+  inputs:
+    - logfile: File(Text)
+  steps:
+    - awk_extract:
+        program: {print $1, $2, $3, $5, $0}
+    - sed_script:
+        script: /error\|fail\|panic\|fatal/I!d
+    - sed_script:
+        script: s/^\([A-Z][a-z]*\) \([0-9]*\) \([0-9:]*\)/\1-\2T\3/g
+    - awk_extract:
+        program: {$1=$2=$3=""; print $4, substr($0, index($0,$5))}
+    - sed_script:
+        script: s/^[ \t]*//
+    - sed_script:
+        script: s/  */ /g
+    - sed_script:
+        script: s/panic/[PANIC]/gI; s/fatal/[FATAL]/gI; s/error/[ERROR]/gI; s/fail/[FAIL]/gI
+    - awk_extract:
+        program: {print $1}
+    - sed_script:
+        script: s/[[:space:]]*$//
+    - sed_script:
+        script: /^$/d
+    - awk_extract:
+        program: {printf "%05d | %s\n", NR, $0}
+    - head:
+        count: 500
+    - tail:
+        count: 200
+    - sed_script:
+        script: 1i\SEQ|PROCESS|MESSAGE
+    - sed_script:
+        script: s/|/,/g
+    - sed_script:
+        script: s/\([^,]*\) \([^,]*\)/"\1 \2"/g
+    - sed_script:
+        script: s/[[:space:]]*$//
+    - sed_script:
+        script: s/^/    /
+    - awk_extract:
+        program: {print $0} END {printf "\n# Total lines: %d\n", NR}
+    - head:
+        count: 250

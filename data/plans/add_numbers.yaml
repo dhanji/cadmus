@@ -1,0 +1,12 @@
+# Plan: Add two numbers
+# Produces: (+ 4 35) → 39
+
+add_numbers:
+  inputs:
+    - x: Number
+    - y: Number
+  output: Number
+  steps:
+    - add:
+        x: "4"
+        y: "35"

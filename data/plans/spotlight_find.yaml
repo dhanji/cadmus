@@ -1,0 +1,10 @@
+# Plan: Spotlight Find
+# ========================
+# Use Spotlight to find files, then filter and sort results.
+
+spotlight_find:
+  inputs:
+    - query: Pattern
+  steps:
+    - spotlight_search
+    - sort_by: name

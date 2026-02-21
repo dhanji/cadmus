@@ -6,7 +6,7 @@ use cadmus::racket_strategy::{load_racket_facts_from_str,
 };
 use cadmus::racket_executor::generate_racket_script;
 use cadmus::registry::load_ops_pack_str;
-use cadmus::workflow::{CompiledStep, CompiledWorkflow, WorkflowDef};
+use cadmus::plan::{CompiledStep, CompiledPlan, PlanDef, PlanInput};
 use cadmus::type_expr::TypeExpr;
 use std::collections::HashMap;
 
@@ -31,20 +31,21 @@ fn make_step(index: usize, op: &str, params: Vec<(&str, &str)>) -> CompiledStep 
     }
 }
 
-fn make_workflow(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) -> (CompiledWorkflow, WorkflowDef) {
-    let input_map: HashMap<String, String> = inputs.iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
+fn make_plan(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) -> (CompiledPlan, PlanDef) {
+    let plan_inputs: Vec<PlanInput> = inputs.iter()
+        .map(|(k, v)| PlanInput::from_legacy(k, v))
         .collect();
-    let compiled = CompiledWorkflow {
+    let compiled = CompiledPlan {
         name: name.to_string(),
         input_type: TypeExpr::prim("Any"),
         input_description: inputs.first().map(|(_, v)| v.to_string()).unwrap_or_default(),
         steps,
         output_type: TypeExpr::prim("Any"),
     };
-    let def = WorkflowDef {
-        workflow: name.to_string(),
-        inputs: input_map,
+    let def = PlanDef {
+        name: name.to_string(),
+        inputs: plan_inputs,
+        output: None,
         steps: vec![],  // not used by generate_racket_script
     };
     (compiled, def)
@@ -75,7 +76,7 @@ fn generate_complex_programs() {
             make_step(0, "sort_list", vec![("value", "'(5 3 1 4 2)"), ("comparator", "<")]),
             make_step(1, "list_reverse", vec![]),  // chains from prev
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Sort descending",
             vec![("lst", "'(5 3 1 4 2)")],
             steps,
@@ -95,7 +96,7 @@ fn generate_complex_programs() {
             make_step(0, "racket_filter", vec![("value", "'(1 2 3 4 5 6 7 8 9 10)"), ("predicate", "even?")]),
             make_step(1, "length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Count even numbers",
             vec![("lst", "'(1 2 3 4 5 6 7 8 9 10)")],
             steps,
@@ -115,7 +116,7 @@ fn generate_complex_programs() {
             make_step(0, "racket_map", vec![("value", "'(1 2 3 4 5)"), ("function", "(lambda (x) (* x x))")]),
             make_step(1, "racket_foldl", vec![("function", "+"), ("init", "0")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Sum of squares",
             vec![("lst", "'(1 2 3 4 5)")],
             steps,
@@ -135,7 +136,7 @@ fn generate_complex_programs() {
             make_step(0, "set_new", vec![("value", "'(1 2 2 3 3 3 4 4 4 4)")]),
             make_step(1, "set_count", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Count unique elements",
             vec![("lst", "'(1 2 2 3 3 3 4 4 4 4)")],
             steps,
@@ -155,7 +156,7 @@ fn generate_complex_programs() {
             make_step(0, "string_append", vec![("x", "Hello, "), ("y", "World")]),
             make_step(1, "string_length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Greeting length",
             vec![("a", "Hello, "), ("b", "World")],
             steps,
@@ -177,7 +178,7 @@ fn generate_complex_programs() {
             make_step(2, "sort_list", vec![("comparator", "<")]),
             make_step(3, "car", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Find minimum",
             vec![("lst", "'(9 1 5 1 9 3 5 7)")],
             steps,
@@ -198,7 +199,7 @@ fn generate_complex_programs() {
             make_step(1, "remove", vec![("x", "3")]),
             make_step(2, "length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Flatten and count without 3",
             vec![("lst", "'((1 2) (3 4) (5 6))")],
             steps,
@@ -220,7 +221,7 @@ fn generate_complex_programs() {
             make_step(2, "divide", vec![("y", "5")]),
             make_step(3, "expt", vec![("y", "2")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Arithmetic chain",
             vec![("x", "6"), ("y", "7")],
             steps,
@@ -240,7 +241,7 @@ fn generate_complex_programs() {
             make_step(0, "racket_filter", vec![("value", "'(2 4 6 8 10 11)"), ("predicate", "even?")]),
             make_step(1, "length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Count evens in mixed list",
             vec![("lst", "'(2 4 6 8 10 11)")],
             steps,
@@ -261,7 +262,7 @@ fn generate_complex_programs() {
             make_step(1, "set_union", vec![("y", "(list->set '(3 4 5))")]),
             make_step(2, "set_count", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Union two sets",
             vec![("a", "'(1 2 3)"), ("b", "'(3 4 5)")],
             steps,
@@ -280,7 +281,7 @@ fn generate_complex_programs() {
         let steps = vec![
             make_step(0, "less_than", vec![("x", "3"), ("y", "5")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Simple comparison",
             vec![("x", "3"), ("y", "5")],
             steps,
@@ -299,7 +300,7 @@ fn generate_complex_programs() {
         let steps = vec![
             make_step(0, "greater_than", vec![("x", "10"), ("y", "7")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Greater than check",
             vec![("x", "10"), ("y", "7")],
             steps,
@@ -318,7 +319,7 @@ fn generate_complex_programs() {
         let steps = vec![
             make_step(0, "less_than_or_equal", vec![("x", "5"), ("y", "5")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "LTE check",
             vec![("x", "5"), ("y", "5")],
             steps,
@@ -337,7 +338,7 @@ fn generate_complex_programs() {
         let steps = vec![
             make_step(0, "string_upcase", vec![("value", "hello world")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Uppercase string",
             vec![("s", "hello world")],
             steps,
@@ -357,7 +358,7 @@ fn generate_complex_programs() {
             make_step(0, "string_downcase", vec![("value", "HELLO WORLD")]),
             make_step(1, "string_length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Downcase and measure",
             vec![("s", "HELLO WORLD")],
             steps,
@@ -379,7 +380,7 @@ fn generate_complex_programs() {
             make_step(2, "string_append", vec![("x", "The answer is: ")]),
             make_step(3, "string_upcase", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Multi-domain chain",
             vec![("x", "6"), ("y", "7")],
             steps,
@@ -403,7 +404,7 @@ fn generate_complex_programs() {
             make_step(0, "file_read", vec![("value", "input.txt")]),
             make_step(1, "string_length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "File size in chars",
             vec![("path", "input.txt")],
             steps,
@@ -424,7 +425,7 @@ fn generate_complex_programs() {
             make_step(1, "string_upcase", vec![]),
             make_step(2, "file_write", vec![("y", "output.txt")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Uppercase file contents",
             vec![("src", "input.txt"), ("dst", "output.txt")],
             steps,
@@ -444,7 +445,7 @@ fn generate_complex_programs() {
             make_step(0, "file_read_lines", vec![("value", "data.csv")]),
             make_step(1, "length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Count lines in file",
             vec![("path", "data.csv")],
             steps,
@@ -465,7 +466,7 @@ fn generate_complex_programs() {
             make_step(1, "racket_filter", vec![("predicate", "(lambda (line) (string-contains? line \"ERROR\"))")]),
             make_step(2, "length", vec![]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Count error lines",
             vec![("path", "log.txt")],
             steps,
@@ -487,7 +488,7 @@ fn generate_complex_programs() {
             make_step(2, "racket_foldl", vec![("function", "(lambda (line acc) (string-append acc line \"\\n\"))"), ("init", "\"\"")]),
             make_step(3, "file_write", vec![("y", "names_upper.txt")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Uppercase all names",
             vec![("src", "names.txt"), ("dst", "names_upper.txt")],
             steps,
@@ -509,7 +510,7 @@ fn generate_complex_programs() {
             make_step(2, "number_to_string", vec![]),
             make_step(3, "string_append", vec![("x", "Config size: ")]),
         ];
-        let (compiled, def) = make_workflow(
+        let (compiled, def) = make_plan(
             "Report config size",
             vec![("path", "config.yaml")],
             steps,

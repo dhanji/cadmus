@@ -1,0 +1,13 @@
+# Plan: Preview Log
+# =====================
+# Walk a directory to find log files, filter for .log extension, then sort.
+
+preview_log:
+  inputs:
+    - path: Dir
+    - keyword: Pattern
+  steps:
+    - walk_tree
+    - filter:
+        extension: .log
+    - sort_by: name

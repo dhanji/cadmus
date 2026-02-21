@@ -1,0 +1,7 @@
+find_large_files:
+  inputs:
+    - path: Dir
+    - min_size: String
+  steps:
+    - list_dir
+    - sort_by: name

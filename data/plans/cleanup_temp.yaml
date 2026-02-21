@@ -1,0 +1,12 @@
+# Plan: Cleanup Temp
+# ======================
+# Find old temporary files and list them for review.
+
+cleanup_temp:
+  inputs:
+    - path: Dir
+  steps:
+    - walk_tree
+    - filter:
+        pattern: "*.tmp"
+    - sort_by: name

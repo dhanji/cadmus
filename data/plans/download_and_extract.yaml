@@ -1,0 +1,11 @@
+# Plan: Download and Extract
+# ==============================
+# Given an archive file, extract its contents and sort them.
+
+download_and_extract:
+  inputs:
+    - archive: File(Archive(File(Bytes), Zip))
+  output: Seq(Entry(Name, File(Bytes)))
+  steps:
+    - extract_archive
+    - sort_by: name

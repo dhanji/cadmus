@@ -9,8 +9,8 @@ Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcri
 
 ### ~~BUG-001: "never mind" not recognized as rejection~~ ✅ FIXED
 - **File:** `src/nl/typo.rs`, `src/nl/intent.rs`
-- **Symptom:** User says "never mind" after a plan is created → instead of rejecting, a *new* `find_matching` workflow is created.
-- **Root cause:** SymSpell typo-corrects "never" → "need" (edit distance 2) and "mind" → "find" (edit distance 1). The tokens become `["need", "find"]`, which triggers `CreateWorkflow` with `find_matching`. The reject pattern `"never mind"` in `is_reject()` never matches because the tokens are already mangled.
+- **Symptom:** User says "never mind" after a plan is created → instead of rejecting, a *new* `find_matching` plan is created.
+- **Root cause:** SymSpell typo-corrects "never" → "need" (edit distance 2) and "mind" → "find" (edit distance 1). The tokens become `["need", "find"]`, which triggers `CreatePlan` with `find_matching`. The reject pattern `"never mind"` in `is_reject()` never matches because the tokens are already mangled.
 - **Repro:** `process_input("never mind", &mut state)` after creating any plan.
 - **Fix:** Add "mind", "never" to SymSpell dictionary as protected words.
 
@@ -49,9 +49,9 @@ Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcri
 ### ~~BUG-006: Double approve succeeds~~ ✅ FIXED
 - **File:** `src/nl/mod.rs`
 - **Symptom:** After approving a plan, approving again returns `Approved` a second time.
-- **Root cause:** The `Intent::Approve` handler returns `NlResponse::Approved` but does NOT clear `state.current_workflow`. The workflow remains set, so the guard `state.current_workflow.is_some()` passes again.
+- **Root cause:** The `Intent::Approve` handler returns `NlResponse::Approved` but does NOT clear `state.current_plan`. The plan remains set, so the guard `state.current_plan.is_some()` passes again.
 - **Repro:** Create plan → approve → approve again.
-- **Fix:** Set `state.current_workflow = None` after returning `Approved`.
+- **Fix:** Set `state.current_plan = None` after returning `Approved`.
 
 ### ~~BUG-007: Skip filter uses action word as pattern~~ ✅ FIXED
 - **File:** `src/nl/dialogue.rs`, `src/nl/slots.rs`
@@ -62,7 +62,7 @@ Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcri
 
 ### ~~BUG-008: "remove the step" looks for op named 'delete'~~ ✅ FIXED
 - **File:** `src/nl/dialogue.rs`, `src/nl/normalize.rs`
-- **Symptom:** "remove the step" on a workflow returns error "No step with operation 'delete' found."
+- **Symptom:** "remove the step" on a plan returns error "No step with operation 'delete' found."
 - **Root cause:** Synonym mapping converts "remove" → "delete". The slot extractor sees "delete" as a canonical op name. `resolve_step_index()` has no step_ref (since "step" is the last token with no number after it), so it falls through to op-name lookup and searches for a step with op "delete".
 - **Repro:** Create a multi-step plan, then `process_input("remove the step", &mut state)`.
 - **Fix:** In `resolve_step_index()`, when the intent is Remove and no step_ref or op is found, default to the last step.
@@ -74,7 +74,7 @@ Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcri
 ### BUG-009: Multi-input ops only capture first file
 - **File:** `src/nl/slots.rs`, `src/nl/dialogue.rs`
 - **Symptom:** "diff old.txt and new.txt" only captures `old.txt` as input. "copy report.txt to backup.txt" only captures `report.txt`. "rename old.txt to new.txt" fails validation entirely.
-- **Root cause:** The slot extractor puts all detected paths into `target_path` (first one wins). There's no concept of a "second argument" or destination path. `build_workflow()` only wires the first path.
+- **Root cause:** The slot extractor puts all detected paths into `target_path` (first one wins). There's no concept of a "second argument" or destination path. `build_plan()` only wires the first path.
 - **Repro:** `process_input("diff old.txt and new.txt", &mut state)`.
 - **Status:** Deferred — requires significant slot extraction redesign (source/destination semantics).
 
@@ -85,16 +85,16 @@ Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcri
 - **Repro:** `process_input("sure why not", &mut state)` after creating a plan.
 - **Fix:** Add to multi-approval list.
 
-### ~~BUG-011: "I have something in mind" creates a workflow~~ ✅ FIXED
+### ~~BUG-011: "I have something in mind" creates a plan~~ ✅ FIXED
 - **File:** `src/nl/typo.rs`
-- **Symptom:** Casual English sentence creates a `find_matching` workflow.
-- **Root cause:** "mind" → "find" via SymSpell, "have" is a stopword, so the intent parser sees "find" and creates a workflow.
+- **Symptom:** Casual English sentence creates a `find_matching` plan.
+- **Root cause:** "mind" → "find" via SymSpell, "have" is a stopword, so the intent parser sees "find" and creates a plan.
 - **Repro:** `process_input("I have something in mind", &mut state)`.
 - **Fix:** Add "mind" to SymSpell dictionary (same fix as BUG-001).
 
 ### BUG-012: "compres teh flie" fails validation
 - **File:** `src/nl/typo.rs`, `src/nl/slots.rs`
-- **Symptom:** All three words are typo-corrected ("compres"→"compress", "teh"→"the", "flie"→"file"), but "file" is a common word, not a path. No path is detected, so `build_workflow` uses "." as default path, producing `Dir(Bytes)` which fails type-checking for `gzip_compress` (expects `File(a)`).
+- **Symptom:** All three words are typo-corrected ("compres"→"compress", "teh"→"the", "flie"→"file"), but "file" is a common word, not a path. No path is detected, so `build_plan` uses "." as default path, producing `Dir(Bytes)` which fails type-checking for `gzip_compress` (expects `File(a)`).
 - **Root cause:** "file" after correction is a bare word, not recognized as a path (no extension, no slash). The user meant "the file" generically but there's no actual filename.
 - **Status:** Working as designed — the system correctly asks for clarification when no specific file is provided. The error message could be friendlier.
 
@@ -108,7 +108,7 @@ Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcri
 ### ~~BUG-014: "ok search for TODO" captures "ok" as keyword~~ ✅ FIXED
 - **File:** `src/nl/slots.rs`
 - **Symptom:** `ok search for TODO in ~/src` produces `search_content` with `pattern: "ok"` instead of `pattern: "TODO"`.
-- **Root cause:** "ok" is not in the stopwords list in `extract_slots()`. It gets classified as a `Keyword` and becomes the first keyword, which `build_workflow` uses as the search pattern.
+- **Root cause:** "ok" is not in the stopwords list in `extract_slots()`. It gets classified as a `Keyword` and becomes the first keyword, which `build_plan` uses as the search pattern.
 - **Repro:** `process_input("ok search for TODO in ~/src", &mut state)`.
 - **Fix:** Add conversational fillers ("ok", "okay", "sure", "yes", "yeah", "yep", "yea", "alright", "right", "well", "hmm", "um", "uh", "hey", "oh") to the stopwords list.
 
@@ -120,7 +120,7 @@ Discovered via 30 transcript demos, 46 red-team probes, and 4 hardening transcri
 - **Fix:** Also check if the tail is a single-word approval (not just multi-word).
 
 ### ~~BUG-016: `~/backup/database.sql` typed as Dir(Bytes)~~ ✅ FIXED
-- **File:** `src/workflow.rs`, `src/nl/dialogue.rs`
+- **File:** `src/plan.rs`, `src/nl/dialogue.rs`
 - **Symptom:** `compress ~/backup/database.sql` fails type-checking because the input is typed as `Dir(Bytes)` instead of `File(Bytes)`.
 - **Root cause:** In `infer_input_type()`, the `value.starts_with("~/")` directory heuristic fires BEFORE extension-based file detection. A path like `~/backup/database.sql` matches the `~/` prefix and gets typed as a directory. The `.sql` extension check doesn't exist in the explicit extension list (only `.txt`, `.json`, `.yaml`, etc. are checked).
 - **Repro:** `process_input("compress ~/backup/database.sql", &mut state)`.
