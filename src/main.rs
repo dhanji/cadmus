@@ -18,12 +18,6 @@ const VERSION: &str = "v0.7.0";
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    // --chat mode: interactive NL UX
-    if args.iter().any(|a| a == "--chat") {
-        run_chat_mode();
-        return;
-    }
-
     // --plan <path> mode: load and execute a plan YAML file
     if let Some(pos) = args.iter().position(|a| a == "--plan") {
         let path = args.get(pos + 1).unwrap_or_else(|| {
@@ -46,8 +40,14 @@ fn main() {
         process::exit(1);
     }
 
-    // Default: run all three strategy demos
-    run_demo_mode();
+    // --demo mode: run strategy demos
+    if args.iter().any(|a| a == "--demo") {
+        run_demo_mode();
+        return;
+    }
+
+    // Default: interactive chat mode
+    run_chat_mode();
 }
 
 // ---------------------------------------------------------------------------
