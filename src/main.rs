@@ -332,24 +332,9 @@ fn run_plan_mode(path: &Path, dry_run: bool) {
     println!("  {}", ui::subsection("Racket Script"));
     println!();
 
-    let mut racket_reg = cadmus::registry::load_ops_pack_str(
-        include_str!("../data/packs/ops/racket.ops.yaml")
-    ).expect("failed to load racket.ops.yaml");
-    let racket_facts = cadmus::racket_strategy::load_racket_facts_from_str(
-        include_str!("../data/packs/facts/racket.facts.yaml")
-    ).expect("failed to load racket.facts.yaml");
-    cadmus::racket_strategy::promote_inferred_ops(&mut racket_reg, &racket_facts);
-
-    // Discover shell submodes (Phase 4) — needed for archive tool dispatch
-    let cli_yaml = std::fs::read_to_string("data/packs/facts/macos_cli.facts.yaml")
-        .unwrap_or_else(|_| include_str!("../data/packs/facts/macos_cli.facts.yaml").to_string());
-    if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(&cli_yaml) {
-        let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
-        cadmus::racket_strategy::discover_shell_submodes(
-            &mut racket_reg, &racket_facts, &cli_facts,
-        );
-    }
-    let script = match cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg) {
+    use cadmus::calling_frame::{CallingFrame, DefaultFrame};
+    let frame = DefaultFrame::from_plan(&def);
+    let script = match frame.invoke(&def) {
         Ok(s) => s,
         Err(e) => {
             println!("  {}", ui::status_fail("Codegen failed"));

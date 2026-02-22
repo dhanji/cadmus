@@ -31,6 +31,7 @@ use dialogue::{DialogueState, DialogueError, FocusEntry};
 use intent::Intent;
 use intent::EditAction;
 use slots::ExtractedSlots;
+use crate::calling_frame::CallingFrame;
 
 // ---------------------------------------------------------------------------
 // NlResponse — the output of the NL UX layer
@@ -257,34 +258,8 @@ fn try_earley_create(
 /// Handle approve intent.
 fn handle_approve(state: &mut DialogueState) -> NlResponse {
     if let Some(wf) = state.current_plan.take() {
-        let script = {
-            let registry = crate::fs_types::build_full_registry();
-            match crate::plan::compile_plan(&wf, &registry) {
-                Ok(compiled) => {
-                    let mut racket_reg = crate::registry::load_ops_pack_str(
-                        include_str!("../../data/packs/ops/racket.ops.yaml")
-                    ).unwrap_or_default();
-                    let racket_facts_yaml = include_str!("../../data/packs/facts/racket.facts.yaml");
-                    if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(
-                        racket_facts_yaml
-                    ) {
-                        crate::racket_strategy::promote_inferred_ops(&mut racket_reg, &facts);
-                        let cli_yaml = include_str!("../../data/packs/facts/macos_cli.facts.yaml");
-                        if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
-                            let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
-                            crate::racket_strategy::discover_shell_submodes(
-                                &mut racket_reg, &facts, &cli_facts,
-                            );
-                        }
-                    }
-                    match crate::racket_executor::generate_racket_script(&compiled, &wf, &racket_reg) {
-                        Ok(s) => Some(s),
-                        Err(_) => None,
-                    }
-                }
-                Err(_) => None,
-            }
-        };
+        let frame = crate::calling_frame::DefaultFrame::from_plan(&wf);
+        let script = frame.invoke(&wf).ok();
         state.alternative_intents.clear();
         NlResponse::Approved { script }
     } else {

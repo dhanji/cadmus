@@ -38,6 +38,39 @@ use crate::registry::OperationRegistry;
 use crate::plan::{CompiledPlan, CompiledStep, PlanDef, PlanInput};
 
 // ---------------------------------------------------------------------------
+// Racket registry builder (shared by all call sites)
+// ---------------------------------------------------------------------------
+
+/// Build a fully configured Racket `OperationRegistry`.
+///
+/// Loads the racket ops pack, promotes inferred ops from the racket facts
+/// pack, and discovers shell submodes from the macOS CLI facts pack.
+///
+/// This is the single source of truth — used by `DefaultFrame::invoke`,
+/// `handle_approve`, and `run_plan_mode` instead of duplicating the
+/// setup inline.
+pub fn build_racket_registry() -> OperationRegistry {
+    let mut reg = crate::registry::load_ops_pack_str(
+        include_str!("../data/packs/ops/racket.ops.yaml")
+    ).unwrap_or_default();
+
+    let racket_facts_yaml = include_str!("../data/packs/facts/racket.facts.yaml");
+    if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(racket_facts_yaml) {
+        crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);
+
+        let cli_yaml = include_str!("../data/packs/facts/macos_cli.facts.yaml");
+        if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
+            let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
+            crate::racket_strategy::discover_shell_submodes(
+                &mut reg, &facts, &cli_facts,
+            );
+        }
+    }
+
+    reg
+}
+
+// ---------------------------------------------------------------------------
 // Shell op helpers
 // ---------------------------------------------------------------------------
 

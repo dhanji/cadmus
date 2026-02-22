@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T08:12:33Z | Size: 58.3k chars
+> Updated: 2026-02-22T09:54:08Z | Size: 59.0k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -738,3 +738,12 @@ plan-name:
 - History file: `~/.cadmus_history`, max 1000 entries
 - Keybindings: Up/Down, Ctrl-A/E/K/U/W, Left/Right, Ctrl-C (re-prompt), Ctrl-D (EOF)
 - Confirmation prompts don't add to history
+
+### Calling Frame / Path Binding
+- `src/calling_frame.rs` [1..171] - `CallingFrame` trait, `DefaultFrame` impl — resolves input bindings
+- `src/plan.rs` - `PlanDef.bindings: HashMap<String, String>` — literal bindings for inputs
+- `src/nl/intent_compiler.rs` - `compile_ir()` populates bindings when target_path != "."
+- `src/nl/dialogue.rs` - `build_plan()` populates bindings; `plan_to_yaml()` renders `bindings:` section
+- `src/racket_executor.rs` - `fs_path_operand()` checks bindings before defaulting to "."
+- `src/nl/mod.rs` - `validate_plan()` validates PlanDef directly (renamed from validate_plan_yaml)
+- `op_to_racket()` now takes `bindings: &HashMap<String, String>` parameter
