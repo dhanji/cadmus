@@ -259,7 +259,7 @@ fn try_earley_create(
 fn handle_approve(state: &mut DialogueState) -> NlResponse {
     if let Some(wf) = state.current_plan.take() {
         let frame = crate::calling_frame::DefaultFrame::from_plan(&wf);
-        let script = frame.invoke(&wf).ok();
+        let script = frame.codegen(&wf).ok();
         state.alternative_intents.clear();
         NlResponse::Approved { script }
     } else {

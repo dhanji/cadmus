@@ -1,6 +1,6 @@
 use std::env;
 use std::path::Path;
-use std::io::Write;
+
 use std::process;
 
 use cadmus::coding_strategy;
@@ -43,30 +43,6 @@ fn main() {
 
     // Default: interactive chat mode
     run_chat_mode();
-}
-
-// ---------------------------------------------------------------------------
-// Racket execution helper
-// ---------------------------------------------------------------------------
-
-/// Run a Racket script by writing it to a temp file and invoking `racket <file>`.
-/// `#lang racket` requires file-based execution (not `racket -e`).
-fn run_racket_script(script: &str) -> Result<std::process::Output, std::io::Error> {
-    let tmp_dir = std::env::temp_dir();
-    let tmp_path = tmp_dir.join(format!("cadmus_{}.rkt", std::process::id()));
-    {
-        let mut f = std::fs::File::create(&tmp_path)?;
-        f.write_all(script.as_bytes())?;
-        f.flush()?;
-    }
-
-    let output = std::process::Command::new("racket")
-        .arg(&tmp_path)
-        .output()?;
-
-    let _ = std::fs::remove_file(&tmp_path);
-
-    Ok(output)
 }
 
 // ---------------------------------------------------------------------------
@@ -169,27 +145,27 @@ fn run_chat_mode() {
                     if answer == "y" || answer == "yes" {
                         println!();
                         println!("  {}", ui::status_active("Running..."));
-                        match run_racket_script(s) {
-                            Ok(output) => {
-                                let stdout_str = String::from_utf8_lossy(&output.stdout);
-                                let stderr_str = String::from_utf8_lossy(&output.stderr);
-                                if !stdout_str.is_empty() {
+                        use cadmus::calling_frame::{CallingFrame, DefaultFrame};
+                        let frame = DefaultFrame::empty();
+                        match frame.run_script(s) {
+                            Ok(exec) => {
+                                if !exec.stdout.is_empty() {
                                     println!();
-                                    println!("{}", ui::code_block(&stdout_str));
+                                    println!("{}", ui::code_block(&exec.stdout));
                                 }
-                                if !stderr_str.is_empty() {
-                                    eprintln!("{}", ui::dim(&stderr_str));
+                                if !exec.stderr.is_empty() {
+                                    eprintln!("{}", ui::dim(&exec.stderr));
                                 }
                                 println!();
-                                if output.status.success() {
+                                if exec.success {
                                     println!("  {}", ui::status_ok("Done"));
                                 } else {
-                                    let code = output.status.code().unwrap_or(1);
+                                    let code = exec.exit_code.unwrap_or(1);
                                     println!("  {}", ui::status_fail(&format!("Exit code {}", code)));
                                 }
                             }
                             Err(e) => {
-                                println!("  {}", ui::error(&format!("Failed to run racket: {}", e)));
+                                println!("  {}", ui::error(&format!("{}", e)));
                                 println!("  {}", ui::dim("Is Racket installed? Try: brew install racket"));
                             }
                         }
@@ -334,7 +310,7 @@ fn run_plan_mode(path: &Path, dry_run: bool) {
 
     use cadmus::calling_frame::{CallingFrame, DefaultFrame};
     let frame = DefaultFrame::from_plan(&def);
-    let script = match frame.invoke(&def) {
+    let script = match frame.codegen(&def) {
         Ok(s) => s,
         Err(e) => {
             println!("  {}", ui::status_fail("Codegen failed"));
@@ -350,27 +326,25 @@ fn run_plan_mode(path: &Path, dry_run: bool) {
         println!("  {}", ui::status_active("Running..."));
         println!();
 
-        match run_racket_script(&script) {
-            Ok(output) => {
-                let stdout_str = String::from_utf8_lossy(&output.stdout);
-                let stderr_str = String::from_utf8_lossy(&output.stderr);
-                if !stdout_str.is_empty() {
-                    println!("{}", ui::code_block(&stdout_str));
+        match frame.run_script(&script) {
+            Ok(exec) => {
+                if !exec.stdout.is_empty() {
+                    println!("{}", ui::code_block(&exec.stdout));
                 }
-                if !stderr_str.is_empty() {
-                    eprintln!("{}", ui::dim(&stderr_str));
+                if !exec.stderr.is_empty() {
+                    eprintln!("{}", ui::dim(&exec.stderr));
                 }
                 println!();
-                if output.status.success() {
+                if exec.success {
                     println!("  {}", ui::status_ok("Done"));
                 } else {
-                    let code = output.status.code().unwrap_or(1);
+                    let code = exec.exit_code.unwrap_or(1);
                     println!("  {}", ui::status_fail(&format!("Exit code {}", code)));
                     process::exit(code);
                 }
             }
             Err(e) => {
-                println!("  {}", ui::error(&format!("Failed to run racket: {}", e)));
+                println!("  {}", ui::error(&format!("{}", e)));
                 println!("  {}", ui::dim("Is Racket installed? Try: brew install racket"));
                 process::exit(1);
             }

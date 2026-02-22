@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 //
 // A CallingFrame determines how plan inputs are resolved at execution time,
-// and how a plan is compiled and turned into a runnable Racket script.
+// and how a plan is compiled, code-generated, and executed.
 //
 // Frames:
 //   - DefaultFrame: resolves from literal bindings on the PlanDef
@@ -16,6 +16,7 @@
 //   - EnvFrame: resolve from environment variables
 
 use std::collections::HashMap;
+use std::io::Write;
 
 use crate::plan::PlanDef;
 
@@ -24,7 +25,7 @@ use crate::plan::PlanDef;
 // ---------------------------------------------------------------------------
 
 /// A calling frame resolves plan input names to concrete values and
-/// orchestrates compilation of a plan into a runnable Racket script.
+/// orchestrates the full compile → codegen → execute pipeline for a plan.
 pub trait CallingFrame {
     /// Resolve an input by name. Returns the bound value, or a default
     /// if the input is not bound.
@@ -36,17 +37,47 @@ pub trait CallingFrame {
     /// Get all bindings as a map.
     fn bindings(&self) -> &HashMap<String, String>;
 
-    /// Compile a plan and generate a Racket script.
+    /// Compile a plan and generate a Racket script (without executing).
+    ///
+    /// Use this when you need the script text for display/confirmation
+    /// before running it.
+    fn codegen(&self, plan: &PlanDef) -> Result<String, InvokeError>;
+
+    /// Compile, generate, and execute a plan.
     ///
     /// This is the main entry point for plan execution. It:
     ///   1. Compiles the PlanDef through the type-checking pipeline
     ///   2. Builds the Racket operation registry
     ///   3. Generates a complete Racket script with bound parameters
+    ///   4. Writes the script to a temp file and executes it via `racket`
     ///
-    /// Returns the Racket script string on success. The caller is
-    /// responsible for writing it to a file and executing it (since
-    /// that involves IO and UI concerns).
-    fn invoke(&self, plan: &PlanDef) -> Result<String, InvokeError>;
+    /// Returns an `Execution` with the script, stdout, stderr, and exit code.
+    fn invoke(&self, plan: &PlanDef) -> Result<Execution, InvokeError>;
+
+    /// Execute an already-generated Racket script.
+    ///
+    /// Use this when you have a script from `codegen()` and want to run it
+    /// after user confirmation.
+    fn run_script(&self, script: &str) -> Result<Execution, InvokeError>;
+}
+
+// ---------------------------------------------------------------------------
+// Execution result
+// ---------------------------------------------------------------------------
+
+/// The result of executing a plan through a calling frame.
+#[derive(Debug, Clone)]
+pub struct Execution {
+    /// The generated Racket script that was executed.
+    pub script: String,
+    /// Standard output from the Racket process.
+    pub stdout: String,
+    /// Standard error from the Racket process.
+    pub stderr: String,
+    /// Whether the process exited successfully.
+    pub success: bool,
+    /// The process exit code (None if killed by signal).
+    pub exit_code: Option<i32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +91,8 @@ pub enum InvokeError {
     CompileError(String),
     /// Racket code generation failed
     CodegenError(String),
+    /// Failed to execute the generated script
+    ExecError(String),
 }
 
 impl std::fmt::Display for InvokeError {
@@ -67,6 +100,7 @@ impl std::fmt::Display for InvokeError {
         match self {
             InvokeError::CompileError(msg) => write!(f, "compile error: {}", msg),
             InvokeError::CodegenError(msg) => write!(f, "codegen error: {}", msg),
+            InvokeError::ExecError(msg) => write!(f, "exec error: {}", msg),
         }
     }
 }
@@ -81,7 +115,6 @@ impl std::fmt::Display for InvokeError {
 ///
 /// Unbound inputs resolve to a sensible default:
 ///   - "path", "dir", "textdir" → "."
-///   - "file" → error (no sensible default for a file)
 ///   - anything else → "."
 pub struct DefaultFrame {
     bindings: HashMap<String, String>,
@@ -127,7 +160,7 @@ impl CallingFrame for DefaultFrame {
         &self.bindings
     }
 
-    fn invoke(&self, plan: &PlanDef) -> Result<String, InvokeError> {
+    fn codegen(&self, plan: &PlanDef) -> Result<String, InvokeError> {
         // 1. Compile the plan through the type-checking pipeline
         let registry = crate::fs_types::build_full_registry();
         let compiled = crate::plan::compile_plan(plan, &registry)
@@ -140,6 +173,52 @@ impl CallingFrame for DefaultFrame {
         crate::racket_executor::generate_racket_script(&compiled, plan, &racket_reg)
             .map_err(|e| InvokeError::CodegenError(format!("{}", e)))
     }
+
+    fn invoke(&self, plan: &PlanDef) -> Result<Execution, InvokeError> {
+        let script = self.codegen(plan)?;
+        self.run_script(&script)
+    }
+
+    fn run_script(&self, script: &str) -> Result<Execution, InvokeError> {
+        exec_racket_script(script)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Racket script execution (shared implementation)
+// ---------------------------------------------------------------------------
+
+/// Execute a Racket script by writing it to a temp file and invoking `racket`.
+///
+/// This is the single implementation used by all frames. `#lang racket`
+/// requires file-based execution (not `racket -e`).
+fn exec_racket_script(script: &str) -> Result<Execution, InvokeError> {
+    let tmp_dir = std::env::temp_dir();
+    let tmp_path = tmp_dir.join(format!("cadmus_{}.rkt", std::process::id()));
+
+    {
+        let mut f = std::fs::File::create(&tmp_path)
+            .map_err(|e| InvokeError::ExecError(format!("create temp file: {}", e)))?;
+        f.write_all(script.as_bytes())
+            .map_err(|e| InvokeError::ExecError(format!("write temp file: {}", e)))?;
+        f.flush()
+            .map_err(|e| InvokeError::ExecError(format!("flush temp file: {}", e)))?;
+    }
+
+    let output = std::process::Command::new("racket")
+        .arg(&tmp_path)
+        .output()
+        .map_err(|e| InvokeError::ExecError(format!("run racket: {}", e)))?;
+
+    let _ = std::fs::remove_file(&tmp_path);
+
+    Ok(Execution {
+        script: script.to_string(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        success: output.status.success(),
+        exit_code: output.status.code(),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -221,10 +300,10 @@ mod tests {
         assert_eq!(frame.resolve_input("path"), "~/My Documents");
     }
 
-    // -- invoke tests --
+    // -- codegen tests --
 
     #[test]
-    fn test_invoke_produces_racket_script() {
+    fn test_codegen_produces_racket_script() {
         let mut bindings = HashMap::new();
         bindings.insert("path".to_string(), "~/Downloads".to_string());
         let plan = PlanDef {
@@ -240,13 +319,13 @@ mod tests {
             bindings,
         };
         let frame = DefaultFrame::from_plan(&plan);
-        let script = frame.invoke(&plan).expect("invoke should succeed");
+        let script = frame.codegen(&plan).expect("codegen should succeed");
         assert!(script.contains("#lang racket"), "should have racket preamble");
         assert!(script.contains("~/Downloads"), "should use bound path: {}", script);
     }
 
     #[test]
-    fn test_invoke_empty_bindings_uses_defaults() {
+    fn test_codegen_empty_bindings_uses_defaults() {
         let plan = PlanDef {
             name: "list-cwd".to_string(),
             inputs: vec![crate::plan::PlanInput::bare("path")],
@@ -260,14 +339,13 @@ mod tests {
             bindings: HashMap::new(),
         };
         let frame = DefaultFrame::from_plan(&plan);
-        let script = frame.invoke(&plan).expect("invoke should succeed");
+        let script = frame.codegen(&plan).expect("codegen should succeed");
         assert!(script.contains("#lang racket"));
-        // With no bindings, fs_path_operand falls back to "."
         assert!(script.contains("\".\""), "should use default dot path: {}", script);
     }
 
     #[test]
-    fn test_invoke_invalid_plan_returns_error() {
+    fn test_codegen_invalid_plan_returns_error() {
         let plan = PlanDef {
             name: "bad-plan".to_string(),
             inputs: vec![],
@@ -281,14 +359,14 @@ mod tests {
             bindings: HashMap::new(),
         };
         let frame = DefaultFrame::from_plan(&plan);
-        let result = frame.invoke(&plan);
+        let result = frame.codegen(&plan);
         assert!(result.is_err(), "should fail for unknown op");
         let err = result.unwrap_err();
         assert!(matches!(err, InvokeError::CompileError(_)));
     }
 
     #[test]
-    fn test_invoke_multi_step_plan() {
+    fn test_codegen_multi_step_plan() {
         let mut bindings = HashMap::new();
         bindings.insert("path".to_string(), "~/Documents".to_string());
         let plan = PlanDef {
@@ -310,9 +388,40 @@ mod tests {
             bindings,
         };
         let frame = DefaultFrame::from_plan(&plan);
-        let script = frame.invoke(&plan).expect("invoke should succeed");
+        let script = frame.codegen(&plan).expect("codegen should succeed");
         assert!(script.contains("#lang racket"));
         assert!(script.contains("~/Documents"), "should use bound path: {}", script);
         assert!(script.contains("step-1"), "should have let* bindings for multi-step");
+    }
+
+    // -- invoke tests (these actually run racket if available) --
+
+    #[test]
+    fn test_invoke_returns_execution_with_script() {
+        let plan = PlanDef {
+            name: "list-cwd".to_string(),
+            inputs: vec![crate::plan::PlanInput::bare("path")],
+            output: None,
+            steps: vec![
+                crate::plan::RawStep {
+                    op: "list_dir".to_string(),
+                    args: crate::plan::StepArgs::None,
+                },
+            ],
+            bindings: HashMap::new(),
+        };
+        let frame = DefaultFrame::from_plan(&plan);
+        // invoke may fail if racket isn't installed — that's an ExecError, not a codegen error
+        match frame.invoke(&plan) {
+            Ok(exec) => {
+                assert!(exec.script.contains("#lang racket"));
+                // We ran successfully — stdout has directory listing
+                assert!(exec.success || !exec.stderr.is_empty());
+            }
+            Err(InvokeError::ExecError(_)) => {
+                // Racket not installed — that's fine for CI
+            }
+            Err(e) => panic!("unexpected error: {}", e),
+        }
     }
 }

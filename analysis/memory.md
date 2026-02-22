@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T09:54:08Z | Size: 59.0k chars
+> Updated: 2026-02-22T19:32:02Z | Size: 59.7k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -747,3 +747,12 @@ plan-name:
 - `src/racket_executor.rs` - `fs_path_operand()` checks bindings before defaulting to "."
 - `src/nl/mod.rs` - `validate_plan()` validates PlanDef directly (renamed from validate_plan_yaml)
 - `op_to_racket()` now takes `bindings: &HashMap<String, String>` parameter
+
+### CallingFrame invoke wiring (wire-calling-frame plan)
+- `src/calling_frame.rs` — `CallingFrame::invoke()` method on trait, `DefaultFrame::invoke()` orchestrates compile_plan → build_racket_registry → generate_racket_script
+- `src/calling_frame.rs` — `InvokeError` enum: `CompileError(String)`, `CodegenError(String)`
+- `src/racket_executor.rs:40-72` — `build_racket_registry()` shared helper, loads ops pack + facts + shell submodes
+- `src/nl/mod.rs:260-263` — `handle_approve` uses `DefaultFrame::from_plan(&wf).invoke(&wf).ok()`
+- `src/main.rs:333-337` — `run_plan_mode` uses `DefaultFrame::from_plan(&def).invoke(&def)`
+- No more duplicated racket registry setup in call sites
+- Commit `9ac1321`
