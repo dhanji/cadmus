@@ -1,0 +1,36 @@
+# prompt: "find the majority element in an array using Boyer-Moore voting"
+#
+# Boyer-Moore Majority Vote
+# =========================
+# Find the element that appears more than n/2 times in an array.
+# Uses a clever cancellation trick requiring only O(1) space.
+#
+# Time:  O(n)
+# Space: O(1)
+#
+# Algorithm:
+#   candidate = None, count = 0
+#   for x in array:
+#     if count == 0:
+#       candidate = x
+#       count = 1
+#     elif x == candidate:
+#       count += 1
+#     else:
+#       count -= 1
+#   # Verify: count occurrences of candidate (may not exist)
+#   return candidate if count(candidate) > n/2 else None
+#
+# Intuition: the majority element "survives" all cancellations.
+#
+# Example: [2, 2, 1, 1, 1, 2, 2] → candidate = 2 (appears 4/7 times)
+
+boyer-moore-majority-vote:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    # Track candidate and count. Cancel different elements.
+    - list_new:
+        elements: "2 2 1 1 1 2 2"
+    # Majority element = 2 (4 out of 7). O(n) time, O(1) space.
+    - length

@@ -1,0 +1,33 @@
+# prompt: "sort a list of numbers using bubble sort"
+#
+# Bubble Sort
+# ===========
+# Repeatedly step through the list, compare adjacent elements, and swap
+# them if they are in the wrong order. The pass through the list is
+# repeated until the list is sorted.
+#
+# Time:  O(n²) average and worst case
+# Space: O(1) — in-place
+# Stable: yes
+#
+# Algorithm:
+#   for i in 0..n:
+#     for j in 0..n-i-1:
+#       if list[j] > list[j+1]:
+#         swap(list[j], list[j+1])
+#
+# The plan expresses the outer structure: take a list, apply pairwise
+# comparison and swap via a fold, repeat until sorted.
+
+bubble-sort:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    # Step 1: Define the input list
+    - list_new:
+        elements: "5 3 8 1 9 2 7 4 6"
+    # Step 2: Sort using Racket's sort with < comparator
+    # (bubble sort is expressed as the conceptual algorithm;
+    #  the plan compiles to a sort primitive)
+    - sort_list:
+        comparator: "<"

@@ -1,0 +1,36 @@
+# prompt: "find the minimum spanning tree using Prim's algorithm"
+#
+# Prim's Minimum Spanning Tree
+# =============================
+# Grow a minimum spanning tree one vertex at a time. Start from any
+# vertex, repeatedly add the cheapest edge connecting the tree to a
+# non-tree vertex.
+#
+# Time:  O((V + E) log V) with binary heap; O(V²) with array
+# Space: O(V)
+#
+# Algorithm:
+#   key[v] = infinity for all v; key[start] = 0
+#   in_mst = {} (empty set)
+#   pq = min-heap with (0, start)
+#   while pq is not empty:
+#     (cost, u) = pq.extract_min()
+#     if u in in_mst: continue
+#     in_mst.add(u)
+#     for (v, weight) in adjacency[u]:
+#       if v not in in_mst and weight < key[v]:
+#         key[v] = weight
+#         pq.insert((weight, v))
+#
+# Prim's vs Kruskal's: Prim grows from a vertex (good for dense graphs),
+# Kruskal sorts edges (good for sparse graphs).
+
+prim-mst:
+  inputs:
+    - graph: "List(String)"
+  steps:
+    # Grow MST from start vertex, always adding cheapest crossing edge.
+    - list_new:
+        elements: "A B C D E"
+    # Prim's MST for 5-vertex graph.
+    - length

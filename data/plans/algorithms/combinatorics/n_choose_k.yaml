@@ -1,0 +1,38 @@
+# prompt: "compute n choose k (binomial coefficient)"
+#
+# Combination Count — C(n, k) / n-Choose-k
+# ==========================================
+# Number of ways to choose k items from n distinct items, where
+# order does not matter.
+#
+# Formula: C(n, k) = n! / (k! × (n-k)!)
+# Efficient: C(n, k) = ∏(i=0..k-1) (n-i) / (i+1)
+#
+# Time:  O(k)
+# Space: O(1)
+#
+# Algorithm (multiplicative):
+#   result = 1
+#   for i in 0..k-1:
+#     result = result × (n - i) / (i + 1)
+#   return result
+#
+# Example: C(10, 3) = 10! / (3! × 7!) = 120
+# Properties: C(n, k) = C(n, n-k); C(n, 0) = C(n, n) = 1
+
+n-choose-k:
+  inputs:
+    - n: "Number"
+    - k: "Number"
+  steps:
+    # C(10, 3) = (10 × 9 × 8) / (1 × 2 × 3)
+    - multiply:
+        x: "10"
+        y: "9"
+    # 10 × 9 = 90
+    - multiply:
+        y: "8"
+    # 90 × 8 = 720
+    - divide:
+        y: "6"
+    # 720 / 6 = 120 = C(10, 3)

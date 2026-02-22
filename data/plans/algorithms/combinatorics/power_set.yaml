@@ -1,0 +1,33 @@
+# prompt: "generate the power set of a set"
+#
+# Power Set Generation
+# ====================
+# Generate all subsets of a given set. A set of n elements has 2^n subsets.
+#
+# Time:  O(n × 2^n) — 2^n subsets, each up to size n
+# Space: O(n × 2^n) for the output
+#
+# Algorithm (iterative / bitmask):
+#   for mask in 0..2^n:
+#     subset = []
+#     for i in 0..n:
+#       if bit i of mask is set:
+#         subset.append(set[i])
+#     output subset
+#
+# Algorithm (recursive):
+#   powerset([]) = [[]]
+#   powerset([x | rest]) = powerset(rest) ++ [s + [x] for s in powerset(rest)]
+#
+# Example: powerset({1, 2, 3}) =
+#   {}, {1}, {2}, {3}, {1,2}, {1,3}, {2,3}, {1,2,3}
+
+power-set:
+  inputs:
+    - s: "List(Number)"
+  steps:
+    # Enumerate all 2^n bitmasks, extract corresponding elements.
+    - list_new:
+        elements: "1 2 3"
+    # Power set of {1, 2, 3}: 8 subsets.
+    - length

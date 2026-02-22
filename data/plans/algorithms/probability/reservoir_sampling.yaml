@@ -1,0 +1,39 @@
+# prompt: "select k random items from a stream using reservoir sampling"
+#
+# Reservoir Sampling (Algorithm R)
+# =================================
+# Select k items uniformly at random from a stream of unknown length n.
+# Each item has equal probability k/n of being in the final sample.
+#
+# Time:  O(n) — single pass through the stream
+# Space: O(k) for the reservoir
+#
+# Algorithm:
+#   reservoir = first k items from stream
+#   for i in k..n:
+#     j = random(0, i)
+#     if j < k:
+#       reservoir[j] = stream[i]
+#   return reservoir
+#
+# Proof of correctness:
+#   After processing item i, each of the first i items has probability
+#   k/i of being in the reservoir. By induction, this holds for all n.
+#
+# Example: select 3 items from stream of 100 → each has 3% chance.
+#
+# Useful for: sampling from files too large to fit in memory,
+# streaming data, database sampling.
+
+reservoir-sampling:
+  inputs:
+    - k: "Number"
+    - stream: "List(Number)"
+  steps:
+    # Fill reservoir with first k items.
+    # For each subsequent item, replace a random reservoir slot with
+    # probability k/i.
+    - list_new:
+        elements: "10 20 30 40 50 60 70 80 90 100"
+    # Reservoir of size 3: each of 10 items has 30% chance of selection.
+    - length

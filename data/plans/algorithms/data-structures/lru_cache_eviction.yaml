@@ -1,0 +1,41 @@
+# prompt: "simulate LRU cache eviction"
+#
+# LRU Cache Eviction
+# ==================
+# Least Recently Used cache: when the cache is full and a new item
+# arrives, evict the item that was accessed least recently.
+#
+# Time:  O(1) for get and put (with hash map + doubly linked list)
+# Space: O(capacity)
+#
+# Data structure: HashMap<Key, Node> + Doubly Linked List
+#   - HashMap gives O(1) lookup
+#   - Doubly linked list maintains access order (most recent at head)
+#
+# Algorithm:
+#   get(key):
+#     if key in map: move node to head; return value
+#     else: return -1
+#
+#   put(key, value):
+#     if key in map: update value; move to head
+#     else:
+#       if size == capacity: remove tail (LRU item); delete from map
+#       create new node at head; add to map
+#
+# Example (capacity=3):
+#   put(1,A) put(2,B) put(3,C)  → [3,2,1]
+#   get(1)                       → [1,3,2]  (1 moved to front)
+#   put(4,D)                     → [4,1,3]  (2 evicted — least recent)
+
+lru-cache-eviction:
+  inputs:
+    - capacity: "Number"
+  steps:
+    # Maintain doubly linked list + hash map.
+    # On access: move to head. On insert when full: evict tail.
+    - list_new:
+        elements: "A B C D"
+    # Capacity 3: after put(A), put(B), put(C), get(A), put(D)
+    # Cache = [D, A, C], B evicted.
+    - length

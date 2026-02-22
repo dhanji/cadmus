@@ -1,0 +1,32 @@
+# prompt: "find the longest palindromic substring using Manacher's algorithm"
+#
+# Manacher's Algorithm
+# ====================
+# Find the longest palindromic substring in O(n) time by exploiting
+# symmetry of palindromes to avoid redundant comparisons.
+#
+# Time:  O(n)
+# Space: O(n)
+#
+# Algorithm:
+#   1. Transform string: insert '#' between chars and at ends
+#      "abba" → "#a#b#b#a#"
+#   2. For each center i, compute P[i] = radius of palindrome centered at i
+#   3. Maintain rightmost palindrome boundary (center C, right R):
+#      - If i < R: P[i] = min(P[2C - i], R - i)  (mirror)
+#      - Expand P[i] while characters match
+#      - Update C, R if i + P[i] > R
+#   4. Maximum P[i] gives the longest palindrome
+#
+# Example: "babad" → longest palindrome = "bab" or "aba" (length 3)
+
+manacher-longest-palindrome:
+  inputs:
+    - s: "String"
+  steps:
+    # Transform string, compute palindrome radii using mirror property.
+    - string_length:
+        s: "babad"
+    # Longest palindromic substring: "bab" or "aba", length 3
+    - subtract:
+        y: "0"

@@ -1,0 +1,33 @@
+# prompt: "search for a number using exponential search"
+#
+# Exponential Search
+# ==================
+# Find the range where the target lies by doubling the index
+# (1, 2, 4, 8, 16, ...), then binary search within that range.
+# Particularly useful for unbounded or infinite lists.
+#
+# Time:  O(log n)
+# Space: O(1) iterative
+# Prerequisite: sorted input
+#
+# Algorithm:
+#   if list[0] == target: return 0
+#   i = 1
+#   while i < n and list[i] <= target:
+#     i *= 2
+#   # Binary search in range [i/2, min(i, n-1)]
+#   return binary_search(list, target, i/2, min(i, n-1))
+#
+# Combines exponential probing with binary search.
+
+exponential-search:
+  inputs:
+    - lst: "List(Number)"
+    - target: "Number"
+  steps:
+    - list_new:
+        elements: "2 3 4 10 40 50 60 70 80 90 100"
+    # Exponential search: double index to find range, then binary search.
+    # O(log n). Good for unbounded lists.
+    - racket_filter:
+        predicate: "(lambda (x) (equal? x 40))"

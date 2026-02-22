@@ -1,0 +1,36 @@
+# prompt: "detect a cycle in a linked list using Floyd's algorithm"
+#
+# Floyd's Cycle Detection (Tortoise and Hare)
+# =============================================
+# Detect whether a linked list (or sequence) contains a cycle using
+# two pointers moving at different speeds.
+#
+# Time:  O(n)
+# Space: O(1) — only two pointers
+#
+# Algorithm:
+#   slow = head, fast = head
+#   while fast != null and fast.next != null:
+#     slow = slow.next          # move 1 step
+#     fast = fast.next.next     # move 2 steps
+#     if slow == fast:
+#       return true  # cycle detected
+#   return false  # no cycle
+#
+# To find cycle start:
+#   After detection, reset slow to head.
+#   Move both one step at a time until they meet → that's the cycle start.
+#
+# Proof: if cycle length = C and distance to cycle = D,
+#   they meet after D + k×C steps for some k.
+
+floyd-cycle-detection:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    # Two pointers: slow (1 step) and fast (2 steps).
+    # If they meet, cycle exists. Reset slow to find cycle start.
+    - list_new:
+        elements: "1 2 3 4 5 6 7 8"
+    # If node 8 points back to node 3: cycle detected at node 3.
+    - length

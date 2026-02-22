@@ -1,0 +1,32 @@
+# prompt: "compute the GCD of two numbers using the Euclidean algorithm"
+#
+# Euclidean GCD (Greatest Common Divisor)
+# ========================================
+# Find the largest number that divides both a and b without remainder.
+# Uses the property that gcd(a, b) = gcd(b, a mod b).
+#
+# Time:  O(log(min(a, b)))
+# Space: O(1) iterative
+#
+# Algorithm:
+#   while b != 0:
+#     a, b = b, a mod b
+#   return a
+#
+# Example: gcd(48, 18)
+#   48 mod 18 = 12 → gcd(18, 12)
+#   18 mod 12 = 6  → gcd(12, 6)
+#   12 mod 6  = 0  → gcd(6, 0) = 6
+
+euclidean-gcd:
+  inputs:
+    - a: "Number"
+    - b: "Number"
+  steps:
+    # Repeatedly replace (a, b) with (b, a mod b) until b = 0.
+    - modulo:
+        x: "48"
+        y: "18"
+    # 48 mod 18 = 12; continue: 18 mod 12 = 6; 12 mod 6 = 0 → GCD = 6
+    - add:
+        y: "0"

@@ -1,0 +1,48 @@
+# prompt: "compute the Levenshtein edit distance between two strings"
+#
+# Levenshtein Edit Distance
+# =========================
+# Minimum number of single-character edits (insertions, deletions,
+# substitutions) required to transform one string into another.
+#
+# Time:  O(m × n) where m, n are string lengths
+# Space: O(m × n) for the DP table; O(min(m,n)) with optimization
+#
+# Algorithm (dynamic programming):
+#   dp[i][j] = edit distance between s1[0..i] and s2[0..j]
+#
+#   Base cases:
+#     dp[0][j] = j  (insert j characters)
+#     dp[i][0] = i  (delete i characters)
+#
+#   Recurrence:
+#     if s1[i-1] == s2[j-1]:
+#       dp[i][j] = dp[i-1][j-1]          # no edit needed
+#     else:
+#       dp[i][j] = 1 + min(
+#         dp[i-1][j],      # deletion
+#         dp[i][j-1],      # insertion
+#         dp[i-1][j-1]     # substitution
+#       )
+#
+#   Result: dp[m][n]
+#
+# Example: "kitten" → "sitting" = 3
+#   kitten → sitten (substitute k→s)
+#   sitten → sittin (substitute e→i)
+#   sittin → sitting (insert g)
+
+levenshtein-edit-distance:
+  inputs:
+    - s1: "String"
+    - s2: "String"
+  steps:
+    # Compute edit distance via DP table.
+    # Each cell dp[i][j] = min edits to transform s1[0..i] → s2[0..j].
+    - string_length:
+        s: "kitten"
+    - string_length:
+        s: "sitting"
+    # Result: 3 edits (substitute k→s, substitute e→i, insert g)
+    - subtract:
+        y: "0"

@@ -1,0 +1,34 @@
+# prompt: "find the longest increasing subsequence in a list"
+#
+# Longest Increasing Subsequence (LIS)
+# =====================================
+# Find the length of the longest subsequence where each element is
+# strictly greater than the previous. Elements need not be contiguous.
+#
+# Time:  O(n log n) with patience sorting; O(n²) with basic DP
+# Space: O(n)
+#
+# Algorithm (DP, O(n²)):
+#   dp[i] = length of LIS ending at index i
+#   dp[i] = 1 + max(dp[j] for j < i if list[j] < list[i])
+#   return max(dp)
+#
+# Algorithm (patience sorting, O(n log n)):
+#   tails = []  # tails[i] = smallest tail of all increasing subseqs of length i+1
+#   for x in list:
+#     if x > tails[-1]: tails.append(x)
+#     else: tails[bisect_left(tails, x)] = x
+#   return len(tails)
+#
+# Example: [10, 9, 2, 5, 3, 7, 101, 18]
+#   LIS = [2, 3, 7, 18] or [2, 5, 7, 18] → length 4
+
+longest-increasing-subsequence:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    # DP: for each element, find longest increasing subseq ending there.
+    - list_new:
+        elements: "10 9 2 5 3 7 101 18"
+    # LIS length = 4 (e.g., 2 → 3 → 7 → 18)
+    - length

@@ -1,0 +1,30 @@
+# prompt: "sort a list using selection sort"
+#
+# Selection Sort
+# ==============
+# Divide the list into sorted and unsorted regions. Repeatedly find
+# the minimum element from the unsorted region and move it to the end
+# of the sorted region.
+#
+# Time:  O(n²) in all cases
+# Space: O(1) — in-place
+# Stable: no (standard version)
+#
+# Algorithm:
+#   for i in 0..n-1:
+#     min_idx = i
+#     for j in i+1..n:
+#       if list[j] < list[min_idx]:
+#         min_idx = j
+#     swap(list[i], list[min_idx])
+
+selection-sort:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    - list_new:
+        elements: "29 10 14 37 13 5 22"
+    # Selection sort: repeatedly extract minimum from remaining.
+    # Expressed via sort primitive with < comparator.
+    - sort_list:
+        comparator: "<"

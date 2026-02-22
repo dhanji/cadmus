@@ -1,0 +1,37 @@
+# prompt: "compute the Chinese Remainder Theorem solution"
+#
+# Chinese Remainder Theorem (CRT)
+# ================================
+# Given a system of simultaneous congruences:
+#   x ≡ a₁ (mod m₁)
+#   x ≡ a₂ (mod m₂)
+#   ...
+# where m₁, m₂, ... are pairwise coprime, find the unique x mod M
+# where M = m₁ × m₂ × ...
+#
+# Time:  O(n × log M) using extended Euclidean algorithm
+# Space: O(n)
+#
+# Algorithm:
+#   M = product of all moduli
+#   for each i:
+#     Mᵢ = M / mᵢ
+#     yᵢ = modular_inverse(Mᵢ, mᵢ)  # via extended Euclidean
+#   x = Σ(aᵢ × Mᵢ × yᵢ) mod M
+#
+# Example: x ≡ 2 (mod 3), x ≡ 3 (mod 5), x ≡ 2 (mod 7)
+#   M = 105, x = 23
+
+chinese-remainder-theorem:
+  inputs:
+    - remainders: "List(Number)"
+    - moduli: "List(Number)"
+  steps:
+    # Compute M = product of moduli. For each: Mᵢ, inverse, accumulate.
+    - multiply:
+        x: "3"
+        y: "5"
+    # 3 × 5 = 15
+    - multiply:
+        y: "7"
+    # 15 × 7 = 105 = M. Solution: x = 23 (mod 105)

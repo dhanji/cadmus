@@ -1,0 +1,38 @@
+# prompt: "find the optimal order for matrix chain multiplication"
+#
+# Matrix Chain Multiplication
+# ===========================
+# Given a chain of matrices A₁×A₂×...×Aₙ, find the parenthesization
+# that minimizes the total number of scalar multiplications.
+#
+# Time:  O(n³)
+# Space: O(n²)
+#
+# Algorithm (dynamic programming):
+#   dp[i][j] = minimum cost to multiply matrices i through j
+#
+#   dp[i][i] = 0
+#   for length in 2..n:
+#     for i in 1..n-length+1:
+#       j = i + length - 1
+#       dp[i][j] = infinity
+#       for k in i..j-1:
+#         cost = dp[i][k] + dp[k+1][j] + dims[i-1] × dims[k] × dims[j]
+#         dp[i][j] = min(dp[i][j], cost)
+#
+# Example: dimensions = [10, 30, 5, 60]
+#   A₁: 10×30, A₂: 30×5, A₃: 5×60
+#   (A₁×A₂)×A₃ = 10×30×5 + 10×5×60 = 1500 + 3000 = 4500
+#   A₁×(A₂×A₃) = 30×5×60 + 10×30×60 = 9000 + 18000 = 27000
+#   Optimal: (A₁×A₂)×A₃ = 4500
+
+matrix-chain-multiplication:
+  inputs:
+    - dimensions: "List(Number)"
+  steps:
+    # Build n×n DP table. Try all split points k for each subchain.
+    - list_new:
+        elements: "10 30 5 60"
+    # Dimensions: [10, 30, 5, 60] → 3 matrices
+    # Optimal cost: 4500 scalar multiplications
+    - length

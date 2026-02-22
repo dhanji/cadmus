@@ -1,0 +1,32 @@
+# prompt: "find shortest paths from all vertices using Floyd-Warshall"
+#
+# Floyd-Warshall All-Pairs Shortest Paths
+# =========================================
+# Compute shortest paths between all pairs of vertices in a weighted
+# graph. Handles negative weights (but not negative cycles).
+#
+# Time:  O(V³)
+# Space: O(V²)
+#
+# Algorithm:
+#   dist[i][j] = weight(i, j) if edge exists, else infinity
+#   dist[i][i] = 0
+#   for k in 1..V:
+#     for i in 1..V:
+#       for j in 1..V:
+#         dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+#
+# The key insight: at step k, dist[i][j] is the shortest path from i
+# to j using only vertices {1, ..., k} as intermediates.
+#
+# Negative cycle detection: if dist[i][i] < 0 for any i after completion.
+
+floyd-warshall:
+  inputs:
+    - graph: "List(String)"
+  steps:
+    # Initialize V×V distance matrix. Triple nested loop over intermediates.
+    - list_new:
+        elements: "A B C D"
+    # All-pairs shortest paths for 4 vertices.
+    - length

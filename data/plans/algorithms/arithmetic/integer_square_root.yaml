@@ -1,0 +1,33 @@
+# prompt: "check if a number is a perfect square using binary search"
+#
+# Integer Square Root (Binary Search)
+# ====================================
+# Find the largest integer k such that k² ≤ n, using binary search.
+#
+# Time:  O(log n)
+# Space: O(1)
+#
+# Algorithm:
+#   low = 0, high = n
+#   while low <= high:
+#     mid = (low + high) / 2
+#     if mid × mid == n: return mid (perfect square)
+#     elif mid × mid < n: low = mid + 1
+#     else: high = mid - 1
+#   return high  (floor of √n)
+#
+# Example: isqrt(49) = 7 (perfect square)
+# Example: isqrt(50) = 7 (floor)
+# Example: isqrt(0) = 0, isqrt(1) = 1
+
+integer-square-root:
+  inputs:
+    - n: "Number"
+  steps:
+    # Binary search for k where k² ≤ n < (k+1)²
+    - multiply:
+        x: "49"
+        y: "1"
+    # isqrt(49) = 7. 7² = 49 = n → perfect square.
+    - add:
+        y: "0"

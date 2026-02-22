@@ -1,0 +1,38 @@
+# prompt: "implement a bloom filter for probabilistic set membership"
+#
+# Bloom Filter
+# ============
+# Space-efficient probabilistic data structure for set membership queries.
+# May return false positives but never false negatives.
+#
+# Time:  O(k) per insert/query (k = number of hash functions)
+# Space: O(m) bits (m = filter size)
+#
+# Algorithm:
+#   Initialize bit array of m bits, all 0
+#
+#   insert(x):
+#     for each hash function h_i (i = 1..k):
+#       bit_array[h_i(x) mod m] = 1
+#
+#   query(x):
+#     for each hash function h_i:
+#       if bit_array[h_i(x) mod m] == 0: return "definitely not in set"
+#     return "probably in set"
+#
+# False positive rate: (1 - e^(-kn/m))^k
+# Optimal k = (m/n) × ln(2)
+#
+# Used in: web caches, database lookups, network routers, Bitcoin SPV.
+
+bloom-filter:
+  inputs:
+    - m: "Number"
+    - k: "Number"
+  steps:
+    # Initialize m-bit array. Hash each element k times, set bits.
+    - list_new:
+        elements: "apple banana cherry"
+    # Insert 3 items into bloom filter. Query "apple" → probably yes.
+    # Query "grape" → definitely no (if bits not set).
+    - length

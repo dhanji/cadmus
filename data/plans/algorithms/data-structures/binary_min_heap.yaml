@@ -1,0 +1,40 @@
+# prompt: "implement a binary heap with insert and extract-min"
+#
+# Binary Min-Heap
+# ===============
+# Complete binary tree where each node is smaller than its children.
+# Supports efficient insert and extract-min operations.
+#
+# Time:  O(log n) insert, O(log n) extract-min, O(1) peek-min
+# Space: O(n) — stored as an array
+#
+# Array representation: parent(i) = (i-1)/2, left(i) = 2i+1, right(i) = 2i+2
+#
+# Algorithm:
+#   insert(x):
+#     append x to end of array
+#     sift_up(last_index)  # bubble up until heap property restored
+#
+#   extract_min():
+#     min = array[0]
+#     array[0] = array[last]
+#     remove last
+#     sift_down(0)  # bubble down until heap property restored
+#     return min
+#
+#   sift_up(i): while parent > child: swap
+#   sift_down(i): while child < parent: swap with smaller child
+#
+# Used in: priority queues, Dijkstra's algorithm, heap sort.
+
+binary-min-heap:
+  inputs:
+    - elements: "List(Number)"
+  steps:
+    # Build heap by inserting elements one by one (or heapify in O(n)).
+    - list_new:
+        elements: "5 3 8 1 9 2 7"
+    # After heapify: [1, 3, 2, 5, 9, 8, 7]
+    # Extract-min returns 1, then 2, then 3, ...
+    - sort_list:
+        comparator: "<"

@@ -1,0 +1,38 @@
+# prompt: "search for a number using Fibonacci search"
+#
+# Fibonacci Search
+# ================
+# Similar to binary search but divides the array using Fibonacci numbers
+# instead of halving. Uses only addition and subtraction (no division).
+#
+# Time:  O(log n)
+# Space: O(1)
+# Prerequisite: sorted input
+#
+# Algorithm:
+#   Find smallest Fibonacci number >= n: fib(m)
+#   offset = -1
+#   while fib(m) > 1:
+#     i = min(offset + fib(m-2), n-1)
+#     if list[i] < target:
+#       fib(m) = fib(m-1); fib(m-1) = fib(m-2)
+#       offset = i
+#     elif list[i] > target:
+#       fib(m) = fib(m-2); fib(m-1) -= fib(m-2)
+#     else: return i
+#   if fib(m-1) and list[offset+1] == target: return offset+1
+#   return -1
+#
+# Useful on systems where division is expensive (embedded).
+
+fibonacci-search:
+  inputs:
+    - lst: "List(Number)"
+    - target: "Number"
+  steps:
+    - list_new:
+        elements: "10 22 35 40 45 50 80 82 85 90 100"
+    # Fibonacci search: divide using Fibonacci numbers, no division needed.
+    # O(log n). Requires sorted input.
+    - racket_filter:
+        predicate: "(lambda (x) (equal? x 85))"

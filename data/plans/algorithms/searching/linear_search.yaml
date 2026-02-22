@@ -1,0 +1,29 @@
+# prompt: "search for a number in a list using linear search"
+#
+# Linear Search (Sequential Search)
+# ==================================
+# Scan each element of the list from start to end until the target is
+# found or the list is exhausted.
+#
+# Time:  O(n) worst and average; O(1) best
+# Space: O(1)
+# Prerequisite: none — works on unsorted data
+#
+# Algorithm:
+#   for i in 0..n:
+#     if list[i] == target: return i
+#   return -1  # not found
+#
+# Simplest search. Use when data is small or unsorted.
+
+linear-search:
+  inputs:
+    - lst: "List(Number)"
+    - target: "Number"
+  steps:
+    - list_new:
+        elements: "10 23 19 5 42 7 31"
+    # Linear search: scan left to right until target found.
+    # O(n). No sorting required.
+    - racket_filter:
+        predicate: "(lambda (x) (equal? x 42))"

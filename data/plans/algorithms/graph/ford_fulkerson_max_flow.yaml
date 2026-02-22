@@ -1,0 +1,33 @@
+# prompt: "find the maximum flow in a network using Ford-Fulkerson"
+#
+# Ford-Fulkerson Maximum Flow
+# ============================
+# Find the maximum flow from source to sink in a flow network.
+# Repeatedly find augmenting paths and push flow along them.
+#
+# Time:  O(E × max_flow) with DFS; O(V × E²) with Edmonds-Karp (BFS)
+# Space: O(V + E) for the residual graph
+#
+# Algorithm:
+#   Initialize flow = 0 on all edges
+#   while there exists an augmenting path from source to sink in residual graph:
+#     Find bottleneck (minimum residual capacity along path)
+#     Augment flow along path by bottleneck
+#     Update residual graph (forward edges decrease, backward edges increase)
+#   return total flow
+#
+# Max-flow min-cut theorem: maximum flow = minimum cut capacity.
+#
+# Used in: network routing, bipartite matching, image segmentation.
+
+ford-fulkerson-max-flow:
+  inputs:
+    - graph: "List(String)"
+    - source: "String"
+    - sink: "String"
+  steps:
+    # Find augmenting paths via DFS/BFS, push flow, update residual graph.
+    - list_new:
+        elements: "S A B C D T"
+    # Network with 6 nodes. Max flow from S to T.
+    - length

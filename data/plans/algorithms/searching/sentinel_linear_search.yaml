@@ -1,0 +1,35 @@
+# prompt: "search for a number using sentinel linear search"
+#
+# Sentinel Linear Search
+# ======================
+# Optimization of linear search that eliminates the bounds check in
+# the inner loop. Place the target at the end of the array (sentinel),
+# so the loop always terminates without checking index bounds.
+#
+# Time:  O(n) — same asymptotic as linear, but fewer comparisons per step
+# Space: O(1)
+# Prerequisite: none
+#
+# Algorithm:
+#   last = list[n-1]
+#   list[n-1] = target   # place sentinel
+#   i = 0
+#   while list[i] != target:
+#     i += 1
+#   list[n-1] = last     # restore
+#   if i < n-1 or last == target: return i
+#   return -1
+#
+# Saves one comparison per iteration (no i < n check).
+
+sentinel-linear-search:
+  inputs:
+    - lst: "List(Number)"
+    - target: "Number"
+  steps:
+    - list_new:
+        elements: "15 22 8 31 44 7 19"
+    # Sentinel linear search: append target as sentinel, scan without
+    # bounds check. O(n) but fewer comparisons than naive linear.
+    - racket_filter:
+        predicate: "(lambda (x) (equal? x 31))"

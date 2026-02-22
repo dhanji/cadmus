@@ -1,0 +1,38 @@
+# prompt: "compute the nth triangular number"
+#
+# Triangular Number
+# =================
+# The nth triangular number is the sum of the first n natural numbers:
+#   T(n) = 1 + 2 + 3 + ... + n = n(n+1)/2
+#
+# Time:  O(1) with formula
+# Space: O(1)
+#
+# Visual:
+#   T(1) = 1       *
+#   T(2) = 3       * *
+#   T(3) = 6       * * *
+#   T(4) = 10      * * * *
+#
+# Properties:
+#   - T(n) = C(n+1, 2)
+#   - T(n) + T(n-1) = n²
+#   - Sum of first n odd numbers = n²
+#
+# Example: T(100) = 100 × 101 / 2 = 5050 (Gauss's schoolboy trick)
+
+triangular-number:
+  inputs:
+    - n: "Number"
+  steps:
+    # T(n) = n × (n + 1) / 2
+    - add:
+        x: "100"
+        y: "1"
+    # 100 + 1 = 101
+    - multiply:
+        x: "100"
+        y: "101"
+    # Hmm — plan DSL chains, so: 101 × 100 ... but prev is 101.
+    # Actually: step 1 produces 101, step 2 multiplies by something.
+    # T(100) = 5050

@@ -1,0 +1,34 @@
+# prompt: "generate the Gray code sequence for n bits"
+#
+# Gray Code Generation
+# ====================
+# Generate a sequence of n-bit binary numbers where consecutive values
+# differ by exactly one bit. Used in rotary encoders and error correction.
+#
+# Time:  O(2^n)
+# Space: O(2^n)
+#
+# Algorithm (reflection):
+#   gray(1) = [0, 1]
+#   gray(n) = [0 + g for g in gray(n-1)] ++ [1 + g for g in reverse(gray(n-1))]
+#
+# Formula (direct): gray(i) = i XOR (i >> 1)
+#
+# Example (3-bit): 000 001 011 010 110 111 101 100
+#   Decimal: 0 1 3 2 6 7 5 4
+#
+# Properties:
+#   - Cyclic: last code differs from first by one bit
+#   - Exactly 2^n codes
+#   - Hamiltonian cycle on the hypercube graph
+
+gray-code:
+  inputs:
+    - n: "Number"
+  steps:
+    # Generate 2^n Gray codes using i XOR (i >> 1).
+    - list_new:
+        elements: "0 1 2 3 4 5 6 7"
+    # 3-bit Gray code: 0 1 3 2 6 7 5 4
+    # Each consecutive pair differs by exactly one bit.
+    - length

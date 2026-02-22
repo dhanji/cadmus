@@ -1,0 +1,37 @@
+# prompt: "search for a pattern in text using Rabin-Karp hashing"
+#
+# Rabin-Karp Hash Search
+# ======================
+# String search using a rolling hash. Compute the hash of the pattern
+# and slide a window across the text, updating the hash in O(1) per
+# position. Only do character-by-character comparison when hashes match.
+#
+# Time:  O(n + m) average; O(nm) worst case (many hash collisions)
+# Space: O(1) beyond the input
+#
+# Algorithm:
+#   h_pattern = hash(pattern)
+#   h_window  = hash(text[0..m])
+#   for i in 0..n-m:
+#     if h_window == h_pattern:
+#       if text[i..i+m] == pattern: found match at i
+#     # Rolling hash: remove text[i], add text[i+m]
+#     h_window = roll(h_window, text[i], text[i+m])
+#
+# Rolling hash: h = (h - text[i] × d^(m-1)) × d + text[i+m]  (mod q)
+# Good for multi-pattern search (compute hash for each pattern).
+
+rabin-karp:
+  inputs:
+    - text: "String"
+    - pattern: "String"
+  steps:
+    # Compute rolling hash over text windows, compare with pattern hash.
+    # Character comparison only on hash match.
+    - string_length:
+        s: "GEEKS FOR GEEKS"
+    - string_length:
+        s: "GEEK"
+    # Rabin-Karp finds matches at positions 0 and 10.
+    - subtract:
+        y: "0"

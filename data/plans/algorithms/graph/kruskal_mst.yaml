@@ -1,0 +1,34 @@
+# prompt: "find the minimum spanning tree using Kruskal's algorithm"
+#
+# Kruskal's Minimum Spanning Tree
+# ================================
+# Find a subset of edges that connects all vertices with minimum total
+# weight and no cycles. Uses a greedy approach: sort edges by weight,
+# add each edge if it doesn't create a cycle (checked via Union-Find).
+#
+# Time:  O(E log E) — dominated by sorting edges
+# Space: O(V) for Union-Find
+#
+# Algorithm:
+#   Sort all edges by weight
+#   Initialize Union-Find with V components
+#   mst = []
+#   for (u, v, weight) in sorted edges:
+#     if find(u) != find(v):    # different components
+#       union(u, v)
+#       mst.append((u, v, weight))
+#     if len(mst) == V - 1: break
+#   return mst
+#
+# Example: A-B:4, A-C:2, B-C:1, B-D:5, C-D:8, C-E:10, D-E:2
+#   MST: B-C:1, A-C:2, D-E:2, A-B:4 → total weight = 9
+
+kruskal-mst:
+  inputs:
+    - edges: "List(String)"
+  steps:
+    # Sort edges by weight. Add each if it connects two different components.
+    - list_new:
+        elements: "B-C:1 A-C:2 D-E:2 A-B:4 B-D:5 C-D:8 C-E:10"
+    # MST edges: B-C:1, A-C:2, D-E:2, A-B:4 → total = 9
+    - length

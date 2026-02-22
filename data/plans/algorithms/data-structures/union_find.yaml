@@ -1,0 +1,38 @@
+# prompt: "implement a union-find data structure with path compression"
+#
+# Union-Find (Disjoint Set Union)
+# ================================
+# Data structure that tracks a partition of elements into disjoint sets.
+# Supports two operations: find (which set?) and union (merge two sets).
+#
+# Time:  O(α(n)) amortized per operation (α = inverse Ackermann, nearly O(1))
+# Space: O(n)
+#
+# Algorithm:
+#   parent[x] = x for all x  (each element is its own set)
+#   rank[x] = 0
+#
+#   find(x):
+#     if parent[x] != x:
+#       parent[x] = find(parent[x])  # path compression
+#     return parent[x]
+#
+#   union(x, y):
+#     rx, ry = find(x), find(y)
+#     if rx == ry: return  # already same set
+#     if rank[rx] < rank[ry]: swap(rx, ry)
+#     parent[ry] = rx      # union by rank
+#     if rank[rx] == rank[ry]: rank[rx] += 1
+#
+# Used in: Kruskal's MST, connected components, percolation.
+
+union-find:
+  inputs:
+    - elements: "List(Number)"
+  steps:
+    # Initialize parent array. Find with path compression, union by rank.
+    - list_new:
+        elements: "0 1 2 3 4 5 6 7"
+    # 8 elements, initially 8 disjoint sets.
+    # After union(0,1), union(2,3), union(0,2): {0,1,2,3} {4} {5} {6} {7}
+    - length

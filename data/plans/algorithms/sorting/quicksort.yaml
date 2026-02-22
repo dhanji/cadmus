@@ -1,0 +1,32 @@
+# prompt: "sort a list using quicksort"
+#
+# Quicksort (Hoare partition scheme)
+# ===================================
+# Divide-and-conquer: pick a pivot, partition elements into those less
+# than and greater than the pivot, recursively sort each partition.
+#
+# Time:  O(n log n) average; O(n²) worst case (bad pivot)
+# Space: O(log n) stack depth average
+# Stable: no
+#
+# Algorithm:
+#   quicksort(lst):
+#     if length(lst) <= 1: return lst
+#     pivot = lst[0]
+#     less    = [x for x in lst[1:] if x <= pivot]
+#     greater = [x for x in lst[1:] if x > pivot]
+#     return quicksort(less) + [pivot] + quicksort(greater)
+#
+# The functional version (filter into less/greater, recurse, append)
+# maps naturally to filter + append ops.
+
+quicksort:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    - list_new:
+        elements: "10 7 8 9 1 5 3 6 2 4"
+    # Quicksort: partition around pivot, recurse on halves.
+    # Average O(n log n). Not stable.
+    - sort_list:
+        comparator: "<"

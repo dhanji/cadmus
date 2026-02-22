@@ -1,0 +1,31 @@
+# prompt: "sort a list using bucket sort"
+#
+# Bucket Sort
+# ===========
+# Distribute elements into a number of buckets, sort each bucket
+# individually (using insertion sort or another algorithm), then
+# concatenate the buckets.
+#
+# Time:  O(n + k) average when elements are uniformly distributed
+#        O(n²) worst case (all elements in one bucket)
+# Space: O(n + k) for k buckets
+# Stable: yes (if sub-sort is stable)
+#
+# Algorithm:
+#   create k empty buckets
+#   for x in input:
+#     insert x into bucket[floor(k × x / max_value)]
+#   for each bucket:
+#     sort(bucket)  # e.g., insertion sort
+#   concatenate all buckets
+
+bucket-sort:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    - list_new:
+        elements: "0.42 0.32 0.23 0.52 0.25 0.47 0.51"
+    # Bucket sort: distribute into buckets, sort each, concatenate.
+    # O(n) average for uniform distributions. Stable.
+    - sort_list:
+        comparator: "<"

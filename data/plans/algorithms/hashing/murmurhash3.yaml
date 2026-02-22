@@ -1,0 +1,43 @@
+# prompt: "compute the MurmurHash3 of a string"
+#
+# MurmurHash3
+# ===========
+# Fast, non-cryptographic hash function with excellent distribution
+# and low collision rate. Widely used in practice.
+#
+# Time:  O(n) where n = input length
+# Space: O(1)
+#
+# Algorithm (MurmurHash3, 32-bit):
+#   h = seed
+#   for each 4-byte block:
+#     k = block × c1
+#     k = rotl(k, 15)
+#     k = k × c2
+#     h = h XOR k
+#     h = rotl(h, 13)
+#     h = h × 5 + 0xe6546b64
+#   # Process remaining bytes
+#   # Finalization: avalanche mixing
+#   h = h XOR (h >> 16)
+#   h = h × 0x85ebca6b
+#   h = h XOR (h >> 13)
+#   h = h × 0xc2b2ae35
+#   h = h XOR (h >> 16)
+#   return h
+#
+# Properties: better distribution than FNV, faster than SipHash.
+# Used in: hash tables, Bloom filters, HyperLogLog.
+
+murmurhash3:
+  inputs:
+    - data: "String"
+    - seed: "Number"
+  steps:
+    # Process 4-byte blocks with multiply-rotate-XOR, then finalize.
+    - add:
+        x: "0"
+        y: "42"
+    # MurmurHash3("hello", seed=42) → process blocks → finalize
+    - multiply:
+        y: "1"

@@ -1,0 +1,38 @@
+# prompt: "find all occurrences of multiple patterns using Aho-Corasick"
+#
+# Aho-Corasick Multi-Pattern Search
+# ===================================
+# Search for multiple patterns simultaneously in a text using a
+# trie with failure links (similar to KMP's failure function but
+# for multiple patterns).
+#
+# Time:  O(n + m + z) where n=text, m=total pattern length, z=matches
+# Space: O(m) for the automaton
+#
+# Algorithm:
+#   1. Build a trie from all patterns
+#   2. Add failure links (BFS from root):
+#      failure[node] = longest proper suffix of node's path that is
+#      also a prefix of some pattern
+#   3. Search text:
+#      state = root
+#      for each character c in text:
+#        while state has no edge for c and state != root:
+#          state = failure[state]
+#        if state has edge for c: state = goto(state, c)
+#        report all patterns ending at state (follow output links)
+#
+# Used in: intrusion detection, DNA sequence analysis, spam filtering.
+
+aho-corasick:
+  inputs:
+    - text: "String"
+    - patterns: "List(String)"
+  steps:
+    # Build trie + failure links. Scan text once, report all matches.
+    - string_length:
+        s: "ahishers"
+    # Patterns: "he", "she", "his", "hers"
+    # Matches: "his" at 1, "he" at 4, "she" at 3, "hers" at 4
+    - add:
+        y: "0"

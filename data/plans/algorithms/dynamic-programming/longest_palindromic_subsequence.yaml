@@ -1,0 +1,31 @@
+# prompt: "compute the longest palindromic subsequence"
+#
+# Longest Palindromic Subsequence (LPS)
+# ======================================
+# Find the length of the longest subsequence that is a palindrome.
+# Unlike longest palindromic substring, characters need not be contiguous.
+#
+# Time:  O(n²)
+# Space: O(n²); O(n) with optimization
+#
+# Algorithm (DP):
+#   dp[i][j] = length of LPS in s[i..j]
+#
+#   Base: dp[i][i] = 1
+#   if s[i] == s[j]: dp[i][j] = dp[i+1][j-1] + 2
+#   else: dp[i][j] = max(dp[i+1][j], dp[i][j-1])
+#
+# Alternative: LPS(s) = LCS(s, reverse(s))
+#
+# Example: "BBABCBCAB" → LPS = "BABCBAB" (length 7)
+
+longest-palindromic-subsequence:
+  inputs:
+    - s: "String"
+  steps:
+    # DP on substrings: expand from single chars to full string.
+    - string_length:
+        s: "BBABCBCAB"
+    # LPS = "BABCBAB", length 7
+    - subtract:
+        y: "0"

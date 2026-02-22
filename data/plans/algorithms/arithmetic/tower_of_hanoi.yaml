@@ -1,0 +1,36 @@
+# prompt: "compute the number of moves for the Tower of Hanoi"
+#
+# Tower of Hanoi
+# ==============
+# Move n disks from source peg to target peg using an auxiliary peg.
+# Rules: only one disk at a time, never place larger on smaller.
+#
+# Time:  O(2^n) — exactly 2^n - 1 moves required
+# Space: O(n) recursive stack
+#
+# Algorithm:
+#   hanoi(n, source, target, auxiliary):
+#     if n == 1:
+#       move disk 1 from source to target
+#       return
+#     hanoi(n-1, source, auxiliary, target)
+#     move disk n from source to target
+#     hanoi(n-1, auxiliary, target, source)
+#
+# Move count: T(n) = 2^n - 1
+# Example: T(3) = 7 moves, T(10) = 1023 moves, T(64) = 18446744073709551615
+#
+# Classic example of exponential-time recursion.
+
+tower-of-hanoi:
+  inputs:
+    - n: "Number"
+  steps:
+    # Number of moves = 2^n - 1
+    - expt:
+        x: "2"
+        y: "10"
+    # 2^10 = 1024
+    - subtract:
+        y: "1"
+    # 1024 - 1 = 1023 moves for 10 disks

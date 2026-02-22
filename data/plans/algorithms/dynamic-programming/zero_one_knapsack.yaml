@@ -1,0 +1,42 @@
+# prompt: "solve the 0-1 knapsack problem"
+#
+# 0-1 Knapsack Problem
+# ====================
+# Given n items with weights and values, and a knapsack of capacity W,
+# find the maximum value achievable without exceeding the weight limit.
+# Each item is either taken or not (0-1 choice).
+#
+# Time:  O(n × W)
+# Space: O(n × W) for the DP table; O(W) with rolling row
+#
+# Algorithm (dynamic programming):
+#   dp[i][w] = max value using items 1..i with capacity w
+#
+#   dp[0][w] = 0 for all w
+#   for i in 1..n:
+#     for w in 0..W:
+#       if weight[i] > w:
+#         dp[i][w] = dp[i-1][w]          # can't take item i
+#       else:
+#         dp[i][w] = max(
+#           dp[i-1][w],                   # skip item i
+#           dp[i-1][w - weight[i]] + value[i]  # take item i
+#         )
+#   return dp[n][W]
+#
+# Example: items = [(2,3), (3,4), (4,5), (5,6)], W = 8
+#   Optimal: take items 1,2,3 → weight=9 (too heavy)
+#   Take items 2,3 → weight=7, value=9 ✓
+
+zero-one-knapsack:
+  inputs:
+    - weights: "List(Number)"
+    - values: "List(Number)"
+    - capacity: "Number"
+  steps:
+    # Build n×W DP table. Each cell = max value for prefix of items at capacity.
+    - list_new:
+        elements: "2 3 4 5"
+    # Weights: 2 3 4 5; Values: 3 4 5 6; Capacity: 8
+    # Optimal value = 12 (items with weights 3+5=8, values 4+6=10... or 2+3+4=9>8)
+    - length

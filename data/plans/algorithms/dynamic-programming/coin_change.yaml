@@ -1,0 +1,34 @@
+# prompt: "find the minimum number of coins to make change"
+#
+# Coin Change Problem
+# ===================
+# Given coin denominations and a target amount, find the minimum number
+# of coins needed to make that amount. Classic DP problem.
+#
+# Time:  O(n × amount) where n = number of denominations
+# Space: O(amount)
+#
+# Algorithm (dynamic programming):
+#   dp[0] = 0
+#   dp[i] = infinity for i > 0
+#   for coin in coins:
+#     for amount in coin..target:
+#       dp[amount] = min(dp[amount], dp[amount - coin] + 1)
+#   return dp[target]  (-1 if dp[target] == infinity)
+#
+# Example: coins = [1, 5, 10, 25], amount = 36
+#   Optimal: 25 + 10 + 1 = 3 coins
+#
+# Greedy doesn't always work (e.g., coins=[1,3,4], amount=6: greedy=4+1+1=3, optimal=3+3=2)
+
+coin-change:
+  inputs:
+    - coins: "List(Number)"
+    - amount: "Number"
+  steps:
+    # DP: for each coin, update dp[amount] = min(dp[amount], dp[amount-coin]+1)
+    - list_new:
+        elements: "1 5 10 25"
+    # Coins: 1 5 10 25; Target: 36
+    # Minimum coins: 25 + 10 + 1 = 3 coins
+    - length

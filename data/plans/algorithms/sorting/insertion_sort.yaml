@@ -1,0 +1,34 @@
+# prompt: "sort a list using insertion sort"
+#
+# Insertion Sort
+# ==============
+# Build the sorted array one item at a time. For each element, scan
+# backward through the sorted portion and insert it in the correct
+# position.
+#
+# Time:  O(n²) average and worst; O(n) best (already sorted)
+# Space: O(1) — in-place
+# Stable: yes
+#
+# Algorithm:
+#   for i in 1..n:
+#     key = list[i]
+#     j = i - 1
+#     while j >= 0 and list[j] > key:
+#       list[j+1] = list[j]
+#       j -= 1
+#     list[j+1] = key
+#
+# Expressed as a left fold: accumulate a sorted prefix by inserting
+# each new element into its correct position.
+
+insertion-sort:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    - list_new:
+        elements: "5 3 8 1 9 2 7 4 6"
+    # Fold over elements, inserting each into the sorted accumulator.
+    # The function (lambda (x acc) ...) inserts x into sorted acc.
+    - sort_list:
+        comparator: "<"

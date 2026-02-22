@@ -1,0 +1,39 @@
+# prompt: "compute the edit distance between two strings using Wagner-Fischer"
+#
+# Wagner-Fischer Algorithm
+# ========================
+# Tabular DP computation of the Levenshtein edit distance.
+# Named after Robert Wagner and Michael Fischer (1974).
+# This is the standard implementation of Levenshtein distance.
+#
+# Time:  O(m × n)
+# Space: O(m × n); O(min(m,n)) with two-row optimization
+#
+# Algorithm:
+#   Create (m+1) × (n+1) matrix D
+#   D[i][0] = i for all i (delete i chars from s1)
+#   D[0][j] = j for all j (insert j chars into s1)
+#   for i in 1..m:
+#     for j in 1..n:
+#       cost = 0 if s1[i] == s2[j] else 1
+#       D[i][j] = min(
+#         D[i-1][j] + 1,        # deletion
+#         D[i][j-1] + 1,        # insertion
+#         D[i-1][j-1] + cost    # substitution
+#       )
+#   return D[m][n]
+#
+# Example: "sunday" → "saturday" = 3
+
+wagner-fischer:
+  inputs:
+    - s1: "String"
+    - s2: "String"
+  steps:
+    - string_length:
+        s: "sunday"
+    - string_length:
+        s: "saturday"
+    # Wagner-Fischer: edit distance = 3
+    - subtract:
+        y: "0"

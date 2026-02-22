@@ -1,0 +1,41 @@
+# prompt: "reverse the bits of an integer"
+#
+# Bit Reversal
+# ============
+# Reverse the order of bits in an n-bit integer.
+#
+# Time:  O(n) where n = number of bits
+# Space: O(1)
+#
+# Algorithm:
+#   result = 0
+#   for i in 0..n_bits:
+#     result = (result << 1) | (x & 1)
+#     x = x >> 1
+#   return result
+#
+# Divide-and-conquer (32-bit):
+#   x = ((x & 0x55555555) << 1)  | ((x >> 1) & 0x55555555)   # swap adjacent bits
+#   x = ((x & 0x33333333) << 2)  | ((x >> 2) & 0x33333333)   # swap 2-bit groups
+#   x = ((x & 0x0F0F0F0F) << 4)  | ((x >> 4) & 0x0F0F0F0F)   # swap nibbles
+#   x = ((x & 0x00FF00FF) << 8)  | ((x >> 8) & 0x00FF00FF)   # swap bytes
+#   x = (x << 16) | (x >> 16)                                  # swap halves
+#
+# Example (8-bit): reverse(0b11010010) = 0b01001011
+#   210 → 75
+#
+# Used in: FFT (bit-reversal permutation), network routing.
+
+bit-reversal:
+  inputs:
+    - x: "Number"
+    - n_bits: "Number"
+  steps:
+    # Shift result left, OR with LSB of x, shift x right. Repeat n times.
+    - multiply:
+        x: "210"
+        y: "1"
+    # reverse_bits(210, 8) = 75
+    # 210 = 11010010₂ → 01001011₂ = 75
+    - add:
+        y: "0"

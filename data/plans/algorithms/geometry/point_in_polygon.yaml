@@ -1,0 +1,39 @@
+# prompt: "check if a point is inside a polygon"
+#
+# Point-in-Polygon (Ray Casting Algorithm)
+# =========================================
+# Determine whether a point lies inside, outside, or on the boundary
+# of a polygon. Cast a ray from the point to infinity and count how
+# many polygon edges it crosses.
+#
+# Time:  O(n) where n = number of polygon edges
+# Space: O(1)
+#
+# Algorithm:
+#   crossings = 0
+#   for each edge (v₁, v₂) of the polygon:
+#     if ray from point crosses edge:
+#       crossings += 1
+#   if crossings is odd: point is inside
+#   if crossings is even: point is outside
+#
+# Edge crossing test:
+#   Ray goes rightward from (px, py).
+#   Edge from (x1,y1) to (x2,y2) crosses if:
+#     - y1 and y2 straddle py (one above, one below)
+#     - The x-coordinate of the intersection is > px
+#
+# Also known as the Jordan curve theorem test.
+# Alternative: winding number algorithm (handles self-intersecting polygons).
+
+point-in-polygon:
+  inputs:
+    - point: "String"
+    - polygon: "List(String)"
+  steps:
+    # Cast horizontal ray from point, count edge crossings.
+    # Odd crossings = inside, even = outside.
+    - list_new:
+        elements: "0,0 4,0 4,4 0,4"
+    # Square polygon. Point (2,2) → inside (1 crossing). Point (5,5) → outside.
+    - length

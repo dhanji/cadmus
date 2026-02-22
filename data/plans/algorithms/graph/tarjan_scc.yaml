@@ -1,0 +1,41 @@
+# prompt: "find strongly connected components using Tarjan's algorithm"
+#
+# Tarjan's Strongly Connected Components
+# ========================================
+# Find all strongly connected components (SCCs) in a directed graph.
+# An SCC is a maximal set of vertices where every vertex is reachable
+# from every other vertex.
+#
+# Time:  O(V + E)
+# Space: O(V)
+#
+# Algorithm:
+#   index_counter = 0
+#   stack = []
+#   for each vertex v:
+#     if v.index is undefined:
+#       strongconnect(v)
+#
+#   strongconnect(v):
+#     v.index = v.lowlink = index_counter++
+#     stack.push(v)
+#     v.on_stack = true
+#     for each (v, w) in edges:
+#       if w.index is undefined:
+#         strongconnect(w)
+#         v.lowlink = min(v.lowlink, w.lowlink)
+#       elif w.on_stack:
+#         v.lowlink = min(v.lowlink, w.index)
+#     if v.lowlink == v.index:
+#       # v is root of an SCC
+#       pop stack until v → that's one SCC
+
+tarjan-scc:
+  inputs:
+    - graph: "List(String)"
+  steps:
+    # DFS with index/lowlink tracking. Root of SCC: lowlink == index.
+    - list_new:
+        elements: "A B C D E F G H"
+    # Find all SCCs in directed graph. Single-pass DFS.
+    - length

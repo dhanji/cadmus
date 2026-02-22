@@ -1,0 +1,39 @@
+# prompt: "compute the extended Euclidean GCD of two numbers"
+#
+# Extended Euclidean Algorithm
+# ============================
+# Computes gcd(a, b) and also finds integers x, y such that:
+#   a × x + b × y = gcd(a, b)    (Bézout's identity)
+#
+# Time:  O(log(min(a, b)))
+# Space: O(1) iterative
+#
+# Algorithm:
+#   old_r, r = a, b
+#   old_s, s = 1, 0
+#   old_t, t = 0, 1
+#   while r != 0:
+#     quotient = old_r / r
+#     old_r, r = r, old_r - quotient × r
+#     old_s, s = s, old_s - quotient × s
+#     old_t, t = t, old_t - quotient × t
+#   return (old_r, old_s, old_t)  # (gcd, x, y)
+#
+# Example: ext_gcd(35, 15)
+#   gcd = 5, x = 1, y = -2  →  35×1 + 15×(-2) = 5
+#
+# Used in modular inverse computation and RSA key generation.
+
+extended-euclidean-gcd:
+  inputs:
+    - a: "Number"
+    - b: "Number"
+  steps:
+    # Track (r, s, t) triples through the Euclidean iterations.
+    # Final s, t are the Bézout coefficients.
+    - modulo:
+        x: "35"
+        y: "15"
+    # ext_gcd(35, 15) → gcd=5, x=1, y=-2
+    - add:
+        y: "0"

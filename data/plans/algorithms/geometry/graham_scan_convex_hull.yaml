@@ -1,0 +1,38 @@
+# prompt: "compute the convex hull of a set of points using Graham scan"
+#
+# Convex Hull — Graham Scan
+# =========================
+# Find the smallest convex polygon that contains all given points.
+# Graham scan sorts points by polar angle from a bottom-most point,
+# then processes them maintaining a convex hull using a stack.
+#
+# Time:  O(n log n) — dominated by the sort
+# Space: O(n)
+#
+# Algorithm:
+#   1. Find the point with lowest y-coordinate (leftmost if tie) → P₀
+#   2. Sort remaining points by polar angle with respect to P₀
+#   3. Initialize stack with P₀, P₁, P₂
+#   4. For each remaining point Pᵢ:
+#      while the turn from second-to-top → top → Pᵢ is clockwise:
+#        pop the stack
+#      push Pᵢ
+#   5. Stack contains the convex hull vertices in CCW order
+#
+# Cross product test: (B-A) × (C-A) > 0 → left turn (CCW)
+#                                    = 0 → collinear
+#                                    < 0 → right turn (CW)
+#
+# Example: points = (0,0) (1,1) (2,2) (0,2) (2,0) (1,0) (0,1)
+#   Hull: (0,0) (2,0) (2,2) (0,2)
+
+graham-scan-convex-hull:
+  inputs:
+    - points: "List(String)"
+  steps:
+    # Sort by polar angle from bottom-most point.
+    # Maintain stack, pop on clockwise turns.
+    - list_new:
+        elements: "0,0 2,0 2,2 0,2 1,1"
+    # Convex hull: (0,0) (2,0) (2,2) (0,2) — a square
+    - length

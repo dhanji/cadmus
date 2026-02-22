@@ -1,0 +1,42 @@
+# prompt: "implement a trie for prefix search"
+#
+# Trie (Prefix Tree)
+# ==================
+# Tree data structure for storing strings where each node represents
+# a character. Shared prefixes share nodes, making prefix operations
+# very efficient.
+#
+# Time:  O(m) insert, search, prefix check (m = key length)
+# Space: O(n × m) worst case (n keys of length m)
+#
+# Algorithm:
+#   Each node has: children (map char → node), is_end_of_word (bool)
+#
+#   insert(word):
+#     node = root
+#     for char in word:
+#       if char not in node.children:
+#         node.children[char] = new TrieNode()
+#       node = node.children[char]
+#     node.is_end_of_word = true
+#
+#   search(word):
+#     node = root
+#     for char in word:
+#       if char not in node.children: return false
+#       node = node.children[char]
+#     return node.is_end_of_word
+#
+#   starts_with(prefix): same as search but return true at end of prefix
+#
+# Used in: autocomplete, spell check, IP routing, DNA sequence matching.
+
+trie-prefix-tree:
+  inputs:
+    - words: "List(String)"
+  steps:
+    # Build trie from word list. Each path from root = a stored prefix.
+    - list_new:
+        elements: "apple app application apt"
+    # Trie shares "ap" prefix. search("app")=true, search("apt")=true
+    - length

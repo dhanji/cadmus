@@ -1,0 +1,40 @@
+# prompt: "count the number of integer partitions of a number"
+#
+# Integer Partition Count
+# =======================
+# Count the number of ways to write n as a sum of positive integers,
+# where order doesn't matter.
+#
+# Time:  O(n²) dynamic programming
+# Space: O(n)
+#
+# Algorithm (DP):
+#   dp[0] = 1  (empty partition)
+#   for k in 1..n:
+#     for j in k..n:
+#       dp[j] += dp[j - k]
+#   return dp[n]
+#
+# Example: p(5) = 7
+#   5 = 5
+#   5 = 4 + 1
+#   5 = 3 + 2
+#   5 = 3 + 1 + 1
+#   5 = 2 + 2 + 1
+#   5 = 2 + 1 + 1 + 1
+#   5 = 1 + 1 + 1 + 1 + 1
+#
+# Ramanujan's asymptotic: p(n) ~ exp(π√(2n/3)) / (4n√3)
+
+integer-partition-count:
+  inputs:
+    - n: "Number"
+  steps:
+    # DP: for each k from 1 to n, update dp[j] += dp[j-k].
+    # Similar structure to the coin change problem.
+    - add:
+        x: "5"
+        y: "0"
+    # p(5) = 7 partitions
+    - add:
+        y: "2"

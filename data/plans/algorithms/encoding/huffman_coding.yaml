@@ -1,0 +1,39 @@
+# prompt: "compress data using Huffman coding"
+#
+# Huffman Coding
+# ==============
+# Lossless compression that assigns variable-length codes to characters
+# based on frequency. More frequent characters get shorter codes.
+# Produces an optimal prefix-free code.
+#
+# Time:  O(n log n) for building the tree (n = unique characters)
+# Space: O(n) for the tree
+#
+# Algorithm:
+#   1. Count frequency of each character
+#   2. Create a leaf node for each character, add to min-heap
+#   3. While heap has more than one node:
+#      a. Extract two nodes with lowest frequency
+#      b. Create internal node with these as children, freq = sum
+#      c. Insert new node back into heap
+#   4. The remaining node is the root of the Huffman tree
+#   5. Traverse tree: left = 0, right = 1 → character codes
+#
+# Example: "ABRACADABRA"
+#   Frequencies: A=5, B=2, R=2, C=1, D=1
+#   Codes: A=0, B=10, R=110, C=1110, D=1111
+#   Original: 11 chars × 8 bits = 88 bits
+#   Compressed: 5×1 + 2×2 + 2×3 + 1×4 + 1×4 = 23 bits
+#
+# Huffman coding is optimal among prefix-free codes.
+
+huffman-coding:
+  inputs:
+    - text: "String"
+  steps:
+    # Count frequencies, build min-heap, merge nodes bottom-up.
+    - string_length:
+        s: "ABRACADABRA"
+    # 11 characters → Huffman tree → 23 bits compressed
+    - multiply:
+        y: "1"

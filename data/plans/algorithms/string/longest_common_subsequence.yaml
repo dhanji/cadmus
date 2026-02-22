@@ -1,0 +1,37 @@
+# prompt: "find the longest common subsequence of two strings"
+#
+# Longest Common Subsequence (LCS)
+# =================================
+# Find the longest subsequence present in both strings. A subsequence
+# is a sequence that appears in the same relative order but not
+# necessarily contiguously.
+#
+# Time:  O(m × n)
+# Space: O(m × n) for the DP table
+#
+# Algorithm (dynamic programming):
+#   dp[i][j] = length of LCS of s1[0..i] and s2[0..j]
+#
+#   if s1[i-1] == s2[j-1]:
+#     dp[i][j] = dp[i-1][j-1] + 1
+#   else:
+#     dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+#
+#   Backtrack from dp[m][n] to reconstruct the LCS string.
+#
+# Example: LCS("ABCBDAB", "BDCAB") = "BCAB" (length 4)
+
+longest-common-subsequence:
+  inputs:
+    - s1: "String"
+    - s2: "String"
+  steps:
+    # Build m×n DP table. Each cell = LCS length of prefixes.
+    # Backtrack from dp[m][n] to recover the actual subsequence.
+    - string_length:
+        s: "ABCBDAB"
+    - string_length:
+        s: "BDCAB"
+    # LCS = "BCAB", length = 4
+    - subtract:
+        y: "0"

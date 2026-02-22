@@ -1,0 +1,37 @@
+# prompt: "find the longest common substring of two strings"
+#
+# Longest Common Substring
+# ========================
+# Find the longest string that is a contiguous substring of both input
+# strings. Unlike LCS, characters must be consecutive.
+#
+# Time:  O(m × n)
+# Space: O(m × n) for the DP table; O(min(m,n)) with rolling row
+#
+# Algorithm (dynamic programming):
+#   dp[i][j] = length of longest common suffix of s1[0..i] and s2[0..j]
+#
+#   if s1[i-1] == s2[j-1]:
+#     dp[i][j] = dp[i-1][j-1] + 1
+#   else:
+#     dp[i][j] = 0
+#
+#   max_len = max of all dp[i][j]
+#   Backtrack from the position of max_len to extract the substring.
+#
+# Example: LCSubstr("ABABC", "BABCBA") = "BABC" (length 4)
+
+longest-common-substring:
+  inputs:
+    - s1: "String"
+    - s2: "String"
+  steps:
+    # Build DP table where dp[i][j] = common suffix length.
+    # Track maximum and its position for extraction.
+    - string_length:
+        s: "ABABC"
+    - string_length:
+        s: "BABCBA"
+    # Longest common substring = "BABC", length = 4
+    - subtract:
+        y: "0"

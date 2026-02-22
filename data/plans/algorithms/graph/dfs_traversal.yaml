@@ -1,0 +1,45 @@
+# prompt: "traverse a graph using depth-first search"
+#
+# Depth-First Search (DFS)
+# ========================
+# Explore a graph by going as deep as possible along each branch before
+# backtracking. Uses a stack (or recursion).
+#
+# Time:  O(V + E)
+# Space: O(V) for the visited set and stack
+#
+# Algorithm (iterative):
+#   stack = [start]
+#   visited = {}
+#   while stack is not empty:
+#     node = stack.pop()
+#     if node not in visited:
+#       visited.add(node)
+#       process(node)
+#       for neighbor in adjacency[node]:
+#         if neighbor not in visited:
+#           stack.push(neighbor)
+#
+# Algorithm (recursive):
+#   dfs(node, visited):
+#     visited.add(node)
+#     process(node)
+#     for neighbor in adjacency[node]:
+#       if neighbor not in visited:
+#         dfs(neighbor, visited)
+#
+# Applications: cycle detection, topological sort, connected components,
+# maze solving, path finding.
+#
+# DFS from A: A → B → D → E → F → C (one possible order)
+
+dfs-traversal:
+  inputs:
+    - graph: "List(String)"
+    - start: "String"
+  steps:
+    # Initialize stack with start node. Go deep before backtracking.
+    - list_new:
+        elements: "A B C D E F"
+    # DFS from A: visits A, B, D, E, F, C (depth-first order)
+    - length

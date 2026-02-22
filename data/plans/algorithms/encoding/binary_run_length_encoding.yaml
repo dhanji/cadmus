@@ -1,0 +1,38 @@
+# prompt: "encode and decode data using run-length encoding for binary"
+#
+# Binary Run-Length Encoding
+# ==========================
+# Specialized RLE for binary data: encode runs of 0s and 1s.
+# Store the length of each run, alternating between 0-runs and 1-runs.
+#
+# Time:  O(n)
+# Space: O(r) where r = number of runs
+#
+# Algorithm:
+#   Assume first run is 0s (prepend 0-length run if starts with 1)
+#   runs = []
+#   current = data[0], count = 1
+#   for i in 1..n:
+#     if data[i] == current:
+#       count += 1
+#     else:
+#       runs.append(count)
+#       current = data[i]
+#       count = 1
+#   runs.append(count)
+#
+# Example: 0000011111110010 → [5, 7, 2, 1, 1]
+#   5 zeros, 7 ones, 2 zeros, 1 one, 1 zero
+#
+# Used in: fax machines (Group 3/4), bitmap compression, JPEG.
+
+binary-run-length-encoding:
+  inputs:
+    - data: "String"
+  steps:
+    # Count consecutive identical bits, output run lengths.
+    - string_length:
+        s: "0000011111110010"
+    # 16 bits → runs [5, 7, 2, 1, 1] → 5 values
+    - subtract:
+        y: "0"

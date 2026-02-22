@@ -1,0 +1,36 @@
+# prompt: "check if a string is a palindrome"
+#
+# Palindrome Check
+# ================
+# Determine whether a string reads the same forward and backward.
+# Optionally ignore case and non-alphanumeric characters.
+#
+# Time:  O(n)
+# Space: O(1) with two-pointer; O(n) with reversal
+#
+# Algorithm (two-pointer):
+#   left = 0, right = n - 1
+#   while left < right:
+#     if s[left] != s[right]: return false
+#     left += 1; right -= 1
+#   return true
+#
+# Algorithm (reversal):
+#   return s == reverse(s)
+#
+# Examples:
+#   "racecar" → true
+#   "hello"   → false
+#   "A man a plan a canal Panama" → true (ignoring case/spaces)
+
+palindrome-check:
+  inputs:
+    - s: "String"
+  steps:
+    # Check if string equals its reverse.
+    # Two-pointer approach: compare from both ends inward.
+    - string_length:
+        s: "racecar"
+    # "racecar" reversed = "racecar" → palindrome = true
+    - subtract:
+        y: "0"

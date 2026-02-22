@@ -1,0 +1,37 @@
+# prompt: "compute the Collatz sequence starting from a number"
+#
+# Collatz Sequence (3n + 1 Problem)
+# ==================================
+# Starting from any positive integer n, repeatedly apply:
+#   if n is even: n = n / 2
+#   if n is odd:  n = 3n + 1
+# The conjecture states this always reaches 1.
+#
+# Time:  Unknown (no proven bound — the Collatz conjecture is unproven)
+# Space: O(1) per step; O(k) to store the sequence
+#
+# Algorithm:
+#   sequence = [n]
+#   while n != 1:
+#     if n is even: n = n / 2
+#     else: n = 3 * n + 1
+#     sequence.append(n)
+#   return sequence
+#
+# Example (n=6): 6 → 3 → 10 → 5 → 16 → 8 → 4 → 2 → 1 (9 steps)
+# Example (n=27): takes 111 steps, reaches max of 9232
+#
+# One of the most famous unsolved problems in mathematics.
+
+collatz-sequence:
+  inputs:
+    - n: "Number"
+  steps:
+    # Apply the Collatz rule iteratively until reaching 1.
+    # Even: divide by 2. Odd: multiply by 3 and add 1.
+    - multiply:
+        x: "6"
+        y: "1"
+    # Collatz(6): 6 → 3 → 10 → 5 → 16 → 8 → 4 → 2 → 1
+    - add:
+        y: "0"

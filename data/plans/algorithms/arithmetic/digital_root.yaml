@@ -1,0 +1,37 @@
+# prompt: "compute the sum of digits of a number repeatedly until single digit"
+#
+# Digital Root (Repeated Digit Sum)
+# ==================================
+# Repeatedly sum the digits of a number until a single digit remains.
+# Also known as the digital root.
+#
+# Time:  O(1) with formula; O(log n × iterations) iterative
+# Space: O(1)
+#
+# Formula: digital_root(n) = 1 + (n - 1) mod 9  (for n > 0)
+#          digital_root(0) = 0
+#
+# Algorithm (iterative):
+#   while n >= 10:
+#     n = sum of digits of n
+#   return n
+#
+# Example: digital_root(493) → 4+9+3=16 → 1+6=7
+# Example: digital_root(9999) → 36 → 9
+#
+# Properties: digital_root(n) = n mod 9 (except 9 maps to 9, not 0)
+
+digital-root:
+  inputs:
+    - n: "Number"
+  steps:
+    # Formula: 1 + (n - 1) mod 9
+    - subtract:
+        x: "493"
+        y: "1"
+    # 493 - 1 = 492
+    - modulo:
+        y: "9"
+    # 492 mod 9 = 6; 6 + 1 = 7 = digital root of 493
+    - add:
+        y: "1"

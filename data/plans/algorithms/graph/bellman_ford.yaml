@@ -1,0 +1,34 @@
+# prompt: "find shortest paths using Bellman-Ford algorithm"
+#
+# Bellman-Ford Shortest Path
+# ===========================
+# Find shortest paths from a source vertex to all other vertices.
+# Unlike Dijkstra, handles negative edge weights and detects negative cycles.
+#
+# Time:  O(V × E)
+# Space: O(V)
+#
+# Algorithm:
+#   dist[v] = infinity for all v; dist[source] = 0
+#   for i in 1..V-1:           # relax all edges V-1 times
+#     for (u, v, w) in edges:
+#       if dist[u] + w < dist[v]:
+#         dist[v] = dist[u] + w
+#   # Check for negative cycles
+#   for (u, v, w) in edges:
+#     if dist[u] + w < dist[v]:
+#       negative cycle exists!
+#
+# Use when: graph has negative weights (Dijkstra fails).
+# Slower than Dijkstra for non-negative weights.
+
+bellman-ford:
+  inputs:
+    - edges: "List(String)"
+    - source: "String"
+  steps:
+    # Relax all edges V-1 times. One more pass detects negative cycles.
+    - list_new:
+        elements: "A B C D E"
+    # Shortest paths from source, handling negative weights.
+    - length

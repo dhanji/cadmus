@@ -1,0 +1,40 @@
+# prompt: "traverse a graph using breadth-first search"
+#
+# Breadth-First Search (BFS)
+# ==========================
+# Explore a graph level by level, visiting all neighbors of a node
+# before moving to the next depth level. Uses a queue.
+#
+# Time:  O(V + E) where V = vertices, E = edges
+# Space: O(V) for the visited set and queue
+#
+# Algorithm:
+#   queue = [start]
+#   visited = {start}
+#   while queue is not empty:
+#     node = queue.dequeue()
+#     process(node)
+#     for neighbor in adjacency[node]:
+#       if neighbor not in visited:
+#         visited.add(neighbor)
+#         queue.enqueue(neighbor)
+#
+# Properties:
+#   - Finds shortest path in unweighted graphs
+#   - Visits nodes in order of distance from start
+#   - Can detect connected components
+#
+# Graph representation: adjacency list
+#   {A: [B, C], B: [A, D, E], C: [A, F], D: [B], E: [B, F], F: [C, E]}
+# BFS from A: A → B → C → D → E → F
+
+bfs-traversal:
+  inputs:
+    - graph: "List(String)"
+    - start: "String"
+  steps:
+    # Initialize queue with start node. Process level by level.
+    - list_new:
+        elements: "A B C D E F"
+    # BFS from A: visits A, B, C, D, E, F (level order)
+    - length

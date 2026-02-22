@@ -1,0 +1,36 @@
+# prompt: "find the minimum edit operations to transform one string to another using Damerau-Levenshtein"
+#
+# Damerau-Levenshtein Distance
+# =============================
+# Extension of Levenshtein distance that also allows transposition of
+# two adjacent characters as a single edit operation.
+#
+# Operations: insertion, deletion, substitution, transposition
+#
+# Time:  O(m × n)
+# Space: O(m × n)
+#
+# Algorithm:
+#   Same as Levenshtein DP, plus:
+#   if s1[i-1] == s2[j-2] and s1[i-2] == s2[j-1]:
+#     dp[i][j] = min(dp[i][j], dp[i-2][j-2] + 1)  # transposition
+#
+# Example: "CA" → "ABC"
+#   Levenshtein: 3 (delete C, keep A, insert B, insert C)
+#   Damerau-Levenshtein: 2 (transpose CA→AC, insert B)
+#
+# More accurate for typo correction (transpositions are common typos).
+
+damerau-levenshtein:
+  inputs:
+    - s1: "String"
+    - s2: "String"
+  steps:
+    # DP table with additional transposition check for adjacent characters.
+    - string_length:
+        s: "CA"
+    - string_length:
+        s: "ABC"
+    # Damerau-Levenshtein distance = 2 (transpose + insert)
+    - subtract:
+        y: "0"

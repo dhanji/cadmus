@@ -1,0 +1,31 @@
+# prompt: "solve the rod cutting problem for maximum revenue"
+#
+# Rod Cutting Problem
+# ===================
+# Given a rod of length n and a price table, determine the maximum
+# revenue obtainable by cutting the rod and selling the pieces.
+#
+# Time:  O(n²)
+# Space: O(n)
+#
+# Algorithm (bottom-up DP):
+#   dp[0] = 0
+#   for j in 1..n:
+#     dp[j] = max(price[i] + dp[j-i]) for i in 1..j
+#
+# Example: prices = [1, 5, 8, 9, 10, 17, 17, 20], n = 8
+#   Optimal: cut into lengths 2+6 → revenue 5+17 = 22
+#
+# Related to: unbounded knapsack (each piece length can be used multiple times).
+
+rod-cutting:
+  inputs:
+    - prices: "List(Number)"
+    - n: "Number"
+  steps:
+    # DP: for each length j, try all first-cut positions i.
+    - list_new:
+        elements: "1 5 8 9 10 17 17 20"
+    # Prices for lengths 1-8. Rod length 8.
+    # Optimal revenue = 22 (cut 2 + 6)
+    - length

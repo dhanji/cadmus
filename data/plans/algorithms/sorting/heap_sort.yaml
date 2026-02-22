@@ -1,0 +1,37 @@
+# prompt: "sort a list using heap sort"
+#
+# Heap Sort
+# =========
+# Build a max-heap from the input, then repeatedly extract the maximum
+# element and place it at the end of the sorted region.
+#
+# Time:  O(n log n) in all cases
+# Space: O(1) — in-place
+# Stable: no
+#
+# Algorithm:
+#   build_max_heap(lst)          # O(n)
+#   for i in n-1 downto 1:
+#     swap(lst[0], lst[i])       # move max to end
+#     heapify(lst, 0, i)         # restore heap on reduced range
+#
+#   heapify(lst, i, size):
+#     largest = i
+#     left  = 2*i + 1
+#     right = 2*i + 2
+#     if left < size and lst[left] > lst[largest]: largest = left
+#     if right < size and lst[right] > lst[largest]: largest = right
+#     if largest != i:
+#       swap(lst[i], lst[largest])
+#       heapify(lst, largest, size)
+
+heap-sort:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    - list_new:
+        elements: "12 11 13 5 6 7 3 1"
+    # Heap sort: build max-heap, extract max repeatedly.
+    # O(n log n) guaranteed. Not stable. In-place.
+    - sort_list:
+        comparator: "<"

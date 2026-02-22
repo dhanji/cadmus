@@ -1,0 +1,39 @@
+# prompt: "find the shortest path in a weighted graph using Dijkstra's algorithm"
+#
+# Dijkstra's Shortest Path Algorithm
+# ====================================
+# Find the shortest path from a source vertex to all other vertices in
+# a weighted graph with non-negative edge weights.
+#
+# Time:  O((V + E) log V) with binary heap; O(V²) with array
+# Space: O(V) for distances and priority queue
+#
+# Algorithm:
+#   dist[v] = infinity for all v; dist[source] = 0
+#   pq = min-heap with (0, source)
+#   while pq is not empty:
+#     (d, u) = pq.extract_min()
+#     if d > dist[u]: continue  # stale entry
+#     for (v, weight) in adjacency[u]:
+#       if dist[u] + weight < dist[v]:
+#         dist[v] = dist[u] + weight
+#         pq.insert((dist[v], v))
+#   return dist
+#
+# Graph (adjacency list with weights):
+#   A→B:4, A→C:1, B→D:1, C→B:2, C→D:5, D→E:3
+# Shortest from A: A=0, C=1, B=3, D=4, E=7
+#
+# Does NOT work with negative edge weights (use Bellman-Ford instead).
+
+dijkstra-shortest-path:
+  inputs:
+    - graph: "List(String)"
+    - source: "String"
+  steps:
+    # Initialize distances to infinity, source to 0.
+    # Greedily relax edges via priority queue.
+    - list_new:
+        elements: "A B C D E"
+    # Shortest distances from A: A=0, C=1, B=3, D=4, E=7
+    - length

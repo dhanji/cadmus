@@ -1,0 +1,42 @@
+# prompt: "search for a pattern in text using Knuth-Morris-Pratt"
+#
+# Knuth-Morris-Pratt (KMP) Pattern Matching
+# ==========================================
+# Efficient string search that avoids re-examining characters by
+# precomputing a failure function (partial match table) from the pattern.
+#
+# Time:  O(n + m) where n = text length, m = pattern length
+# Space: O(m) for the failure table
+#
+# Algorithm:
+#   1. Build failure table F for pattern P:
+#      F[0] = 0
+#      for i in 1..m:
+#        j = F[i-1]
+#        while j > 0 and P[j] != P[i]: j = F[j-1]
+#        if P[j] == P[i]: j += 1
+#        F[i] = j
+#
+#   2. Search text T for pattern P:
+#      j = 0  (characters matched in pattern)
+#      for i in 0..n:
+#        while j > 0 and P[j] != T[i]: j = F[j-1]
+#        if P[j] == T[i]: j += 1
+#        if j == m: found match at i - m + 1; j = F[j-1]
+#
+# Never backtracks in the text — each character examined at most twice.
+
+knuth-morris-pratt:
+  inputs:
+    - text: "String"
+    - pattern: "String"
+  steps:
+    # Phase 1: Build failure table from pattern.
+    # Phase 2: Scan text using failure table to skip re-comparisons.
+    - string_length:
+        s: "ABABDABACDABABCABAB"
+    - string_length:
+        s: "ABABCABAB"
+    # KMP finds pattern at position 10. O(n + m).
+    - subtract:
+        y: "0"

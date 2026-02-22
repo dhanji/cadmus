@@ -1,0 +1,40 @@
+# prompt: "implement a skip list for fast search"
+#
+# Skip List
+# =========
+# Probabilistic data structure that allows O(log n) search, insert,
+# and delete in a sorted sequence. Uses multiple levels of linked lists
+# where higher levels skip over more elements.
+#
+# Time:  O(log n) expected for search, insert, delete
+# Space: O(n) expected
+#
+# Algorithm:
+#   Structure: multiple levels of sorted linked lists
+#   Level 0: all elements
+#   Level i: subset of level i-1 (each element promoted with probability ½)
+#
+#   search(target):
+#     start at top-left
+#     while not found:
+#       move right while next < target
+#       if next == target: found
+#       else: move down one level
+#
+#   insert(x):
+#     search for position
+#     insert at level 0
+#     flip coin: if heads, promote to next level (repeat)
+#
+# Expected height: O(log n). Simpler to implement than balanced BSTs.
+# Used in: Redis sorted sets, LevelDB, MemSQL.
+
+skip-list:
+  inputs:
+    - elements: "List(Number)"
+  steps:
+    # Build multi-level linked list with probabilistic promotion.
+    - list_new:
+        elements: "3 6 7 9 12 19 21 25 26"
+    # Skip list with ~log₂(9) ≈ 3 levels. Search in O(log n).
+    - length
