@@ -170,9 +170,10 @@ fn subsumed_op_to_racket(
     prev_binding: Option<&str>,
     registry: &OperationRegistry,
     prev_is_seq: bool,
+    bindings: &HashMap<String, String>,
 ) -> Result<RacketExpr, RacketError> {
     let uses_prev = prev_binding.is_some();
-    let path = fs_path_operand(prev_binding, input_values);
+    let path = fs_path_operand(prev_binding, input_values, bindings);
 
     // Try to get the base command from the shell op's metadata in the registry.
     // If the shell op is registered, extract_shell_meta gives us the command + flags.
@@ -392,11 +393,18 @@ fn racket_native_op_to_racket(
 /// Resolve the path operand for a filesystem op.
 /// Returns a Racket expression: either a variable name (prev binding)
 /// or a quoted string literal from the plan inputs.
-fn fs_path_operand(prev: Option<&str>, _inputs: &[PlanInput]) -> String {
+fn fs_path_operand(prev: Option<&str>, inputs: &[PlanInput], bindings: &HashMap<String, String>) -> String {
     if let Some(p) = prev {
         return p.to_string();
     }
-    // No literal values in inputs — use default
+    // Resolve from bindings via the calling frame
+    // Try each input name in order — first bound value wins
+    for input in inputs {
+        if let Some(bound) = bindings.get(&input.name) {
+            return racket_string(bound);
+        }
+    }
+    // No bindings — use default
     racket_string(".")
 }
 
@@ -445,6 +453,7 @@ pub fn op_to_racket(
     prev_binding: Option<&str>,
     registry: &OperationRegistry,
     prev_is_seq: bool,
+    bindings: &HashMap<String, String>,
 ) -> Result<RacketExpr, RacketError> {
     let op = step.op.as_str();
     let params = &step.params;
@@ -557,7 +566,7 @@ pub fn op_to_racket(
     }
 
     if let Some(entry) = crate::type_lowering::lookup_subsumption(op) {
-        return subsumed_op_to_racket(step, entry, input_values, prev_binding, registry, prev_is_seq);
+        return subsumed_op_to_racket(step, entry, input_values, prev_binding, registry, prev_is_seq, bindings);
     }
 
     // -----------------------------------------------------------------------
@@ -643,7 +652,7 @@ pub fn generate_racket_script(
     if num_steps == 1 {
         let step = &compiled.steps[0];
         script.push_str(&format!(";; Step 1: {}\n", step.op));
-        let expr = op_to_racket(step, input_values, None, registry, false)?;
+        let expr = op_to_racket(step, input_values, None, registry, false, &def.bindings)?;
         script.push_str(&format!("(displayln {})\n", expr.expr));
         return Ok(script);
     }
@@ -700,7 +709,7 @@ pub fn generate_racket_script(
                 // Normal map-each: generate the inner expression with _line as the
                 // scalar prev_binding (not the list), and prev_is_seq=false
                 // since _line is a single element.
-                let expr = op_to_racket(step, input_values, Some("_line"), registry, false)?;
+                let expr = op_to_racket(step, input_values, Some("_line"), registry, false, &def.bindings)?;
                 script.push_str(&format!("    [{} (map (lambda (_line) {}) {})]\n",
                     binding_name, expr.expr, prev));
             }
@@ -709,7 +718,7 @@ pub fn generate_racket_script(
             let prev_is_seq = if i > 0 {
                 is_seq_output(&compiled.steps[i - 1], registry)
             } else { false };
-            let expr = op_to_racket(step, input_values, prev_binding.as_deref(), registry, prev_is_seq)?;
+            let expr = op_to_racket(step, input_values, prev_binding.as_deref(), registry, prev_is_seq, &def.bindings)?;
             script.push_str(&format!("    [{} {}]\n", binding_name, expr.expr));
         }
     }
@@ -866,7 +875,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("add", vec![("x", "4"), ("y", "35")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(+ 4 35)");
         assert!(!expr.uses_prev);
     }
@@ -877,7 +886,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("remove", vec![("x", "3"), ("y", "'(1 2 3 4)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(remove 3 '(1 2 3 4))");
     }
 
@@ -887,7 +896,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("list_reverse", vec![("value", "'(1 2 3)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(reverse '(1 2 3))");
     }
 
@@ -896,7 +905,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("subtract", vec![("x", "6"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(- 6 2)");
     }
 
@@ -905,7 +914,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("multiply", vec![("x", "3"), ("y", "7")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(* 3 7)");
     }
 
@@ -914,7 +923,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("divide", vec![("x", "10"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(/ 10 2)");
     }
 
@@ -923,7 +932,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("add", vec![("y", "10")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(+ step-1 10)");
         assert!(expr.uses_prev);
     }
@@ -933,7 +942,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("display", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(display step-1)");
     }
 
@@ -942,7 +951,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("displayln", vec![("value", "hello")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(displayln \"hello\")");
     }
 
@@ -951,7 +960,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("nonexistent_op", vec![]);
         let inputs = make_inputs(vec![]);
-        let result = op_to_racket(&step, &inputs, None, &reg, false);
+        let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
         assert!(result.is_err());
         match result.unwrap_err() {
             RacketError::UnknownOp(name) => assert_eq!(name, "nonexistent_op"),
@@ -964,7 +973,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_filter", vec![("predicate", "even?")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("'(1 2 3 4 5)"), &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("'(1 2 3 4 5)"), &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(filter even? '(1 2 3 4 5))");
     }
 
@@ -973,7 +982,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_map", vec![("function", "add1")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(map add1 step-1)");
     }
 
@@ -982,7 +991,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("racket_foldl", vec![("function", "+"), ("init", "0")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(foldl + 0 step-1)");
     }
 
@@ -991,7 +1000,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("set_union", vec![("x", "(set 1 2 3)"), ("y", "(set 3 4 5)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(set-union (set 1 2 3) (set 3 4 5))");
     }
 
@@ -1000,7 +1009,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("cons", vec![("x", "42"), ("y", "'()")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(cons 42 '())");
     }
 
@@ -1049,6 +1058,7 @@ mod tests {
             inputs: vec![],
             output: None,
             steps: vec![],
+            bindings: HashMap::new(),
         };
         let script = generate_racket_script(&compiled, &def, &reg).unwrap();
         assert!(script.contains("#lang racket"));
@@ -1089,6 +1099,7 @@ mod tests {
             inputs: vec![],
             output: None,
             steps: vec![],
+            bindings: HashMap::new(),
         };
         let script = generate_racket_script(&compiled, &def, &reg).unwrap();
         assert!(script.contains("#lang racket"));
@@ -1113,6 +1124,7 @@ mod tests {
             inputs: vec![],
             output: None,
             steps: vec![],
+            bindings: HashMap::new(),
         };
         let script = generate_racket_script(&compiled, &def, &reg).unwrap();
         assert!(script.contains(";; (no steps)"));
@@ -1123,7 +1135,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_append", vec![("x", "hello"), ("y", " world")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(string-append \"hello\" \" world\")");
     }
 
@@ -1132,7 +1144,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("number_to_string", vec![("value", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(number->string 42)");
     }
 
@@ -1141,7 +1153,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("abs", vec![("value", "-5")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(abs -5)");
     }
 
@@ -1150,7 +1162,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("equal", vec![("x", "42"), ("y", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(equal? 42 42)");
     }
 
@@ -1159,7 +1171,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("less_than", vec![("x", "1"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(< 1 2)");
     }
 
@@ -1170,7 +1182,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("newline", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(newline)");
         assert!(!expr.uses_prev);
     }
@@ -1180,7 +1192,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("read_line", vec![]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(read-line)");
         assert!(!expr.uses_prev);
     }
@@ -1190,7 +1202,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("set_member", vec![("x", "(set 1 2 3)"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(set-member? (set 1 2 3) 2)");
     }
 
@@ -1199,7 +1211,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("set_new", vec![("value", "'(1 2 3)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(list->set '(1 2 3))");
     }
 
@@ -1208,7 +1220,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("list_reverse", vec![("value", "'(1 2 3)")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(reverse '(1 2 3))");
     }
 
@@ -1217,7 +1229,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("sort_list", vec![("value", "'(3 1 2)"), ("comparator", ">")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(sort '(3 1 2) >)");
     }
 
@@ -1226,7 +1238,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("greater_than", vec![("x", "5"), ("y", "3")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(> 5 3)");
     }
 
@@ -1235,7 +1247,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_to_number", vec![("value", "42")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(string->number 42)");
     }
 
@@ -1244,7 +1256,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("less_than_or_equal", vec![("x", "3"), ("y", "5")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(<= 3 5)");
     }
 
@@ -1253,7 +1265,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("greater_than_or_equal", vec![("x", "7"), ("y", "2")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(>= 7 2)");
     }
 
@@ -1262,7 +1274,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_upcase", vec![("value", "hello")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(string-upcase \"hello\")");
     }
 
@@ -1271,7 +1283,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("string_downcase", vec![("value", "HELLO")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(string-downcase \"HELLO\")");
     }
 
@@ -1280,7 +1292,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_read", vec![("value", "data.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(file->string \"data.txt\")");
     }
 
@@ -1289,7 +1301,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_read_lines", vec![("value", "data.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(file->lines \"data.txt\")");
     }
 
@@ -1298,7 +1310,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_write", vec![("x", "hello world"), ("y", "output.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(display-to-file \"hello world\" \"output.txt\")");
     }
 
@@ -1307,7 +1319,7 @@ mod tests {
         let reg = make_registry();
         let step = make_step("file_exists", vec![("value", "data.txt")]);
         let inputs = make_inputs(vec![]);
-        let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
         assert_eq!(expr.expr, "(file-exists? \"data.txt\")");
     }
 
@@ -1397,7 +1409,7 @@ mod tests {
         };
         let inputs = make_inputs(vec![("path", "~/Downloads")]);
         // prev_is_seq=true: step-1 is a List(String) from walk_tree
-        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true, &HashMap::new()).unwrap();
         // Should bridge the seq — either string-join or append-map
         assert!(expr.expr.contains("string-join") || expr.expr.contains("map shell-quote") || expr.expr.contains("append-map"),
             "pack_archive with seq prev should bridge: {}", expr.expr);
@@ -1418,7 +1430,7 @@ mod tests {
         };
         let inputs = make_inputs(vec![]);
         // Use prev_binding to provide the path
-        let expr = op_to_racket(&step, &inputs, Some("\"~/readme.md\""), &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("\"~/readme.md\""), &reg, false, &HashMap::new()).unwrap();
         assert!(expr.expr.contains("shell-quote"),
             "stat single step should use shell-quote: {}", expr.expr);
         assert!(expr.expr.contains("~/readme.md"),
@@ -1439,7 +1451,7 @@ mod tests {
         };
         let inputs = make_inputs(vec![("textdir", "~/Projects")]);
         // prev_is_seq=true: step-1 is a List(String) from walk_tree
-        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true, &HashMap::new()).unwrap();
         // Should use append-map to grep each file individually
         assert!(expr.expr.contains("append-map"),
             "search_content with seq prev should use append-map: {}", expr.expr);
@@ -1462,7 +1474,7 @@ mod tests {
         };
         let inputs = make_inputs(vec![]);
         // Use prev_binding to provide the path
-        let expr = op_to_racket(&step, &inputs, Some("\"~/Projects\""), &reg, false).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("\"~/Projects\""), &reg, false, &HashMap::new()).unwrap();
         assert!(expr.expr.contains("~/Projects"),
             "search_content first step should use input path: {}", expr.expr);
     }
@@ -1480,7 +1492,7 @@ mod tests {
             ..Default::default()
         };
         let inputs = make_inputs(vec![("path", "~/Projects")]);
-        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true).unwrap();
+        let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, true, &HashMap::new()).unwrap();
         // Should use append-map to cat each file
         assert!(expr.expr.contains("append-map"),
             "read_file with seq prev should use append-map: {}", expr.expr);

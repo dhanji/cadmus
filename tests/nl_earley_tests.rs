@@ -806,3 +806,64 @@ fn test_earley_plan_yaml_has_steps() {
     let yaml = expect_plan("find comics in downloads");
     assert!(yaml.contains("steps:"), "should have steps section:\n{}", yaml);
 }
+
+// ---------------------------------------------------------------------------
+// Calling frame / path binding tests
+// ---------------------------------------------------------------------------
+
+
+#[test]
+fn test_binding_find_comics_in_downloads() {
+    let mut state = DialogueState::new();
+    let response = process_input("find comics in my downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            // The YAML should show the bound path
+            assert!(plan_yaml.contains("ownload"),
+                "YAML should contain path literal:\n{}", plan_yaml);
+            // The path should appear in the inputs section
+            assert!(plan_yaml.contains("path:") || plan_yaml.contains("path"),
+                "should have path input:\n{}", plan_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_binding_zip_up_downloads() {
+    let mut state = DialogueState::new();
+    let response = process_input("zip up everything in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("ownload"),
+                "YAML should contain path literal:\n{}", plan_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_binding_no_path_has_no_binding_in_yaml() {
+    // "find files" with no location should not show a path binding
+    let yaml = expect_plan("find files");
+    // Should have bare "path" input, not "path: <something>"
+    let has_bare_path = yaml.lines().any(|l| {
+        let trimmed = l.trim();
+        trimmed == "- path"
+    });
+    assert!(has_bare_path,
+        "should have bare 'path' input (no binding):\n{}", yaml);
+}
+
+#[test]
+fn test_binding_list_files_in_documents() {
+    let mut state = DialogueState::new();
+    let response = process_input("list files in documents", &mut state);
+    match response {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            assert!(plan_yaml.contains("ocument"),
+                "YAML should contain path literal:\n{}", plan_yaml);
+        }
+        other => panic!("expected PlanCreated, got: {:?}", other),
+    }
+}

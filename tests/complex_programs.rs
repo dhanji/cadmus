@@ -47,6 +47,7 @@ fn make_plan(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) ->
         inputs: plan_inputs,
         output: None,
         steps: vec![],  // not used by generate_racket_script
+    bindings: HashMap::new(),
     };
     (compiled, def)
 }

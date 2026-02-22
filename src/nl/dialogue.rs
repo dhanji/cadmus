@@ -428,7 +428,13 @@ pub fn build_plan(
                 let plan_name = description
                     .map(|d| d.to_string())
                     .unwrap_or_else(|| generate_plan_name(primary_op, &slots));
-                return Ok(PlanDef { name: plan_name, inputs, output: None, steps });
+                let mut bindings = HashMap::new();
+                if target_path != "." {
+                    if let Some(inp) = inputs.first() {
+                        bindings.insert(inp.name.clone(), target_path.clone());
+                    }
+                }
+                return Ok(PlanDef { name: plan_name, inputs, output: None, steps, bindings });
             } else if is_path_op(other) {
                 // Ops that take Path primitive (stat, du_size, chmod, etc.)
                 // Use "pathref" input name so type inference yields Path, not Dir(Bytes)
@@ -459,11 +465,20 @@ pub fn build_plan(
         .map(|d| d.to_string())
         .unwrap_or_else(|| generate_plan_name(primary_op, &slots));
 
+    // Bind path literals to inputs
+    let mut bindings = HashMap::new();
+    if target_path != "." {
+        if let Some(inp) = inputs.first() {
+            bindings.insert(inp.name.clone(), target_path.clone());
+        }
+    }
+
     Ok(PlanDef {
         name: plan_name,
         inputs,
         output: None,
         steps,
+        bindings,
     })
 }
 
@@ -962,6 +977,17 @@ fn build_step_from_slots(op: &str, slots: &ExtractedSlots) -> RawStep {
 // Plan serialization to YAML
 // ---------------------------------------------------------------------------
 
+/// Quote a YAML value if it contains special characters.
+fn yaml_quote_if_needed(s: &str) -> String {
+    if s.contains(' ') || s.contains(':') || s.contains('#')
+        || s.contains('"') || s.contains('\'') || s.contains('\n')
+    {
+        format!("{:?}", s) // Rust debug format gives us double-quoted with escapes
+    } else {
+        s.to_string()
+    }
+}
+
 /// Serialize a PlanDef to YAML string.
 pub fn plan_to_yaml(wf: &PlanDef) -> String {
     let mut lines = Vec::new();
@@ -971,11 +997,22 @@ pub fn plan_to_yaml(wf: &PlanDef) -> String {
     if !wf.inputs.is_empty() {
         lines.push("  inputs:".to_string());
         for input in &wf.inputs {
+            // Render type hint if present, otherwise bare name
             if let Some(hint) = &input.type_hint {
-                lines.push(format!("    - {}: {}", input.name, hint));
+                lines.push(format!("    - {}: {}", input.name, yaml_quote_if_needed(hint)));
             } else {
                 lines.push(format!("    - {}", input.name));
             }
+        }
+    }
+
+    // Show bindings (display-only — not parsed back)
+    if !wf.bindings.is_empty() {
+        lines.push("  bindings:".to_string());
+        let mut keys: Vec<&String> = wf.bindings.keys().collect();
+        keys.sort();
+        for key in keys {
+            lines.push(format!("    {}: {}", key, wf.bindings[key]));
         }
     }
 
@@ -1162,6 +1199,7 @@ mod tests {
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
             ],
+            bindings: HashMap::new(),
         };
 
         let yaml = plan_to_yaml(&wf);
@@ -1193,6 +1231,7 @@ mod tests {
                     }),
                 },
             ],
+            bindings: HashMap::new(),
         };
 
         let yaml = plan_to_yaml(&wf);
@@ -1237,6 +1276,7 @@ mod tests {
                 inputs: vec![],
             output: None,
                 steps: vec![],
+                bindings: HashMap::new(),
             },
             &EditAction::Skip,
             &slots,
@@ -1252,6 +1292,7 @@ mod tests {
                 inputs: vec![],
             output: None,
                 steps: vec![],
+                bindings: HashMap::new(),
             },
             &EditAction::Skip,
             &slots_empty,
@@ -1271,6 +1312,7 @@ mod tests {
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "pack_archive".to_string(), args: StepArgs::None },
             ],
+            bindings: HashMap::new(),
         };
 
         let normalized = normalize::normalize("skip any subdirectory named foo");
@@ -1301,6 +1343,7 @@ mod tests {
                 RawStep { op: "filter".to_string(), args: StepArgs::None },
                 RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
             ],
+            bindings: HashMap::new(),
         };
 
         let extracted = slots::extract_slots(&["step".to_string(), "2".to_string()]);
@@ -1323,6 +1366,7 @@ mod tests {
                 RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
                 RawStep { op: "filter".to_string(), args: StepArgs::None },
             ],
+            bindings: HashMap::new(),
         };
 
         // "move step 3 before step 2"
@@ -1413,6 +1457,7 @@ mod tests {
                 RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
                 RawStep { op: "pack_archive".to_string(), args: StepArgs::None },
             ],
+            bindings: HashMap::new(),
         };
 
         // Apply skip edit

@@ -270,6 +270,9 @@ pub struct PlanDef {
     pub output: Option<Vec<String>>,
     /// Ordered pipeline steps (unchanged)
     pub steps: Vec<RawStep>,
+    /// Literal bindings for inputs (e.g., path → "~/Downloads").
+    /// Populated by the NL pipeline from extracted literals.
+    pub bindings: HashMap<String, String>,
 }
 
 impl PlanDef {
@@ -367,6 +370,8 @@ impl<'de> Deserialize<'de> for PlanDef {
             output: Option<Vec<String>>,
             #[serde(default)]
             steps: Vec<RawStep>,
+            #[serde(default)]
+            bindings: HashMap<String, String>,
         }
 
         impl<'de> Visitor<'de> for PlanDefVisitor {
@@ -395,6 +400,7 @@ impl<'de> Deserialize<'de> for PlanDef {
                     inputs: body.inputs,
                     output: body.output,
                     steps: body.steps,
+                    bindings: body.bindings,
                 })
             }
         }

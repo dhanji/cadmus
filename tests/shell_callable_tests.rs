@@ -345,7 +345,7 @@ fn test_shell_ls_generates_shell_lines() {
     let reg = make_full_registry();
     let step = make_step("shell_ls", vec![("path", "/tmp")]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
     assert!(expr.expr.contains("shell-lines"), "should use shell-lines");
     assert!(expr.expr.contains("shell-quote"), "should use shell-quote for safety");
     assert!(expr.expr.contains("ls"), "should contain ls command");
@@ -356,7 +356,7 @@ fn test_shell_ls_long_includes_flags() {
     let reg = make_full_registry();
     let step = make_step("shell_ls_long", vec![("path", "/tmp")]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
     assert!(expr.expr.contains("ls -l"), "should contain 'ls -l'");
 }
 
@@ -365,7 +365,7 @@ fn test_shell_ps_nullary() {
     let reg = make_full_registry();
     let step = make_step("shell_ps", vec![]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
     assert_eq!(expr.expr, "(shell-lines \"ps\")");
     assert!(!expr.uses_prev);
 }
@@ -375,7 +375,7 @@ fn test_shell_ps_aux_nullary_with_flags() {
     let reg = make_full_registry();
     let step = make_step("shell_ps_aux", vec![]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
     assert_eq!(expr.expr, "(shell-lines \"ps aux\")");
 }
 
@@ -384,7 +384,7 @@ fn test_shell_grep_binary() {
     let reg = make_full_registry();
     let step = make_step("shell_grep", vec![("x", "error"), ("y", "/var/log/system.log")]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
     assert!(expr.expr.contains("grep"), "should contain grep");
     assert!(expr.expr.contains("shell-quote"), "should quote arguments");
 }
@@ -394,7 +394,7 @@ fn test_shell_op_with_prev_binding() {
     let reg = make_full_registry();
     let step = make_step("shell_ls", vec![]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, Some("step-1"), &reg, false, &HashMap::new()).unwrap();
     assert!(expr.uses_prev, "should use prev binding");
     assert!(expr.expr.contains("step-1"), "should reference step-1");
 }
@@ -405,7 +405,7 @@ fn test_shell_quote_prevents_injection() {
     // Path with spaces and special chars
     let step = make_step("shell_ls", vec![("path", "/path/with spaces/and;rm -rf /")]);
     let inputs = make_inputs(vec![]);
-    let expr = op_to_racket(&step, &inputs, None, &reg, false).unwrap();
+    let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
     assert!(expr.expr.contains("shell-quote"), "must use shell-quote for safety");
     // The path is passed through shell-quote at runtime — the Racket string
     // contains the raw value but shell-quote escapes it before shell execution
@@ -430,6 +430,7 @@ fn test_script_preamble_emitted_for_shell_ops() {
         inputs: vec![],
         output: None,
         steps: vec![],
+    bindings: HashMap::new(),
     };
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
     assert!(script.contains("(require racket/system)"), "should have require");
@@ -460,6 +461,7 @@ fn test_script_no_preamble_for_pure_racket() {
         inputs: vec![],
         output: None,
         steps: vec![],
+    bindings: HashMap::new(),
     };
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
     assert!(!script.contains("racket/system"), "pure Racket script should NOT have shell preamble");
@@ -497,6 +499,7 @@ fn test_mixed_pipeline_script() {
         inputs: vec![],
         output: None,
         steps: vec![],
+    bindings: HashMap::new(),
     };
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
     assert!(script.contains("(require racket/system)"), "mixed pipeline needs preamble");

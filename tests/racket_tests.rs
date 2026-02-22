@@ -241,6 +241,7 @@ fn test_add_4_and_35_script() {
         inputs: vec![],
         output: None,
         steps: vec![],
+    bindings: HashMap::new(),
     };
     let racket_reg = make_racket_reg();
     let script = generate_racket_script(&compiled, &def, &racket_reg).unwrap();
@@ -271,6 +272,7 @@ fn test_subtract_6_minus_2_script() {
         inputs: vec![],
         output: None,
         steps: vec![],
+    bindings: HashMap::new(),
     };
     let racket_reg = make_racket_reg();
     let script = generate_racket_script(&compiled, &def, &racket_reg).unwrap();
@@ -457,7 +459,7 @@ fn test_unknown_racket_op_error() {
     };
     let inputs: Vec<cadmus::plan::PlanInput> = vec![];
     let racket_reg = make_racket_reg();
-    let result = op_to_racket(&step, &inputs, None, &racket_reg, false);
+    let result = op_to_racket(&step, &inputs, None, &racket_reg, false, &HashMap::new());
     assert!(result.is_err());
 }
 
@@ -525,6 +527,7 @@ fn test_full_pipeline_subtract_with_inference() {
         inputs: vec![],
         output: None,
         steps: vec![],
+    bindings: HashMap::new(),
     };
     let racket_reg = make_racket_reg();
     let script = generate_racket_script(&compiled, &def, &racket_reg).unwrap();

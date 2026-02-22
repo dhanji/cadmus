@@ -379,6 +379,7 @@ fn make_plan(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) ->
         inputs: inputs.iter().map(|(k, _)| PlanInput::bare(*k)).collect(),
         steps: vec![],
         output: None,
+    bindings: HashMap::new(),
     };
     (compiled, def)
 }
@@ -883,7 +884,7 @@ fn stress_racket_foldl_missing_function() {
     let step = make_step(0, "racket_foldl", vec![("value", "'(1 2 3)"), ("init", "0")]);
     // No "function" param — should error
     let inputs: Vec<PlanInput> = vec![];
-    let result = op_to_racket(&step, &inputs, None, &reg, false);
+    let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
     assert!(result.is_err(), "foldl without function should error");
     let err = result.unwrap_err();
     assert!(matches!(err, RacketError::MissingParam { .. }));
@@ -894,7 +895,7 @@ fn stress_racket_filter_missing_predicate() {
     let reg = make_racket_reg();
     let step = make_step(0, "racket_filter", vec![("value", "'(1 2 3)")]);
     let inputs: Vec<PlanInput> = vec![];
-    let result = op_to_racket(&step, &inputs, None, &reg, false);
+    let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), RacketError::MissingParam { .. }));
 }
@@ -904,7 +905,7 @@ fn stress_racket_map_missing_function() {
     let reg = make_racket_reg();
     let step = make_step(0, "racket_map", vec![("value", "'(1 2 3)")]);
     let inputs: Vec<PlanInput> = vec![];
-    let result = op_to_racket(&step, &inputs, None, &reg, false);
+    let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
     assert!(result.is_err());
     assert!(matches!(result.unwrap_err(), RacketError::MissingParam { .. }));
 }
@@ -914,7 +915,7 @@ fn stress_racket_completely_unknown_op() {
     let reg = make_racket_reg();
     let step = make_step(0, "quantum_teleport", vec![("x", "42")]);
     let inputs: Vec<PlanInput> = vec![];
-    let result = op_to_racket(&step, &inputs, None, &reg, false);
+    let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
     assert!(result.is_err(), "unknown op should error");
     assert!(matches!(result.unwrap_err(), RacketError::UnknownOp(_)));
 }
@@ -926,7 +927,7 @@ fn stress_racket_shell_ps_nullary() {
     let reg = make_full_registry();
     let step = make_step(0, "shell_ps", vec![]);
     let inputs: Vec<PlanInput> = vec![];
-    let result = op_to_racket(&step, &inputs, None, &reg, false);
+    let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
     assert!(result.is_ok(), "shell_ps should generate: {:?}", result);
     let expr = result.unwrap();
     assert!(expr.expr.contains("ps"), "should contain ps command: {}", expr.expr);
@@ -988,7 +989,7 @@ fn stress_racket_shell_ls_with_path() {
     let reg = make_full_registry();
     let step = make_step(0, "shell_ls", vec![("path", "/tmp")]);
     let inputs = vec![PlanInput::bare("path")];
-    let result = op_to_racket(&step, &inputs, None, &reg, false);
+    let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
     assert!(result.is_ok(), "shell_ls should work: {:?}", result);
     let expr = result.unwrap();
     assert!(expr.expr.contains("ls"), "should contain ls: {}", expr.expr);

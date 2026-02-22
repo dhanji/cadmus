@@ -20,7 +20,8 @@
 
 use std::collections::HashMap;
 
-use crate::nl::intent_ir::{IntentIR, IntentIRResult};
+use crate::nl::intent_ir::{IntentIR, IntentIRResult}
+;
 use crate::nl::vocab;
 use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
 
@@ -196,11 +197,22 @@ pub fn compile_ir(ir: &IntentIR) -> CompileResult {
     // Generate a plan name from the steps and target path
     let name = generate_plan_name(&steps, &target_path);
 
+    // Bind path literals to inputs (the calling frame)
+    let mut bindings = HashMap::new();
+    if target_path != "." {
+        // Bind the extracted path literal to the input name
+        let input_name = inputs.first()
+            .map(|i| i.name.clone())
+            .unwrap_or_else(|| "path".to_string());
+        bindings.insert(input_name, target_path);
+    }
+
     CompileResult::Ok(PlanDef {
         name,
         inputs,
         output: None,
         steps,
+        bindings,
     })
 }
 
@@ -589,5 +601,46 @@ mod tests {
         let plan = expect_plan("find files");
         let ops: Vec<&str> = plan.steps.iter().map(|s| s.op.as_str()).collect();
         assert!(ops.contains(&"walk_tree"), "should have walk_tree: {:?}", ops);
+    }
+
+    #[test]
+    fn test_bindings_populated_with_path() {
+        let plan = expect_plan("find comics in downloads");
+        assert!(!plan.bindings.is_empty(), "bindings should not be empty for path literal");
+        let input_name = &plan.inputs[0].name;
+        assert!(plan.bindings.contains_key(input_name),
+            "bindings should contain input '{}': {:?}", input_name, plan.bindings);
+        let bound_value = &plan.bindings[input_name];
+        assert!(bound_value.contains("ownload"),
+            "bound value should contain 'ownload': {}", bound_value);
+    }
+
+    #[test]
+    fn test_bindings_empty_when_no_path() {
+        // "find files" has no location → target_path defaults to "." → no binding
+        let plan = expect_plan("find files");
+        assert!(plan.bindings.is_empty(),
+            "bindings should be empty when no path literal: {:?}", plan.bindings);
+    }
+
+    #[test]
+    fn test_bindings_shown_in_yaml() {
+        use crate::nl::dialogue::plan_to_yaml;
+        let plan = expect_plan("find comics in downloads");
+        let yaml = plan_to_yaml(&plan);
+        // The YAML should show the bound path value
+        assert!(yaml.contains("ownload"),
+            "YAML should contain bound path value: {}", yaml);
+    }
+
+    #[test]
+    fn test_bindings_with_home_dir() {
+        let plan = expect_plan("list files in home");
+        // "home" should resolve to ~/
+        if !plan.bindings.is_empty() {
+            let input_name = &plan.inputs[0].name;
+            let bound = &plan.bindings[input_name];
+            assert!(!bound.is_empty(), "bound path should not be empty");
+        }
     }
 }

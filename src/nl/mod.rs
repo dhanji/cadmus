@@ -228,7 +228,7 @@ fn try_earley_create(
         intent_compiler::CompileResult::Ok(plan) => {
             let yaml = dialogue::plan_to_yaml(&plan);
 
-            match validate_plan_yaml(&yaml) {
+            match validate_plan(&plan) {
                 Ok(()) => {
                     let summary = format_summary(&plan);
                     let prompt = format!("{}\n\n{}\n\n{}",
@@ -311,7 +311,7 @@ fn handle_create_plan(
             let yaml = dialogue::plan_to_yaml(&wf);
 
             // Validate: try to compile through the engine
-            match validate_plan_yaml(&yaml) {
+            match validate_plan(&wf) {
                 Ok(()) => {
                     let summary = format_summary(&wf);
                     let prompt = format!("{}\n\n{}\n\n{}",
@@ -366,7 +366,7 @@ fn handle_edit_step(
         Ok((edited_wf, diff_desc)) => {
             let yaml = dialogue::plan_to_yaml(&edited_wf);
 
-            match validate_plan_yaml(&yaml) {
+            match validate_plan(&edited_wf) {
                 Ok(()) => {
                     let prompt = format!("{}\n\n{}\n\nApprove?",
                         diff_desc,
@@ -483,11 +483,9 @@ fn update_focus(state: &mut DialogueState, slots: &ExtractedSlots) {
 }
 
 /// Validate a plan YAML string by parsing and compiling it.
-fn validate_plan_yaml(yaml: &str) -> Result<(), String> {
-    let parsed = crate::plan::parse_plan(yaml)
-        .map_err(|e| format!("Parse error: {}", e))?;
+fn validate_plan(plan: &crate::plan::PlanDef) -> Result<(), String> {
     let registry = crate::fs_types::build_full_registry();
-    crate::plan::compile_plan(&parsed, &registry)
+    crate::plan::compile_plan(plan, &registry)
         .map_err(|e| format!("Compile error: {}", e))?;
     Ok(())
 }
