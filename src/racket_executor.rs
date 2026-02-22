@@ -434,11 +434,29 @@ fn fs_path_operand(prev: Option<&str>, inputs: &[PlanInput], bindings: &HashMap<
     // Try each input name in order — first bound value wins
     for input in inputs {
         if let Some(bound) = bindings.get(&input.name) {
-            return racket_string(bound);
+            return racket_string(&expand_tilde(bound));
         }
     }
     // No bindings — use default
     racket_string(".")
+}
+
+/// Expand a leading `~` or `~/` to the user's home directory.
+///
+/// Shell-quoted strings (via `shell-quote`) prevent tilde expansion,
+/// so we resolve `~` at codegen time to an absolute path.
+fn expand_tilde(path: &str) -> String {
+    if path == "~" || path.starts_with("~/") {
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = home.to_string_lossy();
+            return if path == "~" {
+                home.into_owned()
+            } else {
+                format!("{}{}", home, &path[1..])
+            };
+        }
+    }
+    path.to_string()
 }
 
 
@@ -1531,5 +1549,46 @@ mod tests {
             "read_file with seq prev should use append-map: {}", expr.expr);
         assert!(expr.expr.contains("cat"),
             "should use cat command: {}", expr.expr);
+    }
+
+    // --- expand_tilde tests ---
+
+    #[test]
+    fn test_expand_tilde_home_prefix() {
+        let expanded = expand_tilde("~/Downloads");
+        assert!(!expanded.starts_with("~/"), "should expand tilde: {}", expanded);
+        assert!(expanded.ends_with("/Downloads"), "should keep path suffix: {}", expanded);
+    }
+
+    #[test]
+    fn test_expand_tilde_bare() {
+        let expanded = expand_tilde("~");
+        assert!(!expanded.starts_with("~"), "should expand bare tilde: {}", expanded);
+        assert!(!expanded.is_empty());
+    }
+
+    #[test]
+    fn test_expand_tilde_absolute_path_unchanged() {
+        assert_eq!(expand_tilde("/usr/local"), "/usr/local");
+    }
+
+    #[test]
+    fn test_expand_tilde_relative_path_unchanged() {
+        assert_eq!(expand_tilde("foo/bar"), "foo/bar");
+    }
+
+    #[test]
+    fn test_expand_tilde_dot_unchanged() {
+        assert_eq!(expand_tilde("."), ".");
+    }
+
+    #[test]
+    fn test_fs_path_operand_expands_tilde() {
+        let inputs = vec![PlanInput::bare("path")];
+        let mut bindings = HashMap::new();
+        bindings.insert("path".to_string(), "~/Documents".to_string());
+        let result = fs_path_operand(None, &inputs, &bindings);
+        assert!(!result.contains("~/"), "should expand tilde in operand: {}", result);
+        assert!(result.contains("/Documents"), "should keep path suffix: {}", result);
     }
 }

@@ -321,7 +321,8 @@ mod tests {
         let frame = DefaultFrame::from_plan(&plan);
         let script = frame.codegen(&plan).expect("codegen should succeed");
         assert!(script.contains("#lang racket"), "should have racket preamble");
-        assert!(script.contains("~/Downloads"), "should use bound path: {}", script);
+        // Tilde is expanded at codegen time
+        assert!(script.contains("/Downloads"), "should use bound path (tilde expanded): {}", script);
     }
 
     #[test]
@@ -390,7 +391,8 @@ mod tests {
         let frame = DefaultFrame::from_plan(&plan);
         let script = frame.codegen(&plan).expect("codegen should succeed");
         assert!(script.contains("#lang racket"));
-        assert!(script.contains("~/Documents"), "should use bound path: {}", script);
+        // Tilde is expanded at codegen time
+        assert!(script.contains("/Documents"), "should use bound path (tilde expanded): {}", script);
         assert!(script.contains("step-1"), "should have let* bindings for multi-step");
     }
 

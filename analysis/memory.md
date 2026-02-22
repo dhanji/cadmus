@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T19:32:02Z | Size: 59.7k chars
+> Updated: 2026-02-22T19:46:47Z | Size: 60.7k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -756,3 +756,17 @@ plan-name:
 - `src/main.rs:333-337` — `run_plan_mode` uses `DefaultFrame::from_plan(&def).invoke(&def)`
 - No more duplicated racket registry setup in call sites
 - Commit `9ac1321`
+
+### CallingFrame full execution (updated)
+- `src/calling_frame.rs` — `CallingFrame` trait now has 3 execution methods:
+  - `codegen(&plan) → Result<String>` — compile + generate script text
+  - `invoke(&plan) → Result<Execution>` — codegen + execute
+  - `run_script(&script) → Result<Execution>` — execute existing script
+- `src/calling_frame.rs` — `Execution` struct: `script`, `stdout`, `stderr`, `success`, `exit_code`
+- `src/calling_frame.rs` — `exec_racket_script()` private fn: single implementation for temp-file racket execution
+- `src/calling_frame.rs` — `InvokeError`: `CompileError`, `CodegenError`, `ExecError`
+- `src/main.rs` — `run_racket_script()` removed entirely
+- `src/main.rs` chat mode: `frame.run_script(s)` after user confirms
+- `src/main.rs` plan mode: `frame.codegen(&def)` for display, `frame.run_script(&script)` for execution
+- `src/nl/mod.rs` handle_approve: `frame.codegen(&wf).ok()` for script generation
+- Commit `ac45690`
