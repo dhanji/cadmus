@@ -377,10 +377,10 @@ mod tests {
     }
 
     #[test]
-    fn test_verb_synonym_search_is_select() {
+    fn test_verb_search_is_search_text() {
         let lex = lexicon();
-        let info = lex.verbs.get("search").expect("search should be a verb synonym");
-        assert_eq!(info.action, "select");
+        let info = lex.verbs.get("search").expect("search should be a verb");
+        assert_eq!(info.action, "search_text");
     }
 
     #[test]

@@ -140,6 +140,12 @@ fn tree_to_intent(tree: &ParseNode, score: f64, lex: &Lexicon) -> Option<IntentI
     // Extract location modifier
     let location = extract_location(tree, lex);
 
+    // Extract object path (e.g., "~/comic.cbz" in "extract ~/comic.cbz")
+    let object_path = extract_object_path(tree);
+
+    // If no explicit location, check if the object itself is a path_noun
+    let location = location.or_else(|| extract_object_as_location(tree, lex));
+
     // Extract ordering modifier
     let ordering = extract_ordering(tree, lex);
 
@@ -154,7 +160,7 @@ fn tree_to_intent(tree: &ParseNode, score: f64, lex: &Lexicon) -> Option<IntentI
 
     // Determine output type based on action
     let output = match action.as_str() {
-        "select" | "enumerate" | "retrieve" | "traverse" => "Collection<File>".to_string(),
+        "select" | "enumerate" | "retrieve" | "traverse" | "search_text" => "Collection<File>".to_string(),
         "compress" | "decompress" => "File".to_string(),
         "order" => "Collection<File>".to_string(),
         "count" => "Number".to_string(),
@@ -167,8 +173,10 @@ fn tree_to_intent(tree: &ParseNode, score: f64, lex: &Lexicon) -> Option<IntentI
         _ => "Collection<File>".to_string(),
     };
 
-    // Build input from location
-    let dir = location.as_deref().unwrap_or(".");
+    // Build input from location or object path
+    let dir = object_path.as_deref()
+        .or(location.as_deref())
+        .unwrap_or(".");
     let input_type = if object_concept.is_some() {
         "Collection<File>".to_string()
     } else {
@@ -191,7 +199,12 @@ fn tree_to_intent(tree: &ParseNode, score: f64, lex: &Lexicon) -> Option<IntentI
     let mut last_ref = "universe".to_string();
 
     // Step 1: selection/filtering based on concept
-    if let Some(ref concept) = object_concept {
+    // Skip generic concepts that don't need filtering
+    let generic_concepts = ["file", "directory", "all_files"];
+    let filterable_concept = object_concept.as_ref()
+        .filter(|c| !generic_concepts.contains(&c.as_str()));
+
+    if let Some(concept) = &filterable_concept {
         step_counter += 1;
         let out_ref = format!("step_{}", step_counter);
         let mut params = HashMap::new();
@@ -429,6 +442,40 @@ fn extract_pattern(tree: &ParseNode) -> Option<String> {
     let pat = tree.find("PatternMod")?;
     let tokens: Vec<&str> = pat.leaf_tokens();
     tokens.first().map(|t| t.to_string())
+}
+
+/// Check if the Object is a path_noun and extract its path.
+/// Used as fallback when there's no explicit LocationMod.
+/// E.g., "list desktop" → Object is "desktop" which is a path_noun → ~/Desktop.
+fn extract_object_as_location(tree: &ParseNode, lex: &Lexicon) -> Option<String> {
+    let obj = tree.find("Object")?;
+    let tokens: Vec<&str> = obj.leaf_tokens();
+
+    for token in &tokens {
+        if let Some(info) = lex.path_nouns.get(&token.to_lowercase()) {
+            return Some(info.path.clone());
+        }
+    }
+
+    None
+}
+
+/// Extract a filesystem path from the Object node.
+/// E.g., "extract ~/comic.cbz" → Object is "~/comic.cbz" → Some("~/comic.cbz").
+fn extract_object_path(tree: &ParseNode) -> Option<String> {
+    let obj = tree.find("Object")?;
+    let tokens: Vec<&str> = obj.leaf_tokens();
+
+    for token in &tokens {
+        if token.starts_with("~/")
+            || token.starts_with('/')
+            || token.starts_with("$HOME")
+        {
+            return Some(token.to_string());
+        }
+    }
+
+    None
 }
 
 // ---------------------------------------------------------------------------

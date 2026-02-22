@@ -15,7 +15,10 @@ verbs:
   # Selection / retrieval
   - word: find
     action: select
-    synonyms: [search, look, locate, seek, discover, hunt]
+    synonyms: [look, locate, seek, discover, hunt]
+  - word: search
+    action: search_text
+    synonyms: [grep, rg]
   - word: list
     action: enumerate
     synonyms: [show, display, ls, dir, print]

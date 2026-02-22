@@ -65,8 +65,12 @@ pub fn compile_ir(ir: &IntentIR) -> CompileResult {
         .map(|s| s.dir.clone())
         .unwrap_or_else(|| ".".to_string());
 
-    // Add path input
-    inputs.push(PlanInput::bare("path"));
+    // Add input — "file" for file targets, "path" for directories
+    if is_file_path(&target_path) {
+        inputs.push(PlanInput::bare("file"));
+    } else {
+        inputs.push(PlanInput::bare("path"));
+    }
 
     // Process each IR step
     for ir_step in &ir.steps {
@@ -79,6 +83,16 @@ pub fn compile_ir(ir: &IntentIR) -> CompileResult {
             }
             "compress" => {
                 compile_compress_step(&target_path, &mut steps);
+            }
+            "search_text" => {
+                steps.push(RawStep {
+                    op: "walk_tree".to_string(),
+                    args: StepArgs::None,
+                });
+                steps.push(RawStep {
+                    op: "search_content".to_string(),
+                    args: StepArgs::None,
+                });
             }
             "decompress" => {
                 compile_decompress_step(&mut steps);
@@ -179,8 +193,8 @@ pub fn compile_ir(ir: &IntentIR) -> CompileResult {
         );
     }
 
-    // Generate a plan name from the steps
-    let name = generate_plan_name(&steps);
+    // Generate a plan name from the steps and target path
+    let name = generate_plan_name(&steps, &target_path);
 
     CompileResult::Ok(PlanDef {
         name,
@@ -234,15 +248,22 @@ fn compile_select_step(
             op: "find_matching".to_string(),
             args: StepArgs::Map(params),
         });
-    } else if let Some(pat) = explicit_pattern {
+    } else if let Some(ref pat) = explicit_pattern {
         let mut params = HashMap::new();
-        params.insert("pattern".to_string(), pat);
+        params.insert("pattern".to_string(), pat.clone());
         steps.push(RawStep {
             op: "find_matching".to_string(),
             args: StepArgs::Map(params),
         });
     }
-    // If no patterns and no concept, just walk_tree (no filter)
+    // If no patterns and no concept, still add find_matching (no filter)
+    // This ensures the plan has at least 2 steps for edit operations.
+    if patterns.is_empty() && explicit_pattern.is_none() {
+        steps.push(RawStep {
+            op: "find_matching".to_string(),
+            args: StepArgs::None,
+        });
+    }
 }
 
 /// Compile an "order" action to a sort_by step.
@@ -273,19 +294,37 @@ fn compile_order_step(
     });
 }
 
-/// Compile a "compress" action to walk_tree + pack_archive.
+/// Compile a "compress" action.
+/// If the target looks like a file path, use gzip_compress.
+/// Otherwise, use walk_tree + pack_archive for directory archiving.
 fn compile_compress_step(
-    _target_path: &str,
+    target_path: &str,
     steps: &mut Vec<RawStep>,
 ) {
-    steps.push(RawStep {
-        op: "walk_tree".to_string(),
-        args: StepArgs::None,
-    });
-    steps.push(RawStep {
-        op: "pack_archive".to_string(),
-        args: StepArgs::None,
-    });
+    if is_file_path(target_path) {
+        steps.push(RawStep {
+            op: "gzip_compress".to_string(),
+            args: StepArgs::None,
+        });
+    } else {
+        steps.push(RawStep {
+            op: "walk_tree".to_string(),
+            args: StepArgs::None,
+        });
+        steps.push(RawStep {
+            op: "pack_archive".to_string(),
+            args: StepArgs::None,
+        });
+    }
+}
+
+/// Check if a path looks like a file (has an extension).
+fn is_file_path(path: &str) -> bool {
+    if let Some(last) = path.rsplit('/').next() {
+        last.contains('.') && !last.starts_with('.')
+    } else {
+        path.contains('.') && !path.starts_with('.')
+    }
 }
 
 /// Compile a "decompress" action to extract_archive.
@@ -332,8 +371,8 @@ fn resolve_concept_to_patterns(concept: &str) -> Vec<String> {
     Vec::new()
 }
 
-/// Generate a plan name from the steps.
-fn generate_plan_name(steps: &[RawStep]) -> String {
+/// Generate a plan name from the steps and target path.
+fn generate_plan_name(steps: &[RawStep], target_path: &str) -> String {
     if steps.is_empty() {
         return "unnamed-plan".to_string();
     }
@@ -358,7 +397,7 @@ fn generate_plan_name(steps: &[RawStep]) -> String {
     };
 
     // Add filter info if present
-    let filter_info = steps.iter()
+    let filter_info: Option<String> = steps.iter()
         .find(|s| s.op == "find_matching")
         .and_then(|s| match &s.args {
             StepArgs::Map(m) => m.get("pattern").cloned(),
@@ -367,7 +406,13 @@ fn generate_plan_name(steps: &[RawStep]) -> String {
 
     if let Some(pattern) = filter_info {
         let clean = pattern.replace("*.", "").replace(',', "-");
-        format!("{}-{}", primary, clean)
+        if target_path != "." {
+            format!("{}-{} in {}", primary, clean, target_path)
+        } else {
+            format!("{}-{}", primary, clean)
+        }
+    } else if target_path != "." {
+        format!("{} in {}", primary, target_path)
     } else {
         primary.to_string()
     }

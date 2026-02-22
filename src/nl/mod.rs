@@ -91,48 +91,45 @@ pub enum NlResponse {
 
 /// Process a user input through the full NL pipeline.
 ///
-/// Pipeline: normalize → typo_correct → parse_intent → extract_slots
-/// → resolve_references → execute.
+/// Pipeline:
+///   1. normalize → typo_correct
+///   2. Check approve/reject/explain/edit (keyword/pattern match)
+///   3. Earley parse → Intent IR → compile to PlanDef
+///   4. Fallback: old intent/slots pipeline
 ///
 /// This is the single entry point for the NL UX layer.
 pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
     state.next_turn();
 
-    // Pipeline: normalize → typo correct → re-normalize (for synonyms) → intent → slots
-    //
-    // 1. First normalize: case fold, strip punctuation, expand contractions, ordinals
+    // 1. Normalize: case fold, strip punctuation, expand contractions, ordinals
     let first_pass = normalize::normalize(input);
 
     // 2. Typo correction on the raw tokens (before synonym mapping)
     let dict = typo::domain_dict();
     let corrected_tokens = dict.correct_tokens(&first_pass.tokens);
 
-    // 3. Re-normalize the corrected tokens to apply synonym mapping
-    //    We join with spaces, preserving path tokens that have original case
-    //    Re-quote tokens that contain spaces (they came from quoted input)
+    // 3. Re-normalize corrected tokens for synonym mapping
     let corrected_input = corrected_tokens.iter()
         .map(|t| if t.contains(' ') { format!("\"{}\"", t) } else { t.clone() })
         .collect::<Vec<_>>()
         .join(" ");
     let normalized = normalize::normalize(&corrected_input);
 
-    // 4. Parse intent from the fully normalized+corrected tokens
+    // 4. Parse intent (old pipeline — used for approve/reject/explain/edit)
     let intent_result = intent::parse_intent(&normalized);
 
-    // 5. Extract slots from canonical tokens
+    // 5. Extract slots (old pipeline — used for edit handling)
     let extracted = slots::extract_slots(&normalized.canonical_tokens);
 
-    // 5. Update focus stack with mentioned ops/paths
+    // 6. Update focus stack
     update_focus(state, &extracted);
 
-    // 6. Store last intent
+    // 7. Store last intent
     state.last_intent = Some(intent_result.clone());
 
-    // 7. Dispatch based on intent
+    // 8. Dispatch: approve/reject/explain/edit use old pipeline;
+    //    plan creation uses Earley parser with old-pipeline fallback.
     match intent_result {
-        Intent::CreatePlan { op, rest: _ } => {
-            handle_create_plan(op, &extracted, state)
-        }
         Intent::EditStep { action, rest: _ } => {
             handle_edit_step(action, &extracted, state)
         }
@@ -140,56 +137,11 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
             handle_explain(&subject)
         }
         Intent::Approve => {
-            if let Some(wf) = state.current_plan.take() {
-                // Generate a Racket program from the plan.
-                // Use a full registry that includes shell ops so that
-                // subsumed fs_ops can route through extract_shell_meta().
-                let script = {
-                    let registry = crate::fs_types::build_full_registry();
-                    match crate::plan::compile_plan(&wf, &registry) {
-                        Ok(compiled) => {
-                            // Build a Racket registry with shell ops included.
-                            // This runs the same inference pipeline as build_full_registry
-                            // but for the Racket-specific ops.
-                            let mut racket_reg = crate::registry::load_ops_pack_str(
-                                include_str!("../../data/packs/ops/racket.ops.yaml")
-                            ).unwrap_or_default();
-                            let racket_facts_yaml = include_str!("../../data/packs/facts/racket.facts.yaml");
-                            if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(
-                                racket_facts_yaml
-                            ) {
-                                crate::racket_strategy::promote_inferred_ops(&mut racket_reg, &facts);
-
-                                // Also discover shell submodes so extract_shell_meta()
-                                // works for subsumed fs_ops (Phase 2 type lowering).
-                                let cli_yaml = include_str!("../../data/packs/facts/macos_cli.facts.yaml");
-                                if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
-                                    let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
-                                    crate::racket_strategy::discover_shell_submodes(
-                                        &mut racket_reg, &facts, &cli_facts,
-                                    );
-                                }
-                            }
-                            match crate::racket_executor::generate_racket_script(&compiled, &wf, &racket_reg) {
-                                Ok(s) => Some(s),
-                                Err(_) => None,
-                            }
-                        }
-                        Err(_) => None,
-                    }
-                };
-                NlResponse::Approved { script }
-            } else {
-                NlResponse::NeedsClarification {
-                    needs: vec![
-                        "There's nothing to approve yet.".to_string(),
-                        "Try creating a plan first, like 'zip up ~/Downloads'.".to_string(),
-                    ],
-                }
-            }
+            handle_approve(state)
         }
         Intent::Reject => {
             state.current_plan = None;
+            state.alternative_intents.clear();
             NlResponse::Rejected
         }
         Intent::AskQuestion { tokens } => {
@@ -199,7 +151,141 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
             handle_set_param(param, value, &extracted, state)
         }
         Intent::NeedsClarification { needs } => {
-            NlResponse::NeedsClarification { needs }
+            // Before giving up, try the Earley parser
+            try_earley_or_clarify(&corrected_tokens, &extracted, state, needs)
+        }
+        Intent::CreatePlan { op, rest: _ } => {
+            // Try Earley parser first, fall back to old pipeline
+            try_earley_or_old_pipeline(&corrected_tokens, op, &extracted, state)
+        }
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// Earley parser integration
+// ---------------------------------------------------------------------------
+
+/// Try the Earley parser for plan creation, fall back to old pipeline.
+fn try_earley_or_old_pipeline(
+    corrected_tokens: &[String],
+    old_op: Option<String>,
+    extracted: &ExtractedSlots,
+    state: &mut DialogueState,
+) -> NlResponse {
+    // Try Earley parser
+    if let Some(response) = try_earley_create(corrected_tokens, state) {
+        return response;
+    }
+
+    // Fall back to old pipeline
+    handle_create_plan(old_op, extracted, state)
+}
+
+/// Try the Earley parser when old pipeline says NeedsClarification.
+fn try_earley_or_clarify(
+    corrected_tokens: &[String],
+    _extracted: &ExtractedSlots,
+    state: &mut DialogueState,
+    fallback_needs: Vec<String>,
+) -> NlResponse {
+    // Try Earley parser — it might understand what the old pipeline couldn't
+    if let Some(response) = try_earley_create(corrected_tokens, state) {
+        return response;
+    }
+
+    // Earley also failed — return the original clarification
+    NlResponse::NeedsClarification { needs: fallback_needs }
+}
+
+/// Attempt to parse and compile via the Earley pipeline.
+/// Returns Some(NlResponse) on success, None if Earley can't parse.
+fn try_earley_create(
+    tokens: &[String],
+    state: &mut DialogueState,
+) -> Option<NlResponse> {
+    let grammar = grammar::build_command_grammar();
+    let lex = lexicon::lexicon();
+    let parses = earley::parse(&grammar, tokens, lex);
+
+    if parses.is_empty() {
+        return None;
+    }
+
+    let ir_result = intent_ir::parse_trees_to_intents(&parses);
+
+    // Store alternatives in dialogue state
+    state.alternative_intents = ir_result.alternatives.clone();
+
+    match intent_compiler::compile_intent(&ir_result) {
+        intent_compiler::CompileResult::Ok(plan) => {
+            let yaml = dialogue::plan_to_yaml(&plan);
+
+            match validate_plan_yaml(&yaml) {
+                Ok(()) => {
+                    let summary = format_summary(&plan);
+                    let prompt = format!("{}\n\n{}\n\n{}",
+                        casual_ack(state.turn_count),
+                        yaml,
+                        "Approve? Or edit plan?"
+                    );
+
+                    state.current_plan = Some(plan);
+                    state.focus.push(FocusEntry::WholePlan);
+
+                    Some(NlResponse::PlanCreated {
+                        plan_yaml: yaml,
+                        summary,
+                        prompt,
+                    })
+                }
+                Err(_) => None, // Validation failed — fall back to old pipeline
+            }
+        }
+        intent_compiler::CompileResult::Error(_) => None,
+        intent_compiler::CompileResult::NoIntent => None,
+    }
+}
+
+/// Handle approve intent.
+fn handle_approve(state: &mut DialogueState) -> NlResponse {
+    if let Some(wf) = state.current_plan.take() {
+        let script = {
+            let registry = crate::fs_types::build_full_registry();
+            match crate::plan::compile_plan(&wf, &registry) {
+                Ok(compiled) => {
+                    let mut racket_reg = crate::registry::load_ops_pack_str(
+                        include_str!("../../data/packs/ops/racket.ops.yaml")
+                    ).unwrap_or_default();
+                    let racket_facts_yaml = include_str!("../../data/packs/facts/racket.facts.yaml");
+                    if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(
+                        racket_facts_yaml
+                    ) {
+                        crate::racket_strategy::promote_inferred_ops(&mut racket_reg, &facts);
+                        let cli_yaml = include_str!("../../data/packs/facts/macos_cli.facts.yaml");
+                        if let Ok(cli_pack) = serde_yaml::from_str::<crate::fact_pack::FactPack>(cli_yaml) {
+                            let cli_facts = crate::fact_pack::FactPackIndex::build(cli_pack);
+                            crate::racket_strategy::discover_shell_submodes(
+                                &mut racket_reg, &facts, &cli_facts,
+                            );
+                        }
+                    }
+                    match crate::racket_executor::generate_racket_script(&compiled, &wf, &racket_reg) {
+                        Ok(s) => Some(s),
+                        Err(_) => None,
+                    }
+                }
+                Err(_) => None,
+            }
+        };
+        state.alternative_intents.clear();
+        NlResponse::Approved { script }
+    } else {
+        NlResponse::NeedsClarification {
+            needs: vec![
+                "There's nothing to approve yet.".to_string(),
+                "Try creating a plan first, like 'zip up ~/Downloads'.".to_string(),
+            ],
         }
     }
 }

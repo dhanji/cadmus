@@ -113,6 +113,8 @@ impl FocusStack {
 pub struct DialogueState {
     /// The current plan being built/edited (None if no plan yet).
     pub current_plan: Option<PlanDef>,
+    /// Alternative intent interpretations from the Earley parser.
+    pub alternative_intents: Vec<crate::nl::intent_ir::IntentIR>,
     /// Focus stack for anaphora resolution.
     pub focus: FocusStack,
     /// Number of turns in this conversation.
@@ -125,6 +127,7 @@ impl DialogueState {
     pub fn new() -> Self {
         Self {
             current_plan: None,
+            alternative_intents: Vec::new(),
             focus: FocusStack::new(),
             turn_count: 0,
             last_intent: None,
