@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T01:06:44Z | Size: 56.5k chars
+> Updated: 2026-02-22T03:14:55Z | Size: 57.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -713,3 +713,11 @@ plan-name:
 ### Test Counts
 - Total: 1345 passing, 0 failing
 - Pre-existing flaky: test_type_symmetric_discovery_tabular
+
+### Verb Lexicon Expansion (commit 69b9475)
+- `data/nl/nl_lexicon.yaml` — expanded from 23 to 104 base verbs, 1186 total words
+- 103 unique action labels across 3 domains: file ops (41), programming (43), git (17), network (3)
+- New action labels are label-only — NOT implemented in `src/nl/intent_compiler.rs`
+- Unimplemented actions fall through: Earley parses → compiler returns Error → falls back to old pipeline → NeedsClarification
+- Zero synonym conflicts enforced: each word appears in exactly one verb entry
+- `tests/nl_earley_tests.rs` — 58 tests total (20 new synonym/lexicon tests)

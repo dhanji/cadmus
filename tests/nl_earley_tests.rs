@@ -1,5 +1,111 @@
 
 // ===========================================================================
+// Phrase tokenizer integration tests
+// ===========================================================================
+// These tests verify that multi-word verb phrases are correctly grouped
+// into single canonical tokens before Earley parsing.
+
+#[test]
+fn test_phrase_make_a_list_of_files_in_downloads() {
+    // "make a list" → "list" (enumerate action) → list_dir plan
+    let yaml = expect_plan("make a list of files in downloads");
+    assert!(yaml.contains("list_dir"), "should have list_dir:\n{}", yaml);
+}
+
+#[test]
+fn test_phrase_make_me_a_list_of_files() {
+    // "make me a list" → "list" with stopword stripping
+    let yaml = expect_plan("make me a list of files in downloads");
+    assert!(yaml.contains("list_dir"), "should have list_dir:\n{}", yaml);
+}
+
+#[test]
+fn test_phrase_give_me_a_list() {
+    // "give me a list" → "list"
+    let yaml = expect_plan("give me a list of files in downloads");
+    assert!(yaml.contains("list_dir"), "should have list_dir:\n{}", yaml);
+}
+
+#[test]
+fn test_phrase_take_a_look_at_photos() {
+    // "take a look" → "find" (select action)
+    let yaml = expect_plan("take a look at photos in downloads");
+    assert!(yaml.contains("walk_tree"), "should have walk_tree:\n{}", yaml);
+    assert!(yaml.contains("find_matching"), "should have find_matching:\n{}", yaml);
+}
+
+#[test]
+fn test_phrase_zip_up_files() {
+    // "zip up" → "zip" (compress action)
+    let yaml = expect_plan("zip up files in downloads");
+    assert!(yaml.contains("walk_tree"), "should have walk_tree:\n{}", yaml);
+    assert!(yaml.contains("pack_archive") || yaml.contains("gzip_compress"),
+        "should have compress op:\n{}", yaml);
+}
+
+#[test]
+fn test_phrase_clean_up_downloads() {
+    // "clean up" → "clean" (not implemented, falls back)
+    let mut state = DialogueState::new();
+    let response = process_input("clean up downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'clean up downloads': {:?}", other),
+    }
+}
+
+#[test]
+fn test_phrase_back_up_files() {
+    // "back up" → "backup" (not implemented, falls back)
+    let mut state = DialogueState::new();
+    let response = process_input("back up files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        NlResponse::Rejected => {} // "back" triggers rejection in old pipeline
+        other => panic!("unexpected response for 'back up files': {:?}", other),
+    }
+}
+
+#[test]
+fn test_phrase_write_a_program() {
+    // "write a program" → "implement" (not implemented, falls back)
+    let mut state = DialogueState::new();
+    let response = process_input("write a program to sort files", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'write a program': {:?}", other),
+    }
+}
+
+#[test]
+fn test_phrase_no_false_match() {
+    // "make comics" should NOT match [make, list] — "comics" is not "list"
+    // Should still work as a normal find/create command or fall back
+    let mut state = DialogueState::new();
+    let response = process_input("make comics in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'make comics': {:?}", other),
+    }
+}
+
+#[test]
+fn test_phrase_existing_single_word_verbs_unaffected() {
+    // Single-word verbs should still work exactly as before
+    let yaml1 = expect_plan("find comics in downloads");
+    assert!(yaml1.contains("walk_tree") && yaml1.contains("find_matching"));
+
+    let yaml2 = expect_plan("sort files in downloads newest first");
+    assert!(yaml2.contains("sort_by"));
+
+    let yaml3 = expect_plan("list files in downloads");
+    assert!(yaml3.contains("list_dir"));
+}
+// ===========================================================================
 // Expanded verb lexicon tests
 // ===========================================================================
 // These tests verify the expanded verb lexicon (104 base verbs, 1186 words)

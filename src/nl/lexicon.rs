@@ -34,6 +34,16 @@ struct LexiconYaml {
     quantifiers: Vec<String>,
     conjunctions: Vec<String>,
     fillers: Vec<String>,
+    #[serde(default)]
+    phrase_groups: Vec<PhraseGroupEntry>,
+}
+/// A phrase group: multi-word verb phrase → canonical single token.
+#[derive(Debug, Clone)]
+pub struct PhraseGroup {
+    /// Content-word skeleton (lowercased, 2+ words).
+    pub skeleton: Vec<String>,
+    /// Canonical verb token to emit.
+    pub canonical: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +52,14 @@ struct VerbEntry {
     action: String,
     #[serde(default)]
     synonyms: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PhraseGroupEntry {
+    /// Content-word skeleton (2+ words, in order).
+    skeleton: Vec<String>,
+    /// Canonical single verb token to replace the phrase with.
+    canonical: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,6 +165,9 @@ pub struct Lexicon {
 
     /// Set of conjunctions.
     pub conjunctions: std::collections::HashSet<String>,
+
+    /// Phrase groups for multi-word verb phrase canonicalization.
+    pub phrase_groups: Vec<PhraseGroup>,
 }
 
 // ---------------------------------------------------------------------------
@@ -337,12 +358,22 @@ fn parse_lexicon(yaml_str: &str) -> Result<Lexicon, String> {
         cats.dedup();
     }
 
+    // Phrase groups
+    let phrase_groups: Vec<PhraseGroup> = raw.phrase_groups.iter()
+        .filter(|pg| pg.skeleton.len() >= 2)
+        .map(|pg| PhraseGroup {
+            skeleton: pg.skeleton.iter().map(|w| w.to_lowercase()).collect(),
+            canonical: pg.canonical.to_lowercase(),
+        })
+        .collect();
+
     Ok(Lexicon {
         categories,
         verbs,
         nouns,
         path_nouns: path_nouns_map,
         orderings,
+        phrase_groups,
         fillers,
         prepositions,
         possessives,
@@ -515,5 +546,24 @@ mod tests {
         let lex = lexicon();
         let info = lex.verbs.get("sort").expect("sort should be a verb");
         assert_eq!(info.action, "order");
+    }
+
+    #[test]
+    fn test_phrase_groups_loaded() {
+        let lex = lexicon();
+        assert!(!lex.phrase_groups.is_empty(), "phrase_groups should not be empty");
+        let make_list = lex.phrase_groups.iter()
+            .find(|pg| pg.skeleton == vec!["make", "list"])
+            .expect("should have [make, list] phrase group");
+        assert_eq!(make_list.canonical, "list");
+    }
+
+    #[test]
+    fn test_phrase_groups_all_have_2_plus_words() {
+        let lex = lexicon();
+        for pg in &lex.phrase_groups {
+            assert!(pg.skeleton.len() >= 2,
+                "phrase group skeleton must have 2+ words: {:?}", pg.skeleton);
+        }
     }
 }

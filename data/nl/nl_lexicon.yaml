@@ -678,6 +678,146 @@ conjunctions:
 # ---------------------------------------------------------------------------
 # Filler words (ignored during parsing but preserved for context)
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Phrase groups: multi-word verb phrases → canonical single verb token
+# ---------------------------------------------------------------------------
+# Each entry defines content words (the skeleton) that must appear in order.
+# Intervening stopwords/fillers (a, the, me, up, out, etc.) are stripped
+# during matching. The canonical token replaces the entire phrase in the
+# token stream before Earley parsing.
+#
+# Example: "make a list" → skeleton [make, list] → canonical "list"
+#          "make me a list" → same match (me, a are stopwords)
+#          "make me up a list" → same match (me, up, a are stopwords)
+#
+# RULE: skeletons must have 2+ content words.
+#       The canonical token must be a known verb in the verbs section.
+# ---------------------------------------------------------------------------
+
+phrase_groups:
+  # --- Periphrastic verb phrases (natural speech → canonical verb) ----------
+
+  # Listing / showing
+  - skeleton: [make, list]
+    canonical: list
+  - skeleton: [give, list]
+    canonical: list
+  - skeleton: [get, list]
+    canonical: list
+  - skeleton: [pull, list]
+    canonical: list
+  - skeleton: [show, list]
+    canonical: list
+  - skeleton: [print, list]
+    canonical: list
+
+  # Finding / looking
+  - skeleton: [take, look]
+    canonical: find
+  - skeleton: [have, look]
+    canonical: find
+  - skeleton: [go, find]
+    canonical: find
+  - skeleton: [go, look]
+    canonical: find
+  - skeleton: [look, up]
+    canonical: search
+
+  # Running / executing
+  - skeleton: [carry, out]
+    canonical: run
+  - skeleton: [fire, up]
+    canonical: run
+  - skeleton: [kick, off]
+    canonical: run
+  - skeleton: [spin, up]
+    canonical: run
+  - skeleton: [set, off]
+    canonical: run
+
+  # Installing / setting up
+  - skeleton: [set, up]
+    canonical: install
+  - skeleton: [get, ready]
+    canonical: install
+  - skeleton: [get, going]
+    canonical: install
+
+  # Cleaning / tidying
+  - skeleton: [clean, up]
+    canonical: clean
+  - skeleton: [tidy, up]
+    canonical: clean
+  - skeleton: [clear, out]
+    canonical: clean
+  - skeleton: [wipe, out]
+    canonical: delete
+
+  # Backing up
+  - skeleton: [back, up]
+    canonical: backup
+  - skeleton: [make, backup]
+    canonical: backup
+  - skeleton: [make, copy]
+    canonical: copy
+  - skeleton: [make, snapshot]
+    canonical: backup
+
+  # Checking out / switching
+  - skeleton: [check, out]
+    canonical: clone
+  - skeleton: [switch, to]
+    canonical: clone
+
+  # Picking up / getting
+  - skeleton: [pick, up]
+    canonical: get
+  - skeleton: [grab, hold]
+    canonical: get
+
+  # Writing / creating
+  - skeleton: [write, program]
+    canonical: implement
+  - skeleton: [write, script]
+    canonical: implement
+  - skeleton: [write, code]
+    canonical: implement
+  - skeleton: [build, program]
+    canonical: implement
+  - skeleton: [make, program]
+    canonical: implement
+  - skeleton: [create, program]
+    canonical: implement
+
+  # Compressing / archiving
+  - skeleton: [zip, up]
+    canonical: zip
+  - skeleton: [pack, up]
+    canonical: zip
+  - skeleton: [bundle, up]
+    canonical: zip
+  - skeleton: [make, archive]
+    canonical: zip
+  - skeleton: [make, zip]
+    canonical: zip
+
+  # Figuring out / debugging
+  - skeleton: [figure, out]
+    canonical: debug
+  - skeleton: [work, out]
+    canonical: debug
+  - skeleton: [track, down]
+    canonical: debug
+  - skeleton: [narrow, down]
+    canonical: filter
+  - skeleton: [zero, in]
+    canonical: find
+  - skeleton: [drill, down]
+    canonical: find
+  - skeleton: [dig, into]
+    canonical: search
+
 fillers:
   - up
   - out

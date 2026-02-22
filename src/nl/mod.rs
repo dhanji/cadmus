@@ -25,6 +25,7 @@ pub mod grammar;
 pub mod lexicon;
 pub mod intent_ir;
 pub mod intent_compiler;
+pub mod phrase;
 
 use dialogue::{DialogueState, DialogueError, FocusEntry};
 use intent::Intent;
@@ -206,9 +207,13 @@ fn try_earley_create(
     tokens: &[String],
     state: &mut DialogueState,
 ) -> Option<NlResponse> {
+    // Phase 0: Phrase tokenization — group multi-word verb phrases into
+    // single canonical tokens (e.g., "make me a list" → "list").
+    let phrase_tokens = phrase::phrase_tokenize(tokens);
+
     let grammar = grammar::build_command_grammar();
     let lex = lexicon::lexicon();
-    let parses = earley::parse(&grammar, tokens, lex);
+    let parses = earley::parse(&grammar, &phrase_tokens, lex);
 
     if parses.is_empty() {
         return None;
