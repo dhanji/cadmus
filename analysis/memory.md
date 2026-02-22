@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T03:14:55Z | Size: 57.1k chars
+> Updated: 2026-02-22T05:01:34Z | Size: 57.8k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -721,3 +721,12 @@ plan-name:
 - Unimplemented actions fall through: Earley parses → compiler returns Error → falls back to old pipeline → NeedsClarification
 - Zero synonym conflicts enforced: each word appears in exactly one verb entry
 - `tests/nl_earley_tests.rs` — 58 tests total (20 new synonym/lexicon tests)
+
+### Phrase Tokenizer (commit 5b11288)
+- `src/nl/phrase.rs` (314 lines) — greedy longest-match phrase tokenizer with stopword stripping
+- `data/nl/nl_lexicon.yaml` — 49 `phrase_groups` entries mapping content-word skeletons to canonical verb tokens
+- `src/nl/lexicon.rs` — `PhraseGroup` and `PhraseGroupEntry` types, loaded via `#[serde(default)]`
+- Wired in `src/nl/mod.rs::try_earley_create()` — `phrase::phrase_tokenize(tokens)` called before `earley::parse()`
+- Algorithm: scan tokens, match first skeleton word, skip stopwords between skeleton words, emit canonical token
+- Stopwords: 55 words (determiners, pronouns, fillers, auxiliaries, prepositions)
+- `tests/nl_earley_tests.rs` — 68 tests total (10 new phrase integration tests)
