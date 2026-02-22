@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T05:01:34Z | Size: 57.8k chars
+> Updated: 2026-02-22T08:12:33Z | Size: 58.3k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -730,3 +730,11 @@ plan-name:
 - Algorithm: scan tokens, match first skeleton word, skip stopwords between skeleton words, emit canonical token
 - Stopwords: 55 words (determiners, pronouns, fillers, auxiliaries, prepositions)
 - `tests/nl_earley_tests.rs` — 68 tests total (10 new phrase integration tests)
+
+### CLI Readline Support
+- `src/line_editor.rs` [1..167] - `LineEditor`, `ReadResult` — rustyline v15 wrapper with Emacs mode
+- `Cargo.toml` — `rustyline = "15"` dependency
+- `src/main.rs` — `run_chat_mode()` uses `LineEditor` instead of `stdin.lock().read_line()`
+- History file: `~/.cadmus_history`, max 1000 entries
+- Keybindings: Up/Down, Ctrl-A/E/K/U/W, Left/Right, Ctrl-C (re-prompt), Ctrl-D (EOF)
+- Confirmation prompts don't add to history
