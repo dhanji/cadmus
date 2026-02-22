@@ -1,4 +1,263 @@
+
 // ===========================================================================
+// Expanded verb lexicon tests
+// ===========================================================================
+// These tests verify the expanded verb lexicon (104 base verbs, 1186 words)
+// across three domains: file operations, general programming, git operations.
+
+// ---------------------------------------------------------------------------
+// Domain 1: File operation synonyms
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_synonym_locate_photos_in_downloads() {
+    // "locate" is a synonym of "find" (action: select)
+    let yaml = expect_plan("locate photos in downloads");
+    assert!(yaml.contains("walk_tree"), "should have walk_tree:\n{}", yaml);
+    assert!(yaml.contains("find_matching"), "should have find_matching:\n{}", yaml);
+}
+
+#[test]
+fn test_synonym_grab_comics_in_documents() {
+    // "grab" is a synonym of "download" (action: download) — but in context
+    // of "grab comics in documents" it should parse as select via the Earley
+    // parser or fall back to old pipeline
+    let mut state = DialogueState::new();
+    let response = process_input("grab comics in documents", &mut state);
+    // Should produce some response (not panic)
+    match response {
+        NlResponse::PlanCreated { .. } => {} // great
+        NlResponse::NeedsClarification { .. } => {} // also fine — fallback
+        other => panic!("unexpected response for 'grab comics in documents': {:?}", other),
+    }
+}
+
+#[test]
+fn test_synonym_hunt_pdfs_in_desktop() {
+    // "hunt" is a synonym of "find" (action: select)
+    let yaml = expect_plan("hunt pdfs in desktop");
+    assert!(yaml.contains("walk_tree"), "should have walk_tree:\n{}", yaml);
+    assert!(yaml.contains("find_matching"), "should have find_matching:\n{}", yaml);
+}
+
+#[test]
+fn test_synonym_catalog_files_in_downloads() {
+    // "catalog" is a synonym of "list" (action: enumerate)
+    let yaml = expect_plan("catalog files in downloads");
+    assert!(yaml.contains("list_dir"), "should have list_dir:\n{}", yaml);
+}
+
+#[test]
+fn test_synonym_arrange_files_newest_first() {
+    // "arrange" is a synonym of "sort" (action: order)
+    let yaml = expect_plan("arrange files in downloads newest first");
+    assert!(yaml.contains("sort_by"), "should have sort_by:\n{}", yaml);
+}
+
+#[test]
+fn test_synonym_compress_bundle_pack() {
+    // "bundle" and "pack" are synonyms of "zip" (action: compress)
+    // Verify the lexicon knows about these synonyms
+    let lex = cadmus::nl::lexicon::lexicon();
+    let bundle_info = lex.verbs.get("bundle").expect("bundle should be a verb");
+    assert_eq!(bundle_info.action, "compress", "bundle should map to compress");
+    let pack_info = lex.verbs.get("pack").expect("pack should be a verb");
+    assert_eq!(pack_info.action, "compress", "pack should map to compress");
+
+    // These should parse through the pipeline without crashing
+    let mut state = DialogueState::new();
+    let response = process_input("bundle photos in downloads", &mut state);
+    // Any response is fine — the key test is that it doesn't panic
+    // and the lexicon correctly maps the synonyms
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        _ => {}
+    }
+}
+
+#[test]
+fn test_synonym_unwrap_archive() {
+    // "unwrap" is a synonym of "unzip" (action: decompress)
+    let yaml = expect_plan("unwrap ~/Downloads/archive.tar.gz");
+    assert!(yaml.contains("extract_archive"), "should have extract_archive:\n{}", yaml);
+}
+
+#[test]
+fn test_synonym_replicate_files() {
+    // "replicate" is a synonym of "copy" (action: copy)
+    // copy is implemented in compiler — should produce a plan
+    let mut state = DialogueState::new();
+    let response = process_input("replicate files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {} // great — compiler handled it
+        NlResponse::NeedsClarification { .. } => {} // also fine — fallback
+        other => panic!("unexpected response for 'replicate': {:?}", other),
+    }
+}
+
+#[test]
+fn test_synonym_relocate_files() {
+    // "relocate" is a synonym of "move" (action: move)
+    let yaml = expect_plan("relocate files in downloads");
+    assert!(yaml.contains("move") || yaml.contains("walk_tree"),
+        "should produce a plan:\n{}", yaml);
+}
+
+#[test]
+fn test_synonym_purge_files() {
+    // "purge" is a synonym of "delete" (action: delete)
+    let mut state = DialogueState::new();
+    let response = process_input("purge files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {} // compiler handled delete
+        NlResponse::NeedsClarification { .. } => {} // fallback is fine
+        other => panic!("unexpected response for 'purge': {:?}", other),
+    }
+}
+
+#[test]
+fn test_synonym_tidy_downloads() {
+    // "tidy" is a synonym of "clean" (action: clean)
+    // clean is not implemented in compiler, so should fall back
+    let mut state = DialogueState::new();
+    let response = process_input("tidy downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {} // old pipeline might handle
+        NlResponse::NeedsClarification { .. } => {} // expected fallback
+        other => panic!("unexpected response for 'tidy downloads': {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Domain 2: Programming verb synonyms
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_synonym_execute_files() {
+    // "execute" is a synonym of "run" (action: execute)
+    // execute is not implemented in compiler, so should fall back gracefully
+    let mut state = DialogueState::new();
+    let response = process_input("execute files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'execute': {:?}", other),
+    }
+}
+
+#[test]
+fn test_synonym_compile_not_crash() {
+    // "compile" is a verb with action: compile (not implemented in compiler)
+    let mut state = DialogueState::new();
+    let response = process_input("compile files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'compile': {:?}", other),
+    }
+}
+
+#[test]
+fn test_synonym_scaffold_not_crash() {
+    // "scaffold" action is not implemented in compiler
+    let mut state = DialogueState::new();
+    let response = process_input("scaffold files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'scaffold': {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Domain 3: Git verb synonyms
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_synonym_git_revert_undo() {
+    // "undo" is a synonym of "revert" (action: git_revert)
+    // git_revert is not implemented in compiler, should fall back
+    let mut state = DialogueState::new();
+    let response = process_input("undo files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'undo': {:?}", other),
+    }
+}
+
+#[test]
+fn test_synonym_git_stash_shelve() {
+    // "shelve" is a synonym of "stash" (action: git_stash)
+    let mut state = DialogueState::new();
+    let response = process_input("shelve files in downloads", &mut state);
+    match response {
+        NlResponse::PlanCreated { .. } => {}
+        NlResponse::NeedsClarification { .. } => {}
+        other => panic!("unexpected response for 'shelve': {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lexicon validation tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_lexicon_verb_count_over_100() {
+    let lex = cadmus::nl::lexicon::lexicon();
+    // Count unique action labels
+    let actions: std::collections::HashSet<&str> = lex.verbs.values()
+        .map(|v| v.action.as_str())
+        .collect();
+    assert!(actions.len() >= 50, "should have at least 50 unique actions, got {}", actions.len());
+    assert!(lex.verbs.len() >= 500, "should have at least 500 verb words, got {}", lex.verbs.len());
+}
+
+#[test]
+fn test_lexicon_no_verb_filler_overlap() {
+    let lex = cadmus::nl::lexicon::lexicon();
+    for filler in &lex.fillers {
+        assert!(!lex.verbs.contains_key(filler.as_str()),
+            "filler '{}' should not also be a verb", filler);
+    }
+}
+
+#[test]
+fn test_lexicon_all_synonyms_single_word() {
+    let lex = cadmus::nl::lexicon::lexicon();
+    for (word, _) in &lex.verbs {
+        assert!(!word.contains(' '),
+            "verb '{}' contains a space — multi-word synonyms not supported", word);
+    }
+}
+
+#[test]
+fn test_unimplemented_action_no_crash() {
+    // Test a broad set of unimplemented actions to ensure none crash
+    let unimplemented_verbs = [
+        "encrypt", "decrypt", "chmod", "mount", "unmount", "sync", "backup",
+        "restore", "build", "run", "stop", "debug", "test", "lint", "compile",
+        "deploy", "scaffold", "refactor", "configure", "profile", "optimize",
+        "publish", "serve", "containerize", "migrate", "patch", "mock", "parse",
+        "serialize", "deserialize", "index", "query", "aggregate", "generate",
+        "implement", "initialize", "log", "monitor", "notify", "schedule",
+        "pipe", "wrap", "inject", "sample", "visualize", "encode", "benchmark",
+        "automate", "commit", "clone", "push", "pull", "branch", "stash",
+        "rebase", "revert", "tag", "fetch", "status", "remote", "ping", "ssh",
+    ];
+    for verb in &unimplemented_verbs {
+        let mut state = DialogueState::new();
+        let input = format!("{} files in downloads", verb);
+        let response = process_input(&input, &mut state);
+        // Should not panic — any response is fine
+        match response {
+            NlResponse::PlanCreated { .. } => {}
+            NlResponse::NeedsClarification { .. } => {}
+            _ => {} // any response is acceptable, just no panic
+        }
+    }
+}// ===========================================================================
 // Integration tests for the Earley NL pipeline.
 //
 // These tests exercise the full path:

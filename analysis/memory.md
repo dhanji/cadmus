@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T00:20:07Z | Size: 55.0k chars
+> Updated: 2026-02-22T01:06:44Z | Size: 56.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -685,3 +685,31 @@ plan-name:
 - Approve/reject/explain stay as keyword match
 - DialogueState carries alternative IntentIRs
 - No external Earley crate — implement core directly
+
+### Earley NL Pipeline (Phase 4 - Complete)
+- `src/nl/earley.rs` [788 lines] - Earley parser engine (predict/scan/complete, parse forest, ranked output)
+- `src/nl/grammar.rs` [360 lines] - Command grammar builder (30+ rules, Verb Object Modifiers pattern)
+- `src/nl/lexicon.rs` [519 lines] - YAML lexicon loader + TokenClassifier
+- `data/nl/nl_lexicon.yaml` - Earley lexicon (verbs, nouns, path_nouns, orderings, prepositions, determiners, fillers)
+- `src/nl/intent_ir.rs` [671 lines] - IntentIR schema + parse_trees_to_intents()
+- `src/nl/intent_compiler.rs` [593 lines] - IntentIR → PlanDef (select, compress, decompress, order, search_text, list)
+- `src/nl/mod.rs` [813 lines] - process_input() with Earley-first + old pipeline fallback
+- `tests/nl_earley_tests.rs` [443 lines] - 38 integration tests
+
+### Key Architecture
+- Earley parser is **additive** — falls back to old pipeline when it can't parse
+- `try_earley_create()` in mod.rs is the integration point
+- `DialogueState.alternative_intents` stores alternative IntentIRs from Earley
+- Approve/reject/explain/edit still use keyword/pattern matching (old pipeline)
+- Only plan creation uses Earley parser
+
+### Commits (Phase 4)
+- `2075c0a` - Earley parser engine, lexicon, grammar (I1+I2)
+- `735ec02` - Intent IR + Intent Compiler (I3+I4)
+- `90dbff5` - Rewire NL pipeline (I5)
+- `1ad22cc` - Integration tests (I6)
+- `d3216db` - Documentation (I7)
+
+### Test Counts
+- Total: 1345 passing, 0 failing
+- Pre-existing flaky: test_type_symmetric_discovery_tabular

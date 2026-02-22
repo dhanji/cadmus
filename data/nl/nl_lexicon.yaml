@@ -11,87 +11,490 @@
 # ---------------------------------------------------------------------------
 # Verbs: action words → abstract action labels (NOT cadmus ops)
 # ---------------------------------------------------------------------------
+# Three domains:
+#   1. File operations — copy, move, compress, encrypt, backup, etc.
+#   2. General programming — build, compile, test, run, debug, lint, etc.
+#   3. Git operations — commit, pull, push, merge, rebase, etc.
+#
+# RULE: every synonym must appear in EXACTLY ONE verb entry.
+#       No word may be a synonym of two different actions.
+#       Single-word synonyms only (tokenizer splits on whitespace).
+# ---------------------------------------------------------------------------
+
 verbs:
-  # Selection / retrieval
+  # ==========================================================================
+  # DOMAIN 1: FILE OPERATIONS
+  # ==========================================================================
+
+  # --- Selection / retrieval ------------------------------------------------
+
   - word: find
     action: select
-    synonyms: [look, locate, seek, discover, hunt]
+    synonyms: [locate, seek, discover, hunt, spot, identify, pinpoint, detect, uncover, expose, reveal, trace, track, scour, rummage, forage, prospect, reconnoiter]
+
   - word: search
     action: search_text
-    synonyms: [grep, rg]
+    synonyms: [grep, rg, lookup, probe, trawl, dredge, comb, rifle, ransack, peruse, skim]
+
   - word: list
     action: enumerate
-    synonyms: [show, display, ls, dir, print]
+    synonyms: [show, display, ls, dir, catalog, inventory, itemize, tabulate, manifest, register]
+
   - word: get
     action: retrieve
-    synonyms: [fetch, grab, obtain, pull]
+    synonyms: [obtain, acquire, procure, collect, gather, harvest, reap, assemble, accumulate, amass, hoard, stockpile, requisition]
 
-  # Traversal
-  - word: walk
-    action: traverse
-    synonyms: [scan, crawl, recurse, traverse, explore]
-
-  # Transformation / ordering
-  - word: sort
-    action: order
-    synonyms: [order, arrange, rank, organize]
   - word: filter
     action: select
-    synonyms: [sift, narrow, restrict, limit, keep]
+    synonyms: [sift, narrow, restrict, limit, keep, refine, distill, screen, cull, prune, trim, whittle, pare, isolate, segregate]
+
+  # --- Traversal ------------------------------------------------------------
+
+  - word: walk
+    action: traverse
+    synonyms: [scan, crawl, recurse, traverse, explore, navigate, browse, roam, wander, patrol, sweep, tour, canvass]
+
+  # --- Ordering / sorting ---------------------------------------------------
+
+  - word: sort
+    action: order
+    synonyms: [order, arrange, rank, organize, classify, categorize, group, sequence, prioritize, grade, rate, tier, stratify, marshal, regiment, systematize, alphabetize, collate, interleave]
+
   - word: count
     action: count
-    synonyms: [tally, total, sum]
+    synonyms: [tally, total, sum, quantify, measure, gauge, reckon, compute, calculate, census, meter]
+
   - word: deduplicate
     action: deduplicate
-    synonyms: [dedup, unique]
+    synonyms: [dedup, unique, distinct, uniq, consolidate, coalesce, collapse, compact, normalize, canonicalize, reconcile, harmonize, rationalize, streamline]
 
-  # Archive / compression
+  # --- Archive / compression ------------------------------------------------
+
   - word: zip
     action: compress
-    synonyms: [compress, archive, bundle, pack, tar]
+    synonyms: [compress, archive, bundle, pack, tar, gzip, bzip, squash, squeeze, shrink, condense, deflate, minify, crunch, reduce]
+
   - word: unzip
     action: decompress
-    synonyms: [extract, unpack, decompress, untar, expand, inflate]
+    synonyms: [extract, unpack, decompress, untar, expand, inflate, unwrap, unbundle, unseal, unarchive, explode, reconstitute, rehydrate]
 
-  # File operations
+  # --- File CRUD ------------------------------------------------------------
+
   - word: copy
     action: copy
-    synonyms: [duplicate, cp]
+    synonyms: [duplicate, cp, replicate, reproduce, mirror, echo, propagate, disseminate, distribute]
+
   - word: move
     action: move
-    synonyms: [mv, relocate, transfer]
+    synonyms: [mv, relocate, transfer, shift, transport, convey, shuttle, dispatch, reroute, displace, reposition, transplant, reshuffle, rearrange]
+
   - word: delete
     action: delete
-    synonyms: [remove, rm, erase, trash, destroy]
+    synonyms: [remove, rm, erase, trash, destroy, purge, wipe, obliterate, annihilate, expunge, scrub, shred, nuke, zap, eliminate, exterminate, liquidate, discard, jettison]
+
   - word: rename
     action: rename
-    synonyms: [name]
+    synonyms: [retitle, relabel, rebrand, rechristen, redesignate, reclassify, remap, reassign, realias, reidentify, retag, restamp, remark, reindex, renumber, recode, rekey]
+
+  - word: create
+    action: create
+    synonyms: [make, new, touch, produce, fabricate, construct, craft, forge, spawn, instantiate, bootstrap]
+
   - word: read
     action: read
-    synonyms: [cat, view, open, inspect, examine]
+    synonyms: [cat, view, open, inspect, examine, peek, glance, study, review, analyze, interpret, decipher, transcribe, digest]
+
   - word: write
     action: write
-    synonyms: [save, output, emit]
+    synonyms: [save, output, emit, dump, export, flush, persist, store, record, journal, chronicle, inscribe, render]
+
+  - word: append
+    action: append
+    synonyms: [attach, affix, suffix, concatenate, adjoin, annex, supplement, augment, elongate, accrue, tack, staple, glue, splice]
+
+  - word: truncate
+    action: truncate
+    synonyms: [shorten, clip, snip, chop, lop, curtail, abbreviate, abridge, elide, omit, excise, redact, censor, blank, zero]
+
+  - word: overwrite
+    action: overwrite
+    synonyms: [replace, supersede, supplant, override, clobber, stomp, trample, shadow, mask, occlude, eclipse, preempt, usurp, commandeer, hijack]
+
+  # --- File comparison / diff -----------------------------------------------
+
   - word: diff
     action: compare
-    synonyms: [compare]
+    synonyms: [compare, contrast, juxtapose, correlate, match, align, synchronize, verify, validate, check]
+
+  # --- Download / upload ----------------------------------------------------
+
   - word: download
     action: download
-    synonyms: [wget, curl, fetch]
+    synonyms: [wget, curl, grab, snag, nab, capture, siphon, drain]
+
+  - word: upload
+    action: upload
+    synonyms: [send, transmit, ship, deliver, post, submit, broadcast, relay, forward]
+
+  # --- Hashing / checksums --------------------------------------------------
+
   - word: hash
     action: checksum
-    synonyms: [checksum, md5, sha, sha256]
+    synonyms: [checksum, md5, sha, sha256, sha512, fingerprint, sign, notarize, seal, watermark]
 
-  # Git
+  # --- Encryption / security ------------------------------------------------
+
+  - word: encrypt
+    action: encrypt
+    synonyms: [encipher, scramble, obfuscate, protect, secure, lock, shield, guard, armor, fortify, cipher, veil, cloak, conceal]
+
+  - word: decrypt
+    action: decrypt
+    synonyms: [unscramble, unlock, declassify, disclose, divulge, crack, penetrate, bypass]
+
+  # --- Permissions ----------------------------------------------------------
+
+  - word: chmod
+    action: permission
+    synonyms: [chown, chgrp, permit, allow, deny, forbid, grant, revoke, authorize, deauthorize, enable, disable, activate, deactivate, block, unblock, whitelist, blacklist]
+
+  # --- Linking / symlinks ---------------------------------------------------
+
+  - word: link
+    action: link
+    synonyms: [symlink, hardlink, shortcut, alias, reference, point, connect, associate, bind, couple, pair, bridge, interlink, wire, hook]
+
+  # --- Mounting / filesystems -----------------------------------------------
+
+  - word: mount
+    action: mount
+    synonyms: [dock, plug, engage, fuse, integrate, incorporate, assimilate, embed, implant]
+
+  - word: unmount
+    action: unmount
+    synonyms: [detach, disconnect, unbind, unload, disengage, undock, unplug, decouple, separate, unlink, sever, eject, release]
+
+  # --- Sync / backup --------------------------------------------------------
+
+  - word: sync
+    action: sync
+    synonyms: [equilibrate, balance, calibrate, standardize, homogenize]
+
+  - word: backup
+    action: backup
+    synonyms: [snapshot, checkpoint, preserve, safeguard, insure, hedge, cache, bank, vault, warehouse, reserve, retain]
+
+  - word: restore
+    action: restore
+    synonyms: [recover, reclaim, resurrect, revive, regenerate, rebuild, reconstruct, rehabilitate, remediate, repair, fix, mend, heal, salvage, rescue]
+
+  # --- Watch / monitor files ------------------------------------------------
+
+  - word: watch
+    action: watch
+    synonyms: [observe, follow, tail, surveil, oversee, supervise, sentinel, poll, listen, await]
+
+  # --- Clean / tidy ---------------------------------------------------------
+
+  - word: clean
+    action: clean
+    synonyms: [tidy, sanitize, sterilize, disinfect, decontaminate, cleanse, wash, rinse, vacuum, dust, polish, buff, shine, groom, declutter]
+
+  # --- Convert / transform --------------------------------------------------
+
+  - word: convert
+    action: convert
+    synonyms: [transform, translate, transcode, transmute, transpose, morph, mutate, adapt, modify, alter, change, reformat, reshape, remodel, rework, reengineer, refashion, retool, revamp]
+
+  - word: format
+    action: format
+    synonyms: [prettify, beautify, indent, justify, typeset, layout, style, theme, decorate, embellish, adorn, garnish, dress]
+
+  # --- Merge / split --------------------------------------------------------
+
+  - word: merge
+    action: merge
+    synonyms: [combine, unite, blend, mingle, intermix, amalgamate, synthesize, absorb, unify, converge, pool]
+
+  - word: split
+    action: split
+    synonyms: [divide, partition, segment, section, slice, dice, chunk, fragment, shard, decompose, dissect, trisect, quarter, halve, cleave, fracture]
+
+  # --- Validate / verify ----------------------------------------------------
+
+  - word: audit
+    action: validate
+    synonyms: [certify, authenticate, attest, corroborate, substantiate, prove, demonstrate, establish, ratify, endorse, sanction]
+
+  # ==========================================================================
+  # DOMAIN 2: GENERAL PROGRAMMING
+  # ==========================================================================
+
+  # --- Build / compile ------------------------------------------------------
+
+  - word: build
+    action: build
+    synonyms: [manufacture, architect, engineer, develop, design]
+
+  - word: run
+    action: execute
+    synonyms: [execute, invoke, launch, start, fire, trigger, initiate, begin, commence, perform, process, handle, queue, fork]
+
+  - word: stop
+    action: terminate
+    synonyms: [halt, kill, terminate, abort, cancel, quit, exit, end, cease, discontinue, suspend, pause, freeze, interrupt, shutdown, close, finish, conclude]
+
+  - word: debug
+    action: debug
+    synonyms: [troubleshoot, diagnose, investigate, step, breakpoint, evaluate, assess]
+
+  - word: test
+    action: test
+    synonyms: [assert, confirm, exercise, stress, fuzz]
+
+  - word: lint
+    action: lint
+    synonyms: [critique, appraise, judge, flag, warn, report]
+
+  - word: compile
+    action: compile
+    synonyms: [transpile, codegen, preprocess, postprocess, recompile, crosscompile, jit, aot, bytecode, objectcode, linkage]
+
+  - word: install
+    action: install
+    synonyms: [setup, provision, seed, populate, hydrate, preload, prefill]
+
+  - word: uninstall
+    action: uninstall
+    synonyms: [deregister, decommission, deprovision, teardown, demolish, dismantle, deconstruct, dissolve, retire, sunset, deprecate, abandon, orphan]
+
+  - word: deploy
+    action: deploy
+    synonyms: [rollout, stage, promote, graduate, transition, cutover, swap, flip, toggle]
+
+  - word: scaffold
+    action: scaffold
+    synonyms: [template, stub, skeleton, boilerplate, prototype, wireframe, draft, sketch, outline, blueprint]
+
+  - word: refactor
+    action: refactor
+    synonyms: [restructure, reorganize, rearchitect, redesign, rewrite, revise, overhaul, modernize, upgrade, improve, enhance, simplify, clarify]
+
+  - word: document
+    action: document
+    synonyms: [annotate, comment, describe, explain, illustrate, diagram, chart, graph, depict, portray, represent, model, map, summarize, abstract, synopsis, recap]
+
+  - word: configure
+    action: configure
+    synonyms: [customize, personalize, tailor, adjust, tune, tweak, parameterize, plumb, rig, outfit, equip]
+
+  - word: profile
+    action: profile
+    synonyms: [instrument, characterize, baseline, time, clock]
+
+  - word: optimize
+    action: optimize
+    synonyms: [accelerate, speed, boost, turbocharge, supercharge, memoize, parallelize, vectorize, batch]
+
+  - word: publish
+    action: publish
+    synonyms: [announce, advertise, showcase, exhibit, present, unveil, premiere, debut, introduce]
+
+  - word: serve
+    action: serve
+    synonyms: [host, provide, offer, supply, respond, gateway, route]
+
+  - word: containerize
+    action: containerize
+    synonyms: [dockerize, package, encapsulate, sandbox, virtualize, emulate, simulate, modularize, componentize, microservice]
+
+  - word: migrate
+    action: migrate
+    synonyms: [port, retrofit, backport, advance, progress, elevate, lift]
+
+  - word: patch
+    action: patch
+    synonyms: [hotfix, bandaid, workaround, mitigate, alleviate, address, resolve, settle]
+
+  - word: mock
+    action: mock
+    synonyms: [fake, mimic, imitate, impersonate, spoof, counterfeit, shim, polyfill]
+
+  - word: parse
+    action: parse
+    synonyms: [tokenize, lex, decode, break, deparse, unparse, reparse, syntax, grammar, ast, cst]
+
+  - word: serialize
+    action: serialize
+    synonyms: [stringify, flatten, pickle, externalize, jsonify, xmlify, bsonify, protobuf, msgpack, cbor, avro]
+
+  - word: deserialize
+    action: deserialize
+    synonyms: [unmarshal, unpickle, internalize, load, materialize]
+
+  - word: index
+    action: index
+    synonyms: [label, bookmark, pin, highlight, star, favorite]
+
+  - word: query
+    action: query
+    synonyms: [ask, request, inquire, interrogate, survey, dereference, chase]
+
+  - word: aggregate
+    action: aggregate
+    synonyms: [fold, bucket, bin, cluster, rollup, pivot, crosstab, groupby, window, cube, subtotal]
+
+  - word: generate
+    action: generate
+    synonyms: [conjure, summon, yield, author, compose]
+
+  - word: implement
+    action: implement
+    synonyms: [code, program, realize, actualize, concretize, embody, fulfill, satisfy, accomplish]
+
+  - word: initialize
+    action: initialize
+    synonyms: [init, prepare, prime, preset, predefine, preconfigure, preallocate]
+
+  # --- Logging / monitoring -------------------------------------------------
+
+  - word: log
+    action: log
+    synonyms: [diary, ledger, jot, scribble, note, entry, logfile, syslog, printout, transcript]
+
+  - word: monitor
+    action: monitor
+    synonyms: [heartbeat, attend, mind, vigil, watchdog, daemon, sentry, guardian, lookout, spotter]
+
+  - word: notify
+    action: notify
+    synonyms: [alert, alarm, message, email, text, page, buzz, ring, chime, beep, flash, blink]
+
+  # --- Scheduling -----------------------------------------------------------
+
+  - word: schedule
+    action: schedule
+    synonyms: [cron, plan, book, allocate, assign, delegate, enqueue, defer, postpone, delay, stagger, throttle, pipeline]
+
+  # --- Misc programming verbs -----------------------------------------------
+
+  - word: pipe
+    action: pipe
+    synonyms: [chain, stream, funnel, channel, direct, guide, steer, conduct, tee, multiplex, fan]
+
+  - word: wrap
+    action: wrap
+    synonyms: [enclose, surround, envelope, sheath, coat, cover, blanket, shroud, insulate, buffer]
+
+  - word: inject
+    action: inject
+    synonyms: [insert, infuse, include, interpose, interject, interpolate, graft]
+
+  - word: sample
+    action: sample
+    synonyms: [taste, preview, trial, pilot, experiment, research]
+
+  - word: visualize
+    action: visualize
+    synonyms: [plot, draw, paint, animate, sparkline, heatmap, treemap, sunburst, sankey, choropleth, histogram]
+
+  - word: encode
+    action: encode
+    synonyms: [express, formulate, articulate, base64, hex, urlencode, htmlencode, escape, unescape, percent]
+
+  - word: benchmark
+    action: benchmark
+    synonyms: [soak, endurance, capacity, throughput, latency, perf, profiling]
+
+  - word: automate
+    action: automate
+    synonyms: [script, mechanize, routinize, formalize, codify, digitize, computerize, robotize, orchestrate, choreograph, coordinate, manage, control, govern]
+
+  # ==========================================================================
+  # DOMAIN 3: GIT OPERATIONS
+  # ==========================================================================
+
   - word: commit
     action: git_commit
-    synonyms: []
+    synonyms: [checkin, cement, solidify, enshrine, finalize]
+
   - word: clone
     action: git_clone
-    synonyms: []
+    synonyms: [gitclone, repoclone, clonedown, gitcopy, gitfork, gitcheckout, gitfetch, gitgrab, gitpull, gitdownload]
+
   - word: push
     action: git_push
-    synonyms: []
+    synonyms: [contribute, propose, gitpush, pushup, upstream]
+
+  - word: pull
+    action: git_pull
+    synonyms: [update, refresh, reload, redownload, ingest]
+
+  - word: branch
+    action: git_branch
+    synonyms: [diverge, spike, iterate, evolve, vary, diversify]
+
+  - word: stash
+    action: git_stash
+    synonyms: [shelve, park, sideline, bench, table]
+
+  - word: rebase
+    action: git_rebase
+    synonyms: [replay, reapply, linearize, reorder, restage, resequence, restack]
+
+  - word: cherry
+    action: git_cherry_pick
+    synonyms: [pick, pluck, handpick, curate, select]
+
+  - word: blame
+    action: git_blame
+    synonyms: [attribute, credit, provenance, authorship, ownership]
+
+  - word: bisect
+    action: git_bisect
+    synonyms: [binary, binarysearch, gitbisect, faultfind, rootcause, regfind, bugfind, failpoint, breakage]
+
+  - word: revert
+    action: git_revert
+    synonyms: [undo, rollback, reverse, backtrack, retreat, withdraw, retract, rescind, annul, nullify, void, invalidate]
+
+  - word: tag
+    action: git_tag
+    synonyms: [badge, stamp, mark, designate, milestone, version]
+
+  - word: fetch
+    action: git_fetch
+    synonyms: [retrieve, import, fetchup, prefetch, fetchall, fetchorigin, remoteupdate, remotefetch, fetchremote]
+
+  - word: gitlog
+    action: git_log
+    synonyms: [history, timeline, changelog, shortlog, reflog, whatchanged]
+
+  - word: status
+    action: git_status
+    synonyms: [state, condition, health, dashboard, brief, standing, situation, assessment]
+
+  - word: gitinit
+    action: git_init
+    synonyms: [repoinit, repocreate, reponew, reposetup, gitcreate, gitnew, gitsetup, gitstart, gitbegin]
+
+  - word: remote
+    action: git_remote
+    synonyms: [origin, downstream, server, endpoint, target, destination, source, repository, repo, registry, hub, platform]
+
+  # --- Network operations ---------------------------------------------------
+
+  - word: ping
+    action: ping
+    synonyms: [knock, tap, nudge, poke, prod, tickle]
+
+  - word: httpreq
+    action: http_request
+    synonyms: [call, hit, httpget, httppost, httpput, httppatch, httpdelete, restcall, apicall]
+
+  - word: ssh
+    action: remote_connect
+    synonyms: [login, tunnel, proxy, jump, hop, bounce, mux]
 
 # ---------------------------------------------------------------------------
 # Nouns: object words → concept labels
