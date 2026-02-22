@@ -2,13 +2,15 @@
 //!
 //! A deterministic, low-latency adapter that converts chatty user input
 //! into structured plan YAML / Goal DSL instructions for Cadmus.
-//! Operates in four stages:
+//! Pipeline:
 //!
-//! 1. **Normalization** — case fold, punctuation strip, ordinal canonicalization,
-//!    synonym mapping (`normalize`)
+//! 1. **Normalization** — case fold, punctuation strip, synonym mapping (`normalize`)
 //! 2. **Typo correction** — domain-bounded SymSpell dictionary (`typo`)
-//! 3. **Intent recognition** — closed grammar over canonical edit instructions (`intent`)
-//! 4. **Slot extraction** — targets, anchors, parameters, modifiers (`slots`)
+//! 3. **Intent dispatch** — approve/reject/explain/edit via keyword match (`intent`)
+//! 4. **Earley parsing** — grammar-based parse of commands (`earley`, `grammar`, `lexicon`)
+//! 5. **Intent IR** — parse tree → structured intent (`intent_ir`)
+//! 6. **Intent compilation** — IntentIR → PlanDef (`intent_compiler`)
+//! 7. **Fallback** — old intent/slots pipeline for unrecognized input
 //!
 //! Plus dialogue state management (`dialogue`) for multi-turn conversations.
 

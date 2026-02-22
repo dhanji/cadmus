@@ -1223,11 +1223,83 @@ The NL layer uses these descriptions for:
 - `get_op_explanation()` — answering "what does walk_tree mean?"
 - `generate_plan_name()` — generating plan display names
 
+### Extending the Earley Parser Lexicon
+
+The Earley parser uses a separate YAML lexicon (`data/nl/nl_lexicon.yaml`)
+for grammar-based parsing. This is the primary path for plan creation.
+
+#### Adding a Verb
+
+```yaml
+verbs:
+  # ... existing entries ...
+  rename:
+    action: rename
+```
+
+The `action` maps to an abstract action in the Intent IR. Current actions:
+`select`, `compress`, `decompress`, `order`, `search_text`, `list`.
+
+#### Adding a Noun (File Type)
+
+```yaml
+nouns:
+  # ... existing entries ...
+  spreadsheets:
+    concept: spreadsheet_document
+```
+
+The `concept` is resolved to file patterns by `resolve_concept_to_patterns()`
+in `intent_compiler.rs`. To add pattern resolution for a new concept, add
+an entry to `noun_patterns` in `src/nl/intent_compiler.rs`.
+
+#### Adding a Path Noun (Location)
+
+```yaml
+path_nouns:
+  # ... existing entries ...
+  music:
+    path: "~/Music"
+```
+
+Path nouns are recognized as location modifiers in commands like
+"find songs in music".
+
+#### Adding an Ordering
+
+```yaml
+orderings:
+  # ... existing entries ...
+  "oldest first":
+    field: modification_time
+    direction: ascending
+```
+
+#### Intent IR Schema
+
+The Intent IR is the intermediate representation between the Earley parser
+and the plan compiler:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `output` | `String` | Expected output type (e.g. `"Collection<File>"`) |
+| `inputs` | `Vec<IRInput>` | Named inputs with type and selector |
+| `steps` | `Vec<IRStep>` | Abstract processing steps |
+| `constraints` | `Vec<String>` | Result constraints |
+| `acceptance` | `Vec<String>` | Acceptance criteria |
+| `score` | `f64` | Parse confidence score |
+
+Each `IRStep` has: `action` (verb), `input_refs`, `output_ref`, `params`.
+
 ### Reference
 
 - **Vocab YAML**: `data/nl/nl_vocab.yaml` (synonyms, contractions, ordinals, approvals, rejections, stopwords)
 - **Dictionary YAML**: `data/nl/nl_dictionary.yaml` (~2473 frequency-weighted words)
+- **Earley Lexicon YAML**: `data/nl/nl_lexicon.yaml` (verbs, nouns, path_nouns, orderings, prepositions, determiners, fillers)
 - **Rust loader**: `src/nl/vocab.rs` (thin serde loader, `OnceLock` singleton)
+- **Earley parser**: `src/nl/earley.rs` (parser engine), `src/nl/grammar.rs` (grammar builder), `src/nl/lexicon.rs` (lexicon loader)
+- **Intent IR**: `src/nl/intent_ir.rs` (parse tree → structured intent)
+- **Intent Compiler**: `src/nl/intent_compiler.rs` (IntentIR → PlanDef)
 - **Op descriptions**: `data/packs/ops/fs.ops.yaml`, `data/packs/ops/power_tools.ops.yaml` (description field on each op)
 - **Consumers**: `src/nl/normalize.rs` (synonyms, contractions, ordinals), `src/nl/intent.rs` (approvals, rejections), `src/nl/slots.rs` (stopwords), `src/nl/typo.rs` (dictionary), `src/nl/mod.rs` (op explanations), `src/nl/dialogue.rs` (display names)
 

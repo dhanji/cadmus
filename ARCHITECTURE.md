@@ -317,6 +317,131 @@ Step forms:
 - Map: `filter: { extension: ".pdf" }` → named params
 - `$name` → expand from plan inputs
 
+## Natural Language UX Layer
+
+**`src/nl/`** (~9000 lines across 12 modules) — a deterministic, low-latency
+adapter that converts chatty user input into structured plan YAML.
+
+### Pipeline
+
+```
+User input
+  │
+  ▼
+normalize → typo_correct → re-normalize (synonym mapping)
+  │
+  ▼
+intent::parse_intent()  ← keyword/pattern match
+  │
+  ├─ Approve/Reject/Explain/Edit → handled directly
+  │
+  ├─ CreatePlan / NeedsClarification
+  │     │
+  │     ▼
+  │   Earley parser (grammar.rs + earley.rs + lexicon.rs)
+  │     │
+  │     ▼
+  │   Intent IR (intent_ir.rs) — parse tree → structured intent
+  │     │
+  │     ▼
+  │   Intent Compiler (intent_compiler.rs) — IntentIR → PlanDef
+  │     │
+  │     ├─ Success → PlanCreated (YAML)
+  │     └─ Failure → fall back to old intent/slots pipeline
+  │
+  └─ Fallback: old pipeline (intent.rs + slots.rs + dialogue.rs)
+```
+
+The Earley parser is **additive** — when it can't parse the input, the
+system falls back to the original intent/slots pipeline transparently.
+
+### Earley Parser (`earley.rs`, `grammar.rs`, `lexicon.rs`)
+
+A from-scratch Earley parser (~530 lines) with predict/scan/complete and
+parse forest via back-pointers. The grammar has 30+ rules for
+`Command → Verb Object Modifiers` patterns.
+
+- **Lexicon** (`data/nl/nl_lexicon.yaml`): YAML-driven word classification
+  (verbs, nouns, path_nouns, orderings, prepositions, determiners, fillers)
+- **Grammar** (`grammar.rs`): Builds the Earley grammar from lexicon categories
+- **Parser** (`earley.rs`): Produces ranked parse trees (highest score first)
+
+### Intent IR (`intent_ir.rs`)
+
+Structured intent representation produced from Earley parse trees:
+
+```rust
+struct IntentIR {
+    output: String,              // e.g. "Collection<File>"
+    inputs: Vec<IRInput>,        // named inputs with selectors
+    steps: Vec<IRStep>,          // abstract processing steps
+    constraints: Vec<String>,    // result constraints
+    acceptance: Vec<String>,     // acceptance criteria
+    score: f64,                  // parse confidence
+}
+
+struct IRStep {
+    action: String,              // "select", "order", "compress", etc.
+    input_refs: Vec<String>,     // input entity IDs
+    output_ref: String,          // output entity ID
+    params: HashMap<String, String>,  // action parameters
+}
+```
+
+`parse_trees_to_intents()` converts ranked parse trees into a primary
+IntentIR plus alternatives. Multiple candidate parses are preserved for
+future disambiguation.
+
+### Intent Compiler (`intent_compiler.rs`)
+
+Maps abstract actions to concrete PlanDef steps:
+
+| Abstract Action | Plan Steps |
+|----------------|------------|
+| `select` | `walk_tree` + `find_matching` |
+| `compress` | `walk_tree` + `pack_archive` (dir) or `gzip_compress` (file) |
+| `decompress` | `extract_archive` |
+| `order` | `sort_by` |
+| `search_text` | `walk_tree` + `search_content` |
+| `list` | `list_dir` |
+
+Concept labels (e.g. `comic_issue_archive`) are resolved to file patterns
+(`*.cbz`, `*.cbr`) via `noun_patterns` in the vocabulary.
+
+### Dialogue State (`dialogue.rs`)
+
+Multi-turn conversation management:
+
+```rust
+struct DialogueState {
+    current_plan: Option<PlanDef>,
+    alternative_intents: Vec<IntentIR>,  // from Earley parser
+    focus: FocusStack,                    // anaphora resolution
+    turn_count: usize,
+    last_intent: Option<Intent>,
+}
+```
+
+Supports create → edit → approve/reject cycles. Edits use pattern matching
+(not the Earley parser). Approve/reject/explain use keyword matching.
+
+### NL Module Map
+
+| Module | Lines | Role |
+|--------|-------|------|
+| `mod.rs` | 811 | Entry point (`process_input`), Earley integration |
+| `dialogue.rs` | 1620 | `DialogueState`, `build_plan`, `apply_edit`, `plan_to_yaml` |
+| `intent.rs` | 1082 | Old intent recognition (keyword/pattern match) |
+| `slots.rs` | 926 | Slot extraction (targets, anchors, modifiers) |
+| `earley.rs` | 788 | Earley parser engine |
+| `intent_ir.rs` | 671 | Intent IR schema + parse tree conversion |
+| `normalize.rs` | 671 | Tokenization, case folding, synonym mapping |
+| `typo.rs` | 612 | SymSpell-based typo correction |
+| `intent_compiler.rs` | 593 | IntentIR → PlanDef compilation |
+| `lexicon.rs` | 519 | YAML lexicon loader + token classifier |
+| `grammar.rs` | 360 | Earley grammar builder |
+| `vocab.rs` | 340 | Vocabulary YAML loader |
+
 ## Module Map
 
 | Module | Lines | Role |
@@ -331,6 +456,7 @@ Step forms:
 | `coding_strategy` | 780 | `CodingStrategy` |
 | `fs_strategy` | 400 | `FilesystemStrategy` + dry-run trace |
 | `fact_pack` | 290 | Fact pack YAML schema + indexed loader |
+| `nl/` | 9000 | Natural language UX layer (12 modules, see NL section above) |
 | `fs_types` | 190 | `build_fs_registry()` — loads `fs.ops.yaml` |
 | `types` | 310 | Core domain types (`Goal`, `Obligation`, `ReasoningOutput`) |
 | `planner` | 350 | Legacy obligation-based planner (pre-strategy) |
@@ -345,6 +471,8 @@ data/
   fs.ops.yaml              49 filesystem ops (type signatures + properties)
   comparison.ops.yaml       6 comparison ops
   coding.ops.yaml           6 coding ops
+  nl/nl_lexicon.yaml       Earley parser lexicon (verbs, nouns, orderings, etc.)
+  nl/nl_vocab.yaml         NL synonyms, contractions, approvals, rejections
   macos_fs.facts.yaml            Fact pack: macOS tool knowledge (~40 claims)
   putin_stalin.facts.yaml        Fact pack: political comparison domain
   tiramisu_cheesecake.yaml Fact pack: dessert comparison domain
