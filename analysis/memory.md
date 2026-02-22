@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-21T21:01:27Z | Size: 53.3k chars
+> Updated: 2026-02-22T00:20:07Z | Size: 55.0k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -657,3 +657,31 @@ plan-name:
     - op_name: each
     - op_name: { k: v }
 ```
+
+### NL Layer Architecture (pre-rewrite)
+- `src/nl/mod.rs` [0..720] - `process_input()` main entry, `NlResponse` enum, dispatches to handlers
+- `src/nl/intent.rs` [0..1082] - `Intent` enum, `parse_intent()`, pattern-match based recognition
+- `src/nl/slots.rs` [0..926] - `ExtractedSlots`, `extract_slots()`, path/op/modifier detection
+- `src/nl/normalize.rs` [0..671] - `normalize()`, tokenization, synonym mapping via `apply_synonyms()`
+- `src/nl/vocab.rs` [0..340] - `NlVocab` singleton, loads from `data/nl/nl_vocab.yaml`
+- `src/nl/typo.rs` [0..612] - SymSpell typo correction
+- `src/nl/dialogue.rs` [0..1617] - `DialogueState`, `build_plan()`, `apply_edit()`, `plan_to_yaml()`
+- `data/nl/nl_vocab.yaml` [1181 lines] - synonyms, contractions, ordinals, approvals, rejections, stopwords, dir_aliases, noun_patterns
+- `data/nl/nl_dictionary.yaml` [2583 lines] - SymSpell frequency dictionary
+
+### NL Test Counts
+- `src/nl/` inline tests: 262 pass
+- `tests/nl_tests.rs`: 184 pass  
+- `tests/semantic_tests.rs`: 45 pass
+- Total NL-related: ~491 tests
+
+### Public API to preserve
+- `process_input(input: &str, state: &mut DialogueState) -> NlResponse`
+- `NlResponse` enum variants: PlanCreated, PlanEdited, Explanation, Approved, Rejected, NeedsClarification, ParamSet, Error
+- `DialogueState` with current_plan, focus stack, turn_count, last_intent
+
+### Earley Rewrite Plan Decisions
+- Edits (skip/add/remove) stay as pattern-match, NOT routed through Earley
+- Approve/reject/explain stay as keyword match
+- DialogueState carries alternative IntentIRs
+- No external Earley crate — implement core directly

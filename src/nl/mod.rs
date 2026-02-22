@@ -18,6 +18,9 @@ pub mod intent;
 pub mod slots;
 pub mod dialogue;
 pub mod vocab;
+pub mod earley;
+pub mod grammar;
+pub mod lexicon;
 
 use dialogue::{DialogueState, DialogueError, FocusEntry};
 use intent::Intent;

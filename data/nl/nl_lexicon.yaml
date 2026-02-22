@@ -1,0 +1,330 @@
+# NL Lexicon — Earley parser vocabulary
+# ======================================
+# Drives the grammar's terminal symbols. Each category maps words to
+# canonical labels. The Earley parser classifies input tokens by looking
+# them up in these categories.
+#
+# Categories correspond to grammar terminal symbols:
+#   verb, noun, preposition, possessive, determiner, ordering,
+#   quantifier, conjunction, path_noun, filler
+
+# ---------------------------------------------------------------------------
+# Verbs: action words → abstract action labels (NOT cadmus ops)
+# ---------------------------------------------------------------------------
+verbs:
+  # Selection / retrieval
+  - word: find
+    action: select
+    synonyms: [search, look, locate, seek, discover, hunt]
+  - word: list
+    action: enumerate
+    synonyms: [show, display, ls, dir, print]
+  - word: get
+    action: retrieve
+    synonyms: [fetch, grab, obtain, pull]
+
+  # Traversal
+  - word: walk
+    action: traverse
+    synonyms: [scan, crawl, recurse, traverse, explore]
+
+  # Transformation / ordering
+  - word: sort
+    action: order
+    synonyms: [order, arrange, rank, organize]
+  - word: filter
+    action: select
+    synonyms: [sift, narrow, restrict, limit, keep]
+  - word: count
+    action: count
+    synonyms: [tally, total, sum]
+  - word: deduplicate
+    action: deduplicate
+    synonyms: [dedup, unique]
+
+  # Archive / compression
+  - word: zip
+    action: compress
+    synonyms: [compress, archive, bundle, pack, tar]
+  - word: unzip
+    action: decompress
+    synonyms: [extract, unpack, decompress, untar, expand, inflate]
+
+  # File operations
+  - word: copy
+    action: copy
+    synonyms: [duplicate, cp]
+  - word: move
+    action: move
+    synonyms: [mv, relocate, transfer]
+  - word: delete
+    action: delete
+    synonyms: [remove, rm, erase, trash, destroy]
+  - word: rename
+    action: rename
+    synonyms: [name]
+  - word: read
+    action: read
+    synonyms: [cat, view, open, inspect, examine]
+  - word: write
+    action: write
+    synonyms: [save, output, emit]
+  - word: diff
+    action: compare
+    synonyms: [compare]
+  - word: download
+    action: download
+    synonyms: [wget, curl, fetch]
+  - word: hash
+    action: checksum
+    synonyms: [checksum, md5, sha, sha256]
+
+  # Git
+  - word: commit
+    action: git_commit
+    synonyms: []
+  - word: clone
+    action: git_clone
+    synonyms: []
+  - word: push
+    action: git_push
+    synonyms: []
+
+# ---------------------------------------------------------------------------
+# Nouns: object words → concept labels
+# ---------------------------------------------------------------------------
+nouns:
+  # File types
+  - word: comics
+    concept: comic_issue_archive
+    synonyms: [comic, manga, "comic books", "comic book"]
+  - word: pdfs
+    concept: pdf_document
+    synonyms: [pdf, "pdf files", "pdf documents"]
+  - word: photos
+    concept: photograph
+    synonyms: [photo, pictures, picture, images, image, pics, pic]
+  - word: videos
+    concept: video_file
+    synonyms: [video, movies, movie, clips, clip]
+  - word: music
+    concept: audio_file
+    synonyms: [songs, song, audio, tracks, track]
+  - word: archives
+    concept: archive_file
+    synonyms: [archive, zips, zip, tarballs, tarball]
+  - word: logs
+    concept: log_file
+    synonyms: [log, "log files"]
+  - word: configs
+    concept: config_file
+    synonyms: [config, configuration, configurations, settings]
+  - word: ebooks
+    concept: ebook_file
+    synonyms: [ebook, "e-books", "e-book"]
+  - word: spreadsheets
+    concept: spreadsheet_file
+    synonyms: [spreadsheet, csvs, csv]
+  - word: screenshots
+    concept: screenshot_image
+    synonyms: [screenshot]
+
+  # Generic objects
+  - word: files
+    concept: file
+    synonyms: [file, items, item, entries, entry]
+  - word: directories
+    concept: directory
+    synonyms: [directory, folders, folder, dirs, dir, subdirectories, subdirectory, subfolders, subfolder]
+  - word: everything
+    concept: all_files
+    synonyms: [all, "all files", "all items", contents]
+  - word: duplicates
+    concept: duplicate_file
+    synonyms: [duplicate, dupes, dupe, copies]
+  - word: "large files"
+    concept: large_file
+    synonyms: ["big files", "huge files"]
+  - word: errors
+    concept: error_text
+    synonyms: [error, bugs, bug, issues, issue, warnings, warning]
+  - word: text
+    concept: text_content
+    synonyms: [content, string, strings, pattern, patterns]
+
+# ---------------------------------------------------------------------------
+# Prepositions: location/relation markers
+# ---------------------------------------------------------------------------
+prepositions:
+  - in
+  - from
+  - at
+  - on
+  - under
+  - inside
+  - within
+  - into
+  - to
+  - of
+
+# ---------------------------------------------------------------------------
+# Possessives
+# ---------------------------------------------------------------------------
+possessives:
+  - my
+  - our
+  - the
+
+# ---------------------------------------------------------------------------
+# Determiners
+# ---------------------------------------------------------------------------
+determiners:
+  - the
+  - a
+  - an
+  - all
+  - any
+  - every
+  - each
+  - some
+  - this
+  - that
+  - these
+  - those
+
+# ---------------------------------------------------------------------------
+# Path nouns: directory names → filesystem paths
+# ---------------------------------------------------------------------------
+path_nouns:
+  - word: downloads
+    path: "~/Downloads"
+    synonyms: [download]
+  - word: documents
+    path: "~/Documents"
+    synonyms: [document, docs, doc]
+  - word: desktop
+    path: "~/Desktop"
+  - word: pictures
+    path: "~/Pictures"
+  - word: music
+    path: "~/Music"
+  - word: movies
+    path: "~/Movies"
+  - word: home
+    path: "~"
+  - word: tmp
+    path: "/tmp"
+    synonyms: [temp]
+  - word: applications
+    path: "/Applications"
+    synonyms: [apps, application, app]
+
+# ---------------------------------------------------------------------------
+# Ordering phrases: sort direction indicators
+# ---------------------------------------------------------------------------
+orderings:
+  - phrase: "newest first"
+    field: modification_time
+    direction: descending
+    synonyms: ["most recent first", "latest first", "newest"]
+  - phrase: "oldest first"
+    field: modification_time
+    direction: ascending
+    synonyms: ["earliest first", "oldest"]
+  - phrase: "largest first"
+    field: size
+    direction: descending
+    synonyms: ["biggest first", "largest"]
+  - phrase: "smallest first"
+    field: size
+    direction: ascending
+    synonyms: ["smallest"]
+  - phrase: "alphabetically"
+    field: name
+    direction: ascending
+    synonyms: ["alphabetical", "by name", "a to z", "a-z"]
+  - phrase: "reverse alphabetically"
+    field: name
+    direction: descending
+    synonyms: ["reverse alphabetical", "z to a", "z-a"]
+
+# ---------------------------------------------------------------------------
+# Quantifiers
+# ---------------------------------------------------------------------------
+quantifiers:
+  - all
+  - every
+  - each
+  - any
+  - some
+  - no
+
+# ---------------------------------------------------------------------------
+# Conjunctions / sequencing
+# ---------------------------------------------------------------------------
+conjunctions:
+  - and
+  - then
+  - also
+  - but
+  - or
+
+# ---------------------------------------------------------------------------
+# Filler words (ignored during parsing but preserved for context)
+# ---------------------------------------------------------------------------
+fillers:
+  - up
+  - out
+  - just
+  - please
+  - can
+  - could
+  - would
+  - want
+  - need
+  - like
+  - "i"
+  - me
+  - it
+  - them
+  - "for"
+  - about
+  - really
+  - actually
+  - basically
+  - okay
+  - ok
+  - so
+  - well
+  - right
+  - now
+  - here
+  - there
+  - go
+  - do
+  - be
+  - is
+  - are
+  - was
+  - were
+  - been
+  - being
+  - have
+  - has
+  - had
+  - will
+  - shall
+  - may
+  - might
+  - should
+  - "let"
+  - gonna
+  - wanna
+  - gotta
+  - thing
+  - things
+  - stuff
+  - mean
+  - means
+  - called
+  - named
