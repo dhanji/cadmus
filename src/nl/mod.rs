@@ -22,6 +22,7 @@ pub mod earley;
 pub mod grammar;
 pub mod lexicon;
 pub mod intent_ir;
+pub mod intent_compiler;
 
 use dialogue::{DialogueState, DialogueError, FocusEntry};
 use intent::Intent;
