@@ -74,9 +74,10 @@ fn run_racket_script(script: &str) -> Result<std::process::Output, std::io::Erro
 // ---------------------------------------------------------------------------
 
 fn run_chat_mode() {
-    use std::io::{self, BufRead, Write};
+
     use cadmus::nl;
     use cadmus::nl::dialogue::DialogueState;
+    use cadmus::line_editor::{LineEditor, ReadResult};
 
     println!();
     println!("{}", ui::banner("cadmus", VERSION, "reasoning inference engine"));
@@ -88,24 +89,25 @@ fn run_chat_mode() {
     println!();
 
     let mut state = DialogueState::new();
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
+    let mut editor = LineEditor::new();
+    let prompt = format!("{}{}", ui::prompt(), ui::reset());
 
     loop {
-        print!("{}{}", ui::prompt(), ui::reset());
-        stdout.flush().unwrap();
-
-        let mut line = String::new();
-        match stdin.lock().read_line(&mut line) {
-            Ok(0) => break,
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("{}", ui::error(&format!("Read error: {}", e)));
+        let input = match editor.read_line(&prompt) {
+            ReadResult::Line(line) => line,
+            ReadResult::Interrupted => {
+                // Ctrl-C: just re-prompt
+                println!();
+                continue;
+            }
+            ReadResult::Eof => {
+                // Ctrl-D: exit cleanly
+                println!("{}", ui::dim("bye."));
                 break;
             }
-        }
+        };
 
-        let input = line.trim();
+        let input = input.trim();
         if input.is_empty() {
             continue;
         }
@@ -113,6 +115,9 @@ fn run_chat_mode() {
             println!("{}", ui::dim("bye."));
             break;
         }
+
+        // Add to history (only non-empty, non-quit commands)
+        editor.add_history(input);
 
         let response = nl::process_input(input, &mut state);
 
@@ -151,41 +156,45 @@ fn run_chat_mode() {
                     println!();
                     println!("{}", ui::code_block(s));
                     println!();
-                    print!("  {} ", ui::dim("run this? (y/n)"));
-                    stdout.flush().unwrap();
-                    let mut confirm = String::new();
-                    if stdin.lock().read_line(&mut confirm).is_ok() {
-                        let answer = confirm.trim().to_lowercase();
-                        if answer == "y" || answer == "yes" {
+                    let confirm_prompt = format!("  {} ", ui::dim("run this? (y/n)"));
+                    let answer = match editor.read_line(&confirm_prompt) {
+                        ReadResult::Line(line) => line.trim().to_lowercase(),
+                        ReadResult::Interrupted | ReadResult::Eof => {
+                            // Ctrl-C or Ctrl-D at confirmation = skip
                             println!();
-                            println!("  {}", ui::status_active("Running..."));
-                            match run_racket_script(s) {
-                                Ok(output) => {
-                                    let stdout_str = String::from_utf8_lossy(&output.stdout);
-                                    let stderr_str = String::from_utf8_lossy(&output.stderr);
-                                    if !stdout_str.is_empty() {
-                                        println!();
-                                        println!("{}", ui::code_block(&stdout_str));
-                                    }
-                                    if !stderr_str.is_empty() {
-                                        eprintln!("{}", ui::dim(&stderr_str));
-                                    }
+                            String::new()
+                        }
+                    };
+                    // Don't add confirmation to history
+                    if answer == "y" || answer == "yes" {
+                        println!();
+                        println!("  {}", ui::status_active("Running..."));
+                        match run_racket_script(s) {
+                            Ok(output) => {
+                                let stdout_str = String::from_utf8_lossy(&output.stdout);
+                                let stderr_str = String::from_utf8_lossy(&output.stderr);
+                                if !stdout_str.is_empty() {
                                     println!();
-                                    if output.status.success() {
-                                        println!("  {}", ui::status_ok("Done"));
-                                    } else {
-                                        let code = output.status.code().unwrap_or(1);
-                                        println!("  {}", ui::status_fail(&format!("Exit code {}", code)));
-                                    }
+                                    println!("{}", ui::code_block(&stdout_str));
                                 }
-                                Err(e) => {
-                                    println!("  {}", ui::error(&format!("Failed to run racket: {}", e)));
-                                    println!("  {}", ui::dim("Is Racket installed? Try: brew install racket"));
+                                if !stderr_str.is_empty() {
+                                    eprintln!("{}", ui::dim(&stderr_str));
+                                }
+                                println!();
+                                if output.status.success() {
+                                    println!("  {}", ui::status_ok("Done"));
+                                } else {
+                                    let code = output.status.code().unwrap_or(1);
+                                    println!("  {}", ui::status_fail(&format!("Exit code {}", code)));
                                 }
                             }
-                        } else {
-                            println!("  {}", ui::dim("skipped."));
+                            Err(e) => {
+                                println!("  {}", ui::error(&format!("Failed to run racket: {}", e)));
+                                println!("  {}", ui::dim("Is Racket installed? Try: brew install racket"));
+                            }
                         }
+                    } else {
+                        println!("  {}", ui::dim("skipped."));
                     }
                 } else {
                     println!("  {}", ui::dim("(could not compile to script)"));
