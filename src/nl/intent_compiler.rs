@@ -1,6 +1,14 @@
 //! Intent IR → PlanDef compiler.
 //!
-//! Maps abstract actions to concrete cadmus ops:
+//! **Program-first**: every NL intent maps to "write a program". The compiler
+//! first checks if the action label is a registered op (algorithm atom,
+//! filesystem op, etc.) and produces a single-step plan. Filesystem-specific
+//! multi-step patterns (select → walk_tree + find_matching, compress →
+//! walk_tree + pack_archive, etc.) are handled as special cases.
+//!
+//! Action label → plan mapping:
+//!
+//! **Filesystem patterns** (multi-step):
 //! - `select` → `walk_tree` + `find_matching` (or `filter`)
 //! - `order` → `sort_by`
 //! - `compress` → `walk_tree` + `pack_archive`
@@ -15,13 +23,17 @@
 //! - `rename` → `rename`
 //! - `deduplicate` → `walk_tree` + `find_duplicates`
 //!
+//! **Program-first** (single-step, any registered op):
+//! - `fibonacci` → single step `fibonacci` with inputs from op signature
+//! - `quicksort` → single step `quicksort` with inputs from op signature
+//! - etc.
+//!
 //! Concept labels are resolved to file patterns via the NL vocab's
 //! `noun_patterns` table (e.g., `comic_issue_archive` → `*.cbz`, `*.cbr`).
 
 use std::collections::HashMap;
 
-use crate::nl::intent_ir::{IntentIR, IntentIRResult}
-;
+use crate::nl::intent_ir::{IntentIR, IntentIRResult};
 use crate::nl::vocab;
 use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
 
@@ -57,150 +69,144 @@ pub fn compile_intent(result: &IntentIRResult) -> CompileResult {
 
 /// Compile a single IntentIR to a PlanDef.
 pub fn compile_ir(ir: &IntentIR) -> CompileResult {
-    let mut inputs: Vec<PlanInput> = Vec::new();
-    let mut steps: Vec<RawStep> = Vec::new();
-
     // Extract the target path from the IR's input selector
     let target_path = ir.inputs.first()
         .and_then(|i| i.selector.scope.as_ref())
         .map(|s| s.dir.clone())
         .unwrap_or_else(|| ".".to_string());
 
-    // Add input — "file" for file targets, "path" for directories
-    if is_file_path(&target_path) {
-        inputs.push(PlanInput::bare("file"));
-    } else {
-        inputs.push(PlanInput::bare("path"));
-    }
+    // Try each IR step. For single-step IRs (the common case), this
+    // produces a single plan. For multi-step IRs (select + order),
+    // steps accumulate.
+    let mut inputs: Vec<PlanInput> = Vec::new();
+    let mut steps: Vec<RawStep> = Vec::new();
+    let mut used_program_first = false;
 
-    // Process each IR step
     for ir_step in &ir.steps {
-        match ir_step.action.as_str() {
+        let action = ir_step.action.as_str();
+
+        // 1. Try filesystem-specific multi-step patterns first.
+        //    These are more specific than the program-first path.
+        match action {
             "select" => {
                 compile_select_step(ir_step, &target_path, &mut steps);
+                continue;
             }
             "order" => {
                 compile_order_step(ir_step, &mut steps);
+                continue;
             }
             "compress" => {
                 compile_compress_step(&target_path, &mut steps);
+                continue;
             }
             "search_text" => {
-                steps.push(RawStep {
-                    op: "walk_tree".to_string(),
-                    args: StepArgs::None,
-                });
-                steps.push(RawStep {
-                    op: "search_content".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
+                steps.push(RawStep { op: "search_content".into(), args: StepArgs::None });
+                continue;
             }
             "decompress" => {
-                compile_decompress_step(&mut steps);
+                steps.push(RawStep { op: "extract_archive".into(), args: StepArgs::None });
+                continue;
             }
             "enumerate" => {
-                steps.push(RawStep {
-                    op: "list_dir".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "list_dir".into(), args: StepArgs::None });
+                continue;
             }
             "traverse" => {
-                steps.push(RawStep {
-                    op: "walk_tree".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
+                continue;
             }
             "count" => {
-                steps.push(RawStep {
-                    op: "walk_tree".to_string(),
-                    args: StepArgs::None,
-                });
-                steps.push(RawStep {
-                    op: "count_entries".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
+                steps.push(RawStep { op: "count_entries".into(), args: StepArgs::None });
+                continue;
             }
             "read" => {
-                steps.push(RawStep {
-                    op: "read_file".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "read_file".into(), args: StepArgs::None });
+                continue;
             }
-            "delete" => {
-                steps.push(RawStep {
-                    op: "delete".to_string(),
-                    args: StepArgs::None,
-                });
-            }
-            "copy" => {
-                steps.push(RawStep {
-                    op: "copy".to_string(),
-                    args: StepArgs::None,
-                });
+            "delete" | "copy" | "rename" | "checksum" | "download" => {
+                let op = match action {
+                    "delete" => "delete",
+                    "copy" => "copy",
+                    "rename" => "rename",
+                    "checksum" => "checksum",
+                    "download" => "download",
+                    _ => unreachable!(),
+                };
+                steps.push(RawStep { op: op.into(), args: StepArgs::None });
+                continue;
             }
             "move" => {
-                steps.push(RawStep {
-                    op: "move_entry".to_string(),
-                    args: StepArgs::None,
-                });
-            }
-            "rename" => {
-                steps.push(RawStep {
-                    op: "rename".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "move_entry".into(), args: StepArgs::None });
+                continue;
             }
             "deduplicate" => {
-                steps.push(RawStep {
-                    op: "walk_tree".to_string(),
-                    args: StepArgs::None,
-                });
-                steps.push(RawStep {
-                    op: "find_duplicates".to_string(),
-                    args: StepArgs::None,
-                });
-            }
-            "checksum" => {
-                steps.push(RawStep {
-                    op: "checksum".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
+                steps.push(RawStep { op: "find_duplicates".into(), args: StepArgs::None });
+                continue;
             }
             "compare" => {
-                steps.push(RawStep {
-                    op: "diff".to_string(),
-                    args: StepArgs::None,
-                });
+                steps.push(RawStep { op: "diff".into(), args: StepArgs::None });
+                continue;
             }
-            "download" => {
-                steps.push(RawStep {
-                    op: "download".to_string(),
-                    args: StepArgs::None,
-                });
-            }
-            unknown => {
-                return CompileResult::Error(format!(
-                    "Unknown action '{}'. Try a command like 'find', 'sort', 'zip', or 'extract'.",
-                    unknown
-                ));
-            }
+            _ => {}
         }
+
+        // 2. Program-first: check if the action label is a registered op.
+        //    This handles algorithm atoms and any other registered op.
+        let registry = crate::fs_types::build_full_registry();
+        if let Some(op_entry) = registry.get_poly(action) {
+            // Build inputs from the op's signature
+            if !used_program_first {
+                inputs = build_op_inputs(op_entry);
+                used_program_first = true;
+            }
+
+            // Build step — if the op has input_names, pass them as params
+            let args = build_op_step_args(op_entry, &ir.inputs);
+            steps.push(RawStep {
+                op: action.to_string(),
+                args,
+            });
+            continue;
+        }
+
+        // 3. Unknown action — error
+        return CompileResult::Error(format!(
+            "Unknown action '{}'. Try a command like 'find', 'sort', 'zip', 'extract', or an algorithm like 'fibonacci', 'quicksort'.",
+            action
+        ));
     }
 
     // If no steps were generated, that's an error
     if steps.is_empty() {
         return CompileResult::Error(
-            "Could not determine what to do. Try something like 'find comics in downloads'.".to_string()
+            "Could not determine what to do. Try something like 'compute fibonacci' or 'find comics in downloads'.".to_string()
         );
     }
 
-    // Generate a plan name from the steps and target path
-    let name = generate_plan_name(&steps, &target_path);
+    // Default inputs for filesystem ops
+    if inputs.is_empty() {
+        if is_file_path(&target_path) {
+            inputs.push(PlanInput::bare("file"));
+        } else {
+            inputs.push(PlanInput::bare("path"));
+        }
+    }
+
+    // Generate a plan name
+    let name = if used_program_first && steps.len() == 1 {
+        // For single-op programs, use the op name directly
+        steps[0].op.clone().replace('_', "-")
+    } else {
+        generate_plan_name(&steps, &target_path)
+    };
 
     // Bind path literals to inputs (the calling frame)
     let mut bindings = HashMap::new();
-    if target_path != "." {
-        // Bind the extracted path literal to the input name
+    if target_path != "." && !used_program_first {
         let input_name = inputs.first()
             .map(|i| i.name.clone())
             .unwrap_or_else(|| "path".to_string());
@@ -217,7 +223,53 @@ pub fn compile_ir(ir: &IntentIR) -> CompileResult {
 }
 
 // ---------------------------------------------------------------------------
-// Step compilation helpers
+// Program-first helpers
+// ---------------------------------------------------------------------------
+
+/// Build PlanInput list from a registered op's signature.
+fn build_op_inputs(op: &crate::registry::PolyOpEntry) -> Vec<PlanInput> {
+    if !op.input_names.is_empty() {
+        // Use the op's declared input names with type hints from signature
+        op.input_names.iter().zip(op.signature.inputs.iter())
+            .map(|(name, type_expr)| {
+                PlanInput::typed(name.clone(), type_expr.to_string())
+            })
+            .collect()
+    } else {
+        // Fallback: generate generic input names
+        op.signature.inputs.iter().enumerate()
+            .map(|(i, type_expr)| {
+                let name = if op.signature.inputs.len() == 1 {
+                    "input".to_string()
+                } else {
+                    format!("input_{}", i + 1)
+                };
+                PlanInput::typed(name, type_expr.to_string())
+            })
+            .collect()
+    }
+}
+
+/// Build step args from op's input names and IR input values.
+fn build_op_step_args(
+    op: &crate::registry::PolyOpEntry,
+    _ir_inputs: &[crate::nl::intent_ir::IRInput],
+) -> StepArgs {
+    // For algorithm atoms, the step args reference the plan inputs by $var.
+    // The plan compiler will resolve these during compilation.
+    if !op.input_names.is_empty() {
+        let mut map: HashMap<String, String> = HashMap::new();
+        for name in &op.input_names {
+            map.insert(name.clone(), format!("${}", name));
+        }
+        StepArgs::from_string_map(map)
+    } else {
+        StepArgs::None
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Filesystem step compilation helpers
 // ---------------------------------------------------------------------------
 
 /// Compile a "select" action to walk_tree + find_matching/filter steps.
@@ -235,7 +287,6 @@ fn compile_select_step(
     // Resolve concept to file patterns
     let concept = ir_step.params.get("where")
         .and_then(|w| {
-            // Parse "kind: \"concept_label\"" format
             w.strip_prefix("kind: \"")
                 .and_then(|s| s.strip_suffix('"'))
                 .map(|s| s.to_string())
@@ -252,7 +303,6 @@ fn compile_select_step(
 
     // Build the filter step
     if !patterns.is_empty() {
-        // Use find_matching with the resolved patterns
         let pattern_str = patterns.join(",");
         let mut params = HashMap::new();
         params.insert("pattern".to_string(), pattern_str);
@@ -267,10 +317,8 @@ fn compile_select_step(
             op: "find_matching".to_string(),
             args: StepArgs::from_string_map(params),
         });
-    }
-    // If no patterns and no concept, still add find_matching (no filter)
-    // This ensures the plan has at least 2 steps for edit operations.
-    if patterns.is_empty() && explicit_pattern.is_none() {
+    } else {
+        // No patterns and no concept — still add find_matching for edit operations
         steps.push(RawStep {
             op: "find_matching".to_string(),
             args: StepArgs::None,
@@ -286,7 +334,6 @@ fn compile_order_step(
     let field = ir_step.params.get("by").cloned().unwrap_or_else(|| "name".to_string());
     let direction = ir_step.params.get("direction").cloned().unwrap_or_else(|| "ascending".to_string());
 
-    // Map field names to sort_by modes
     let mode = match field.as_str() {
         "modification_time" | "mtime" | "date" | "time" => {
             if direction == "descending" { "mtime_desc" } else { "mtime" }
@@ -307,8 +354,6 @@ fn compile_order_step(
 }
 
 /// Compile a "compress" action.
-/// If the target looks like a file path, use gzip_compress.
-/// Otherwise, use walk_tree + pack_archive for directory archiving.
 fn compile_compress_step(
     target_path: &str,
     steps: &mut Vec<RawStep>,
@@ -339,36 +384,19 @@ fn is_file_path(path: &str) -> bool {
     }
 }
 
-/// Compile a "decompress" action to extract_archive.
-fn compile_decompress_step(steps: &mut Vec<RawStep>) {
-    steps.push(RawStep {
-        op: "extract_archive".to_string(),
-        args: StepArgs::None,
-    });
-}
-
 // ---------------------------------------------------------------------------
 // Concept → pattern resolution
 // ---------------------------------------------------------------------------
 
 /// Resolve a concept label to file glob patterns using the NL vocab's
 /// noun_patterns table.
-///
-/// E.g., "comic_issue_archive" → ["*.cbz", "*.cbr"]
-///       "pdf_document" → ["*.pdf"]
-///       "photograph" → ["*.png", "*.jpg", "*.jpeg", "*.heic"]
 fn resolve_concept_to_patterns(concept: &str) -> Vec<String> {
     let v = vocab::vocab();
-
-    // Direct lookup in noun_patterns by concept label
-    // The noun_patterns table maps surface nouns to patterns,
-    // so we need to find which noun maps to this concept and use its patterns.
     let lex = crate::nl::lexicon::lexicon();
 
     // Find all nouns that map to this concept
     for (word, info) in &lex.nouns {
         if info.concept == concept {
-            // Look up this word in noun_patterns
             if let Some(patterns) = v.noun_patterns.get(word.as_str()) {
                 return patterns.clone();
             }
@@ -391,7 +419,6 @@ fn generate_plan_name(steps: &[RawStep], target_path: &str) -> String {
 
     let ops: Vec<&str> = steps.iter().map(|s| s.op.as_str()).collect();
 
-    // Use the primary operation for the name
     let primary = if ops.contains(&"pack_archive") {
         "archive"
     } else if ops.contains(&"extract_archive") {
@@ -408,7 +435,6 @@ fn generate_plan_name(steps: &[RawStep], target_path: &str) -> String {
         ops.first().unwrap_or(&"plan")
     };
 
-    // Add filter info if present
     let filter_info: Option<String> = steps.iter()
         .find(|s| s.op == "find_matching")
         .and_then(|s| match &s.args {
@@ -463,13 +489,11 @@ mod tests {
     fn test_find_comics_in_downloads_newest_first() {
         let plan = expect_plan("find comics in my downloads folder newest first");
 
-        // Should have walk_tree, find_matching, sort_by
         let ops: Vec<&str> = plan.steps.iter().map(|s| s.op.as_str()).collect();
         assert!(ops.contains(&"walk_tree"), "should have walk_tree: {:?}", ops);
         assert!(ops.contains(&"find_matching"), "should have find_matching: {:?}", ops);
         assert!(ops.contains(&"sort_by"), "should have sort_by: {:?}", ops);
 
-        // find_matching should have cbz/cbr patterns
         let filter = plan.steps.iter().find(|s| s.op == "find_matching").unwrap();
         match &filter.args {
             StepArgs::Map(m) => {
@@ -480,7 +504,6 @@ mod tests {
             _ => panic!("find_matching should have Map args"),
         }
 
-        // sort_by should be mtime_desc
         let sort = plan.steps.iter().find(|s| s.op == "sort_by").unwrap();
         match &sort.args {
             StepArgs::Scalar(mode) => {
@@ -545,7 +568,7 @@ mod tests {
     #[test]
     fn test_empty_input_no_intent() {
         match compile_input("") {
-            CompileResult::NoIntent => {} // expected
+            CompileResult::NoIntent => {}
             other => panic!("expected NoIntent, got: {:?}", other),
         }
     }
@@ -553,7 +576,7 @@ mod tests {
     #[test]
     fn test_gibberish_no_intent() {
         match compile_input("asdfghjkl qwerty") {
-            CompileResult::NoIntent => {} // expected
+            CompileResult::NoIntent => {}
             other => panic!("expected NoIntent, got: {:?}", other),
         }
     }
@@ -597,7 +620,6 @@ mod tests {
 
     #[test]
     fn test_no_steps_produces_walk_tree() {
-        // "find files" with generic concept should still produce walk_tree
         let plan = expect_plan("find files");
         let ops: Vec<&str> = plan.steps.iter().map(|s| s.op.as_str()).collect();
         assert!(ops.contains(&"walk_tree"), "should have walk_tree: {:?}", ops);
@@ -617,7 +639,6 @@ mod tests {
 
     #[test]
     fn test_bindings_empty_when_no_path() {
-        // "find files" has no location → target_path defaults to "." → no binding
         let plan = expect_plan("find files");
         assert!(plan.bindings.is_empty(),
             "bindings should be empty when no path literal: {:?}", plan.bindings);
@@ -628,7 +649,6 @@ mod tests {
         use crate::nl::dialogue::plan_to_yaml;
         let plan = expect_plan("find comics in downloads");
         let yaml = plan_to_yaml(&plan);
-        // The YAML should show the bound path value
         assert!(yaml.contains("ownload"),
             "YAML should contain bound path value: {}", yaml);
     }
@@ -636,11 +656,156 @@ mod tests {
     #[test]
     fn test_bindings_with_home_dir() {
         let plan = expect_plan("list files in home");
-        // "home" should resolve to ~/
         if !plan.bindings.is_empty() {
             let input_name = &plan.inputs[0].name;
             let bound = &plan.bindings[input_name];
             assert!(!bound.is_empty(), "bound path should not be empty");
         }
+    }
+
+    // -- Program-first tests --
+
+    #[test]
+    fn test_program_first_registered_op() {
+        // Directly test the program-first path with a known algorithm op
+        use crate::nl::intent_ir::{IntentIR, IntentIRResult, IRStep, IRInput, IRSelector};
+
+        let ir = IntentIR {
+            output: "Number".to_string(),
+            inputs: vec![IRInput {
+                name: "n".to_string(),
+                type_expr: "Number".to_string(),
+                selector: IRSelector { scope: None },
+            }],
+            steps: vec![IRStep {
+                action: "fibonacci".to_string(),
+                input_refs: vec![],
+                output_ref: "result".to_string(),
+                params: HashMap::new(),
+            }],
+            constraints: vec![],
+            acceptance: vec![],
+            score: 1.0,
+        };
+
+        let result = compile_ir(&ir);
+        match result {
+            CompileResult::Ok(plan) => {
+                assert_eq!(plan.steps.len(), 1);
+                assert_eq!(plan.steps[0].op, "fibonacci");
+                assert_eq!(plan.name, "fibonacci");
+                // Should have typed input from op signature
+                assert!(!plan.inputs.is_empty());
+                assert_eq!(plan.inputs[0].name, "n");
+            }
+            other => panic!("expected Ok, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_program_first_quicksort() {
+        use crate::nl::intent_ir::{IntentIR, IntentIRResult, IRStep, IRInput, IRSelector};
+
+        let ir = IntentIR {
+            output: "List(Number)".to_string(),
+            inputs: vec![IRInput {
+                name: "lst".to_string(),
+                type_expr: "List(Number)".to_string(),
+                selector: IRSelector { scope: None },
+            }],
+            steps: vec![IRStep {
+                action: "quicksort".to_string(),
+                input_refs: vec![],
+                output_ref: "result".to_string(),
+                params: HashMap::new(),
+            }],
+            constraints: vec![],
+            acceptance: vec![],
+            score: 1.0,
+        };
+
+        let result = compile_ir(&ir);
+        match result {
+            CompileResult::Ok(plan) => {
+                assert_eq!(plan.steps.len(), 1);
+                assert_eq!(plan.steps[0].op, "quicksort");
+                // Should have typed input
+                assert!(!plan.inputs.is_empty());
+            }
+            other => panic!("expected Ok, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_program_first_unknown_action_errors() {
+        use crate::nl::intent_ir::{IntentIR, IRStep, IRInput, IRSelector};
+
+        let ir = IntentIR {
+            output: "Any".to_string(),
+            inputs: vec![IRInput {
+                name: "x".to_string(),
+                type_expr: "Any".to_string(),
+                selector: IRSelector { scope: None },
+            }],
+            steps: vec![IRStep {
+                action: "nonexistent_op_xyz_123".to_string(),
+                input_refs: vec![],
+                output_ref: "result".to_string(),
+                params: HashMap::new(),
+            }],
+            constraints: vec![],
+            acceptance: vec![],
+            score: 1.0,
+        };
+
+        let result = compile_ir(&ir);
+        match result {
+            CompileResult::Error(msg) => {
+                assert!(msg.contains("nonexistent_op_xyz_123"),
+                    "error should mention the unknown action: {}", msg);
+            }
+            other => panic!("expected Error, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_program_first_plan_name_is_op_name() {
+        use crate::nl::intent_ir::{IntentIR, IRStep, IRInput, IRSelector};
+
+        let ir = IntentIR {
+            output: "Number".to_string(),
+            inputs: vec![IRInput {
+                name: "n".to_string(),
+                type_expr: "Number".to_string(),
+                selector: IRSelector { scope: None },
+            }],
+            steps: vec![IRStep {
+                action: "digital_root".to_string(),
+                input_refs: vec![],
+                output_ref: "result".to_string(),
+                params: HashMap::new(),
+            }],
+            constraints: vec![],
+            acceptance: vec![],
+            score: 1.0,
+        };
+
+        let result = compile_ir(&ir);
+        match result {
+            CompileResult::Ok(plan) => {
+                assert_eq!(plan.name, "digital-root");
+            }
+            other => panic!("expected Ok, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_filesystem_actions_still_work() {
+        // Verify that filesystem-specific actions are not broken
+        // by the program-first path
+        let plan = expect_plan("find pdfs in documents");
+        let ops: Vec<&str> = plan.steps.iter().map(|s| s.op.as_str()).collect();
+        assert!(ops.contains(&"walk_tree"));
+        assert!(ops.contains(&"find_matching"));
     }
 }
