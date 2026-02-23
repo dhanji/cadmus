@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T23:07:40Z | Size: 61.5k chars
+> Updated: 2026-02-23T00:38:47Z | Size: 63.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -785,3 +785,27 @@ plan-name:
 - **Fully blocked categories**: graph (0/10), searching (0/12), sorting (0/11)
 - **High compile rate**: arithmetic (11/11), number-theory (8/9), encoding (4/4)
 - **Fidelity**: 5 correct, 3 partial, 33 wrong, 3 no-output, 64 no-codegen
+
+### Algorithm Plan Full Pass (plan `algorithm-plan-full-pass`)
+- **108/108 algorithm plans** pass load→compile→codegen→execute with correct output
+- `src/plan.rs:1249` — `resolve_type_hint()` now falls through to `TypeExpr::parse()` for any unrecognized type
+- `src/plan.rs:1130` — `count_value_params()` helper for reset step detection
+- `src/plan.rs:920` — Reset steps: when params fully specify inputs, step doesn't consume pipeline type
+- `src/plan.rs:838` — `$step-N` back-reference validation in compile_plan
+- `src/plan.rs:572` — `InvalidStepRef` error variant
+- `src/plan.rs:640` — `$step-N` refs exempt from `$var` validation
+- `src/registry.rs:541` — `PolyOpEntry.variadic: bool` field
+- `src/registry.rs:774` — `OpDefProperties.variadic: bool` field
+- `src/registry.rs:637` — `set_variadic()` method
+- `src/racket_executor.rs:643` — Variadic ops split elements on whitespace
+- `src/racket_executor.rs:563` — for_fold, for_list, for_sum, for_product, for_and, for_or handlers
+- `src/racket_executor.rs:597` — iterate (named-let) handler with paren-aware binding parser
+- `src/racket_executor.rs:620` — conditional, if_then, let_bind, begin, define, build_list handlers
+- `src/racket_executor.rs:884` — `racket_value()` handles `$step-N` → `step-N`
+- `src/racket_executor.rs:818` — Input bindings emitted as `(define name value)` in scripts
+- `src/racket_executor.rs:935` — `get_one_operand()` falls back to first input name
+- `src/racket_executor.rs:995` — `parse_iterate_bindings()` respects parenthesized values
+- `src/calling_frame.rs:196` — Atomic counter for unique temp file names (parallel test safety)
+- `data/packs/ops/racket.ops.yaml` — 27 new ops: 7 iteration + 20 utility (canonical names)
+- `tests/algorithm_plans_tests.rs` — 16 integration tests (14 per-category + 1 aggregate + 1 compile-only)
+- **Total: 1468 tests**, 0 failures, 0 warnings
