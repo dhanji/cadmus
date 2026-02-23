@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-23T11:31:14Z | Size: 68.1k chars
+> Updated: 2026-02-23T20:37:52Z | Size: 69.2k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -867,3 +867,17 @@ plan-name:
 - Old pipeline removed: `build_plan()`, `handle_create_plan()`, `try_earley_or_old_pipeline()` deleted from mod.rs/dialogue.rs
 - Earley parser is sole path for plan creation; approve/reject/explain/edit still use keyword/pattern matching
 - 1292 tests passing, 66 ignored, 1 known flaky (test_type_symmetric_discovery_tabular)
+
+### Algorithm Plans Expansion (plan `algorithm-plans-expansion`, commit `7b9cbd3`)
+- **86 new atomic ops** in `data/packs/ops/algorithm.ops.yaml` (154 total)
+- **4 new categories**: matrix (8 ops), backtracking (6 ops), interval (4 ops), tree (10 ops)
+- **194 total plans** across 18 categories, all pass compile+codegen+execute
+- **NL autoregression**: 176/194 (90.7%)
+- `src/nl/mod.rs` — Pre-Earley short-circuit: scans phrase tokens for algorithm ops before Earley parse
+- `src/nl/intent_compiler.rs` — `compile_algorithm_op_by_name()` public helper, select-step concept check
+- `src/nl/phrase.rs` — Added stopwords: function, problem, check, simulation, number
+- `data/nl/nl_lexicon.yaml` — 86 verb entries, 116 phrase groups, 70 alt phrases; removed "binary" from git_bisect synonyms
+- `data/nl/nl_dictionary.yaml` — 50 new SymSpell words for algorithm-specific terms
+- `PLAYBOOK.md` — Section 11: Adding Algorithm Plans (full playbook)
+- `tests/algorithm_plans_tests.rs` — 20 tests (18 categories + aggregate + compile-only)
+- 1377 total tests passing, 1 pre-existing failure, 76 ignored
