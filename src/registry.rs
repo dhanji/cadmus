@@ -539,6 +539,8 @@ pub struct MetaSignature {
 pub struct PolyOpEntry {
     /// Unique name for this operation
     pub name: String,
+    /// Whether this op accepts a variable number of arguments
+    pub variadic: bool,
     /// Polymorphic type signature
     pub signature: PolyOpSignature,
     /// Algebraic properties for canonicalization
@@ -555,6 +557,7 @@ impl fmt::Debug for PolyOpEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolyOpEntry")
             .field("name", &self.name)
+            .field("variadic", &self.variadic)
             .field("signature", &self.signature)
             .field("properties", &self.properties)
             .field("description", &self.description)
@@ -613,6 +616,7 @@ impl OperationRegistry {
         let name = name.into();
         self.poly_ops.push(PolyOpEntry {
             name,
+            variadic: false,
             signature,
             properties,
             description: description.into(),
@@ -627,6 +631,13 @@ impl OperationRegistry {
         // Set on the last entry with this name (rfind for shadowing)
         if let Some(entry) = self.poly_ops.iter_mut().rfind(|e| e.name == name) {
             entry.racket_symbol = Some(symbol);
+        }
+    }
+
+    /// Set the variadic flag for a named poly op.
+    pub fn set_variadic(&mut self, name: &str, variadic: bool) {
+        if let Some(entry) = self.poly_ops.iter_mut().rfind(|e| e.name == name) {
+            entry.variadic = variadic;
         }
     }
 
@@ -769,6 +780,8 @@ pub struct OpDef {
 #[derive(Debug, Default, Deserialize)]
 pub struct OpDefProperties {
     #[serde(default)]
+    pub variadic: bool,
+    #[serde(default)]
     pub commutative: bool,
     #[serde(default)]
     pub associative: bool,
@@ -817,6 +830,7 @@ pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> 
         })?;
 
         let sig = PolyOpSignature::new(op_def.type_params, inputs, output);
+        let variadic = op_def.properties.variadic;
         let props: AlgebraicProperties = op_def.properties.into();
 
         let racket_sym = op_def.racket_symbol;
@@ -825,6 +839,10 @@ pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> 
         // Set the racket_symbol on the just-registered entry
         if let Some(sym) = racket_sym {
             reg.set_racket_symbol(&op_name, sym);
+        }
+        // Set variadic flag if declared
+        if variadic {
+            reg.set_variadic(&op_name, true);
         }
     }
 

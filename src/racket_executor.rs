@@ -561,6 +561,115 @@ pub fn op_to_racket(
     }
 
     // -----------------------------------------------------------------------
+    // Iteration forms: for/fold, for/list, for/sum, for/product, for/and, for/or
+    // -----------------------------------------------------------------------
+    match op {
+        "for_fold" => {
+            let bindings = params.get("bindings")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "bindings".into() })?;
+            let sequence = params.get("sequence")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "sequence".into() })?;
+            let body = params.get("body")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+            let var = params.get("var").map(|s| s.as_str()).unwrap_or("x");
+            let expr = format!("(for/fold ({}) ([{} {}]) {})", bindings, var, sequence, body);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "for_list" => {
+            let sequence = params.get("sequence")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "sequence".into() })?;
+            let body = params.get("body")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+            let var = params.get("var").map(|s| s.as_str()).unwrap_or("x");
+            let expr = format!("(for/list ([{} {}]) {})", var, sequence, body);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "for_sum" | "for_product" | "for_and" | "for_or" => {
+            let sym = registry.racket_symbol(op).unwrap_or(op);
+            let sequence = params.get("sequence")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "sequence".into() })?;
+            let body = params.get("body")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+            let var = params.get("var").map(|s| s.as_str()).unwrap_or("x");
+            let expr = format!("({} ([{} {}]) {})", sym, var, sequence, body);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "iterate" => {
+            let name = params.get("name")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "name".into() })?;
+            let bindings = params.get("bindings")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "bindings".into() })?;
+            let body = params.get("body")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+            // Parse bindings: "a=48 b=18" → ([a 48] [b 18])
+            let binding_parts: Vec<String> = bindings.split_whitespace()
+                .map(|pair| {
+                    if let Some((var, val)) = pair.split_once('=') {
+                        format!("[{} {}]", var, racket_value(val))
+                    } else {
+                        format!("[{} 0]", pair)
+                    }
+                })
+                .collect();
+            let expr = format!("(let {} ({}) {})", name, binding_parts.join(" "), body);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        _ => {}
+    }
+
+    // -----------------------------------------------------------------------
+    // Control flow and binding: conditional, if_then, let_bind, begin, define
+    // -----------------------------------------------------------------------
+    match op {
+        "conditional" => {
+            let clauses = params.get("clauses")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "clauses".into() })?;
+            let expr = format!("(cond {})", clauses);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "if_then" => {
+            let test = params.get("test")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "test".into() })?;
+            let then = params.get("then")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "then".into() })?;
+            let else_branch = params.get("else").map(|s| s.as_str()).unwrap_or("#f");
+            let expr = format!("(if {} {} {})", test, then, else_branch);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "let_bind" => {
+            let bindings = params.get("bindings")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "bindings".into() })?;
+            let body = params.get("body")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+            let expr = format!("(let* ({}) {})", bindings, body);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "begin" => {
+            let body = params.get("body")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+            let expr = format!("(begin {})", body);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "define" => {
+            let name = params.get("name")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "name".into() })?;
+            let args = params.get("args").map(|s| s.as_str()).unwrap_or("");
+            let body = params.get("body")
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+            let expr = format!("(define ({} {}) {})", name, args, body);
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+        "build_list" => {
+            let n = get_one_operand(step, input_values, prev_binding)?;
+            let func = params.get("function").or_else(|| params.get("f"))
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "function".into() })?;
+            let expr = format!("(build-list {} {})", n, func);
+            return Ok(RacketExpr { expr, uses_prev: prev_binding.is_some() });
+        }
+        _ => {}
+    }
+
+    // -----------------------------------------------------------------------
     // Shell ops: generate (shell-lines "cmd flags path") or (shell-exec ...)
     // -----------------------------------------------------------------------
     if is_shell_op(op, registry) {
@@ -637,6 +746,25 @@ pub fn op_to_racket(
 
     let sym = poly.racket_symbol.as_deref()
         .ok_or_else(|| RacketError::UnknownOp(format!("{} (no racket_symbol)", op)))?;
+
+    // Variadic ops: split the first value param on whitespace and emit each
+    // as a separate argument.  (list 1 2 3) not (list "1 2 3").
+    if poly.variadic {
+        let elements_str = params.get("elements")
+            .cloned()
+            .or_else(|| first_value_param(params).map(|s| s.to_string()))
+            .unwrap_or_default();
+        if elements_str.is_empty() {
+            // Empty variadic call: (list)
+            return Ok(RacketExpr { expr: format!("({})", sym), uses_prev: false });
+        }
+        let args: Vec<String> = elements_str
+            .split_whitespace()
+            .map(|s| racket_value(s))
+            .collect();
+        let expr = format!("({} {})", sym, args.join(" "));
+        return Ok(RacketExpr { expr, uses_prev: false });
+    }
 
     let arity = poly.signature.inputs.len();
 
@@ -863,6 +991,12 @@ fn get_two_operands(
 /// Numbers pass through as-is. Strings get quoted.
 /// Racket identifiers (starting with lowercase or special chars) pass through.
 fn racket_value(s: &str) -> String {
+    // Step back-references: $step-N → step-N (Racket binding name)
+    if let Some(rest) = s.strip_prefix('$') {
+        if rest.starts_with("step-") {
+            return rest.to_string();
+        }
+    }
     // If it parses as a number, use it directly
     if s.parse::<f64>().is_ok() {
         return s.to_string();
@@ -1590,5 +1724,145 @@ mod tests {
         let result = fs_path_operand(None, &inputs, &bindings);
         assert!(!result.contains("~/"), "should expand tilde in operand: {}", result);
         assert!(result.contains("/Documents"), "should keep path suffix: {}", result);
+    }
+
+    // --- Variadic ops tests ---
+
+    #[test]
+    fn test_list_new_variadic_numbers() {
+        let reg = make_registry();
+        let step = make_step("list_new", vec![("elements", "1 2 3 4 5")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(list 1 2 3 4 5)");
+    }
+
+    #[test]
+    fn test_list_new_variadic_strings() {
+        let reg = make_registry();
+        let step = make_step("list_new", vec![("elements", "A B C")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(list \"A\" \"B\" \"C\")");
+    }
+
+    #[test]
+    fn test_list_new_variadic_empty() {
+        let reg = make_registry();
+        let step = make_step("list_new", vec![]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(list)");
+    }
+
+    #[test]
+    fn test_list_new_variadic_single() {
+        let reg = make_registry();
+        let step = make_step("list_new", vec![("elements", "42")]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(list 42)");
+    }
+
+    // --- Iteration form tests ---
+
+    #[test]
+    fn test_for_fold_sum() {
+        let reg = make_registry();
+        let step = make_step("for_fold", vec![
+            ("bindings", "([acc 0])"),
+            ("sequence", "(in-range 1 11)"),
+            ("body", "(+ acc x)"),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(for/fold (([acc 0])) ([x (in-range 1 11)]) (+ acc x))");
+    }
+
+    #[test]
+    fn test_for_list() {
+        let reg = make_registry();
+        let step = make_step("for_list", vec![
+            ("sequence", "(in-range 1 6)"),
+            ("body", "(* x x)"),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(for/list ([x (in-range 1 6)]) (* x x))");
+    }
+
+    #[test]
+    fn test_for_sum() {
+        let reg = make_registry();
+        let step = make_step("for_sum", vec![
+            ("sequence", "(in-range 1 11)"),
+            ("body", "x"),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(for/sum ([x (in-range 1 11)]) x)");
+    }
+
+    #[test]
+    fn test_iterate_gcd() {
+        let reg = make_registry();
+        let step = make_step("iterate", vec![
+            ("name", "loop"),
+            ("bindings", "a=48 b=18"),
+            ("body", "(if (= b 0) a (loop b (modulo a b)))"),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(let loop ([a 48] [b 18]) (if (= b 0) a (loop b (modulo a b))))");
+    }
+
+    #[test]
+    fn test_for_fold_missing_body() {
+        let reg = make_registry();
+        let step = make_step("for_fold", vec![
+            ("bindings", "([acc 0])"),
+            ("sequence", "(in-range 1 11)"),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
+        assert!(result.is_err());
+    }
+
+    // --- Control flow and utility op tests ---
+
+    #[test]
+    fn test_conditional() {
+        let reg = make_registry();
+        let step = make_step("conditional", vec![
+            ("clauses", "[(= x 0) \"zero\"] [(= x 1) \"one\"] [else \"other\"]"),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert!(expr.expr.starts_with("(cond "));
+    }
+
+    #[test]
+    fn test_if_then() {
+        let reg = make_registry();
+        let step = make_step("if_then", vec![
+            ("test", "(> x 0)"),
+            ("then", "\"positive\""),
+            ("else", "\"non-positive\""),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(if (> x 0) \"positive\" \"non-positive\")");
+    }
+
+    #[test]
+    fn test_let_bind() {
+        let reg = make_registry();
+        let step = make_step("let_bind", vec![
+            ("bindings", "[x 10] [y 20]"),
+            ("body", "(+ x y)"),
+        ]);
+        let inputs = make_inputs(vec![]);
+        let expr = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new()).unwrap();
+        assert_eq!(expr.expr, "(let* ([x 10] [y 20]) (+ x y))");
     }
 }

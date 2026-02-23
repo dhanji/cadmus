@@ -139,6 +139,8 @@ ops:
     type_params: [a]
     inputs: ["a"]
     output: "List(a)"
+    properties:
+      variadic: true
     description: "(list x ...) — create a new list from elements"
 
   - name: append
@@ -411,6 +413,187 @@ ops:
 
   # =========================================================================
   # 6. Boolean and Comparison
+  # =========================================================================
+  # 5b. Iteration Forms (for/*, named-let)
+  # =========================================================================
+
+  - name: for_fold
+    racket_symbol: "for/fold"
+    type_params: [a, b]
+    inputs: ["b"]
+    output: "b"
+    description: "(for/fold ([acc init]) ([x seq]) body) — general accumulator loop"
+
+  - name: for_list
+    racket_symbol: "for/list"
+    type_params: [a, b]
+    inputs: ["a"]
+    output: "List(b)"
+    description: "(for/list ([x seq]) body) — build list from iteration"
+
+  - name: for_sum
+    racket_symbol: "for/sum"
+    type_params: [a]
+    inputs: ["a"]
+    output: "Number"
+    description: "(for/sum ([x seq]) body) — sum values from iteration"
+
+  - name: for_product
+    racket_symbol: "for/product"
+    type_params: [a]
+    inputs: ["a"]
+    output: "Number"
+    description: "(for/product ([x seq]) body) — multiply values from iteration"
+
+  - name: for_and
+    racket_symbol: "for/and"
+    type_params: [a]
+    inputs: ["a"]
+    output: "Boolean"
+    description: "(for/and ([x seq]) body) — true if body is true for all elements"
+
+  - name: for_or
+    racket_symbol: "for/or"
+    type_params: [a]
+    inputs: ["a"]
+    output: "Boolean"
+    description: "(for/or ([x seq]) body) — true if body is true for any element"
+
+  - name: iterate
+    racket_symbol: "let"
+    type_params: [a]
+    inputs: ["a"]
+    output: "a"
+    description: "(let name ([var init] ...) body) — named-let loop for complex iteration"
+
+  # =========================================================================
+  # 5c. Control Flow and Binding
+  # =========================================================================
+
+  - name: conditional
+    racket_symbol: "cond"
+    type_params: [a]
+    inputs: ["a"]
+    output: "a"
+    description: "(cond [test expr] ... [else expr]) — multi-branch conditional"
+
+  - name: if_then
+    racket_symbol: "if"
+    type_params: [a]
+    inputs: ["Boolean"]
+    output: "a"
+    description: "(if test then-expr else-expr) — two-branch conditional"
+
+  - name: let_bind
+    racket_symbol: "let*"
+    type_params: [a]
+    inputs: ["a"]
+    output: "a"
+    description: "(let* ([var expr] ...) body) — sequential binding"
+
+  - name: begin
+    racket_symbol: "begin"
+    type_params: [a]
+    inputs: ["a"]
+    output: "a"
+    description: "(begin expr ...) — sequence expressions, return last"
+
+  - name: define
+    racket_symbol: "define"
+    type_params: [a]
+    inputs: ["a"]
+    output: "Void"
+    description: "(define (name args) body) — define a function"
+
+  # =========================================================================
+  # 5d. Additional List Operations
+  # =========================================================================
+
+  - name: range
+    racket_symbol: "range"
+    inputs: ["Number"]
+    output: "List(Number)"
+    description: "(range n) or (range start end) — list of numbers"
+
+  - name: build_list
+    racket_symbol: "build-list"
+    type_params: [a]
+    inputs: ["Number"]
+    output: "List(a)"
+    description: "(build-list n f) — build list by applying f to 0..n-1"
+
+  - name: list_take
+    racket_symbol: "take"
+    type_params: [a]
+    inputs: ["List(a)", "Number"]
+    output: "List(a)"
+    description: "(take lst n) — first n elements"
+
+  - name: list_drop
+    racket_symbol: "drop"
+    type_params: [a]
+    inputs: ["List(a)", "Number"]
+    output: "List(a)"
+    description: "(drop lst n) — all but first n elements"
+
+  # =========================================================================
+  # 5e. Math Utilities
+  # =========================================================================
+
+  - name: quotient
+    racket_symbol: "quotient"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(quotient a b) — integer division"
+
+  - name: remainder
+    racket_symbol: "remainder"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(remainder a b) — integer remainder"
+
+  - name: sqrt
+    racket_symbol: "sqrt"
+    inputs: ["Number"]
+    output: "Number"
+    description: "(sqrt n) — square root"
+
+  - name: exact_floor
+    racket_symbol: "exact-floor"
+    inputs: ["Number"]
+    output: "Number"
+    description: "(exact-floor n) — floor as exact integer"
+
+  - name: exact_ceiling
+    racket_symbol: "exact-ceiling"
+    inputs: ["Number"]
+    output: "Number"
+    description: "(exact-ceiling n) — ceiling as exact integer"
+
+  - name: exact_round
+    racket_symbol: "exact-round"
+    inputs: ["Number"]
+    output: "Number"
+    description: "(exact-round n) — round to nearest exact integer"
+
+  - name: gcd
+    racket_symbol: "gcd"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(gcd a b) — greatest common divisor"
+
+  - name: lcm
+    racket_symbol: "lcm"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(lcm a b) — least common multiple"
+
+  - name: random
+    racket_symbol: "random"
+    inputs: ["Number"]
+    output: "Number"
+    description: "(random n) — random integer in [0, n)"
+
   # =========================================================================
 
   - name: not

@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-22T19:46:47Z | Size: 60.7k chars
+> Updated: 2026-02-22T23:07:40Z | Size: 61.5k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -770,3 +770,18 @@ plan-name:
 - `src/main.rs` plan mode: `frame.codegen(&def)` for display, `frame.run_script(&script)` for execution
 - `src/nl/mod.rs` handle_approve: `frame.codegen(&wf).ok()` for script generation
 - Commit `ac45690`
+
+### Algorithm Plan Pipeline Report
+- `tmp/report/algorithm_plan_report.md` — Full report (472 lines)
+- `tmp/report/results.json` — Raw JSON results for all 108 plans
+- `tmp/run_algorithm_plans.py` — Test harness script
+- `tmp/generate_report.py` — Report generator
+
+### Pipeline Results Summary
+- 108/108 load, 44/108 compile, 44/108 codegen, 41/108 execute
+- **Compile bottleneck**: `infer_input_type()` in `src/plan.rs` only recognizes fixed input names
+  - `lst`, `graph`, `elements`, `coins`, `edges`, `points` etc. all fail
+- **list_new codegen bug**: `src/racket_executor.rs` — `(list "1 2 3")` instead of `(list 1 2 3)`
+- **Fully blocked categories**: graph (0/10), searching (0/12), sorting (0/11)
+- **High compile rate**: arithmetic (11/11), number-theory (8/9), encoding (4/4)
+- **Fidelity**: 5 correct, 3 partial, 33 wrong, 3 no-output, 64 no-codegen

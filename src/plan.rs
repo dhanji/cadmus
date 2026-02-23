@@ -568,6 +568,8 @@ pub enum PlanError {
     UnknownInputType { name: String },
     /// Planning failed for a step
     PlanFailed { step: usize, op: String, reason: String },
+    /// Invalid $step-N back-reference
+    InvalidStepRef { step: usize, param: String, ref_step: usize },
 }
 
 impl fmt::Display for PlanError {
@@ -594,6 +596,9 @@ impl fmt::Display for PlanError {
             }
             Self::PlanFailed { step, op, reason } => {
                 write!(f, "step {}: planning failed for '{}': {}", step + 1, op, reason)
+            }
+            Self::InvalidStepRef { step, param, ref_step } => {
+                write!(f, "step {}: param '{}' references $step-{} which doesn't exist (must be 1..{})", step + 1, param, ref_step, step)
             }
         }
     }
@@ -631,7 +636,7 @@ fn validate_plan(def: &PlanDef) -> Result<(), PlanError> {
         if let StepArgs::Map(params) = &step.args {
             for (_, v) in params {
                 if let Some(var_name) = v.strip_prefix('$') {
-                    if !def.has_input(var_name) {
+                    if !var_name.starts_with("step-") && !def.has_input(var_name) {
                         return Err(PlanError::UnknownVar {
                             step: i,
                             var_name: var_name.to_string(),
@@ -642,7 +647,7 @@ fn validate_plan(def: &PlanDef) -> Result<(), PlanError> {
         }
         if let StepArgs::Scalar(s) = &step.args {
             if let Some(var_name) = s.strip_prefix('$') {
-                if !def.has_input(var_name) {
+                if !var_name.starts_with("step-") && !def.has_input(var_name) {
                     return Err(PlanError::UnknownVar {
                         step: i,
                         var_name: var_name.to_string(),
@@ -834,6 +839,21 @@ pub fn compile_plan(
             }
         }
 
+        // Validate $step-N back-references in params
+        for (k, v) in &params {
+            if let Some(rest) = v.strip_prefix("$step-") {
+                if let Ok(n) = rest.parse::<usize>() {
+                    if n == 0 || n > i {
+                        return Err(PlanError::InvalidStepRef {
+                            step: i,
+                            param: k.clone(),
+                            ref_step: n,
+                        });
+                    }
+                }
+            }
+        }
+
         // Determine input/output types for this step.
         //
         // If `each` mode: the op applies element-wise inside a Seq.
@@ -923,10 +943,25 @@ pub fn compile_plan(
                 if matched {
                     (current_type.clone(), step_output)
                 } else {
+                    // ---------------------------------------------------------------
+                    // Reset step: if the step has explicit params that provide all
+                    // required inputs, it doesn't consume the pipeline's current type.
+                    // This allows e.g. two consecutive string_length calls with
+                    // different explicit string params.
+                    // ---------------------------------------------------------------
+                    let non_control_param_count = count_value_params(&params);
+                    if non_control_param_count >= sig.inputs.len() {
+                        // All inputs are provided by params — this is a reset step.
+                        // The output type comes from the op's signature.
+                        // Try to infer concrete output by unifying params with inputs.
+                        let (fresh2, _) = poly_op.signature.freshen(&format!("rst{}", i));
+                        let step_output = fresh2.output.clone();
+                        (current_type.clone(), step_output)
+                    }
                     // Special case: flatten_seq on Entry-wrapped nested sequences.
                     // Signature is Seq(Seq(a)) → Seq(a), but actual type may be
                     // Seq(Entry(K, Seq(V))) → Seq(V). Unwrap the Entry layer.
-                    if step.op == "flatten_seq" {
+                    else if step.op == "flatten_seq" {
                         if let Some(outer_inner) = unwrap_seq(&current_type) {
                             if let Some((_, val_type)) = unwrap_entry(outer_inner) {
                                 if let Some(inner_seq_elem) = unwrap_seq(val_type) {
@@ -1112,8 +1147,20 @@ fn narrow_type_from_pattern(current: &TypeExpr, pattern: &str) -> Option<TypeExp
     None
 }
 
+/// Count the number of non-control params in a step's param map.
+///
+/// Control params are things like "function", "predicate", "comparator", "init",
+/// "format" — they configure the op but don't provide data inputs.
+fn count_value_params(params: &HashMap<String, String>) -> usize {
+    const CONTROL_PARAMS: &[&str] = &[
+        "function", "f", "predicate", "pred", "format", "fmt",
+        "comparator", "init", "mode",
+    ];
+    params.keys().filter(|k| !CONTROL_PARAMS.contains(&k.as_str())).count()
+}
+
 fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
-    match ty {
+     match ty {
         TypeExpr::Constructor(name, args) if name == "Seq" && args.len() == 1 => {
             Some(&args[0])
         }
@@ -1224,7 +1271,7 @@ fn resolve_type_hint(hint: &str) -> Option<TypeExpr> {
         "String" => Some(TypeExpr::prim("String")),
         "Count" => Some(TypeExpr::prim("Count")),
         _ => {
-            // Try parsing compound types like File(Text), Dir(Bytes), List[a], Seq(a)
+            // Try parsing compound types like File(Text), Dir(Bytes), List[a], Seq(a), List(Number)
             // Archive(content, format) — e.g., Archive(File(Image), Cbz)
             if let Some(inner) = h.strip_prefix("Archive(").and_then(|s| s.strip_suffix(')')) {
                 // Split on the last comma to handle nested types in the content part
@@ -1240,13 +1287,19 @@ fn resolve_type_hint(hint: &str) -> Option<TypeExpr> {
             if let Some(inner) = h.strip_prefix("Dir(").and_then(|s| s.strip_suffix(')')) {
                 return resolve_type_hint(inner).map(TypeExpr::dir);
             }
+            // List[a] — legacy square-bracket syntax for generic lists
             if let Some(inner) = h.strip_prefix("List[").and_then(|s| s.strip_suffix(']')) {
-                return Some(TypeExpr::seq(TypeExpr::var(inner.trim())));
+                // Resolve inner type (not just Var) so List[Number] works too
+                return resolve_type_hint(inner.trim())
+                    .or_else(|| Some(TypeExpr::var(inner.trim())))
+                    .map(|t| TypeExpr::cons("List", vec![t]));
             }
             if let Some(inner) = h.strip_prefix("Seq(").and_then(|s| s.strip_suffix(')')) {
                 return resolve_type_hint(inner).map(TypeExpr::seq);
             }
-            None
+            // Final fallback: parse as a general type expression.
+            // This handles List(Number), Boolean, Graph, Pair(Number, Number), etc.
+            TypeExpr::parse(h).ok()
         }
     }
 }
@@ -1803,5 +1856,145 @@ list-and-sort:
         assert!(display.contains("list-and-sort"));
         assert!(display.contains("list_dir"));
         assert!(display.contains("sort_by"));
+    }
+
+    // -- resolve_type_hint: List(X) / List[X] interchangeability --
+
+    #[test]
+    fn test_resolve_list_parens_number() {
+        let ty = resolve_type_hint("List(Number)").unwrap();
+        assert_eq!(ty, TypeExpr::cons("List", vec![TypeExpr::prim("Number")]));
+    }
+
+    #[test]
+    fn test_resolve_list_brackets_number() {
+        let ty = resolve_type_hint("List[Number]").unwrap();
+        assert_eq!(ty, TypeExpr::cons("List", vec![TypeExpr::prim("Number")]));
+    }
+
+    #[test]
+    fn test_resolve_list_parens_string() {
+        let ty = resolve_type_hint("List(String)").unwrap();
+        assert_eq!(ty, TypeExpr::cons("List", vec![TypeExpr::prim("String")]));
+    }
+
+    #[test]
+    fn test_resolve_nested_list() {
+        let ty = resolve_type_hint("List(List(Number))").unwrap();
+        let expected = TypeExpr::cons("List", vec![
+            TypeExpr::cons("List", vec![TypeExpr::prim("Number")])
+        ]);
+        assert_eq!(ty, expected);
+    }
+
+    #[test]
+    fn test_resolve_boolean() {
+        let ty = resolve_type_hint("Boolean").unwrap();
+        assert_eq!(ty, TypeExpr::prim("Boolean"));
+    }
+
+    #[test]
+    fn test_resolve_pair_type() {
+        let ty = resolve_type_hint("Pair(Number, String)").unwrap();
+        let expected = TypeExpr::cons("Pair", vec![TypeExpr::prim("Number"), TypeExpr::prim("String")]);
+        assert_eq!(ty, expected);
+    }
+
+    #[test]
+    fn test_resolve_malformed_returns_none() {
+        // Unclosed paren
+        assert!(resolve_type_hint("List(").is_none());
+    }
+
+    #[test]
+    fn test_resolve_infer_list_number_input() {
+        let ty = infer_input_type(&PlanInput::typed("lst", "List(Number)")).unwrap();
+        assert_eq!(ty, TypeExpr::cons("List", vec![TypeExpr::prim("Number")]));
+    }
+
+    // -- Reset step tests (I3) --
+
+    #[test]
+    fn test_reset_step_two_string_lengths() {
+        // Two consecutive string_length calls with explicit params should both compile
+        let yaml = r#"
+string-lengths:
+  inputs:
+    - s1: "String"
+  steps:
+    - string_length:
+        s: "kitten"
+    - string_length:
+        s: "sitting"
+"#;
+        let def = parse_plan(yaml).unwrap();
+        let registry = build_full_registry();
+        let compiled = compile_plan(&def, &registry).unwrap();
+        assert_eq!(compiled.steps.len(), 2);
+        // Both steps should produce Number output
+        assert_eq!(compiled.steps[0].output_type, TypeExpr::prim("Number"));
+        assert_eq!(compiled.steps[1].output_type, TypeExpr::prim("Number"));
+    }
+
+    #[test]
+    fn test_normal_chain_still_works() {
+        // A step without explicit params should still chain from previous output
+        let yaml = r#"
+add-chain:
+  inputs:
+    - n: "Number"
+  steps:
+    - add:
+        x: "10"
+        y: "20"
+    - add:
+        y: "5"
+"#;
+        let def = parse_plan(yaml).unwrap();
+        let registry = build_full_registry();
+        let compiled = compile_plan(&def, &registry).unwrap();
+        assert_eq!(compiled.steps.len(), 2);
+    }
+
+    #[test]
+    fn test_step_backref_valid() {
+        // $step-1 reference in step 2 should compile
+        let yaml = r#"
+backref-test:
+  inputs:
+    - n: "Number"
+  steps:
+    - add:
+        x: "10"
+        y: "20"
+    - add:
+        x: "$step-1"
+        y: "5"
+"#;
+        let def = parse_plan(yaml).unwrap();
+        let registry = build_full_registry();
+        let compiled = compile_plan(&def, &registry).unwrap();
+        assert_eq!(compiled.steps.len(), 2);
+        assert_eq!(compiled.steps[1].params.get("x").unwrap(), "$step-1");
+    }
+
+    #[test]
+    fn test_step_backref_invalid() {
+        // $step-99 in step 1 should fail
+        let yaml = r#"
+bad-backref:
+  inputs:
+    - n: "Number"
+  steps:
+    - add:
+        x: "$step-99"
+        y: "5"
+"#;
+        let def = parse_plan(yaml).unwrap();
+        let registry = build_full_registry();
+        let result = compile_plan(&def, &registry);
+        assert!(result.is_err());
+        let err = format!("{}", result.unwrap_err());
+        assert!(err.contains("$step-99"), "error should mention the bad ref: {}", err);
     }
 }
