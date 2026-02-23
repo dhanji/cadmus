@@ -1,4 +1,4 @@
-# Longest common subsequence length
+# Longest common subsequence: find LCS of two strings
 # Example: lcs("ABCBDAB", "BDCAB") = 4
 # expected: 4
 

@@ -1,0 +1,11 @@
+# Detect cycle in directed graph using DFS coloring
+# Graph: 0→1→2→3→1 (cycle 1→2→3→1)
+# expected: #t
+
+detect_cycle_directed:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "4"
+  steps:
+    - detect_cycle_directed

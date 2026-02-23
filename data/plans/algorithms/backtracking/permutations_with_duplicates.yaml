@@ -1,0 +1,11 @@
+# Unique permutations of a list that may contain duplicates
+# Example: (1 1 2) → ((1 1 2) (1 2 1) (2 1 1))
+# expected: ((1 1 2) (1 2 1) (2 1 1))
+
+permutations_with_duplicates:
+  inputs:
+    - nums: "List(Number)"
+  bindings:
+    nums: "(list 1 1 2)"
+  steps:
+    - permutations_with_duplicates

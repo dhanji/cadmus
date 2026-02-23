@@ -2946,3 +2946,63 @@ algorithm_abbreviations:
   gcd: 50
   kmp: 50
   vlq: 50
+
+# New algorithm expansion words
+algorithm_expansion:
+  ackermann: 50
+  adler: 50
+  anagram: 100
+  backtracking: 100
+  bipartite: 50
+  cocktail: 100
+  cofactor: 50
+  determinant: 100
+  diameter: 100
+  djb2: 50
+  eulerian: 50
+  gnome: 100
+  inorder: 50
+  invert: 100
+  legendre: 50
+  markov: 50
+  mobius: 50
+  morse: 100
+  palindromic: 50
+  pancake: 100
+  parentheses: 100
+  postorder: 50
+  preorder: 50
+  queens: 100
+  robber: 100
+  scalar: 100
+  shaker: 100
+  shortest: 100
+  stirling: 50
+  substring: 100
+  sudoku: 100
+  suffix: 100
+  transpose: 100
+  traversal: 100
+  unweighted: 50
+  lca: 50
+  bst: 50
+  fisher: 50
+  yates: 50
+  roman: 100
+  numeral: 100
+  fifo: 50
+  lifo: 50
+  parity: 100
+  greedy: 100
+  coloring: 100
+  rabin: 50
+  kth: 50
+  lca: 50
+  solver: 100
+  orderings: 100
+  simulate: 100
+  maximum: 100
+  depth: 100
+  reverse: 100
+  characters: 100
+  local: 100

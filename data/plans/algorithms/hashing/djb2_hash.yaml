@@ -1,0 +1,11 @@
+# DJB2 hash: simple string hash function by Dan Bernstein
+# Example: djb2("hello") = 210714636441
+# expected: 210714636441
+
+djb2_hash:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"hello"'
+  steps:
+    - djb2_hash

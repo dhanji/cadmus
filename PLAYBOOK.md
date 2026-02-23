@@ -1507,3 +1507,142 @@ POSIX single-quote escaping (`'...'` with embedded quotes escaped as
 - **Racket generation**: `src/racket_executor.rs` (`shell_preamble()`, `generate_shell_call()`)
 - **Tests**: `tests/shell_callable_tests.rs` (41 tests)
 - **Subsumption plan**: `SUBSUMPTION.md`
+
+## 11. Adding Algorithm Plans
+
+Algorithm plans come in two flavors: **atomic ops** (single-step, opaque Racket body) and **DSL plans** (multi-step, composed from existing primitives).
+
+### Atomic Op (Recommended for Recursive Algorithms)
+
+**Step 1: Add the op to `data/packs/ops/algorithm.ops.yaml`**
+
+```yaml
+  - name: my_algorithm
+    inputs: ['Number', 'List(Number)']
+    input_names: ['n', 'lst']
+    output: "Number"
+    racket_symbol: "my_algorithm"
+    description: "My algorithm: brief description"
+    racket_body: |
+      (let loop ([x n] [acc 0]) (if (= x 0) acc (loop (- x 1) (+ acc (list-ref lst x)))))
+```
+
+**Rules:**
+- `name` must be unique across ALL ops packs (fs, power_tools, racket, algorithm)
+- `input_names` must match the parameter names used in `racket_body`
+- `racket_body` is a single Racket expression (no `#lang`, no `define`)
+- For recursive algorithms, use Y-combinator style: `(let* ([f (lambda (f x) ...)]) (f f input))`
+- Types: `Number`, `String`, `Boolean`, `List(Number)`, `List(String)`, `List(List(Number))`, `List(Any)`, `Vector(...)`, etc.
+
+**Step 2: Create the plan YAML in `data/plans/algorithms/<category>/`**
+
+```yaml
+# My algorithm: brief description
+# Example: my_algorithm(5, (1 2 3 4 5)) = 15
+# expected: 15
+
+my_algorithm:
+  inputs:
+    - n: "Number"
+    - lst: "List(Number)"
+  bindings:
+    n: "5"
+    lst: "(list 1 2 3 4 5)"
+  steps:
+    - my_algorithm
+```
+
+**Rules:**
+- First comment line is the NL description (used by autoregression)
+- `# expected:` comment is the expected Racket output (used by tests)
+- `bindings` provide test data — must be valid Racket literals
+- Plan name = op name = file name (without `.yaml`)
+- For string inputs: `s: '"hello"'` (YAML string containing Racket string)
+- For list inputs: `lst: "(list 1 2 3)"` (Racket list literal)
+
+**Step 3: Add NL lexicon entries in `data/nl/nl_lexicon.yaml`**
+
+```yaml
+# In Domain 4 (Algorithm Operations) verbs section:
+  - word: my_algorithm
+    action: my_algorithm
+
+# In phrase_groups section:
+  - skeleton: [my, algorithm]
+    canonical: my_algorithm
+```
+
+**Step 4: Add SymSpell dictionary entries in `data/nl/nl_dictionary.yaml`**
+
+Add any domain-specific words that might be false-corrected:
+```yaml
+  my_word: 50
+```
+
+**Step 5: Verify**
+
+```bash
+cargo test --test algorithm_plans_tests test_<category>  # Execute test
+cargo test --test nl_autoregression                       # NL matching
+```
+
+### DSL Plan (For Algorithms Composable from Primitives)
+
+Use when the algorithm can be expressed using existing ops (for_fold, for_sum, vector ops, cond, etc.):
+
+```yaml
+# My iterative algorithm: compute something
+# Example: result for input 5 = 42
+# expected: 42
+
+my_iterative_algorithm:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "5"
+  steps:
+    - range:
+        start: "0"
+        end: "$n"
+    - for_sum:
+        var: "i"
+        over: "$step-1"
+        body:
+          - multiply:
+              x: "$i"
+              y: "$i"
+```
+
+DSL plans go in `data/plans/algorithms/<category>/` and need the same NL lexicon entries.
+They are loaded as plan files by the intent compiler (Domain 5 verbs).
+
+### Categories
+
+| Category | Directory | Description |
+|----------|-----------|-------------|
+| arithmetic | `arithmetic/` | Number operations, sequences, conversions |
+| backtracking | `backtracking/` | N-queens, sudoku, subset generation |
+| bitwise | `bitwise/` | Bit manipulation, binary operations |
+| combinatorics | `combinatorics/` | Permutations, combinations, Bell/Stirling |
+| data-structures | `data-structures/` | Stack, queue, BST, heap, trie |
+| dynamic-programming | `dynamic-programming/` | Memoization, tabulation patterns |
+| encoding | `encoding/` | Base64, Huffman, morse, RLE |
+| geometry | `geometry/` | Points, polygons, convex hull |
+| graph | `graph/` | BFS, DFS, Dijkstra, A*, coloring |
+| hashing | `hashing/` | DJB2, Adler32, FNV1a, MurmurHash |
+| interval | `interval/` | Merge, intersect, scheduling |
+| matrix | `matrix/` | Transpose, multiply, determinant, power |
+| number-theory | `number-theory/` | Primes, GCD, modular arithmetic |
+| probability | `probability/` | Shuffle, sampling, Markov chains |
+| searching | `searching/` | Binary search, quickselect, peak finding |
+| sorting | `sorting/` | Quicksort, merge sort, gnome sort |
+| string | `string/` | KMP, Z-algorithm, suffix array, palindromes |
+| tree | `tree/` | Traversals, LCA, diameter, balance check |
+
+### Common Mistakes
+
+1. **Name collision**: Check ALL ops packs before naming. Use `grep '  - name:' data/packs/ops/*.yaml | grep my_name`
+2. **Missing SymSpell entry**: Algorithm-specific words (e.g., "ackermann", "dijkstra") get false-corrected without dictionary entries
+3. **Wrong expected output**: Run the plan first with `cadmus --plan path.yaml --run` to get actual output
+4. **Racket body syntax**: Must be a single expression. Use `let*` for multiple bindings, `begin` for side effects
+5. **String quoting**: YAML `s: '"hello"'` → Racket `"hello"`. Double-check quote nesting

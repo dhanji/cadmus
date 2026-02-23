@@ -1,4 +1,4 @@
-/// Integration tests for all 108 algorithm plans.
+/// Integration tests for all algorithm plans.
 ///
 /// Each test loads a plan YAML, compiles it, generates a Racket script,
 /// executes it, and verifies the output matches the expected value
@@ -94,36 +94,44 @@ category_test!(test_data_structures, "data/plans/algorithms/data-structures");
 category_test!(test_encoding, "data/plans/algorithms/encoding");
 category_test!(test_hashing, "data/plans/algorithms/hashing");
 category_test!(test_probability, "data/plans/algorithms/probability");
+category_test!(test_matrix, "data/plans/algorithms/matrix");
+category_test!(test_backtracking, "data/plans/algorithms/backtracking");
+category_test!(test_interval, "data/plans/algorithms/interval");
+category_test!(test_tree, "data/plans/algorithms/tree");
 
 // ============================================================================
-// Aggregate test: all 108 plans
+// Aggregate test: all plans
 // ============================================================================
+
+static ALL_CATEGORIES: &[&str] = &[
+    "data/plans/algorithms/arithmetic",
+    "data/plans/algorithms/number-theory",
+    "data/plans/algorithms/sorting",
+    "data/plans/algorithms/searching",
+    "data/plans/algorithms/dynamic-programming",
+    "data/plans/algorithms/graph",
+    "data/plans/algorithms/string",
+    "data/plans/algorithms/bitwise",
+    "data/plans/algorithms/combinatorics",
+    "data/plans/algorithms/geometry",
+    "data/plans/algorithms/data-structures",
+    "data/plans/algorithms/encoding",
+    "data/plans/algorithms/hashing",
+    "data/plans/algorithms/probability",
+    "data/plans/algorithms/matrix",
+    "data/plans/algorithms/backtracking",
+    "data/plans/algorithms/interval",
+    "data/plans/algorithms/tree",
+];
 
 #[test]
-fn test_all_108_plans() {
-    let categories = vec![
-        "data/plans/algorithms/arithmetic",
-        "data/plans/algorithms/number-theory",
-        "data/plans/algorithms/sorting",
-        "data/plans/algorithms/searching",
-        "data/plans/algorithms/dynamic-programming",
-        "data/plans/algorithms/graph",
-        "data/plans/algorithms/string",
-        "data/plans/algorithms/bitwise",
-        "data/plans/algorithms/combinatorics",
-        "data/plans/algorithms/geometry",
-        "data/plans/algorithms/data-structures",
-        "data/plans/algorithms/encoding",
-        "data/plans/algorithms/hashing",
-        "data/plans/algorithms/probability",
-    ];
-
+fn test_all_algorithm_plans() {
     let mut all_plans = Vec::new();
-    for cat in &categories {
+    for cat in ALL_CATEGORIES {
         all_plans.extend(collect_plans(cat));
     }
 
-    assert_eq!(all_plans.len(), 108, "Expected 108 plans, found {}", all_plans.len());
+    eprintln!("Running {} algorithm plans...", all_plans.len());
 
     let mut pass = 0;
     let mut failures = Vec::new();
@@ -142,6 +150,8 @@ fn test_all_108_plans() {
         }
     }
 
+    eprintln!("{}/{} passed", pass, all_plans.len());
+
     if !failures.is_empty() {
         panic!(
             "{}/{} passed, {} failures:\n{}",
@@ -156,25 +166,8 @@ fn test_all_108_plans() {
 
 #[test]
 fn test_all_plans_compile() {
-    let categories = vec![
-        "data/plans/algorithms/arithmetic",
-        "data/plans/algorithms/number-theory",
-        "data/plans/algorithms/sorting",
-        "data/plans/algorithms/searching",
-        "data/plans/algorithms/dynamic-programming",
-        "data/plans/algorithms/graph",
-        "data/plans/algorithms/string",
-        "data/plans/algorithms/bitwise",
-        "data/plans/algorithms/combinatorics",
-        "data/plans/algorithms/geometry",
-        "data/plans/algorithms/data-structures",
-        "data/plans/algorithms/encoding",
-        "data/plans/algorithms/hashing",
-        "data/plans/algorithms/probability",
-    ];
-
     let mut all_plans = Vec::new();
-    for cat in &categories {
+    for cat in ALL_CATEGORIES {
         all_plans.extend(collect_plans(cat));
     }
 

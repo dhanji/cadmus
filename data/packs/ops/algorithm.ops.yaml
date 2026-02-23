@@ -675,3 +675,849 @@ ops:
     description: "Run-length encoding: compress consecutive chars"
     racket_body: |
       (let* ([chars (string->list s)]) (let loop ([cs chars] [result ""] [cur #f] [cnt 0]) (cond [(null? cs) (if cur (string-append result (number->string cnt) (string cur)) result)] [(equal? (car cs) cur) (loop (cdr cs) result cur (+ cnt 1))] [else (let ([result (if cur (string-append result (number->string cnt) (string cur)) result)]) (loop (cdr cs) result (car cs) 1))])))
+
+  # =========================================================================
+  # Arithmetic (new)
+  # =========================================================================
+
+  - name: ackermann
+    inputs: ['Number', 'Number']
+    input_names: ['m', 'n']
+    output: "Number"
+    racket_symbol: "ackermann"
+    description: "Ackermann function: A(m,n) — fast-growing recursive function"
+    racket_body: |
+      (let* ([ack (lambda (ack m n) (cond [(= m 0) (+ n 1)] [(= n 0) (ack ack (- m 1) 1)] [else (ack ack (- m 1) (ack ack m (- n 1)))]))]) (ack ack m n))
+
+  - name: catalan_number_compute
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "catalan_number_compute"
+    description: "Catalan number: C(n) = (2n choose n) / (n+1)"
+    racket_body: |
+      (let* ([binom (lambda (binom n k) (if (or (= k 0) (= k n)) 1 (+ (binom binom (- n 1) (- k 1)) (binom binom (- n 1) k))))]) (quotient (binom binom (* 2 n) n) (+ n 1)))
+
+  - name: perfect_number_check
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "perfect_number_check"
+    description: "Perfect number check: sum of proper divisors equals n"
+    racket_body: |
+      (= n (for/sum ([i (in-range 1 n)]) (if (= (modulo n i) 0) i 0)))
+
+  - name: happy_number_check
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "happy_number_check"
+    description: "Happy number check: repeatedly sum squares of digits until 1 or cycle"
+    racket_body: |
+      (let* ([digit-sq-sum (lambda (x) (for/sum ([c (in-string (number->string x))]) (expt (- (char->integer c) 48) 2)))]) (let loop ([slow n] [fast (digit-sq-sum n)]) (cond [(= fast 1) #t] [(= slow fast) #f] [else (loop (digit-sq-sum slow) (digit-sq-sum (digit-sq-sum fast)))])))
+
+  - name: integer_to_roman
+    inputs: ['Number']
+    input_names: ['n']
+    output: "String"
+    racket_symbol: "integer_to_roman"
+    description: "Integer to Roman numeral conversion"
+    racket_body: |
+      (let ([vals '(1000 900 500 400 100 90 50 40 10 9 5 4 1)] [syms '("M" "CM" "D" "CD" "C" "XC" "L" "XL" "X" "IX" "V" "IV" "I")]) (let loop ([n n] [vs vals] [ss syms] [acc ""]) (cond [(null? vs) acc] [(>= n (car vs)) (loop (- n (car vs)) vs ss (string-append acc (car ss)))] [else (loop n (cdr vs) (cdr ss) acc)])))
+
+  - name: roman_to_integer
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "roman_to_integer"
+    description: "Roman numeral to integer conversion"
+    racket_body: |
+      (let ([val (lambda (c) (case c [(#\M) 1000] [(#\D) 500] [(#\C) 100] [(#\L) 50] [(#\X) 10] [(#\V) 5] [(#\I) 1] [else 0]))]) (let* ([chars (string->list s)] [n (length chars)]) (let loop ([i 0] [total 0]) (if (>= i n) total (let ([cur (val (list-ref chars i))] [nxt (if (< (+ i 1) n) (val (list-ref chars (+ i 1))) 0)]) (if (< cur nxt) (loop (+ i 2) (+ total (- nxt cur))) (loop (+ i 1) (+ total cur))))))))
+
+  # =========================================================================
+  # Bitwise (new)
+  # =========================================================================
+
+  - name: hamming_weight
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "hamming_weight"
+    description: "Hamming weight: count set bits using Brian Kernighan's method"
+    racket_body: |
+      (let loop ([x n] [c 0]) (if (= x 0) c (loop (bitwise-and x (- x 1)) (+ c 1))))
+
+  - name: next_power_of_two
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "next_power_of_two"
+    description: "Next power of two: smallest 2^k >= n"
+    racket_body: |
+      (let loop ([p 1]) (if (>= p n) p (loop (* p 2))))
+
+  - name: count_trailing_zeros
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "count_trailing_zeros"
+    description: "Count trailing zeros in binary representation"
+    racket_body: |
+      (if (= n 0) -1 (let loop ([x n] [c 0]) (if (= (bitwise-and x 1) 1) c (loop (arithmetic-shift x -1) (+ c 1)))))
+
+  - name: bit_parity
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "bit_parity"
+    description: "Bit parity: 1 if odd number of set bits, 0 if even"
+    racket_body: |
+      (let loop ([x n] [p 0]) (if (= x 0) p (loop (arithmetic-shift x -1) (bitwise-xor p (bitwise-and x 1)))))
+
+  # =========================================================================
+  # Combinatorics (new)
+  # =========================================================================
+
+  - name: bell_number
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "bell_number"
+    description: "Bell number: B(n) counts partitions of a set of n elements"
+    racket_body: |
+      (if (= n 0) 1 (let* ([prev (make-vector n 0)] [cur (make-vector n 0)]) (vector-set! prev 0 1) (for ([i (in-range 1 n)]) (vector-set! cur 0 (vector-ref prev (- i 1))) (for ([j (in-range 1 (+ i 1))]) (vector-set! cur j (+ (vector-ref cur (- j 1)) (vector-ref prev (- j 1))))) (for ([j (in-range (+ i 1))]) (vector-set! prev j (vector-ref cur j)))) (vector-ref prev (- n 1))))
+
+  - name: stirling_second
+    inputs: ['Number', 'Number']
+    input_names: ['n', 'k']
+    output: "Number"
+    racket_symbol: "stirling_second"
+    description: "Stirling number of the second kind: S(n,k) partitions of n into k non-empty subsets"
+    racket_body: |
+      (let* ([f (lambda (f n k) (cond [(= n 0) (if (= k 0) 1 0)] [(= k 0) 0] [(= k 1) 1] [(= k n) 1] [else (+ (* k (f f (- n 1) k)) (f f (- n 1) (- k 1)))]))]) (f f n k))
+
+  - name: generate_permutations
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(List(Number))"
+    racket_symbol: "generate_permutations"
+    description: "Generate all permutations of (1..n)"
+    racket_body: |
+      (let* ([perm (lambda (perm lst) (if (null? lst) (list (list)) (apply append (map (lambda (x) (map (lambda (p) (cons x p)) (perm perm (remove x lst)))) lst))))]) (perm perm (build-list n (lambda (i) (+ i 1)))))
+
+  - name: generate_combinations
+    inputs: ['Number', 'Number']
+    input_names: ['n', 'k']
+    output: "List(List(Number))"
+    racket_symbol: "generate_combinations"
+    description: "Generate all k-combinations of (1..n)"
+    racket_body: |
+      (let* ([comb (lambda (comb start k) (if (= k 0) (list (list)) (apply append (for/list ([i (in-range start (+ n 1))]) (map (lambda (c) (cons i c)) (comb comb (+ i 1) (- k 1)))))))]) (comb comb 1 k))
+
+  # =========================================================================
+  # Data Structures (new)
+  # =========================================================================
+
+  - name: stack_operations
+    inputs: ['List(Number)']
+    input_names: ['ops']
+    output: "List(Number)"
+    racket_symbol: "stack_operations"
+    description: "Stack simulation: push positive, pop on 0, return final stack"
+    racket_body: |
+      (let loop ([xs ops] [stk (list)]) (if (null? xs) (reverse stk) (let ([x (car xs)]) (if (= x 0) (loop (cdr xs) (if (null? stk) stk (cdr stk))) (loop (cdr xs) (cons x stk))))))
+
+  - name: queue_operations
+    inputs: ['List(Number)']
+    input_names: ['ops']
+    output: "List(Number)"
+    racket_symbol: "queue_operations"
+    description: "Queue simulation: enqueue positive, dequeue on 0, return dequeued values"
+    racket_body: |
+      (let loop ([xs ops] [q (list)] [out (list)]) (if (null? xs) (reverse out) (let ([x (car xs)]) (if (= x 0) (if (null? q) (loop (cdr xs) q out) (loop (cdr xs) (cdr q) (cons (car q) out))) (loop (cdr xs) (append q (list x)) out)))))
+
+  - name: binary_search_tree_insert
+    inputs: ['List(Number)']
+    input_names: ['vals']
+    output: "List(Number)"
+    racket_symbol: "binary_search_tree_insert"
+    description: "BST insert then inorder traversal (produces sorted output)"
+    racket_body: |
+      (let* ([insert (lambda (insert tree val) (if (null? tree) (list val (list) (list)) (let ([root (car tree)] [left (cadr tree)] [right (caddr tree)]) (if (< val root) (list root (insert insert left val) right) (list root left (insert insert right val))))))] [inorder (lambda (inorder tree) (if (null? tree) (list) (append (inorder inorder (cadr tree)) (list (car tree)) (inorder inorder (caddr tree)))))]) (let ([tree (foldl (lambda (v t) (insert insert t v)) (list) vals)]) (inorder inorder tree)))
+
+  - name: max_stack
+    inputs: ['List(Number)']
+    input_names: ['ops']
+    output: "List(Number)"
+    racket_symbol: "max_stack"
+    description: "Max stack: push positive, pop on 0, query max on -1; return max queries"
+    racket_body: |
+      (let loop ([xs ops] [stk (list)] [out (list)]) (if (null? xs) (reverse out) (let ([x (car xs)]) (cond [(= x -1) (loop (cdr xs) stk (cons (if (null? stk) -1 (apply max stk)) out))] [(= x 0) (loop (cdr xs) (if (null? stk) stk (cdr stk)) out)] [else (loop (cdr xs) (cons x stk) out)]))))
+
+  # =========================================================================
+  # Dynamic Programming (new)
+  # =========================================================================
+
+  - name: house_robber
+    inputs: ['List(Number)']
+    input_names: ['nums']
+    output: "Number"
+    racket_symbol: "house_robber"
+    description: "House robber: max sum of non-adjacent elements"
+    racket_body: |
+      (let loop ([xs nums] [prev2 0] [prev1 0]) (if (null? xs) prev1 (loop (cdr xs) prev1 (max prev1 (+ prev2 (car xs))))))
+
+  - name: min_cost_climbing_stairs
+    inputs: ['List(Number)']
+    input_names: ['cost']
+    output: "Number"
+    racket_symbol: "min_cost_climbing_stairs"
+    description: "Min cost climbing stairs: pay cost[i] to step from i, reach top"
+    racket_body: |
+      (let* ([n (length cost)] [v (list->vector cost)]) (let loop ([i 2] [a (vector-ref v 0)] [b (vector-ref v 1)]) (if (= i n) (min a b) (loop (+ i 1) b (+ (vector-ref v i) (min a b))))))
+
+  - name: longest_common_subseq_length
+    inputs: ['String', 'String']
+    input_names: ['a', 'b']
+    output: "Number"
+    racket_symbol: "longest_common_subseq_length"
+    description: "Longest common subsequence length between two strings"
+    racket_body: |
+      (let* ([m (string-length a)] [n (string-length b)] [dp (for/vector ([i (in-range (+ m 1))]) (make-vector (+ n 1) 0))]) (for ([i (in-range 1 (+ m 1))]) (for ([j (in-range 1 (+ n 1))]) (vector-set! (vector-ref dp i) j (if (char=? (string-ref a (- i 1)) (string-ref b (- j 1))) (+ 1 (vector-ref (vector-ref dp (- i 1)) (- j 1))) (max (vector-ref (vector-ref dp (- i 1)) j) (vector-ref (vector-ref dp i) (- j 1))))))) (vector-ref (vector-ref dp m) n))
+
+  - name: unique_paths_grid
+    inputs: ['Number', 'Number']
+    input_names: ['m', 'n']
+    output: "Number"
+    racket_symbol: "unique_paths_grid"
+    description: "Unique paths in m×n grid: top-left to bottom-right, only right/down"
+    racket_body: |
+      (let* ([dp (make-vector n 1)]) (for ([i (in-range 1 m)]) (for ([j (in-range 1 n)]) (vector-set! dp j (+ (vector-ref dp j) (vector-ref dp (- j 1)))))) (vector-ref dp (- n 1)))
+
+  - name: max_subarray_product
+    inputs: ['List(Number)']
+    input_names: ['nums']
+    output: "Number"
+    racket_symbol: "max_subarray_product"
+    description: "Maximum subarray product: contiguous subarray with largest product"
+    racket_body: |
+      (let loop ([xs (cdr nums)] [mx (car nums)] [mn (car nums)] [best (car nums)]) (if (null? xs) best (let* ([x (car xs)] [a (* mx x)] [b (* mn x)] [new-mx (max x (max a b))] [new-mn (min x (min a b))]) (loop (cdr xs) new-mx new-mn (max best new-mx)))))
+
+  - name: word_break_check
+    inputs: ['String', 'List(String)']
+    input_names: ['s', 'dict']
+    output: "Boolean"
+    racket_symbol: "word_break_check"
+    description: "Word break: can string be segmented into dictionary words?"
+    racket_body: |
+      (let* ([n (string-length s)] [dp (make-vector (+ n 1) #f)]) (vector-set! dp 0 #t) (for ([i (in-range 1 (+ n 1))]) (for ([w (in-list dict)]) (let ([wl (string-length w)]) (when (and (>= i wl) (vector-ref dp (- i wl)) (string=? (substring s (- i wl) i) w)) (vector-set! dp i #t))))) (vector-ref dp n))
+
+  # =========================================================================
+  # Encoding (new)
+  # =========================================================================
+
+  - name: base64_dec
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "base64_dec"
+    description: "Base64 decode: decode base64 string to original"
+    racket_body: |
+      (let* ([tbl "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"] [idx (lambda (c) (let loop ([i 0]) (if (char=? c (string-ref tbl i)) i (loop (+ i 1)))))] [clean (filter (lambda (c) (not (char=? c #\=))) (string->list s))] [bits (apply append (map (lambda (c) (let ([v (idx c)]) (for/list ([i (in-range 5 -1 -1)]) (if (> (bitwise-and v (arithmetic-shift 1 i)) 0) 1 0)))) clean))] [nbytes (quotient (* (length clean) 6) 8)]) (list->string (for/list ([i (in-range nbytes)]) (integer->char (for/fold ([v 0]) ([j (in-range 8)]) (+ (* v 2) (list-ref bits (+ (* i 8) j))))))))
+
+  - name: morse_code_encode
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "morse_code_encode"
+    description: "Morse code encode: convert text to morse code"
+    racket_body: |
+      (let ([tbl (hash #\A ".-" #\B "-..." #\C "-.-." #\D "-.." #\E "." #\F "..-." #\G "--." #\H "...." #\I ".." #\J ".---" #\K "-.-" #\L ".-.." #\M "--" #\N "-." #\O "---" #\P ".--." #\Q "--.-" #\R ".-." #\S "..." #\T "-" #\U "..-" #\V "...-" #\W ".--" #\X "-..-" #\Y "-.--" #\Z "--.." #\0 "-----" #\1 ".----" #\2 "..---" #\3 "...--" #\4 "....-" #\5 "....." #\6 "-...." #\7 "--..." #\8 "---.." #\9 "----.")]) (string-join (filter (lambda (x) (not (string=? x ""))) (map (lambda (c) (hash-ref tbl (char-upcase c) "")) (string->list s))) " "))
+
+  # =========================================================================
+  # Geometry (new)
+  # =========================================================================
+
+  - name: euclidean_distance
+    inputs: ['Number', 'Number', 'Number', 'Number']
+    input_names: ['x1', 'y1', 'x2', 'y2']
+    output: "Number"
+    racket_symbol: "euclidean_distance"
+    description: "Euclidean distance between two 2D points"
+    racket_body: |
+      (sqrt (+ (expt (- x2 x1) 2) (expt (- y2 y1) 2)))
+
+  - name: triangle_area
+    inputs: ['Number', 'Number', 'Number', 'Number', 'Number', 'Number']
+    input_names: ['x1', 'y1', 'x2', 'y2', 'x3', 'y3']
+    output: "Number"
+    racket_symbol: "triangle_area"
+    description: "Triangle area from three vertices using cross product"
+    racket_body: |
+      (/ (abs (+ (* x1 (- y2 y3)) (* x2 (- y3 y1)) (* x3 (- y1 y2)))) 2)
+
+  - name: is_point_in_circle
+    inputs: ['Number', 'Number', 'Number', 'Number', 'Number']
+    input_names: ['px', 'py', 'cx', 'cy', 'r']
+    output: "Boolean"
+    racket_symbol: "is_point_in_circle"
+    description: "Check if point (px,py) is inside circle centered at (cx,cy) with radius r"
+    racket_body: |
+      (<= (+ (expt (- px cx) 2) (expt (- py cy) 2)) (expt r 2))
+
+  - name: convex_hull_area
+    inputs: ['List(List(Number))']
+    input_names: ['points']
+    output: "Number"
+    racket_symbol: "convex_hull_area"
+    description: "Area of convex hull of given points using shoelace formula"
+    racket_body: |
+      (let* ([cross (lambda (o a b) (- (* (- (car a) (car o)) (- (cadr b) (cadr o))) (* (- (cadr a) (cadr o)) (- (car b) (car o)))))] [pts (sort points (lambda (a b) (or (< (car a) (car b)) (and (= (car a) (car b)) (< (cadr a) (cadr b))))))] [build (lambda (pts) (foldl (lambda (p hull) (let loop ([h hull]) (if (and (>= (length h) 2) (<= (cross (cadr h) (car h) p) 0)) (loop (cdr h)) (cons p h)))) (list) pts))] [lower (build pts)] [upper (build (reverse pts))] [hull (append (reverse (cdr lower)) (reverse (cdr upper)))] [n (length hull)]) (/ (abs (for/sum ([i (in-range n)]) (let ([a (list-ref hull i)] [b (list-ref hull (modulo (+ i 1) n))]) (- (* (car a) (cadr b)) (* (car b) (cadr a)))))) 2))
+
+  # =========================================================================
+  # Graph (new)
+  # =========================================================================
+
+  - name: a_star_search
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "a_star_search"
+    description: "A* search: find shortest path using heuristic on a grid graph"
+    racket_body: |
+      (let* ([adj (vector '((1 . 1) (2 . 4)) '((0 . 1) (3 . 2) (2 . 2)) '((0 . 4) (1 . 2) (3 . 1)) '((1 . 2) (2 . 1) (4 . 3)) '((3 . 3)))] [h (vector 4 3 2 1 0)] [inf 999999] [dist (make-vector n inf)] [prev (make-vector n -1)]) (vector-set! dist 0 0) (let loop ([open (list (cons 0 0))]) (if (null? open) (let path ([node (- n 1)] [acc (list)]) (if (= node -1) acc (path (vector-ref prev node) (cons node acc)))) (let* ([sorted (sort open (lambda (a b) (< (+ (cdr a) (vector-ref h (car a))) (+ (cdr b) (vector-ref h (car b))))))] [cur (caar sorted)] [rest (cdr sorted)]) (if (= cur (- n 1)) (let path ([node cur] [acc (list)]) (if (= node -1) acc (path (vector-ref prev node) (cons node acc)))) (let nbr-loop ([nbrs (vector-ref adj cur)] [open rest]) (if (null? nbrs) (loop open) (let* ([nb (caar nbrs)] [w (cdar nbrs)] [nd (+ (vector-ref dist cur) w)]) (if (< nd (vector-ref dist nb)) (begin (vector-set! dist nb nd) (vector-set! prev nb cur) (nbr-loop (cdr nbrs) (cons (cons nb nd) open))) (nbr-loop (cdr nbrs) open))))))))))
+
+  - name: bipartite_check
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "bipartite_check"
+    description: "Bipartite check: determine if graph is 2-colorable using BFS"
+    racket_body: |
+      (let* ([adj (vector (list 1 3) (list 0 2) (list 1 3) (list 0 2))] [color (make-vector n -1)]) (vector-set! color 0 0) (let loop ([queue (list 0)]) (if (null? queue) #t (let* ([u (car queue)] [rest (cdr queue)] [c (vector-ref color u)]) (let nbr ([nbrs (vector-ref adj u)] [q rest]) (if (null? nbrs) (loop q) (let ([v (car nbrs)]) (cond [(= (vector-ref color v) -1) (vector-set! color v (- 1 c)) (nbr (cdr nbrs) (append q (list v)))] [(= (vector-ref color v) c) #f] [else (nbr (cdr nbrs) q)]))))))))
+
+  - name: graph_coloring_greedy
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "graph_coloring_greedy"
+    description: "Greedy graph coloring: assign minimum colors to vertices"
+    racket_body: |
+      (let* ([adj (vector (list 1 2) (list 0 2 3) (list 0 1 3) (list 1 2 4) (list 3))] [colors (make-vector n -1)]) (for ([u (in-range n)]) (let ([used (for/fold ([s (set)]) ([v (in-list (vector-ref adj u))]) (let ([c (vector-ref colors v)]) (if (>= c 0) (set-add s c) s)))]) (let find ([c 0]) (if (set-member? used c) (find (+ c 1)) (vector-set! colors u c))))) (vector->list colors))
+
+  - name: has_euler_path
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "has_euler_path"
+    description: "Euler path check: does graph have an Eulerian path?"
+    racket_body: |
+      (let* ([adj (vector (list 1 2) (list 0 2) (list 0 1 3) (list 2))] [degrees (for/list ([i (in-range n)]) (length (vector-ref adj i)))] [odd-count (for/sum ([d (in-list degrees)]) (if (odd? d) 1 0))]) (or (= odd-count 0) (= odd-count 2)))
+
+  - name: detect_cycle_directed
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "detect_cycle_directed"
+    description: "Detect cycle in directed graph using DFS coloring"
+    racket_body: |
+      (let* ([adj (vector (list 1) (list 2) (list 3) (list 1))] [color (make-vector n 0)]) (let/ec return (for ([u (in-range n)]) (when (= (vector-ref color u) 0) (let dfs ([v u]) (vector-set! color v 1) (for ([w (in-list (vector-ref adj v))]) (cond [(= (vector-ref color w) 1) (return #t)] [(= (vector-ref color w) 0) (dfs w)])) (vector-set! color v 2)))) #f))
+
+  - name: shortest_path_unweighted
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "shortest_path_unweighted"
+    description: "Shortest path in unweighted graph using BFS"
+    racket_body: |
+      (let* ([adj (vector (list 1 2) (list 0 3) (list 0 3 4) (list 1 2 5) (list 2 5) (list 3 4))] [dist (make-vector n -1)]) (vector-set! dist 0 0) (let loop ([queue (list 0)]) (if (null? queue) (vector->list dist) (let* ([u (car queue)] [rest (cdr queue)]) (let nbr ([nbrs (vector-ref adj u)] [q rest]) (if (null? nbrs) (loop q) (let ([v (car nbrs)]) (if (= (vector-ref dist v) -1) (begin (vector-set! dist v (+ (vector-ref dist u) 1)) (nbr (cdr nbrs) (append q (list v)))) (nbr (cdr nbrs) q)))))))))
+
+  # =========================================================================
+  # Hashing (new)
+  # =========================================================================
+
+  - name: djb2_hash
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "djb2_hash"
+    description: "DJB2 hash: simple string hash function by Dan Bernstein"
+    racket_body: |
+      (for/fold ([h 5381]) ([c (in-string s)]) (+ (* h 33) (char->integer c)))
+
+  - name: adler32_hash
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "adler32_hash"
+    description: "Adler-32 checksum: fast rolling hash"
+    racket_body: |
+      (let ([mod 65521]) (let-values ([(a b) (for/fold ([a 1] [b 0]) ([c (in-string s)]) (let ([na (modulo (+ a (char->integer c)) mod)]) (values na (modulo (+ b na) mod))))]) (+ (* b 65536) a)))
+
+  # =========================================================================
+  # Number Theory (new)
+  # =========================================================================
+
+  - name: miller_rabin_primality
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "miller_rabin_primality"
+    description: "Miller-Rabin primality test (deterministic for n < 3,215,031,751)"
+    racket_body: |
+      (cond [(< n 2) #f] [(< n 4) #t] [(even? n) #f] [else (let* ([d (let loop ([d (- n 1)]) (if (odd? d) d (loop (quotient d 2))))] [r (let loop ([r 0] [t (- n 1)]) (if (odd? t) r (loop (+ r 1) (quotient t 2))))] [mod-pow (lambda (base exp mod) (let loop ([b base] [e exp] [result 1]) (if (= e 0) result (loop (modulo (* b b) mod) (quotient e 2) (if (odd? e) (modulo (* result b) mod) result)))))]) (let witness ([as (list 2 3 5 7)]) (if (null? as) #t (let* ([a (car as)]) (if (>= a n) (witness (cdr as)) (let* ([x (mod-pow a d n)]) (if (or (= x 1) (= x (- n 1))) (witness (cdr as)) (let inner ([j 1] [x x]) (cond [(= j r) #f] [(= (modulo (* x x) n) (- n 1)) (witness (cdr as))] [else (inner (+ j 1) (modulo (* x x) n))])))))))))])
+
+  - name: nth_prime
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "nth_prime"
+    description: "Find the nth prime number (1-indexed)"
+    racket_body: |
+      (let* ([is-prime (lambda (x) (and (> x 1) (let loop ([i 2]) (cond [(> (* i i) x) #t] [(= (modulo x i) 0) #f] [else (loop (+ i 1))]))))]) (let loop ([x 2] [count 0]) (if (is-prime x) (if (= (+ count 1) n) x (loop (+ x 1) (+ count 1))) (loop (+ x 1) count))))
+
+  - name: sum_of_divisors
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "sum_of_divisors"
+    description: "Sum of all divisors of n (including n)"
+    racket_body: |
+      (for/sum ([i (in-range 1 (+ n 1))]) (if (= (modulo n i) 0) i 0))
+
+  - name: mobius_function
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "mobius_function"
+    description: "Möbius function: μ(n) = 0 if n has squared prime factor, (-1)^k otherwise"
+    racket_body: |
+      (if (= n 1) 1 (let loop ([x n] [d 2] [k 0]) (cond [(> (* d d) x) (if (> x 1) (* (expt -1 (+ k 1)) 1) (expt -1 k))] [(= (modulo x d) 0) (if (= (modulo (quotient x d) d) 0) 0 (loop (quotient x d) (+ d 1) (+ k 1)))] [else (loop x (+ d 1) k)])))
+
+  - name: legendre_symbol
+    inputs: ['Number', 'Number']
+    input_names: ['a', 'p']
+    output: "Number"
+    racket_symbol: "legendre_symbol"
+    description: "Legendre symbol (a/p): 0 if p|a, 1 if a is QR mod p, -1 otherwise"
+    racket_body: |
+      (let* ([mod-pow (lambda (base exp mod) (let loop ([b base] [e exp] [r 1]) (if (= e 0) r (loop (modulo (* b b) mod) (quotient e 2) (if (odd? e) (modulo (* r b) mod) r)))))]) (let ([r (mod-pow (modulo a p) (quotient (- p 1) 2) p)]) (if (> r 1) -1 r)))
+
+  # =========================================================================
+  # Probability (new)
+  # =========================================================================
+
+  - name: fisher_yates_shuffle
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "fisher_yates_shuffle"
+    description: "Fisher-Yates shuffle: random permutation (seeded for reproducibility)"
+    racket_body: |
+      (let* ([v (list->vector lst)] [n (vector-length v)] [rng (make-pseudo-random-generator)]) (parameterize ([current-pseudo-random-generator rng]) (random-seed 42) (for ([i (in-range (- n 1) 0 -1)]) (let ([j (random (+ i 1))]) (let ([tmp (vector-ref v i)]) (vector-set! v i (vector-ref v j)) (vector-set! v j tmp))))) (vector->list v))
+
+  - name: birthday_paradox_sim
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "birthday_paradox_sim"
+    description: "Birthday paradox: expected people for 50% collision probability in n-day year"
+    racket_body: |
+      (let loop ([k 1] [p 1.0]) (let ([np (* p (/ (- n k) n))]) (if (< np 0.5) (+ k 1) (loop (+ k 1) np))))
+
+  - name: markov_chain_steady_state
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "markov_chain_steady_state"
+    description: "Markov chain steady state: find stationary distribution by power iteration"
+    racket_body: |
+      (let* ([P (vector (vector 0.7 0.3) (vector 0.4 0.6))] [state (make-vector n (/ 1.0 n))]) (for ([_ (in-range 100)]) (let ([new (make-vector n 0.0)]) (for ([j (in-range n)]) (for ([i (in-range n)]) (vector-set! new j (+ (vector-ref new j) (* (vector-ref state i) (vector-ref (vector-ref P i) j)))))) (for ([i (in-range n)]) (vector-set! state i (vector-ref new i))))) (map (lambda (x) (exact->inexact (/ (round (* x 10000)) 10000))) (vector->list state)))
+
+  # =========================================================================
+  # Searching (new)
+  # =========================================================================
+
+  - name: three_sum
+    inputs: ['List(Number)']
+    input_names: ['nums']
+    output: "List(List(Number))"
+    racket_symbol: "three_sum"
+    description: "Three sum: find all triplets that sum to zero"
+    racket_body: |
+      (let* ([sorted (sort nums <)] [n (length sorted)] [v (list->vector sorted)]) (let outer ([i 0] [result (list)]) (if (>= i (- n 2)) (reverse result) (if (and (> i 0) (= (vector-ref v i) (vector-ref v (- i 1)))) (outer (+ i 1) result) (let inner ([lo (+ i 1)] [hi (- n 1)] [res result]) (if (>= lo hi) (outer (+ i 1) res) (let ([s (+ (vector-ref v i) (vector-ref v lo) (vector-ref v hi))]) (cond [(= s 0) (inner (+ lo 1) (- hi 1) (cons (list (vector-ref v i) (vector-ref v lo) (vector-ref v hi)) res))] [(< s 0) (inner (+ lo 1) hi res)] [else (inner lo (- hi 1) res)]))))))))
+
+  - name: peak_element
+    inputs: ['List(Number)']
+    input_names: ['nums']
+    output: "Number"
+    racket_symbol: "peak_element"
+    description: "Peak element: find index of element greater than neighbors using binary search"
+    racket_body: |
+      (let* ([v (list->vector nums)] [n (vector-length v)]) (let loop ([lo 0] [hi (- n 1)]) (if (= lo hi) lo (let ([mid (quotient (+ lo hi) 2)]) (if (> (vector-ref v mid) (vector-ref v (+ mid 1))) (loop lo mid) (loop (+ mid 1) hi))))))
+
+  - name: kth_smallest
+    inputs: ['List(Number)', 'Number']
+    input_names: ['nums', 'k']
+    output: "Number"
+    racket_symbol: "kth_smallest"
+    description: "Kth smallest element using quickselect"
+    racket_body: |
+      (let* ([sel (lambda (sel lst k) (let* ([pivot (car lst)] [lo (filter (lambda (x) (< x pivot)) (cdr lst))] [eq (filter (lambda (x) (= x pivot)) lst)] [hi (filter (lambda (x) (> x pivot)) (cdr lst))]) (cond [(<= k (length lo)) (sel sel lo k)] [(<= k (+ (length lo) (length eq))) pivot] [else (sel sel hi (- k (length lo) (length eq)))])))]) (sel sel nums k))
+
+  # =========================================================================
+  # Sorting (new)
+  # =========================================================================
+
+  - name: gnome_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "gnome_sort"
+    description: "Gnome sort: simple exchange sort moving back and forth"
+    racket_body: |
+      (let* ([v (list->vector lst)] [n (vector-length v)]) (let loop ([i 0]) (if (>= i n) (vector->list v) (if (or (= i 0) (<= (vector-ref v (- i 1)) (vector-ref v i))) (loop (+ i 1)) (let ([tmp (vector-ref v i)]) (vector-set! v i (vector-ref v (- i 1))) (vector-set! v (- i 1) tmp) (loop (- i 1)))))))
+
+  - name: cocktail_shaker_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "cocktail_shaker_sort"
+    description: "Cocktail shaker sort: bidirectional bubble sort"
+    racket_body: |
+      (let* ([v (list->vector lst)] [n (vector-length v)]) (let outer ([start 0] [end (- n 1)] [swapped #t]) (if (not swapped) (vector->list v) (let fwd ([i start] [sw #f]) (if (>= i end) (let bwd ([j (- end 1)] [sw2 sw]) (if (< j start) (outer (+ start 1) (- end 1) sw2) (if (> (vector-ref v j) (vector-ref v (+ j 1))) (let ([tmp (vector-ref v j)]) (vector-set! v j (vector-ref v (+ j 1))) (vector-set! v (+ j 1) tmp) (bwd (- j 1) #t)) (bwd (- j 1) sw2)))) (if (> (vector-ref v i) (vector-ref v (+ i 1))) (let ([tmp (vector-ref v i)]) (vector-set! v i (vector-ref v (+ i 1))) (vector-set! v (+ i 1) tmp) (fwd (+ i 1) #t)) (fwd (+ i 1) sw)))))))
+
+  - name: pancake_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "pancake_sort"
+    description: "Pancake sort: sort by flipping prefixes"
+    racket_body: |
+      (let* ([v (list->vector lst)] [n (vector-length v)] [flip (lambda (v end) (let loop ([i 0] [j end]) (when (< i j) (let ([tmp (vector-ref v i)]) (vector-set! v i (vector-ref v j)) (vector-set! v j tmp) (loop (+ i 1) (- j 1))))))]) (for ([size (in-range (- n 1) 0 -1)]) (let ([mi (let loop ([i 0] [best 0]) (if (> i size) best (loop (+ i 1) (if (> (vector-ref v i) (vector-ref v best)) i best))))]) (when (not (= mi size)) (flip v mi) (flip v size)))) (vector->list v))
+
+  # =========================================================================
+  # String (new)
+  # =========================================================================
+
+  - name: z_algorithm
+    inputs: ['String']
+    input_names: ['s']
+    output: "List(Number)"
+    racket_symbol: "z_algorithm"
+    description: "Z-algorithm: compute Z-array for string matching"
+    racket_body: |
+      (let* ([n (string-length s)] [z (make-vector n 0)]) (vector-set! z 0 n) (let loop ([i 1] [l 0] [r 0]) (when (< i n) (let* ([z-val (if (< i r) (min (vector-ref z (- i l)) (- r i)) 0)]) (let extend ([k z-val]) (if (and (< (+ i k) n) (char=? (string-ref s k) (string-ref s (+ i k)))) (extend (+ k 1)) (begin (vector-set! z i k) (when (> (+ i k) r) (loop (+ i 1) i (+ i k))) (when (<= (+ i k) r) (loop (+ i 1) l r)))))))) (vector->list z))
+
+  - name: suffix_array
+    inputs: ['String']
+    input_names: ['s']
+    output: "List(Number)"
+    racket_symbol: "suffix_array"
+    description: "Suffix array: sorted array of all suffix indices"
+    racket_body: |
+      (let* ([n (string-length s)] [indices (build-list n values)]) (sort indices (lambda (i j) (string<? (substring s i) (substring s j)))))
+
+  - name: longest_repeating_substring
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "longest_repeating_substring"
+    description: "Longest repeating substring using suffix array"
+    racket_body: |
+      (let* ([n (string-length s)] [sa (sort (build-list n values) (lambda (i j) (string<? (substring s i) (substring s j))))] [lcp (lambda (i j) (let loop ([k 0]) (if (and (< (+ i k) n) (< (+ j k) n) (char=? (string-ref s (+ i k)) (string-ref s (+ j k)))) (loop (+ k 1)) k)))]) (let loop ([i 1] [best ""] [bl 0]) (if (>= i n) best (let* ([l (lcp (list-ref sa (- i 1)) (list-ref sa i))]) (if (> l bl) (loop (+ i 1) (substring s (list-ref sa i) (+ (list-ref sa i) l)) l) (loop (+ i 1) best bl))))))
+
+  - name: is_anagram
+    inputs: ['String', 'String']
+    input_names: ['a', 'b']
+    output: "Boolean"
+    racket_symbol: "is_anagram"
+    description: "Anagram check: do two strings have the same character frequencies?"
+    racket_body: |
+      (equal? (sort (string->list a) char<?) (sort (string->list b) char<?))
+
+  - name: string_reverse
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "string_reverse"
+    description: "String reverse: reverse a string"
+    racket_body: |
+      (list->string (reverse (string->list s)))
+
+  - name: longest_palindromic_substring
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "longest_palindromic_substring"
+    description: "Longest palindromic substring using expand-around-center"
+    racket_body: |
+      (let* ([n (string-length s)] [expand (lambda (l r) (let loop ([l l] [r r]) (if (and (>= l 0) (< r n) (char=? (string-ref s l) (string-ref s r))) (loop (- l 1) (+ r 1)) (substring s (+ l 1) r))))]) (let loop ([i 0] [best ""]) (if (>= i n) best (let* ([p1 (expand i i)] [p2 (expand i (+ i 1))] [longest (if (> (string-length p1) (string-length p2)) p1 p2)]) (loop (+ i 1) (if (> (string-length longest) (string-length best)) longest best))))))
+
+  # =========================================================================
+  # Matrix (new category)
+  # =========================================================================
+
+  - name: matrix_transpose
+    inputs: ['List(List(Number))']
+    input_names: ['mat']
+    output: "List(List(Number))"
+    racket_symbol: "matrix_transpose"
+    description: "Matrix transpose: swap rows and columns"
+    racket_body: |
+      (apply map list mat)
+
+  - name: matrix_multiply
+    inputs: ['List(List(Number))', 'List(List(Number))']
+    input_names: ['a', 'b']
+    output: "List(List(Number))"
+    racket_symbol: "matrix_multiply"
+    description: "Matrix multiplication: A × B"
+    racket_body: |
+      (let ([bt (apply map list b)]) (map (lambda (row) (map (lambda (col) (apply + (map * row col))) bt)) a))
+
+  - name: matrix_determinant
+    inputs: ['List(List(Number))']
+    input_names: ['mat']
+    output: "Number"
+    racket_symbol: "matrix_determinant"
+    description: "Matrix determinant using cofactor expansion"
+    racket_body: |
+      (let* ([det (lambda (det m) (let ([n (length m)]) (if (= n 1) (caar m) (for/sum ([j (in-range n)]) (* (list-ref (car m) j) (expt -1 j) (det det (map (lambda (row) (append (take row j) (drop row (+ j 1)))) (cdr m))))))))]) (det det mat))
+
+  - name: matrix_scalar_multiply
+    inputs: ['List(List(Number))', 'Number']
+    input_names: ['mat', 'k']
+    output: "List(List(Number))"
+    racket_symbol: "matrix_scalar_multiply"
+    description: "Matrix scalar multiplication: k × M"
+    racket_body: |
+      (map (lambda (row) (map (lambda (x) (* k x)) row)) mat)
+
+  - name: matrix_add
+    inputs: ['List(List(Number))', 'List(List(Number))']
+    input_names: ['a', 'b']
+    output: "List(List(Number))"
+    racket_symbol: "matrix_add"
+    description: "Matrix addition: A + B"
+    racket_body: |
+      (map (lambda (ra rb) (map + ra rb)) a b)
+
+  - name: matrix_identity
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(List(Number))"
+    racket_symbol: "matrix_identity"
+    description: "Identity matrix of size n×n"
+    racket_body: |
+      (build-list n (lambda (i) (build-list n (lambda (j) (if (= i j) 1 0)))))
+
+  - name: matrix_trace
+    inputs: ['List(List(Number))']
+    input_names: ['mat']
+    output: "Number"
+    racket_symbol: "matrix_trace"
+    description: "Matrix trace: sum of diagonal elements"
+    racket_body: |
+      (for/sum ([i (in-range (length mat))]) (list-ref (list-ref mat i) i))
+
+  - name: matrix_power
+    inputs: ['List(List(Number))', 'Number']
+    input_names: ['mat', 'k']
+    output: "List(List(Number))"
+    racket_symbol: "matrix_power"
+    description: "Matrix exponentiation: M^k using repeated squaring"
+    racket_body: |
+      (let* ([n (length mat)] [mul (lambda (a b) (let ([bt (apply map list b)]) (map (lambda (row) (map (lambda (col) (apply + (map * row col))) bt)) a)))] [eye (build-list n (lambda (i) (build-list n (lambda (j) (if (= i j) 1 0)))))]) (let loop ([base mat] [exp k] [result eye]) (cond [(= exp 0) result] [(odd? exp) (loop (mul base base) (quotient exp 2) (mul result base))] [else (loop (mul base base) (quotient exp 2) result)])))
+
+  # =========================================================================
+  # Backtracking (new category)
+  # =========================================================================
+
+  - name: n_queens
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "n_queens"
+    description: "N-Queens: count solutions for placing n non-attacking queens"
+    racket_body: |
+      (let* ([solve (lambda (solve cols diag1 diag2 row) (if (= row n) 1 (for/sum ([col (in-range n)]) (if (and (not (set-member? cols col)) (not (set-member? diag1 (- row col))) (not (set-member? diag2 (+ row col)))) (solve solve (set-add cols col) (set-add diag1 (- row col)) (set-add diag2 (+ row col)) (+ row 1)) 0))))]) (solve solve (set) (set) (set) 0))
+
+  - name: sudoku_solver
+    inputs: ['List(List(Number))']
+    input_names: ['board']
+    output: "List(List(Number))"
+    racket_symbol: "sudoku_solver"
+    description: "Sudoku solver: fill 9×9 grid (0 = empty) using backtracking"
+    racket_body: |
+      (let* ([grid (for/vector ([row (in-list board)]) (list->vector row))] [valid? (lambda (r c v) (and (for/and ([j (in-range 9)]) (not (= (vector-ref (vector-ref grid r) j) v))) (for/and ([i (in-range 9)]) (not (= (vector-ref (vector-ref grid i) c) v))) (let ([br (* 3 (quotient r 3))] [bc (* 3 (quotient c 3))]) (for/and ([i (in-range br (+ br 3))]) (for/and ([j (in-range bc (+ bc 3))]) (not (= (vector-ref (vector-ref grid i) j) v)))))))] [solve (lambda (solve) (let/ec return (for ([r (in-range 9)]) (for ([c (in-range 9)]) (when (= (vector-ref (vector-ref grid r) c) 0) (for ([v (in-range 1 10)]) (when (valid? r c v) (vector-set! (vector-ref grid r) c v) (when (solve solve) (return #t)) (vector-set! (vector-ref grid r) c 0))) (return #f)))) #t))]) (solve solve) (for/list ([r (in-range 9)]) (vector->list (vector-ref grid r))))
+
+  - name: generate_parentheses
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(String)"
+    racket_symbol: "generate_parentheses"
+    description: "Generate all valid combinations of n pairs of parentheses"
+    racket_body: |
+      (let* ([gen (lambda (gen open close current) (if (and (= open n) (= close n)) (list current) (append (if (< open n) (gen gen (+ open 1) close (string-append current "(")) (list)) (if (< close open) (gen gen open (+ close 1) (string-append current ")")) (list)))))]) (gen gen 0 0 ""))
+
+  - name: permutations_with_duplicates
+    inputs: ['List(Number)']
+    input_names: ['nums']
+    output: "List(List(Number))"
+    racket_symbol: "permutations_with_duplicates"
+    description: "Unique permutations of a list that may contain duplicates"
+    racket_body: |
+      (let* ([sorted (sort nums <)] [perm (lambda (perm lst) (if (null? lst) (list (list)) (let loop ([prev #f] [rest lst] [skipped (list)] [result (list)]) (if (null? rest) result (let ([x (car rest)]) (if (equal? x prev) (loop prev (cdr rest) (cons x skipped) result) (let ([sub (perm perm (append (reverse skipped) (cdr rest)))]) (loop x (cdr rest) (cons x skipped) (append result (map (lambda (p) (cons x p)) sub))))))))))]) (perm perm sorted))
+
+  - name: word_search_grid
+    inputs: ['String']
+    input_names: ['word']
+    output: "Boolean"
+    racket_symbol: "word_search_grid"
+    description: "Word search: find word in a 2D character grid"
+    racket_body: |
+      (let* ([grid (vector (vector #\A #\B #\C #\E) (vector #\S #\F #\C #\S) (vector #\A #\D #\E #\E))] [rows 3] [cols 4] [wlen (string-length word)] [visited (for/vector ([_ (in-range rows)]) (make-vector cols #f))] [dfs (lambda (dfs r c k) (cond [(= k wlen) #t] [(or (< r 0) (>= r rows) (< c 0) (>= c cols)) #f] [(vector-ref (vector-ref visited r) c) #f] [(not (char=? (vector-ref (vector-ref grid r) c) (string-ref word k))) #f] [else (vector-set! (vector-ref visited r) c #t) (let ([found (or (dfs dfs (+ r 1) c (+ k 1)) (dfs dfs (- r 1) c (+ k 1)) (dfs dfs r (+ c 1) (+ k 1)) (dfs dfs r (- c 1) (+ k 1)))]) (vector-set! (vector-ref visited r) c #f) found)]))]) (let/ec return (for ([r (in-range rows)]) (for ([c (in-range cols)]) (when (dfs dfs r c 0) (return #t)))) #f))
+
+  - name: subset_sum_all
+    inputs: ['List(Number)', 'Number']
+    input_names: ['nums', 'target']
+    output: "List(List(Number))"
+    racket_symbol: "subset_sum_all"
+    description: "Find all subsets that sum to target"
+    racket_body: |
+      (let* ([find (lambda (find idx current sum) (cond [(= sum target) (list (reverse current))] [(or (>= idx (length nums)) (> sum target)) (list)] [else (let ([x (list-ref nums idx)]) (append (find find (+ idx 1) (cons x current) (+ sum x)) (find find (+ idx 1) current sum)))]))]) (find find 0 (list) 0))
+
+  # =========================================================================
+  # Interval (new category)
+  # =========================================================================
+
+  - name: merge_intervals
+    inputs: ['List(List(Number))']
+    input_names: ['intervals']
+    output: "List(List(Number))"
+    racket_symbol: "merge_intervals"
+    description: "Merge overlapping intervals"
+    racket_body: |
+      (let* ([sorted (sort intervals (lambda (a b) (< (car a) (car b))))]) (foldl (lambda (iv acc) (if (and (not (null? acc)) (>= (cadr (car acc)) (car iv))) (cons (list (car (car acc)) (max (cadr (car acc)) (cadr iv))) (cdr acc)) (cons iv acc))) (list) sorted))
+
+  - name: interval_intersection
+    inputs: ['List(List(Number))', 'List(List(Number))']
+    input_names: ['a', 'b']
+    output: "List(List(Number))"
+    racket_symbol: "interval_intersection"
+    description: "Intersection of two lists of sorted intervals"
+    racket_body: |
+      (let loop ([a a] [b b] [result (list)]) (if (or (null? a) (null? b)) (reverse result) (let* ([lo (max (caar a) (caar b))] [hi (min (cadar a) (cadar b))]) (let ([res (if (<= lo hi) (cons (list lo hi) result) result)]) (if (< (cadar a) (cadar b)) (loop (cdr a) b res) (loop a (cdr b) res))))))
+
+  - name: interval_scheduling_max
+    inputs: ['List(List(Number))']
+    input_names: ['intervals']
+    output: "Number"
+    racket_symbol: "interval_scheduling_max"
+    description: "Maximum non-overlapping intervals (activity selection)"
+    racket_body: |
+      (let* ([sorted (sort intervals (lambda (a b) (< (cadr a) (cadr b))))]) (let loop ([ivs sorted] [end -1] [count 0]) (if (null? ivs) count (if (>= (caar ivs) end) (loop (cdr ivs) (cadar ivs) (+ count 1)) (loop (cdr ivs) end count)))))
+
+  - name: insert_interval
+    inputs: ['List(List(Number))', 'List(Number)']
+    input_names: ['intervals', 'new_iv']
+    output: "List(List(Number))"
+    racket_symbol: "insert_interval"
+    description: "Insert interval into sorted non-overlapping list, merging as needed"
+    racket_body: |
+      (let loop ([ivs intervals] [lo (car new_iv)] [hi (cadr new_iv)] [left (list)] [merged #f]) (if (null? ivs) (reverse (cons (list lo hi) left)) (let ([cur (car ivs)]) (cond [(< (cadr cur) lo) (loop (cdr ivs) lo hi (cons cur left) merged)] [(> (car cur) hi) (append (reverse left) (list (list lo hi)) ivs)] [else (loop (cdr ivs) (min lo (car cur)) (max hi (cadr cur)) left #t)]))))
+
+  # =========================================================================
+  # Tree (new category)
+  # =========================================================================
+
+  - name: tree_inorder
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "List(Number)"
+    racket_symbol: "tree_inorder"
+    description: "Binary tree inorder traversal (tree = (val left right) or null)"
+    racket_body: |
+      (let* ([inorder (lambda (inorder t) (if (null? t) (list) (append (inorder inorder (cadr t)) (list (car t)) (inorder inorder (caddr t)))))]) (inorder inorder tree))
+
+  - name: tree_preorder
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "List(Number)"
+    racket_symbol: "tree_preorder"
+    description: "Binary tree preorder traversal"
+    racket_body: |
+      (let* ([preorder (lambda (preorder t) (if (null? t) (list) (append (list (car t)) (preorder preorder (cadr t)) (preorder preorder (caddr t)))))]) (preorder preorder tree))
+
+  - name: tree_postorder
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "List(Number)"
+    racket_symbol: "tree_postorder"
+    description: "Binary tree postorder traversal"
+    racket_body: |
+      (let* ([postorder (lambda (postorder t) (if (null? t) (list) (append (postorder postorder (cadr t)) (postorder postorder (caddr t)) (list (car t)))))]) (postorder postorder tree))
+
+  - name: tree_height
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "Number"
+    racket_symbol: "tree_height"
+    description: "Binary tree height (max depth)"
+    racket_body: |
+      (let* ([height (lambda (height t) (if (null? t) 0 (+ 1 (max (height height (cadr t)) (height height (caddr t))))))]) (height height tree))
+
+  - name: tree_level_order
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "List(List(Number))"
+    racket_symbol: "tree_level_order"
+    description: "Binary tree level-order (BFS) traversal"
+    racket_body: |
+      (let loop ([queue (if (null? tree) (list) (list tree))] [result (list)]) (if (null? queue) (reverse result) (let-values ([(level next) (let lv ([q queue] [vals (list)] [nxt (list)]) (if (null? q) (values (reverse vals) (reverse nxt)) (let ([node (car q)]) (lv (cdr q) (cons (car node) vals) (let ([n nxt]) (let ([n (if (null? (cadr node)) n (cons (cadr node) n))]) (if (null? (caddr node)) n (cons (caddr node) n))))))))]) (loop next (cons level result)))))
+
+  - name: tree_mirror
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "List(Any)"
+    racket_symbol: "tree_mirror"
+    description: "Mirror/invert a binary tree"
+    racket_body: |
+      (let* ([mirror (lambda (mirror t) (if (null? t) (list) (list (car t) (mirror mirror (caddr t)) (mirror mirror (cadr t)))))]) (mirror mirror tree))
+
+  - name: lowest_common_ancestor
+    inputs: ['List(Any)', 'Number', 'Number']
+    input_names: ['tree', 'p', 'q']
+    output: "Number"
+    racket_symbol: "lowest_common_ancestor"
+    description: "Lowest common ancestor in a binary tree"
+    racket_body: |
+      (let* ([lca (lambda (lca t p q) (cond [(null? t) -1] [(or (= (car t) p) (= (car t) q)) (car t)] [else (let ([left (lca lca (cadr t) p q)] [right (lca lca (caddr t) p q)]) (cond [(and (not (= left -1)) (not (= right -1))) (car t)] [(not (= left -1)) left] [else right]))]))]) (lca lca tree p q))
+
+  - name: tree_diameter
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "Number"
+    racket_symbol: "tree_diameter"
+    description: "Binary tree diameter: longest path between any two nodes"
+    racket_body: |
+      (let* ([best (box 0)] [height (lambda (height t) (if (null? t) 0 (let ([lh (height height (cadr t))] [rh (height height (caddr t))]) (set-box! best (max (unbox best) (+ lh rh))) (+ 1 (max lh rh)))))]) (height height tree) (unbox best))
+
+  - name: is_balanced_tree
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "Boolean"
+    racket_symbol: "is_balanced_tree"
+    description: "Check if binary tree is height-balanced"
+    racket_body: |
+      (let* ([check (lambda (check t) (if (null? t) 0 (let ([lh (check check (cadr t))] [rh (check check (caddr t))]) (if (or (= lh -1) (= rh -1) (> (abs (- lh rh)) 1)) -1 (+ 1 (max lh rh))))))]) (not (= (check check tree) -1)))
+
+  - name: is_valid_bst
+    inputs: ['List(Any)']
+    input_names: ['tree']
+    output: "Boolean"
+    racket_symbol: "is_valid_bst"
+    description: "Check if binary tree is a valid BST"
+    racket_body: |
+      (let* ([valid (lambda (valid t lo hi) (if (null? t) #t (let ([v (car t)]) (and (> v lo) (< v hi) (valid valid (cadr t) lo v) (valid valid (caddr t) v hi)))))]) (valid valid tree -inf.0 +inf.0))

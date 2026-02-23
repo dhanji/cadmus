@@ -189,6 +189,35 @@ fn try_earley_create(
     // single canonical tokens (e.g., "make me a list" → "list").
     let phrase_tokens = phrase::phrase_tokenize(tokens);
 
+    // ── Pre-Earley short-circuit: if any phrase token is an algorithm op
+    //    or plan file, skip the Earley parser entirely.
+    //    Only check the FIRST algorithm-op token (skip filesystem verbs). ──
+    static FS_VERBS: &[&str] = &[
+        "find", "search", "list", "get", "filter", "show", "display",
+        "locate", "seek", "discover", "hunt", "detect", "identify",
+        "compute", "calculate", "run", "execute", "perform",
+    ];
+    let registry = crate::fs_types::build_full_registry();
+    // Find the first token that is an algorithm op (skip leading FS verbs)
+    for token in phrase_tokens.iter()
+        .filter(|t| !FS_VERBS.contains(&t.as_str()))
+    {
+        // Only check if it's an algorithm op or plan file
+        if let Some(entry) = registry.get_poly(token.as_str()) {
+            if entry.racket_body.is_some() {
+                let plan = intent_compiler::compile_algorithm_op_by_name(token, entry);
+                let yaml = dialogue::plan_to_yaml(&plan);
+                return finish_plan_creation(plan, yaml, state);
+            }
+        }
+        if let Some(plan_yaml) = intent_compiler::try_load_plan_yaml(token) {
+            if let Ok(plan) = crate::plan::parse_plan(&plan_yaml) {
+                return finish_plan_creation(plan, plan_yaml, state);
+            }
+        }
+        break; // Only check the first non-FS-verb token
+    }
+
     let grammar = grammar::build_command_grammar();
     let lex = lexicon::lexicon();
     let parses = earley::parse(&grammar, &phrase_tokens, lex);
@@ -415,6 +444,30 @@ fn validate_plan(plan: &crate::plan::PlanDef) -> Result<(), String> {
         .map_err(|e| format!("Compile error: {}", e))?;
     Ok(())
 }
+
+/// Helper: finish plan creation (validate, format, update state).
+fn finish_plan_creation(
+    plan: crate::plan::PlanDef,
+    yaml: String,
+    state: &mut DialogueState,
+) -> NlResponse {
+    match validate_plan(&plan) {
+        Ok(()) => {
+            let summary = format_summary(&plan);
+            let prompt = format!("{}\n\n{}\n\n{}",
+                casual_ack(state.turn_count),
+                &yaml,
+                "Approve? Or edit plan?"
+            );
+            state.current_plan = Some(plan);
+            state.focus.push(FocusEntry::WholePlan);
+            NlResponse::PlanCreated { plan_yaml: yaml, prompt, summary }
+        }
+        Err(e) => NlResponse::Error { message: format!("Generated plan failed validation: {}", e) },
+    }
+}
+
+
 
 /// Generate a casual acknowledgment phrase, varying by turn count.
 fn casual_ack(turn: usize) -> &'static str {

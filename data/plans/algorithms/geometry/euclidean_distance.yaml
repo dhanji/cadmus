@@ -1,0 +1,17 @@
+# Euclidean distance between two 2D points
+# Example: distance from (0,0) to (3,4) = 5.0
+# expected: 5
+
+euclidean_distance:
+  inputs:
+    - x1: "Number"
+    - y1: "Number"
+    - x2: "Number"
+    - y2: "Number"
+  bindings:
+    x1: "0"
+    y1: "0"
+    x2: "3"
+    y2: "4"
+  steps:
+    - euclidean_distance

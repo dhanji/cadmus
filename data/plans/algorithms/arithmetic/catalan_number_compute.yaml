@@ -1,0 +1,11 @@
+# Catalan number: C(n) = (2n choose n) / (n+1)
+# Example: C(5) = 42
+# expected: 42
+
+catalan_number_compute:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "5"
+  steps:
+    - catalan_number_compute

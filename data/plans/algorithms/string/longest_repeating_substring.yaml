@@ -1,0 +1,11 @@
+# Longest repeating substring using suffix array
+# Example: "banana" → "ana"
+# expected: ana
+
+longest_repeating_substring:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"banana"'
+  steps:
+    - longest_repeating_substring

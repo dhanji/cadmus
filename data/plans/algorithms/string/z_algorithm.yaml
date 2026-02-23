@@ -1,0 +1,11 @@
+# Z-algorithm: compute Z-array for string matching
+# Example: "aabxaa" → (6 1 0 0 2 1)
+# expected: (6 1 0 0 2 1)
+
+z_algorithm:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"aabxaa"'
+  steps:
+    - z_algorithm

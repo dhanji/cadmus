@@ -1,0 +1,11 @@
+# Base64 decode: decode base64 string to original
+# Example: decode "SGVsbG8=" = "Hello"
+# expected: Hello
+
+base64_dec:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"SGVsbG8="'
+  steps:
+    - base64_dec

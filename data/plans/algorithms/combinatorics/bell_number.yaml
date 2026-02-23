@@ -1,0 +1,11 @@
+# Bell number: B(n) counts partitions of a set of n elements
+# Example: B(5) = 52
+# expected: 52
+
+bell_number:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "5"
+  steps:
+    - bell_number

@@ -70,21 +70,47 @@ pub fn compile_intent(result: &IntentIRResult) -> CompileResult {
 /// Compile a single IntentIR to a PlanDef.
 pub fn compile_ir(ir: &IntentIR) -> CompileResult {
     // ── Short-circuit: if the primary action is a registered algorithm op
-    //    or a plan file, skip the filesystem IR entirely. ──────────────
+    //    or a plan file, skip the filesystem IR entirely.
+    //    Also check ALL step actions and select-step concepts. ──────────
     let primary_action = ir.steps.iter()
         .rfind(|s| s.action != "select" && s.action != "order")
         .map(|s| s.action.as_str());
 
+    // Collect candidate action names: primary action + any select-step concepts
+    let mut candidates: Vec<String> = Vec::new();
     if let Some(action) = primary_action {
-        // Plan-file lookup first (multi-step DSL plans)
-        if let Some(plan) = try_load_plan_file(action) {
+        candidates.push(action.to_string());
+    }
+    // Check select steps for concepts that might be algorithm ops
+    for step in &ir.steps {
+        if step.action == "select" {
+            if let Some(where_val) = step.params.get("where") {
+                if let Some(kind) = where_val.strip_prefix("kind: \"").and_then(|s| s.strip_suffix('"')) {
+                    candidates.push(kind.to_string());
+                }
+            }
+        }
+    }
+    // Try each candidate
+    // Also check ALL step actions (including select, order) as potential algorithm ops
+    static FS_ACTIONS: &[&str] = &[
+        "select", "order", "compress", "decompress", "enumerate", "traverse",
+        "count", "read", "delete", "copy", "move", "rename", "deduplicate",
+        "retrieve", "search_text",
+    ];
+    for step in &ir.steps {
+        if !FS_ACTIONS.contains(&step.action.as_str()) {
+            candidates.push(step.action.clone());
+        }
+    }
+    let registry = crate::fs_types::build_full_registry();
+    for candidate in &candidates {
+        if let Some(plan) = try_load_plan_file(candidate) {
             return CompileResult::Ok(plan);
         }
-        // Registered op with racket_body → algorithm atom (single-step plan)
-        let registry = crate::fs_types::build_full_registry();
-        if let Some(entry) = registry.get_poly(action) {
+        if let Some(entry) = registry.get_poly(candidate) {
             if entry.racket_body.is_some() {
-                return compile_algorithm_op(action, entry, ir);
+                return compile_algorithm_op(candidate, entry, ir);
             }
         }
     }
@@ -366,7 +392,7 @@ pub fn try_load_plan_yaml(action: &str) -> Option<String> {
 /// This is the short-circuit path for algorithm atoms: the IR's filesystem
 /// scaffolding (select, order) is ignored and we produce a clean plan with
 /// the op's declared inputs and a single step.
-fn compile_algorithm_op(
+pub(crate) fn compile_algorithm_op(
     action: &str,
     op: &crate::registry::PolyOpEntry,
     _ir: &IntentIR,
@@ -387,6 +413,26 @@ fn compile_algorithm_op(
     };
 
     CompileResult::Ok(plan)
+}
+
+/// Public helper: compile an algorithm op by name (no IR needed).
+pub fn compile_algorithm_op_by_name(
+    action: &str,
+    op: &crate::registry::PolyOpEntry,
+) -> PlanDef {
+    let inputs = build_op_inputs(op);
+    let args = build_op_step_args(op, &[]);
+    let step = RawStep {
+        op: action.to_string(),
+        args,
+    };
+    PlanDef {
+        name: action.to_string(),
+        inputs,
+        output: None,
+        steps: vec![step],
+        bindings: HashMap::new(),
+    }
 }
 
 fn compile_select_step(

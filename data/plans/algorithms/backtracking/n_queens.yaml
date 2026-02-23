@@ -1,0 +1,11 @@
+# N-Queens: count solutions for placing n non-attacking queens
+# Example: 8-queens has 92 solutions
+# expected: 92
+
+n_queens:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "8"
+  steps:
+    - n_queens

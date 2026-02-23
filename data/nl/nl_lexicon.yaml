@@ -452,7 +452,7 @@ verbs:
 
   - word: bisect
     action: git_bisect
-    synonyms: [binary, binarysearch, gitbisect, faultfind, rootcause, regfind, bugfind, failpoint, breakage]
+    synonyms: [binarysearch, gitbisect, faultfind, rootcause, regfind, bugfind, failpoint, breakage]
 
   - word: revert
     action: git_revert
@@ -640,6 +640,178 @@ verbs:
     synonyms: [rot13]
   - word: run_length_encoding
     action: run_length_encoding
+  - word: a_star_search
+    action: a_star_search
+  - word: ackermann
+    action: ackermann
+  - word: adler32_hash
+    action: adler32_hash
+  - word: base64_dec
+    action: base64_dec
+  - word: bell_number
+    action: bell_number
+  - word: binary_search_tree_insert
+    action: binary_search_tree_insert
+  - word: bipartite_check
+    action: bipartite_check
+  - word: birthday_paradox_sim
+    action: birthday_paradox_sim
+  - word: bit_parity
+    action: bit_parity
+  - word: catalan_number_compute
+    action: catalan_number_compute
+  - word: cocktail_shaker_sort
+    action: cocktail_shaker_sort
+  - word: convex_hull_area
+    action: convex_hull_area
+  - word: count_trailing_zeros
+    action: count_trailing_zeros
+  - word: detect_cycle_directed
+    action: detect_cycle_directed
+  - word: djb2_hash
+    action: djb2_hash
+  - word: euclidean_distance
+    action: euclidean_distance
+  - word: fisher_yates_shuffle
+    action: fisher_yates_shuffle
+  - word: generate_combinations
+    action: generate_combinations
+  - word: generate_parentheses
+    action: generate_parentheses
+  - word: generate_permutations
+    action: generate_permutations
+  - word: gnome_sort
+    action: gnome_sort
+  - word: graph_coloring_greedy
+    action: graph_coloring_greedy
+  - word: hamming_weight
+    action: hamming_weight
+  - word: happy_number_check
+    action: happy_number_check
+  - word: has_euler_path
+    action: has_euler_path
+  - word: house_robber
+    action: house_robber
+  - word: insert_interval
+    action: insert_interval
+  - word: integer_to_roman
+    action: integer_to_roman
+  - word: interval_intersection
+    action: interval_intersection
+  - word: interval_scheduling_max
+    action: interval_scheduling_max
+  - word: is_anagram
+    action: is_anagram
+  - word: is_balanced_tree
+    action: is_balanced_tree
+  - word: is_point_in_circle
+    action: is_point_in_circle
+  - word: is_valid_bst
+    action: is_valid_bst
+  - word: kth_smallest
+    action: kth_smallest
+  - word: legendre_symbol
+    action: legendre_symbol
+  - word: longest_common_subseq_length
+    action: longest_common_subseq_length
+  - word: longest_palindromic_substring
+    action: longest_palindromic_substring
+  - word: longest_repeating_substring
+    action: longest_repeating_substring
+  - word: lowest_common_ancestor
+    action: lowest_common_ancestor
+  - word: markov_chain_steady_state
+    action: markov_chain_steady_state
+  - word: matrix_add
+    action: matrix_add
+  - word: matrix_determinant
+    action: matrix_determinant
+  - word: matrix_identity
+    action: matrix_identity
+  - word: matrix_multiply
+    action: matrix_multiply
+  - word: matrix_power
+    action: matrix_power
+  - word: matrix_scalar_multiply
+    action: matrix_scalar_multiply
+  - word: matrix_trace
+    action: matrix_trace
+  - word: matrix_transpose
+    action: matrix_transpose
+  - word: max_stack
+    action: max_stack
+  - word: max_subarray_product
+    action: max_subarray_product
+  - word: merge_intervals
+    action: merge_intervals
+  - word: miller_rabin_primality
+    action: miller_rabin_primality
+  - word: min_cost_climbing_stairs
+    action: min_cost_climbing_stairs
+  - word: mobius_function
+    action: mobius_function
+  - word: morse_code_encode
+    action: morse_code_encode
+  - word: n_queens
+    action: n_queens
+  - word: next_power_of_two
+    action: next_power_of_two
+  - word: nth_prime
+    action: nth_prime
+  - word: pancake_sort
+    action: pancake_sort
+  - word: peak_element
+    action: peak_element
+  - word: perfect_number_check
+    action: perfect_number_check
+  - word: permutations_with_duplicates
+    action: permutations_with_duplicates
+  - word: queue_operations
+    action: queue_operations
+  - word: roman_to_integer
+    action: roman_to_integer
+  - word: shortest_path_unweighted
+    action: shortest_path_unweighted
+  - word: stack_operations
+    action: stack_operations
+  - word: stirling_second
+    action: stirling_second
+  - word: string_reverse
+    action: string_reverse
+  - word: subset_sum_all
+    action: subset_sum_all
+  - word: sudoku_solver
+    action: sudoku_solver
+  - word: suffix_array
+    action: suffix_array
+  - word: sum_of_divisors
+    action: sum_of_divisors
+  - word: three_sum
+    action: three_sum
+  - word: tree_diameter
+    action: tree_diameter
+  - word: tree_height
+    action: tree_height
+  - word: tree_inorder
+    action: tree_inorder
+  - word: tree_level_order
+    action: tree_level_order
+  - word: tree_mirror
+    action: tree_mirror
+  - word: tree_postorder
+    action: tree_postorder
+  - word: tree_preorder
+    action: tree_preorder
+  - word: triangle_area
+    action: triangle_area
+  - word: unique_paths_grid
+    action: unique_paths_grid
+  - word: word_break_check
+    action: word_break_check
+  - word: word_search_grid
+    action: word_search_grid
+  - word: z_algorithm
+    action: z_algorithm
 
 
   # ==========================================================================
@@ -1190,6 +1362,238 @@ phrase_groups:
     canonical: rot13_cipher
   - skeleton: [run, length, encoding]
     canonical: run_length_encoding
+  - skeleton: [a, star, search]
+    canonical: a_star_search
+  - skeleton: [ackermann, function]
+    canonical: ackermann
+  - skeleton: [adler32, hash]
+    canonical: adler32_hash
+  - skeleton: [adler, 32]
+    canonical: adler32_hash
+  - skeleton: [base64, dec]
+    canonical: base64_dec
+  - skeleton: [base64, decode]
+    canonical: base64_dec
+  - skeleton: [bell, number]
+    canonical: bell_number
+  - skeleton: [binary, search, tree, insert]
+    canonical: binary_search_tree_insert
+  - skeleton: [bst, insert]
+    canonical: binary_search_tree_insert
+  - skeleton: [bipartite, check]
+    canonical: bipartite_check
+  - skeleton: [birthday, paradox]
+    canonical: birthday_paradox_sim
+  - skeleton: [bit, parity]
+    canonical: bit_parity
+  - skeleton: [catalan, number, compute]
+    canonical: catalan_number_compute
+  - skeleton: [cocktail, shaker, sort]
+    canonical: cocktail_shaker_sort
+  - skeleton: [convex, hull, area]
+    canonical: convex_hull_area
+  - skeleton: [count, trailing, zeros]
+    canonical: count_trailing_zeros
+  - skeleton: [detect, cycle, directed]
+    canonical: detect_cycle_directed
+  - skeleton: [cycle, detection, directed]
+    canonical: detect_cycle_directed
+  - skeleton: [djb2, hash]
+    canonical: djb2_hash
+  - skeleton: [euclidean, distance]
+    canonical: euclidean_distance
+  - skeleton: [fisher, yates, shuffle]
+    canonical: fisher_yates_shuffle
+  - skeleton: [generate, combinations]
+    canonical: generate_combinations
+  - skeleton: [generate, parentheses]
+    canonical: generate_parentheses
+  - skeleton: [valid, parentheses]
+    canonical: generate_parentheses
+  - skeleton: [generate, permutations]
+    canonical: generate_permutations
+  - skeleton: [gnome, sort]
+    canonical: gnome_sort
+  - skeleton: [graph, coloring, greedy]
+    canonical: graph_coloring_greedy
+  - skeleton: [graph, coloring]
+    canonical: graph_coloring_greedy
+  - skeleton: [hamming, weight]
+    canonical: hamming_weight
+  - skeleton: [happy, number, check]
+    canonical: happy_number_check
+  - skeleton: [happy, number]
+    canonical: happy_number_check
+  - skeleton: [euler, path]
+    canonical: has_euler_path
+  - skeleton: [eulerian, path]
+    canonical: has_euler_path
+  - skeleton: [house, robber]
+    canonical: house_robber
+  - skeleton: [insert, interval]
+    canonical: insert_interval
+  - skeleton: [integer, to, roman]
+    canonical: integer_to_roman
+  - skeleton: [interval, intersection]
+    canonical: interval_intersection
+  - skeleton: [interval, scheduling]
+    canonical: interval_scheduling_max
+  - skeleton: [activity, selection]
+    canonical: interval_scheduling_max
+  - skeleton: [anagram, check]
+    canonical: is_anagram
+  - skeleton: [balanced, tree]
+    canonical: is_balanced_tree
+  - skeleton: [point, in, circle]
+    canonical: is_point_in_circle
+  - skeleton: [valid, bst]
+    canonical: is_valid_bst
+  - skeleton: [kth, smallest]
+    canonical: kth_smallest
+  - skeleton: [legendre, symbol]
+    canonical: legendre_symbol
+  - skeleton: [longest, common, subsequence, length]
+    canonical: longest_common_subseq_length
+  - skeleton: [longest, palindromic, substring]
+    canonical: longest_palindromic_substring
+  - skeleton: [longest, repeating, substring]
+    canonical: longest_repeating_substring
+  - skeleton: [lowest, common, ancestor]
+    canonical: lowest_common_ancestor
+  - skeleton: [lca]
+    canonical: lowest_common_ancestor
+  - skeleton: [markov, chain, steady, state]
+    canonical: markov_chain_steady_state
+  - skeleton: [markov, chain]
+    canonical: markov_chain_steady_state
+  - skeleton: [matrix, add]
+    canonical: matrix_add
+  - skeleton: [matrix, addition]
+    canonical: matrix_add
+  - skeleton: [matrix, determinant]
+    canonical: matrix_determinant
+  - skeleton: [matrix, identity]
+    canonical: matrix_identity
+  - skeleton: [identity, matrix]
+    canonical: matrix_identity
+  - skeleton: [matrix, multiply]
+    canonical: matrix_multiply
+  - skeleton: [matrix, multiplication]
+    canonical: matrix_multiply
+  - skeleton: [matrix, power]
+    canonical: matrix_power
+  - skeleton: [matrix, exponentiation]
+    canonical: matrix_power
+  - skeleton: [matrix, scalar, multiply]
+    canonical: matrix_scalar_multiply
+  - skeleton: [matrix, trace]
+    canonical: matrix_trace
+  - skeleton: [matrix, transpose]
+    canonical: matrix_transpose
+  - skeleton: [max, stack]
+    canonical: max_stack
+  - skeleton: [max, subarray, product]
+    canonical: max_subarray_product
+  - skeleton: [maximum, subarray, product]
+    canonical: max_subarray_product
+  - skeleton: [merge, intervals]
+    canonical: merge_intervals
+  - skeleton: [miller, rabin, primality]
+    canonical: miller_rabin_primality
+  - skeleton: [miller, rabin]
+    canonical: miller_rabin_primality
+  - skeleton: [min, cost, climbing, stairs]
+    canonical: min_cost_climbing_stairs
+  - skeleton: [mobius, function]
+    canonical: mobius_function
+  - skeleton: [morse, code, encode]
+    canonical: morse_code_encode
+  - skeleton: [morse, code]
+    canonical: morse_code_encode
+  - skeleton: [n, queens]
+    canonical: n_queens
+  - skeleton: [next, power, two]
+    canonical: next_power_of_two
+  - skeleton: [nth, prime]
+    canonical: nth_prime
+  - skeleton: [pancake, sort]
+    canonical: pancake_sort
+  - skeleton: [peak, element]
+    canonical: peak_element
+  - skeleton: [perfect, number, check]
+    canonical: perfect_number_check
+  - skeleton: [perfect, number]
+    canonical: perfect_number_check
+  - skeleton: [permutations, duplicates]
+    canonical: permutations_with_duplicates
+  - skeleton: [queue, operations]
+    canonical: queue_operations
+  - skeleton: [roman, to, integer]
+    canonical: roman_to_integer
+  - skeleton: [shortest, path, unweighted]
+    canonical: shortest_path_unweighted
+  - skeleton: [stack, operations]
+    canonical: stack_operations
+  - skeleton: [stirling, second]
+    canonical: stirling_second
+  - skeleton: [stirling, number]
+    canonical: stirling_second
+  - skeleton: [string, reverse]
+    canonical: string_reverse
+  - skeleton: [reverse, string]
+    canonical: string_reverse
+  - skeleton: [subset, sum, all]
+    canonical: subset_sum_all
+  - skeleton: [sudoku, solver]
+    canonical: sudoku_solver
+  - skeleton: [suffix, array]
+    canonical: suffix_array
+  - skeleton: [sum, divisors]
+    canonical: sum_of_divisors
+  - skeleton: [three, sum]
+    canonical: three_sum
+  - skeleton: [3, sum]
+    canonical: three_sum
+  - skeleton: [tree, diameter]
+    canonical: tree_diameter
+  - skeleton: [tree, height]
+    canonical: tree_height
+  - skeleton: [tree, inorder]
+    canonical: tree_inorder
+  - skeleton: [inorder, traversal]
+    canonical: tree_inorder
+  - skeleton: [tree, level, order]
+    canonical: tree_level_order
+  - skeleton: [level, order, traversal]
+    canonical: tree_level_order
+  - skeleton: [tree, mirror]
+    canonical: tree_mirror
+  - skeleton: [invert, tree]
+    canonical: tree_mirror
+  - skeleton: [tree, postorder]
+    canonical: tree_postorder
+  - skeleton: [postorder, traversal]
+    canonical: tree_postorder
+  - skeleton: [tree, preorder]
+    canonical: tree_preorder
+  - skeleton: [preorder, traversal]
+    canonical: tree_preorder
+  - skeleton: [triangle, area]
+    canonical: triangle_area
+  - skeleton: [unique, paths, grid]
+    canonical: unique_paths_grid
+  - skeleton: [unique, paths]
+    canonical: unique_paths_grid
+  - skeleton: [word, break, check]
+    canonical: word_break_check
+  - skeleton: [word, break]
+    canonical: word_break_check
+  - skeleton: [word, search, grid]
+    canonical: word_search_grid
+  - skeleton: [word, search]
+    canonical: word_search_grid
+  - skeleton: [z, algorithm]
+    canonical: z_algorithm
 
 
 
@@ -1227,6 +1631,114 @@ phrase_groups:
     canonical: manacher_longest_palindrome
   - skeleton: [rot13, cipher]
     canonical: rot13_cipher
+
+  # --- Alternative phrases for new algorithm ops ---
+  - skeleton: [binary, tree, inorder]
+    canonical: tree_inorder
+  - skeleton: [binary, tree, preorder]
+    canonical: tree_preorder
+  - skeleton: [binary, tree, postorder]
+    canonical: tree_postorder
+  - skeleton: [binary, tree, height]
+    canonical: tree_height
+  - skeleton: [binary, tree, level, order]
+    canonical: tree_level_order
+  - skeleton: [binary, tree, diameter]
+    canonical: tree_diameter
+  - skeleton: [mirror, binary, tree]
+    canonical: tree_mirror
+  - skeleton: [invert, binary, tree]
+    canonical: tree_mirror
+  - skeleton: [binary, tree, balanced]
+    canonical: is_balanced_tree
+  - skeleton: [height, balanced]
+    canonical: is_balanced_tree
+  - skeleton: [valid, binary, search, tree]
+    canonical: is_valid_bst
+  - skeleton: [lowest, common, ancestor, binary]
+    canonical: lowest_common_ancestor
+  - skeleton: [integer, roman]
+    canonical: integer_to_roman
+  - skeleton: [roman, numeral, integer]
+    canonical: roman_to_integer
+  - skeleton: [roman, integer]
+    canonical: roman_to_integer
+  - skeleton: [detect, cycle]
+    canonical: detect_cycle_directed
+  - skeleton: [directed, cycle]
+    canonical: detect_cycle_directed
+  - skeleton: [graph, coloring]
+    canonical: graph_coloring_greedy
+  - skeleton: [greedy, coloring]
+    canonical: graph_coloring_greedy
+  - skeleton: [shortest, path, unweighted]
+    canonical: shortest_path_unweighted
+  - skeleton: [unweighted, shortest, path]
+    canonical: shortest_path_unweighted
+  - skeleton: [merge, overlapping, intervals]
+    canonical: merge_intervals
+  - skeleton: [overlapping, intervals]
+    canonical: merge_intervals
+  - skeleton: [non, overlapping, intervals]
+    canonical: interval_scheduling_max
+  - skeleton: [maximum, non, overlapping]
+    canonical: interval_scheduling_max
+  - skeleton: [matrix, scalar]
+    canonical: matrix_scalar_multiply
+  - skeleton: [identity, matrix]
+    canonical: matrix_identity
+  - skeleton: [miller, rabin]
+    canonical: miller_rabin_primality
+  - skeleton: [nth, prime, number]
+    canonical: nth_prime
+  - skeleton: [fisher, yates]
+    canonical: fisher_yates_shuffle
+  - skeleton: [kth, smallest, element]
+    canonical: kth_smallest
+  - skeleton: [peak, element]
+    canonical: peak_element
+  - skeleton: [reverse, string]
+    canonical: string_reverse
+  - skeleton: [stack, simulation]
+    canonical: stack_operations
+  - skeleton: [queue, simulation]
+    canonical: queue_operations
+  - skeleton: [max, stack]
+    canonical: max_stack
+  - skeleton: [star, search]
+    canonical: a_star_search
+  - skeleton: [convex, hull]
+    canonical: convex_hull_area
+  - skeleton: [point, circle]
+    canonical: is_point_in_circle
+  - skeleton: [sudoku, solve]
+    canonical: sudoku_solver
+  - skeleton: [valid, parentheses]
+    canonical: generate_parentheses
+  - skeleton: [balanced, parentheses]
+    canonical: generate_parentheses
+  - skeleton: [subset, sum]
+    canonical: subset_sum_all
+  - skeleton: [word, search]
+    canonical: word_search_grid
+  - skeleton: [word, break]
+    canonical: word_break_check
+  - skeleton: [unique, paths]
+    canonical: unique_paths_grid
+  - skeleton: [grid, paths]
+    canonical: unique_paths_grid
+  - skeleton: [trailing, zeros]
+    canonical: count_trailing_zeros
+  - skeleton: [bit, parity]
+    canonical: bit_parity
+  - skeleton: [happy, number]
+    canonical: happy_number_check
+  - skeleton: [perfect, number]
+    canonical: perfect_number_check
+  - skeleton: [combinations, k]
+    canonical: generate_combinations
+  - skeleton: [permutations, n]
+    canonical: generate_permutations
 
   # --- DSL plan name phrases (auto-generated) ---
   - skeleton: [aho, corasick]

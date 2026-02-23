@@ -1,0 +1,11 @@
+# Check if binary tree is height-balanced
+# Tree: (1 (2 (3 () ()) ()) ()) — left-heavy, not balanced
+# expected: #f
+
+is_balanced_tree:
+  inputs:
+    - tree: "List(Any)"
+  bindings:
+    tree: "(list 1 (list 2 (list 3 (list) (list)) (list)) (list))"
+  steps:
+    - is_balanced_tree

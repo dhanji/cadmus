@@ -1,0 +1,11 @@
+# Suffix array: sorted array of all suffix indices
+# Example: "banana" → (5 3 1 0 4 2)
+# expected: (5 3 1 0 4 2)
+
+suffix_array:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"banana"'
+  steps:
+    - suffix_array

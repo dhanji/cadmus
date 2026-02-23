@@ -1,0 +1,11 @@
+# Generate parentheses: all valid combinations of n pairs
+# Example: n=3 → ("((()))" "(()())" "(())()" "()(())" "()()()")
+# expected: (((())) (()()) (())() ()(()) ()()())
+
+generate_parentheses:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "3"
+  steps:
+    - generate_parentheses

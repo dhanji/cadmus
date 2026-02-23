@@ -1,0 +1,11 @@
+# Longest palindromic substring using expand-around-center
+# Example: "babad" → "bab"
+# expected: bab
+
+longest_palindromic_substring:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"babad"'
+  steps:
+    - longest_palindromic_substring

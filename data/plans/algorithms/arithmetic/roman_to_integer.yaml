@@ -1,0 +1,11 @@
+# Roman to integer: convert Roman numeral to decimal
+# Example: MCMXCIV = 1994
+# expected: 1994
+
+roman_to_integer:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"MCMXCIV"'
+  steps:
+    - roman_to_integer

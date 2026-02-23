@@ -1,0 +1,11 @@
+# Check if binary tree is a valid BST
+# Tree: (2 (1 () ()) (3 () ())) — valid BST
+# expected: #t
+
+is_valid_bst:
+  inputs:
+    - tree: "List(Any)"
+  bindings:
+    tree: "(list 2 (list 1 (list) (list)) (list 3 (list) (list)))"
+  steps:
+    - is_valid_bst

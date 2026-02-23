@@ -1,0 +1,11 @@
+# Perfect number check: sum of proper divisors equals n
+# Example: 28 is perfect (1+2+4+7+14=28)
+# expected: #t
+
+perfect_number_check:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "28"
+  steps:
+    - perfect_number_check

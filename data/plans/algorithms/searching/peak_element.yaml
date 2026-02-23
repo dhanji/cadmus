@@ -1,0 +1,11 @@
+# Peak element: find local maximum in array
+# Example: (1 2 3 1) → peak at index 2
+# expected: 2
+
+peak_element:
+  inputs:
+    - nums: "List(Number)"
+  bindings:
+    nums: "(list 1 2 3 1)"
+  steps:
+    - peak_element

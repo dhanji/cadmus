@@ -1,0 +1,11 @@
+# Morse code encode: convert text to morse code
+# Example: "SOS" = "... --- ..."
+# expected: ... --- ...
+
+morse_code_encode:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"SOS"'
+  steps:
+    - morse_code_encode

@@ -1,0 +1,11 @@
+# String reverse: reverse characters in a string
+# Example: reverse "hello" = "olleh"
+# expected: olleh
+
+string_reverse:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"hello"'
+  steps:
+    - string_reverse

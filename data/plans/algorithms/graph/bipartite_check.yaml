@@ -1,0 +1,11 @@
+# Bipartite check: determine if graph is 2-colorable using BFS
+# Graph: 0-1, 1-2, 2-3, 3-0 (cycle of 4 = bipartite)
+# expected: #t
+
+bipartite_check:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "4"
+  steps:
+    - bipartite_check

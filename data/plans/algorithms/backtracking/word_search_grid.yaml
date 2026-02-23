@@ -1,0 +1,12 @@
+# Word search: find word in a 2D character grid
+# Grid: A B C E / S F C S / A D E E
+# Example: find "ABCCED" → true
+# expected: #t
+
+word_search_grid:
+  inputs:
+    - word: "String"
+  bindings:
+    word: '"ABCCED"'
+  steps:
+    - word_search_grid

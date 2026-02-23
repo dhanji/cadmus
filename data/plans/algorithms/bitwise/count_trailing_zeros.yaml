@@ -1,0 +1,11 @@
+# Count trailing zeros in binary representation
+# Example: 40 = 101000 has 3 trailing zeros
+# expected: 3
+
+count_trailing_zeros:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "40"
+  steps:
+    - count_trailing_zeros

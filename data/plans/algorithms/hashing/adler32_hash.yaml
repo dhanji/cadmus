@@ -1,0 +1,11 @@
+# Adler-32 checksum: fast rolling hash
+# Example: adler32("Wikipedia") = 300286872
+# expected: 300286872
+
+adler32_hash:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"Wikipedia"'
+  steps:
+    - adler32_hash

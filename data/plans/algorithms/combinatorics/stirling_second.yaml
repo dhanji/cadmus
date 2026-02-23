@@ -1,0 +1,13 @@
+# Stirling number of the second kind: S(n,k) partitions of n into k non-empty subsets
+# Example: S(5,3) = 25
+# expected: 25
+
+stirling_second:
+  inputs:
+    - n: "Number"
+    - k: "Number"
+  bindings:
+    n: "5"
+    k: "3"
+  steps:
+    - stirling_second
