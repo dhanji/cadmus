@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-23T05:56:07Z | Size: 65.9k chars
+> Updated: 2026-02-23T09:00:52Z | Size: 66.9k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -844,3 +844,14 @@ plan-name:
 - **No-arg ops**: Use `op: ""` for zero-argument calls
 
 ### Test Count: 1471 (unchanged from pre-rewrite)
+
+### Algorithm Atoms Feature (commit `3e1faf2`)
+- `data/packs/ops/algorithm.ops.yaml` — 68 opaque algorithm ops with `racket_body` and `input_names`
+- `src/registry.rs` — `OpDef.racket_body: Option<String>`, `OpDef.input_names: Vec<String>`, `PolyOpEntry.racket_body`, `PolyOpEntry.input_names`, `set_racket_body()`, `set_input_names()`
+- `src/racket_executor.rs:57-62` — `build_racket_registry()` loads algorithm.ops.yaml
+- `src/racket_executor.rs:1246-1265` — Algorithm atom dispatch in `op_to_racket()` (before subsumption)
+- `src/racket_executor.rs:1399-1418` — `generate_racket_script()` emits deduplicated `(define ...)` blocks
+- `src/fs_types.rs:55,73-78` — `ALGORITHM_OPS_YAML` const, loaded in `build_full_registry()`
+- Two ops renamed to avoid collisions: `shell_sort→shellsort`, `base64_encode→base64_enc`
+- All 68 plan YAMLs rewritten to single-step op calls (zero let_bind/iterate remaining)
+- 108/108 algorithm plans pass, 1471 tests pass

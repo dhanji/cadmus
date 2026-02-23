@@ -4,7 +4,8 @@
 use cadmus::nl::normalize;
 use cadmus::nl::intent::{self, Intent};
 use cadmus::nl::slots;
-use cadmus::nl::dialogue;
+use cadmus::nl::dialogue::DialogueState;
+use cadmus::nl::{self, NlResponse};
 use cadmus::plan;
 use cadmus::fs_types;
 use cadmus::racket_executor;
@@ -51,16 +52,23 @@ fn trace_full_pipeline() {
     println!("      patterns:    {:?}", extracted.patterns);
 
     // ═══════════════════════════════════════════════════════════
-    //  STAGE 2: Intent + Slots → PlanDef (YAML structure)
+    //  STAGE 2: NL → PlanDef via Earley pipeline
     // ═══════════════════════════════════════════════════════════
     println!("\n══════════════════════════════════════════════════════════");
-    println!("  STAGE 2: Intent + Slots → PlanDef");
+    println!("  STAGE 2: NL → PlanDef via Earley pipeline");
     println!("══════════════════════════════════════════════════════════\n");
 
-    if let Intent::CreatePlan { ref op, .. } = parsed_intent {
-        match dialogue::build_plan(op, &extracted, Some("Extract comic archive")) {
-            Ok(wf) => {
-                println!("  Generated PlanDef:");
+    let mut state = DialogueState::new();
+    let response = nl::process_input(nl_input, &mut state);
+    match &response {
+        NlResponse::PlanCreated { plan_yaml, .. } => {
+            println!("  Generated Plan YAML:");
+            for line in plan_yaml.lines() {
+                println!("    {}", line);
+            }
+            // Parse and show structure
+            if let Ok(wf) = plan::parse_plan(plan_yaml) {
+                println!("\n  Parsed PlanDef:");
                 println!("    name: {:?}", wf.name);
                 println!("    inputs:");
                 for input in &wf.inputs {
@@ -70,33 +78,17 @@ fn trace_full_pipeline() {
                 for (i, s) in wf.steps.iter().enumerate() {
                     println!("      {}: {} {:?}", i + 1, s.op, s.args);
                 }
-
-                // This is what would be serialized to YAML
-                println!("\n  Equivalent YAML:");
-                println!("    {}:", wf.name);
-                println!("      inputs:");
-                for input in &wf.inputs {
-                    if let Some(ref hint) = input.type_hint {
-                        println!("        - {}: \"{}\"", input.name, hint);
-                    } else {
-                        println!("        - {}", input.name);
-                    }
-                }
-                println!("      steps:");
-                for s in &wf.steps {
-                    match &s.args {
-                        plan::StepArgs::None => println!("        - {}", s.op),
-                        plan::StepArgs::Scalar(v) => println!("        - {}: {}", s.op, v),
-                        plan::StepArgs::Map(m) => {
-                            println!("        - {}:", s.op);
-                            for (k, v) in m {
-                                println!("            {}: {}", k, v);
-                            }
-                        }
-                    }
-                }
             }
-            Err(e) => println!("  Build error: {:?}", e),
+        }
+        NlResponse::NeedsClarification { needs } => {
+            println!("  NeedsClarification: {:?}", needs);
+            println!("  (Earley parser could not produce a plan for this input)");
+        }
+        NlResponse::Error { message } => {
+            println!("  Error: {}", message);
+        }
+        other => {
+            println!("  Other: {:?}", other);
         }
     }
 
