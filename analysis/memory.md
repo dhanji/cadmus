@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-23T09:00:52Z | Size: 66.9k chars
+> Updated: 2026-02-23T11:31:14Z | Size: 68.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -855,3 +855,15 @@ plan-name:
 - Two ops renamed to avoid collisions: `shell_sort→shellsort`, `base64_encode→base64_enc`
 - All 68 plan YAMLs rewritten to single-step op calls (zero let_bind/iterate remaining)
 - 108/108 algorithm plans pass, 1471 tests pass
+
+### NL Autoregression Complete (plan `nl-autoregression`, commit `e3f6c53`)
+- **Score: 108/108 (100.0%)** — all 14 algorithm categories at 100%
+- `src/nl/intent_compiler.rs:75-93` — Short-circuit in `compile_ir()`: checks if primary action (non-select, non-order) is a plan file or algorithm atom before processing filesystem IR
+- `src/nl/intent_compiler.rs:363-395` — `compile_algorithm_op()` creates clean single-step plan for registered ops with `racket_body`
+- `src/nl/intent_compiler.rs:316-345` — `try_load_plan_file()` and `try_load_plan_yaml()` load plan files by name from `data/plans/algorithms/`
+- `data/nl/nl_lexicon.yaml:1234` — `[base64, encode]` phrase group maps to `base64_enc` (not `base64_encode`)
+- `data/nl/nl_lexicon.yaml:285` — Removed "explain" from document verb synonyms
+- `data/nl/nl_dictionary.yaml` — Added "catalog" (60) and "downloads" (80) to prevent false SymSpell corrections
+- Old pipeline removed: `build_plan()`, `handle_create_plan()`, `try_earley_or_old_pipeline()` deleted from mod.rs/dialogue.rs
+- Earley parser is sole path for plan creation; approve/reject/explain/edit still use keyword/pattern matching
+- 1292 tests passing, 66 ignored, 1 known flaky (test_type_symmetric_discovery_tabular)
