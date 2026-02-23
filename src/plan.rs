@@ -794,6 +794,13 @@ impl std::error::Error for PlanError {}
 pub fn load_plan(path: &Path) -> Result<PlanDef, PlanError> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| PlanError::Parse(format!("cannot read {}: {}", path.display(), e)))?;
+
+    // Detect .sexp extension and route to sexpr parser
+    if path.extension().and_then(|e| e.to_str()) == Some("sexp") {
+        return crate::sexpr::parse_sexpr_to_plan(&content)
+            .map_err(|e| PlanError::Parse(e.to_string()));
+    }
+
     parse_plan(&content)
 }
 

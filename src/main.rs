@@ -23,10 +23,11 @@ fn main() {
         let path = args.get(pos + 1).unwrap_or_else(|| {
             eprintln!("{}", ui::error("Missing plan path"));
             eprintln!();
-            eprintln!("  {} cadmus --plan <path.yaml> [--dry-run]", ui::dim("usage:"));
+            eprintln!("  {} cadmus --plan <path.yaml|path.sexp> [--dry-run]", ui::dim("usage:"));
             eprintln!();
             eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml", ui::dim("  $"));
-            eprintln!("  {} cadmus --plan data/plans/find_pdfs.yaml --dry-run", ui::dim("  $"));
+            eprintln!("  {} cadmus --plan factorial.sexp", ui::dim("  $"));
+            eprintln!("  {} cadmus --plan path.yaml --dry-run", ui::dim("  $"));
             process::exit(1);
         });
 
