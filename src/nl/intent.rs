@@ -109,9 +109,14 @@ pub fn parse_intent(normalized: &NormalizedInput) -> Intent {
     // 2. Check for explain/question patterns — but NOT if the first token
     //    is a known verb/op (that's a command, not a question).
     //    E.g., "fibonacci fn where f 0 0..." is a command, not "explain fibonacci".
-    let first_is_verb_or_op = tokens.first()
-        .map(|t| is_canonical_op(t))
-        .unwrap_or(false);
+    let first_is_verb_or_op = if let Some(first) = tokens.first() {
+        is_canonical_op(first) || {
+            let lex = crate::nl::lexicon::lexicon();
+            lex.verbs.contains_key(first.as_str())
+        }
+    } else {
+        false
+    };
     if !first_is_verb_or_op {
         if let Some(intent) = try_explain(tokens) {
             return intent;

@@ -134,7 +134,13 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
     //    plan creation uses Earley parser (sole path).
     match intent_result {
         Intent::EditStep { action, rest: _ } => {
-            handle_edit_step(action, &extracted, state)
+            // Only handle edits if there's a current plan to edit.
+            // Otherwise, fall through to Earley parser (e.g., "skip list" is
+            // both an edit command and an algorithm name).
+            if state.current_plan.is_some() {
+                return handle_edit_step(action, &extracted, state);
+            }
+            try_earley_create(&corrected_tokens, state, Vec::new())
         }
         Intent::ExplainOp { subject, rest: _ } => {
             handle_explain(&subject)
@@ -205,7 +211,10 @@ fn try_earley_create(
 
     match intent_compiler::compile_intent(&ir_result) {
         intent_compiler::CompileResult::Ok(plan) => {
-            let yaml = dialogue::plan_to_yaml(&plan);
+            // For DSL plans loaded from files, use the raw YAML (plan_to_yaml
+            // can't serialize complex step args like sub-steps and clauses).
+            let yaml = intent_compiler::try_load_plan_yaml(&plan.name)
+                .unwrap_or_else(|| dialogue::plan_to_yaml(&plan));
 
             match validate_plan(&plan) {
                 Ok(()) => {

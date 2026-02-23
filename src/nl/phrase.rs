@@ -50,6 +50,8 @@ fn stopwords() -> &'static HashSet<&'static str> {
             "for", "about", "to", "of", "on", "by", "with", "using",
             // Generic words that appear between algorithm name parts
             "test", "algorithm", "method", "technique", "approach",
+            // Numeric fragments that appear in algorithm names
+            "1a", "32", "64", "128", "256",
         ].into_iter().collect()
     })
 }

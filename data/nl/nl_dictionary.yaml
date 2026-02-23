@@ -68,6 +68,7 @@ op_components:
   paste: 60
   plist: 40
   download: 80
+  downloads: 80
   upload: 60
   sync: 60
 
@@ -716,6 +717,7 @@ regular_verbs:
   worry: 20
 
 common_english_nouns:
+  catalog: 60
   time: 60
   year: 20
   people: 20
@@ -2820,3 +2822,127 @@ common_plurals:
   tars: 40
   logs: 40
   dirs: 40
+
+# DSL plan name words (prevents false SymSpell corrections)
+dsl_plan_words:
+  aho: 40
+  aho_corasick: 40
+  base64_encode: 40
+  bellman: 40
+  bellman_ford: 40
+  bit_reversal: 40
+  carlo: 40
+  catalan: 40
+  catalan_number: 40
+  closest: 40
+  closest_pair_of_points: 40
+  code: 40
+  coin: 40
+  coin_change: 40
+  consistent: 40
+  consistent_hashing: 40
+  coprimality: 40
+  coprimality_test: 40
+  corasick: 40
+  cutting: 40
+  eratosthenes: 40
+  euler: 40
+  euler_totient: 40
+  factorial: 40
+  floyd_warshall: 40
+  fnv1a: 40
+  fnv1a_hash: 40
+  gray_code: 40
+  hamming: 40
+  hamming_distance: 40
+  hanoi: 40
+  hashing: 40
+  increasing: 40
+  insertion: 40
+  insertion_sort: 40
+  integer_partition_count: 40
+  knapsack: 40
+  longest_increasing_subsequence: 40
+  monte: 40
+  monte_carlo_pi: 40
+  murmurhash3: 40
+  n_choose_k: 40
+  palindrome_check: 40
+  pascals: 40
+  pascals_triangle_row: 40
+  permutation: 40
+  permutation_count: 40
+  point_in_polygon: 40
+  points: 40
+  polygon: 40
+  power_of_two_check: 40
+  power_set: 40
+  prefix: 40
+  prim: 40
+  prim_mst: 40
+  reservoir: 40
+  reservoir_sampling: 40
+  reversal: 40
+  rod: 40
+  rod_cutting: 40
+  row: 40
+  sampling: 40
+  shell_sort: 40
+  shoelace: 40
+  shoelace_polygon_area: 40
+  sieve: 40
+  sieve_of_eratosthenes: 40
+  single_number_xor: 40
+  skip_list: 40
+  subset: 40
+  subset_sum: 40
+  timsort: 40
+  totient: 40
+  tower: 40
+  tower_of_hanoi: 40
+  triangle: 40
+  triangular: 40
+  triangular_number: 40
+  trie: 40
+  trie_prefix_tree: 40
+  warshall: 40
+  xor: 40
+  xor_sum: 40
+  zero_one_knapsack: 40
+
+# DSL plan short-form names
+dsl_short_forms:
+  trie: 50
+  shoelace: 50
+  knapsack: 50
+  fnv1a: 50
+  binomial: 50
+  skiplist: 50
+  hamming: 50
+  corasick: 50
+  eratosthenes: 50
+  warshall: 50
+  bellman: 50
+  catalan: 50
+  hanoi: 50
+  pascals: 50
+  coprimality: 50
+  totient: 50
+  euler: 50
+  prim: 50
+  murmurhash3: 50
+  reservoir: 50
+  carlo: 50
+  monte: 50
+
+# Algorithm abbreviations
+algorithm_abbreviations:
+  fnv: 50
+  lru: 50
+  bfs: 50
+  dfs: 50
+  mst: 50
+  scc: 50
+  gcd: 50
+  kmp: 50
+  vlq: 50

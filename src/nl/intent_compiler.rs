@@ -69,6 +69,26 @@ pub fn compile_intent(result: &IntentIRResult) -> CompileResult {
 
 /// Compile a single IntentIR to a PlanDef.
 pub fn compile_ir(ir: &IntentIR) -> CompileResult {
+    // ── Short-circuit: if the primary action is a registered algorithm op
+    //    or a plan file, skip the filesystem IR entirely. ──────────────
+    let primary_action = ir.steps.iter()
+        .rfind(|s| s.action != "select" && s.action != "order")
+        .map(|s| s.action.as_str());
+
+    if let Some(action) = primary_action {
+        // Plan-file lookup first (multi-step DSL plans)
+        if let Some(plan) = try_load_plan_file(action) {
+            return CompileResult::Ok(plan);
+        }
+        // Registered op with racket_body → algorithm atom (single-step plan)
+        let registry = crate::fs_types::build_full_registry();
+        if let Some(entry) = registry.get_poly(action) {
+            if entry.racket_body.is_some() {
+                return compile_algorithm_op(action, entry, ir);
+            }
+        }
+    }
+
     // Extract the target path from the IR's input selector
     let target_path = ir.inputs.first()
         .and_then(|i| i.selector.scope.as_ref())
@@ -173,6 +193,12 @@ pub fn compile_ir(ir: &IntentIR) -> CompileResult {
             continue;
         }
 
+        // 2b. Plan-file lookup: check if the action matches a plan YAML file.
+        //     This handles multi-step DSL plans (factorial, zero_one_knapsack, etc.)
+        if let Some(plan) = try_load_plan_file(action) {
+            return CompileResult::Ok(plan);
+        }
+
         // 3. Unknown action — error
         return CompileResult::Error(format!(
             "Unknown action '{}'. Try a command like 'find', 'sort', 'zip', 'extract', or an algorithm like 'fibonacci', 'quicksort'.",
@@ -268,11 +294,101 @@ fn build_op_step_args(
     }
 }
 
+
+// ---------------------------------------------------------------------------
+// Plan-file lookup
+// ---------------------------------------------------------------------------
+
+/// Try to load a plan YAML file matching the given action name.
+///
+/// Searches `data/plans/algorithms/` for `<action>.yaml`.
+/// Returns the parsed PlanDef if found, None otherwise. 
+fn try_load_plan_file(action: &str) -> Option<PlanDef> {
+    // Try to find the plan file in the algorithms directory
+    let base = std::path::Path::new("data/plans/algorithms");
+    if !base.exists() {
+        return None;
+    }
+
+    // Walk category directories
+    for cat_entry in std::fs::read_dir(base).ok()? {
+        let cat_entry = cat_entry.ok()?;
+        if !cat_entry.file_type().ok()?.is_dir() {
+            continue;
+        }
+
+        let plan_path = cat_entry.path().join(format!("{}.yaml", action));
+        if plan_path.exists() {
+            let content = std::fs::read_to_string(&plan_path).ok()?;
+            match crate::plan::parse_plan(&content) {
+                Ok(plan) => return Some(plan),
+                Err(_) => return None,
+            }
+        }
+    }
+
+    None
+}
+
+/// Try to load the raw YAML content of a plan file matching the given action name.
+///
+/// Returns the file content as a string if found, None otherwise.
+/// This is used instead of plan_to_yaml() for DSL plans because plan_to_yaml()
+/// can't serialize complex step args (sub-steps, clauses, etc.).
+pub fn try_load_plan_yaml(action: &str) -> Option<String> {
+    let base = std::path::Path::new("data/plans/algorithms");
+    if !base.exists() {
+        return None;
+    }
+
+    for cat_entry in std::fs::read_dir(base).ok()? {
+        let cat_entry = cat_entry.ok()?;
+        if !cat_entry.file_type().ok()?.is_dir() {
+            continue;
+        }
+
+        let plan_path = cat_entry.path().join(format!("{}.yaml", action));
+        if plan_path.exists() {
+            return std::fs::read_to_string(&plan_path).ok();
+        }
+    }
+
+    None
+}
+
 // ---------------------------------------------------------------------------
 // Filesystem step compilation helpers
 // ---------------------------------------------------------------------------
 
 /// Compile a "select" action to walk_tree + find_matching/filter steps.
+/// Compile a registered algorithm op into a single-step PlanDef.
+///
+/// This is the short-circuit path for algorithm atoms: the IR's filesystem
+/// scaffolding (select, order) is ignored and we produce a clean plan with
+/// the op's declared inputs and a single step.
+fn compile_algorithm_op(
+    action: &str,
+    op: &crate::registry::PolyOpEntry,
+    _ir: &IntentIR,
+) -> CompileResult {
+    let inputs = build_op_inputs(op);
+    let args = build_op_step_args(op, &[]);
+    let step = RawStep {
+        op: action.to_string(),
+        args,
+    };
+
+    let plan = PlanDef {
+        name: action.to_string(),
+        inputs,
+        output: None,
+        steps: vec![step],
+        bindings: HashMap::new(),
+    };
+
+    CompileResult::Ok(plan)
+}
+
 fn compile_select_step(
     ir_step: &crate::nl::intent_ir::IRStep,
     _target_path: &str,
@@ -793,7 +909,7 @@ mod tests {
         let result = compile_ir(&ir);
         match result {
             CompileResult::Ok(plan) => {
-                assert_eq!(plan.name, "digital-root");
+                assert_eq!(plan.name, "digital_root");
             }
             other => panic!("expected Ok, got: {:?}", other),
         }

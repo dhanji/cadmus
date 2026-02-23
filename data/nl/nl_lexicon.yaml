@@ -282,7 +282,7 @@ verbs:
 
   - word: document
     action: document
-    synonyms: [annotate, comment, describe, explain, illustrate, diagram, chart, graph, depict, portray, represent, model, map, summarize, abstract, synopsis, recap]
+    synonyms: [annotate, comment, describe, illustrate, diagram, chart, graph, depict, portray, represent, model, map, summarize, abstract, synopsis, recap]
 
   - word: configure
     action: configure
@@ -640,6 +640,104 @@ verbs:
     synonyms: [rot13]
   - word: run_length_encoding
     action: run_length_encoding
+
+
+  # ==========================================================================
+  # DOMAIN 5: MULTI-STEP DSL PLANS (auto-generated from data/plans/algorithms/)
+  # ==========================================================================
+
+  - word: aho_corasick
+    action: aho_corasick
+  - word: base64_encode
+    action: base64_encode
+  - word: bellman_ford
+    action: bellman_ford
+  - word: bit_reversal
+    action: bit_reversal
+  - word: catalan_number
+    action: catalan_number
+  - word: closest_pair_of_points
+    action: closest_pair_of_points
+  - word: coin_change
+    action: coin_change
+  - word: consistent_hashing
+    action: consistent_hashing
+  - word: coprimality_test
+    action: coprimality_test
+  - word: euler_totient
+    action: euler_totient
+  - word: factorial
+    action: factorial
+  - word: floyd_warshall
+    action: floyd_warshall
+  - word: fnv1a_hash
+    action: fnv1a_hash
+    synonyms: [fnv1a]
+  - word: gray_code
+    action: gray_code
+  - word: hamming_distance
+    action: hamming_distance
+    synonyms: [hamming]
+  - word: insertion_sort
+    action: insertion_sort
+  - word: integer_partition_count
+    action: integer_partition_count
+  - word: longest_increasing_subsequence
+    action: longest_increasing_subsequence
+  - word: monte_carlo_pi
+    action: monte_carlo_pi
+  - word: murmurhash3
+    action: murmurhash3
+  - word: n_choose_k
+    action: n_choose_k
+    synonyms: [binomial]
+  - word: palindrome_check
+    action: palindrome_check
+  - word: pascals_triangle_row
+    action: pascals_triangle_row
+  - word: permutation_count
+    action: permutation_count
+  - word: point_in_polygon
+    action: point_in_polygon
+  - word: power_of_two_check
+    action: power_of_two_check
+  - word: power_set
+    action: power_set
+  - word: prim_mst
+    action: prim_mst
+  - word: reservoir_sampling
+    action: reservoir_sampling
+  - word: rod_cutting
+    action: rod_cutting
+  - word: shell_sort
+    action: shell_sort
+  - word: shoelace_polygon_area
+    action: shoelace_polygon_area
+    synonyms: [shoelace]
+  - word: sieve_of_eratosthenes
+    action: sieve_of_eratosthenes
+  - word: single_number_xor
+    action: single_number_xor
+    synonyms: [single_number]
+  - word: skip_list
+    action: skip_list
+    synonyms: [skiplist]
+  - word: subset_sum
+    action: subset_sum
+  - word: timsort
+    action: timsort
+  - word: tower_of_hanoi
+    action: tower_of_hanoi
+  - word: triangular_number
+    action: triangular_number
+  - word: trie_prefix_tree
+    action: trie_prefix_tree
+    synonyms: [trie]
+  - word: xor_sum
+    action: xor_sum
+  - word: zero_one_knapsack
+    action: zero_one_knapsack
+    synonyms: [knapsack]
 
 # ---------------------------------------------------------------------------
 # Nouns: object words → concept labels
@@ -1130,9 +1228,118 @@ phrase_groups:
   - skeleton: [rot13, cipher]
     canonical: rot13_cipher
 
+  # --- DSL plan name phrases (auto-generated) ---
+  - skeleton: [aho, corasick]
+    canonical: aho_corasick
+  - skeleton: [base64, encode]
+    canonical: base64_enc
+  - skeleton: [bellman, ford]
+    canonical: bellman_ford
+  - skeleton: [bit, reversal]
+    canonical: bit_reversal
+  - skeleton: [catalan, number]
+    canonical: catalan_number
+  - skeleton: [closest, pair, of, points]
+    canonical: closest_pair_of_points
+  - skeleton: [coin, change]
+    canonical: coin_change
+  - skeleton: [consistent, hashing]
+    canonical: consistent_hashing
+  - skeleton: [coprimality, test]
+    canonical: coprimality_test
+  - skeleton: [euler, totient]
+    canonical: euler_totient
+  - skeleton: [floyd, warshall]
+    canonical: floyd_warshall
+  - skeleton: [fnv1a, hash]
+    canonical: fnv1a_hash
+  - skeleton: [gray, code]
+    canonical: gray_code
+  - skeleton: [hamming, distance]
+    canonical: hamming_distance
+  - skeleton: [insertion, sort]
+    canonical: insertion_sort
+  - skeleton: [integer, partition, count]
+    canonical: integer_partition_count
+  - skeleton: [longest, increasing, subsequence]
+    canonical: longest_increasing_subsequence
+  - skeleton: [monte, carlo, pi]
+    canonical: monte_carlo_pi
+  - skeleton: [n, choose, k]
+    canonical: n_choose_k
+  - skeleton: [palindrome, check]
+    canonical: palindrome_check
+  - skeleton: [pascals, triangle, row]
+    canonical: pascals_triangle_row
+  - skeleton: [permutation, count]
+    canonical: permutation_count
+  - skeleton: [point, in, polygon]
+    canonical: point_in_polygon
+  - skeleton: [power, of, two, check]
+    canonical: power_of_two_check
+  - skeleton: [power, set]
+    canonical: power_set
+  - skeleton: [prim, mst]
+    canonical: prim_mst
+  - skeleton: [reservoir, sampling]
+    canonical: reservoir_sampling
+  - skeleton: [rod, cutting]
+    canonical: rod_cutting
+  - skeleton: [shell, sort]
+    canonical: shell_sort
+  - skeleton: [shoelace, polygon, area]
+    canonical: shoelace_polygon_area
+  - skeleton: [sieve, of, eratosthenes]
+    canonical: sieve_of_eratosthenes
+  - skeleton: [single, number, xor]
+    canonical: single_number_xor
+  - skeleton: [skip, list]
+    canonical: skip_list
+  - skeleton: [subset, sum]
+    canonical: subset_sum
+  - skeleton: [tower, of, hanoi]
+    canonical: tower_of_hanoi
+  - skeleton: [triangular, number]
+    canonical: triangular_number
+  - skeleton: [trie, prefix, tree]
+    canonical: trie_prefix_tree
+  - skeleton: [xor, sum]
+    canonical: xor_sum
+  - skeleton: [zero, one, knapsack]
+    canonical: zero_one_knapsack
+
+
+
+  # --- Alternative DSL plan name phrases ---
+  - skeleton: [single, number]
+    canonical: single_number_xor
+  - skeleton: [binomial, coefficient]
+    canonical: n_choose_k
+  - skeleton: [binomial]
+    canonical: n_choose_k
+  - skeleton: [shoelace, formula]
+    canonical: shoelace_polygon_area
+  - skeleton: [shoelace, area]
+    canonical: shoelace_polygon_area
+  - skeleton: [shoelace, polygon]
+    canonical: shoelace_polygon_area
+  - skeleton: [knapsack]
+    canonical: zero_one_knapsack
+  - skeleton: [trie, insert]
+    canonical: trie_prefix_tree
+  - skeleton: [fnv1a]
+    canonical: fnv1a_hash
+  - skeleton: [fnv, hash]
+    canonical: fnv1a_hash
+  - skeleton: [aho, corasick]
+    canonical: aho_corasick
+  - skeleton: [hamming, distance]
+    canonical: hamming_distance
+
 fillers:
   - up
   - out
+  - "0/1"
   - just
   - please
   - can
@@ -1186,4 +1393,5 @@ fillers:
   - means
   - called
   - named
+
 
