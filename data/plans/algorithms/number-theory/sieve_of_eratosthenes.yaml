@@ -8,6 +8,73 @@ sieve_of_eratosthenes:
   bindings:
     n: "30"
   steps:
-    - let_bind:
-        bindings: "[sieve (make-vector (+ n 1) #t)]"
-        body: "(begin (vector-set! sieve 0 #f) (vector-set! sieve 1 #f) (for ([i (in-range 2 (+ (exact-floor (sqrt n)) 1))]) (when (vector-ref sieve i) (for ([j (in-range (* i i) (+ n 1) i)]) (vector-set! sieve j #f)))) (for/list ([i (in-range 2 (+ n 1))] #:when (vector-ref sieve i)) i))"
+    - add:
+        x: "$n"
+        y: "1"
+    - make_vector:
+        size: "$step-1"
+        init: "#t"
+    - vector_set:
+        v: "$step-2"
+        i: "0"
+        val: "#f"
+    - vector_set:
+        v: "$step-2"
+        i: "1"
+        val: "#f"
+    - sqrt: "$n"
+    - exact_floor: "$step-5"
+    - add:
+        x: "$step-6"
+        y: "1"
+    - for_range:
+        var: "i"
+        start: "2"
+        end: "$step-7"
+        body:
+          - when_do:
+              test:
+                vector_ref:
+                  v: "$step-2"
+                  i: "$i"
+              body:
+                - multiply:
+                    x: "$i"
+                    y: "$i"
+                - for_range:
+                    var: "j"
+                    start: "$body-1"
+                    end:
+                      add:
+                        x: "$n"
+                        y: "1"
+                    step: "$i"
+                    body:
+                      - vector_set:
+                          v: "$step-2"
+                          i: "$j"
+                          val: "#f"
+    - range:
+        start: "2"
+        end:
+          add:
+            x: "$n"
+            y: "1"
+    - fold:
+        acc: "primes"
+        init: "(list)"
+        var: "i"
+        over: "$step-9"
+        body:
+          - cond:
+              clauses:
+                - test:
+                    vector_ref:
+                      v: "$step-2"
+                      i: "$i"
+                  then:
+                    - append:
+                        x: "$primes"
+                        y:
+                          list_new: "$i"
+                - else: "$primes"

@@ -8,6 +8,9 @@ tower_of_hanoi:
   bindings:
     n: "4"
   steps:
+    - expt:
+        x: "2"
+        y: "$n"
     - subtract:
-        x: "(expt 2 n)"
+        x: "$step-1"
         y: "1"

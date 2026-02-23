@@ -8,6 +8,27 @@ trie_prefix_tree:
   bindings:
     n: "0"
   steps:
-    - let_bind:
-        bindings: "[words (list \"apple\" \"app\" \"ape\" \"bat\" \"bar\")] [prefix \"ap\"]"
-        body: "(for/sum ([w (in-list words)]) (if (and (>= (string-length w) (string-length prefix)) (string=? (substring w 0 (string-length prefix)) prefix)) 1 0))"
+    - list_new: "\"apple\" \"app\" \"ape\" \"bat\" \"bar\""
+    - for_sum:
+        var: "w"
+        over: "$step-1"
+        body:
+          - string_length: "$w"
+          - cond:
+              clauses:
+                - test:
+                    and_logic:
+                      x:
+                        greater_than_or_equal:
+                          x: "$body-1"
+                          y: "2"
+                      y:
+                        string_equal:
+                          x:
+                            substring_op:
+                              x: "$w"
+                              y: "0"
+                              z: "2"
+                          y: "\"ap\""
+                  then: "1"
+                - else: "0"

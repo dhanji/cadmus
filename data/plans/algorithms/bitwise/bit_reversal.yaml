@@ -8,8 +8,27 @@ bit_reversal:
   bindings:
     n: "178"
   steps:
-    - for_fold:
-        bindings: "[result 0]"
+    - range:
+        start: "0"
+        end: "8"
+    - fold:
+        acc: "result"
+        init: "0"
         var: "i"
-        sequence: "(in-range 8)"
-        body: "(bitwise-ior (arithmetic-shift result 1) (bitwise-and (arithmetic-shift n (- i)) 1))"
+        over: "$step-1"
+        body:
+          - arithmetic_shift:
+              x: "$n"
+              y:
+                subtract:
+                  x: "0"
+                  y: "$i"
+          - bitwise_and:
+              x: "$body-1"
+              y: "1"
+          - arithmetic_shift:
+              x: "$result"
+              y: "1"
+          - bitwise_or:
+              x: "$body-3"
+              y: "$body-2"

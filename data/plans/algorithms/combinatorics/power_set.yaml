@@ -8,6 +8,44 @@ power_set:
   bindings:
     lst: "(list 1 2 3)"
   steps:
-    - let_bind:
-        bindings: "[n (length lst)]"
-        body: "(for/list ([mask (in-range (expt 2 n))]) (for/list ([i (in-range n)] #:when (> (bitwise-and mask (arithmetic-shift 1 i)) 0)) (list-ref lst i)))"
+    - length: "$lst"
+    - expt:
+        x: "2"
+        y: "$step-1"
+    - range:
+        start: "0"
+        end: "$step-2"
+    - map:
+        var: "mask"
+        over: "$step-3"
+        body:
+          - range:
+              start: "0"
+              end: "$step-1"
+          - fold:
+              acc: "subset"
+              init: "(list)"
+              var: "i"
+              over: "$body-1"
+              body:
+                - arithmetic_shift:
+                    x: "1"
+                    y: "$i"
+                - bitwise_and:
+                    x: "$mask"
+                    y: "$body-1"
+                - cond:
+                    clauses:
+                      - test:
+                          greater_than:
+                            x: "$body-2"
+                            y: "0"
+                        then:
+                          - list_ref:
+                              x: "$lst"
+                              y: "$i"
+                          - append:
+                              x: "$subset"
+                              y:
+                                list_new: "$body-1"
+                      - else: "$subset"

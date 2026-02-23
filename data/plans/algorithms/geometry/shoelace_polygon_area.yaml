@@ -8,6 +8,43 @@ shoelace_polygon_area:
   bindings:
     n: "3"
   steps:
-    - let_bind:
-        bindings: "[xs (vector 0 4 0)] [ys (vector 0 0 3)]"
-        body: "(/ (abs (for/sum ([i (in-range n)]) (let ([j (modulo (+ i 1) n)]) (- (* (vector-ref xs i) (vector-ref ys j)) (* (vector-ref xs j) (vector-ref ys i)))))) 2)"
+    - vector_new: "0 4 0"
+    - vector_new: "0 0 3"
+    - range:
+        start: "0"
+        end: "$n"
+    - for_sum:
+        var: "i"
+        over: "$step-3"
+        body:
+          - add:
+              x: "$i"
+              y: "1"
+          - modulo:
+              x: "$body-1"
+              y: "$n"
+          - vector_ref:
+              v: "$step-1"
+              i: "$i"
+          - vector_ref:
+              v: "$step-2"
+              i: "$body-2"
+          - multiply:
+              x: "$body-3"
+              y: "$body-4"
+          - vector_ref:
+              v: "$step-1"
+              i: "$body-2"
+          - vector_ref:
+              v: "$step-2"
+              i: "$i"
+          - multiply:
+              x: "$body-6"
+              y: "$body-7"
+          - subtract:
+              x: "$body-5"
+              y: "$body-8"
+    - abs: "$step-4"
+    - quotient:
+        x: "$step-5"
+        y: "2"

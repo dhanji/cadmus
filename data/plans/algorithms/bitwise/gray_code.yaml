@@ -8,7 +8,17 @@ gray_code:
   bindings:
     n: "3"
   steps:
+    - expt:
+        x: "2"
+        y: "$n"
     - for_list:
         var: "i"
-        sequence: "(in-range (expt 2 n))"
-        body: "(bitwise-xor i (arithmetic-shift i -1))"
+        start: "0"
+        end: "$step-1"
+        body:
+          - bitwise_xor:
+              x: "$i"
+              y:
+                arithmetic_shift:
+                  x: "$i"
+                  y: "-1"

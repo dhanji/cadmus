@@ -431,6 +431,26 @@ ops:
     output: "List(b)"
     description: "(for/list ([x seq]) body) — build list from iteration"
 
+  - name: for_each
+    racket_symbol: "for-each"
+    type_params: [a]
+    inputs: ["a"]
+    output: "Void"
+    description: "(for-each (lambda (x) body) seq) — iterate for side effects"
+
+  - name: cond
+    racket_symbol: "cond"
+    inputs: []
+    output: "Any"
+    description: "(cond [test then] ... [else val]) — multi-branch conditional"
+
+  - name: map
+    racket_symbol: "map"
+    type_params: [a, b]
+    inputs: ["List(a)"]
+    output: "List(b)"
+    description: "(map (lambda (x) body) lst) — transform each element"
+
   - name: for_sum
     racket_symbol: "for/sum"
     type_params: [a]
@@ -569,6 +589,12 @@ ops:
     inputs: ["Number"]
     output: "Number"
     description: "(exact-ceiling n) — ceiling as exact integer"
+
+  - name: round
+    racket_symbol: "round"
+    inputs: ["Number"]
+    output: "Number"
+    description: "(round n) — round to nearest integer"
 
   - name: exact_round
     racket_symbol: "exact-round"
@@ -920,3 +946,349 @@ ops:
       invariants: []
       category: shell
       effects: io
+
+  # =========================================================================
+  # 9. Vector Operations
+  # =========================================================================
+
+  - name: make_vector
+    racket_symbol: "make-vector"
+    inputs: ["Number", "Any"]
+    output: "Vector(Any)"
+    description: "(make-vector size init) — create a vector of given size filled with init"
+
+  - name: vector_ref
+    racket_symbol: "vector-ref"
+    type_params: [a]
+    inputs: ["Vector(a)", "Number"]
+    output: "a"
+    description: "(vector-ref v i) — get element at index i"
+
+  - name: vector_set
+    racket_symbol: "vector-set!"
+    type_params: [a]
+    inputs: ["Vector(a)", "Number", "a"]
+    output: "Void"
+    description: "(vector-set! v i val) — set element at index i"
+
+  - name: vector_new
+    racket_symbol: "vector"
+    inputs: []
+    output: "Vector(Any)"
+    description: "(vector e ...) — create a vector from elements"
+    properties:
+      variadic: true
+
+  - name: vector_length
+    racket_symbol: "vector-length"
+    type_params: [a]
+    inputs: ["Vector(a)"]
+    output: "Number"
+    description: "(vector-length v) — number of elements"
+
+  - name: vector_to_list
+    racket_symbol: "vector->list"
+    type_params: [a]
+    inputs: ["Vector(a)"]
+    output: "List(a)"
+    description: "(vector->list v) — convert vector to list"
+
+  - name: list_to_vector
+    racket_symbol: "list->vector"
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "Vector(a)"
+    description: "(list->vector lst) — convert list to vector"
+
+  - name: build_vector
+    racket_symbol: "build-vector"
+    inputs: ["Number"]
+    output: "Vector(Any)"
+    description: "(build-vector n f) — create vector of size n using function f"
+
+  # =========================================================================
+  # 10. Character Operations
+  # =========================================================================
+
+  - name: char_to_integer
+    racket_symbol: "char->integer"
+    inputs: ["Char"]
+    output: "Number"
+    description: "(char->integer c) — character to Unicode code point"
+
+  - name: integer_to_char
+    racket_symbol: "integer->char"
+    inputs: ["Number"]
+    output: "Char"
+    description: "(integer->char n) — Unicode code point to character"
+
+  - name: char_alphabetic
+    racket_symbol: "char-alphabetic?"
+    inputs: ["Char"]
+    output: "Boolean"
+    description: "(char-alphabetic? c) — is character a letter?"
+
+  - name: char_upper_case
+    racket_symbol: "char-upper-case?"
+    inputs: ["Char"]
+    output: "Boolean"
+    description: "(char-upper-case? c) — is character uppercase?"
+
+  - name: char_equal
+    racket_symbol: "char=?"
+    inputs: ["Char", "Char"]
+    output: "Boolean"
+    description: "(char=? a b) — are characters equal?"
+
+  # =========================================================================
+  # 11. String Operations (extended)
+  # =========================================================================
+
+  - name: string_to_list
+    racket_symbol: "string->list"
+    inputs: ["String"]
+    output: "List(Char)"
+    description: "(string->list s) — convert string to list of characters"
+
+  - name: list_to_string
+    racket_symbol: "list->string"
+    inputs: ["List(Char)"]
+    output: "String"
+    description: "(list->string lst) — convert list of characters to string"
+
+  - name: string_ref
+    racket_symbol: "string-ref"
+    inputs: ["String", "Number"]
+    output: "Char"
+    description: "(string-ref s i) — get character at index i"
+
+  - name: substring_op
+    racket_symbol: "substring"
+    inputs: ["String", "Number", "Number"]
+    output: "String"
+    description: "(substring s start end) — extract substring"
+
+  - name: string_equal
+    racket_symbol: "string=?"
+    inputs: ["String", "String"]
+    output: "Boolean"
+    description: "(string=? a b) — are strings equal?"
+
+  - name: number_to_string_conv
+    racket_symbol: "number->string"
+    inputs: ["Number"]
+    output: "String"
+    description: "(number->string n) — convert number to string"
+
+  # =========================================================================
+  # 12. Bitwise Operations
+  # =========================================================================
+
+  - name: bitwise_and
+    racket_symbol: "bitwise-and"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(bitwise-and a b) — bitwise AND"
+
+  - name: bitwise_or
+    racket_symbol: "bitwise-ior"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(bitwise-ior a b) — bitwise OR"
+
+  - name: bitwise_xor
+    racket_symbol: "bitwise-xor"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(bitwise-xor a b) — bitwise XOR"
+
+  - name: arithmetic_shift
+    racket_symbol: "arithmetic-shift"
+    inputs: ["Number", "Number"]
+    output: "Number"
+    description: "(arithmetic-shift n m) — shift n by m bits (positive=left, negative=right)"
+
+  # =========================================================================
+  # 13. Boolean / Predicate Operations
+  # =========================================================================
+
+  - name: odd_check
+    racket_symbol: "odd?"
+    inputs: ["Number"]
+    output: "Boolean"
+    description: "(odd? n) — is n odd?"
+
+  - name: even_check
+    racket_symbol: "even?"
+    inputs: ["Number"]
+    output: "Boolean"
+    description: "(even? n) — is n even?"
+
+  - name: null_check
+    racket_symbol: "null?"
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "Boolean"
+    description: "(null? lst) — is list empty?"
+
+  - name: and_logic
+    racket_symbol: "and"
+    inputs: ["Boolean", "Boolean"]
+    output: "Boolean"
+    description: "(and a b) — logical AND"
+
+  - name: or_logic
+    racket_symbol: "or"
+    inputs: ["Boolean", "Boolean"]
+    output: "Boolean"
+    description: "(or a b) — logical OR"
+
+  # =========================================================================
+  # 14. List Operations (extended)
+  # =========================================================================
+
+  - name: reverse_list
+    racket_symbol: "reverse"
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "List(a)"
+    description: "(reverse lst) — reverse a list"
+
+  - name: first_elem
+    racket_symbol: "first"
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "a"
+    description: "(first lst) — first element"
+
+  - name: second_elem
+    racket_symbol: "second"
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "a"
+    description: "(second lst) — second element"
+
+  - name: third_elem
+    racket_symbol: "third"
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "a"
+    description: "(third lst) — third element"
+
+  - name: remove_duplicates
+    racket_symbol: "remove-duplicates"
+    type_params: [a]
+    inputs: ["List(a)"]
+    output: "List(a)"
+    description: "(remove-duplicates lst) — remove duplicate elements"
+
+  - name: apply_max
+    racket_symbol: "apply-max"
+    inputs: ["List(Number)"]
+    output: "Number"
+    description: "(apply max lst) — maximum element of list"
+
+  - name: apply_min
+    racket_symbol: "apply-min"
+    inputs: ["List(Number)"]
+    output: "Number"
+    description: "(apply min lst) — minimum element of list"
+
+  # =========================================================================
+  # 15. Mutable State Operations
+  # =========================================================================
+
+  - name: box_new
+    racket_symbol: "box"
+    inputs: ["Any"]
+    output: "Box(Any)"
+    description: "(box v) — create a mutable box"
+
+  - name: unbox_val
+    racket_symbol: "unbox"
+    inputs: ["Box(Any)"]
+    output: "Any"
+    description: "(unbox b) — read the value in a box"
+
+  - name: set_box
+    racket_symbol: "set-box!"
+    inputs: ["Box(Any)", "Any"]
+    output: "Void"
+    description: "(set-box! b v) — set the value in a box"
+
+  - name: set_bang
+    racket_symbol: "set!"
+    inputs: ["Any", "Any"]
+    output: "Void"
+    description: "(set! var val) — mutate a variable"
+
+  # =========================================================================
+  # 16. Control Flow Operations
+  # =========================================================================
+
+  - name: when_do
+    racket_symbol: "when"
+    inputs: ["Boolean", "Any"]
+    output: "Void"
+    description: "(when test body) — execute body when test is true"
+
+  - name: make_prng
+    racket_symbol: "make-pseudo-random-generator"
+    inputs: []
+    output: "Any"
+    description: "(make-pseudo-random-generator) — create a PRNG"
+
+  - name: random_seed
+    racket_symbol: "random-seed"
+    inputs: ["Number"]
+    output: "Void"
+    description: "(random-seed n) — seed the random number generator"
+
+  # =========================================================================
+  # 17. Plan DSL Control Flow Ops
+  # =========================================================================
+  # These ops are used by the plan DSL for structured sub-step pipelines.
+  # They compile to Racket control flow forms (for/fold, map, for-each, etc.)
+
+  - name: fold
+    racket_symbol: "for/fold"
+    type_params: [a, b]
+    inputs: ["b", "List(a)"]
+    output: "b"
+    description: "fold — accumulate over a sequence with sub-step body"
+
+  - name: for_range
+    racket_symbol: "for"
+    inputs: ["Number", "Number"]
+    output: "Void"
+    description: "for_range — iterate over integer range with sub-step body"
+
+  - name: for_range_down
+    racket_symbol: "for"
+    inputs: ["Number", "Number"]
+    output: "Void"
+    description: "for_range_down — iterate over integer range in reverse"
+
+  - name: for_list_star
+    racket_symbol: "for*/list"
+    inputs: []
+    output: "List(Any)"
+    description: "for*/list — nested iteration producing a list"
+
+  - name: take
+    racket_symbol: "take"
+    inputs: ["List(a)", "Number"]
+    output: "List(a)"
+    description: "(take lst n) — first n elements of list"
+
+  - name: drop
+    racket_symbol: "drop"
+    inputs: ["List(a)", "Number"]
+    output: "List(a)"
+    description: "(drop lst n) — all but first n elements of list"
+
+  - name: for_star
+    racket_symbol: "for*"
+    inputs: []
+    output: "Void"
+    description: "for* — nested iteration for side effects"

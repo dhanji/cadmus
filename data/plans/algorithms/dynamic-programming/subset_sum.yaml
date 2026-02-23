@@ -8,6 +8,42 @@ subset_sum:
   bindings:
     target: "9"
   steps:
-    - let_bind:
-        bindings: "[nums (list 3 34 4 12 5 2)] [dp (make-vector (+ target 1) #f)]"
-        body: "(begin (vector-set! dp 0 #t) (for ([x (in-list nums)]) (for ([j (in-range target (- x 1) -1)]) (when (vector-ref dp (- j x)) (vector-set! dp j #t)))) (vector-ref dp target))"
+    - list_new: "3 34 4 12 5 2"
+    - add:
+        x: "$target"
+        y: "1"
+    - make_vector:
+        size: "$step-2"
+        init: "#f"
+    - vector_set:
+        v: "$step-3"
+        i: "0"
+        val: "#t"
+    - for_each:
+        var: "x"
+        over: "$step-1"
+        body:
+          - for_range_down:
+              var: "j"
+              start: "$target"
+              end:
+                subtract:
+                  x: "$x"
+                  y: "1"
+              body:
+                - subtract:
+                    x: "$j"
+                    y: "$x"
+                - vector_ref:
+                    v: "$step-3"
+                    i: "$body-1"
+                - when_do:
+                    test: "$body-2"
+                    body:
+                      - vector_set:
+                          v: "$step-3"
+                          i: "$j"
+                          val: "#t"
+    - vector_ref:
+        v: "$step-3"
+        i: "$target"

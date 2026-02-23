@@ -8,6 +8,35 @@ consistent_hashing:
   bindings:
     n: "0"
   steps:
-    - let_bind:
-        bindings: "[nodes (list 100 200 300)] [key-pos 150]"
-        body: "(let loop ([ns (sort nodes <)]) (cond [(null? ns) (car (sort nodes <))] [(>= (car ns) key-pos) (car ns)] [else (loop (cdr ns))]))"
+    - list_new: "100 200 300"
+    - sort_list:
+        comparator: "<"
+    - fold:
+        acc: "result"
+        init: "-1"
+        var: "node"
+        over: "$step-2"
+        body:
+          - cond:
+              clauses:
+                - test:
+                    and_logic:
+                      x:
+                        equal:
+                          x: "$result"
+                          y: "-1"
+                      y:
+                        greater_than_or_equal:
+                          x: "$node"
+                          y: "150"
+                  then: "$node"
+                - else: "$result"
+    - cond:
+        clauses:
+          - test:
+              equal:
+                x: "$step-3"
+                y: "-1"
+            then:
+              - first_elem: "$step-2"
+          - else: "$step-3"

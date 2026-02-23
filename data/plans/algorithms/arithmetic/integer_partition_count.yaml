@@ -8,6 +8,50 @@ integer_partition_count:
   bindings:
     n: "10"
   steps:
-    - let_bind:
-        bindings: "[dp (make-vector (+ n 1) 0)]"
-        body: "(begin (vector-set! dp 0 1) (for ([i (in-range 1 (+ n 1))]) (for ([j (in-range i (+ n 1))]) (vector-set! dp j (+ (vector-ref dp j) (vector-ref dp (- j i)))))) (vector-ref dp n))"
+    - add:
+        x: "$n"
+        y: "1"
+    - make_vector:
+        size: "$step-1"
+        init: "0"
+    - vector_set:
+        v: "$step-2"
+        i: "0"
+        val: "1"
+    - range:
+        start: "1"
+        end:
+          add:
+            x: "$n"
+            y: "1"
+    - for_each:
+        var: "i"
+        over: "$step-4"
+        body:
+          - for_range:
+              var: "j"
+              start: "$i"
+              end:
+                add:
+                  x: "$n"
+                  y: "1"
+              body:
+                - vector_ref:
+                    v: "$step-2"
+                    i: "$j"
+                - subtract:
+                    x: "$j"
+                    y: "$i"
+                - vector_ref:
+                    v: "$step-2"
+                    i: "$body-2"
+                - add:
+                    x: "$body-1"
+                    y: "$body-3"
+                - vector_set:
+                    v: "$step-2"
+                    i: "$j"
+                    val: "$body-4"
+    - vector_ref:
+        v: "$step-2"
+        i: "$n"

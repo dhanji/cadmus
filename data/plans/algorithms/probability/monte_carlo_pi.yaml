@@ -8,6 +8,43 @@ monte_carlo_pi:
   bindings:
     n: "10000"
   steps:
-    - let_bind:
-        bindings: "[samples 10000]"
-        body: "(let* ([gen (make-pseudo-random-generator)] [_ (parameterize ([current-pseudo-random-generator gen]) (random-seed 42))] [inside (parameterize ([current-pseudo-random-generator gen]) (for/sum ([_ (in-range samples)]) (let ([x (random)] [y (random)]) (if (<= (+ (* x x) (* y y)) 1.0) 1 0))))]) (/ (round (* (/ (* 4.0 inside) samples) 100)) 100))"
+    - random_seed: "42"
+    - range:
+        start: "0"
+        end: "$n"
+    - for_sum:
+        var: "_"
+        over: "$step-2"
+        body:
+          - random: ""
+          - random: ""
+          - multiply:
+              x: "$body-1"
+              y: "$body-1"
+          - multiply:
+              x: "$body-2"
+              y: "$body-2"
+          - add:
+              x: "$body-3"
+              y: "$body-4"
+          - cond:
+              clauses:
+                - test:
+                    less_than_or_equal:
+                      x: "$body-5"
+                      y: "1.0"
+                  then: "1"
+                - else: "0"
+    - multiply:
+        x: "4.0"
+        y: "$step-3"
+    - divide:
+        x: "$step-4"
+        y: "$n"
+    - multiply:
+        x: "$step-5"
+        y: "100"
+    - round: "$step-6"
+    - divide:
+        x: "$step-7"
+        y: "100"

@@ -8,7 +8,12 @@ factorial:
   bindings:
     n: "10"
   steps:
+    - range:
+        start: "1"
+        end:
+          add:
+            x: "$n"
+            y: "1"
     - for_product:
         var: "i"
-        sequence: "(in-range 1 (+ n 1))"
-        body: "i"
+        over: "$step-1"

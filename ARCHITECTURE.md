@@ -484,3 +484,349 @@ data/
 - `serde`, `serde_yaml`, `serde_json` — serialization
 - `thiserror` — error types
 - No async, no LLM, no network calls
+
+## Plan DSL: Structured Sub-Steps
+
+The plan DSL supports **nested sub-step lists** as first-class step parameters,
+enabling Turing-complete computation without embedded Racket code. Control flow
+constructs (`map`, `for_each`, `fold`, `cond`, `for_range`) take sub-step
+pipelines as their bodies, not string expressions.
+
+### Design Principles
+
+1. **Every operation is a first-class step** — no string expressions, no
+   embedded Racket in any parameter.
+2. **Sub-step pipelines** use `$body-N` references (1-indexed) to refer to
+   results of earlier steps within the same body.
+3. **Outer scope** is accessible via `$var` (plan inputs) and `$step-N`
+   (top-level pipeline steps).
+4. **Loop variables** are accessible via `$var_name` within their body scope.
+5. **The last step** in a sub-pipeline is its return value.
+
+### New Step Types
+
+#### `map` — Transform Each Element
+
+Applies a sub-step pipeline to each element of a sequence. Returns a new
+sequence of the same length.
+
+```yaml
+- map:
+    var: "c"                    # loop variable name
+    over: "$step-1"            # sequence to iterate (or inline step)
+    body:                       # sub-step pipeline
+      - char_to_integer: "$c"
+      - add: { x: "$body-1", y: "1" }
+```
+
+Generates: `(map (lambda (c) (let* ([body-1 (char->integer c)] [body-2 (+ body-1 1)]) body-2)) step-1)`
+
+#### `for_each` — Side Effects Over Sequence
+
+Like `map` but for side effects (mutation). Returns void.
+
+```yaml
+- for_each:
+    var: "x"
+    over: "$coins"
+    body:
+      - for_range:
+          var: "a"
+          start: "$x"
+          end: { add: { x: "$amount", y: "1" } }
+          body:
+            - vector_ref: { v: "$dp", i: { subtract: { x: "$a", y: "$x" } } }
+            - add: { x: "$body-1", y: "1" }
+            - vector_ref: { v: "$dp", i: "$a" }
+            - min: { x: "$body-3", y: "$body-2" }
+            - vector_set: { v: "$dp", i: "$a", val: "$body-4" }
+```
+
+Generates: `(for-each (lambda (x) ...) coins)`
+
+#### `fold` — Accumulate Over Sequence
+
+Reduces a sequence to a single value using an accumulator.
+
+```yaml
+- fold:
+    acc: "result"               # accumulator variable name
+    init: "1"                   # initial accumulator value
+    var: "i"                    # element variable name
+    over: "$step-1"            # sequence to fold over
+    body:                       # sub-step pipeline (last step = new acc)
+      - subtract: { x: "$n", y: "$i" }
+      - add: { x: "$body-1", y: "1" }
+      - multiply: { x: "$result", y: "$body-2" }
+```
+
+Generates: `(for/fold ([result 1]) ([i (in-list step-1)]) (let* (...) body-3))`
+
+#### `cond` — Switch/Case
+
+Multi-branch conditional. Each clause has a `test` (a step or inline op)
+and a `then` (a value, `$`-reference, or sub-step pipeline). The last
+clause can be `else`.
+
+```yaml
+- cond:
+    clauses:
+      - test: { char_alphabetic: "$c" }
+        then:
+          - cond:
+              clauses:
+                - test: { char_upper_case: "$c" }
+                  then: "65"
+                - else: "97"
+          - char_to_integer: "$c"
+          - subtract: { x: "$body-2", y: "$body-1" }
+          - add: { x: "$body-3", y: "$k" }
+          - modulo: { x: "$body-4", y: "26" }
+          - add: { x: "$body-1", y: "$body-5" }
+          - integer_to_char: "$body-6"
+      - else: "$c"
+```
+
+Generates: `(cond [(char-alphabetic? c) (let* (...) body-7)] [else c])`
+
+#### `for_range` — Iterate Over Integer Range
+
+Iterates a sub-step pipeline over an integer range. Used for side effects
+(with `vector_set`) or as a sequence generator.
+
+```yaml
+- for_range:
+    var: "i"
+    start: "1"
+    end: { add: { x: "$n", y: "1" } }
+    body:
+      - vector_ref: { v: "$dp", i: "$i" }
+      - add: { x: "$body-1", y: "1" }
+      - vector_set: { v: "$dp", i: "$i", val: "$body-2" }
+```
+
+Generates: `(for ([i (in-range 1 (+ n 1))]) (let* (...) body-3))`
+
+When used as a value (not for side effects), use `for_list` variant:
+
+```yaml
+- for_list:
+    var: "i"
+    start: "0"
+    end: "$n"
+    body:
+      - bitwise_xor: { x: "$i", y: { arithmetic_shift: { x: "$i", y: "-1" } } }
+```
+
+Generates: `(for/list ([i (in-range 0 n)]) (bitwise-xor i (arithmetic-shift i -1)))`
+
+#### Inline Steps
+
+Any parameter that expects a value can be an **inline step** (a single-key
+map that names an op). This avoids needing a separate step + `$body-N`
+reference for simple expressions:
+
+```yaml
+# Instead of:
+- add: { x: "$n", y: "1" }
+- range: { start: "1", end: "$step-1" }
+
+# Inline:
+- range:
+    start: "1"
+    end: { add: { x: "$n", y: "1" } }
+```
+
+Inline steps are syntactic sugar — the codegen inlines them as nested
+Racket expressions without intermediate `let*` bindings.
+
+### Scope Rules
+
+| Reference | Resolves to |
+|-----------|-------------|
+| `$var_name` | Plan input, loop variable, or accumulator in scope |
+| `$step-N` | Result of top-level pipeline step N |
+| `$body-N` | Result of sub-step N within current body |
+
+Shadowing: loop variables shadow plan inputs of the same name within
+their body scope.
+
+### Examples
+
+#### Factorial (SIMPLE — for_product over range)
+
+```yaml
+factorial:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "10"
+  steps:
+    - range:
+        start: "1"
+        end: { add: { x: "$n", y: "1" } }
+    - for_product:
+        var: "i"
+        over: "$step-1"
+```
+
+#### Euler Totient (FOR_SUM with cond)
+
+```yaml
+euler_totient:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "12"
+  steps:
+    - range:
+        start: "1"
+        end: "$n"
+    - for_sum:
+        var: "i"
+        over: "$step-1"
+        body:
+          - gcd: { x: "$i", y: "$n" }
+          - cond:
+              clauses:
+                - test: { equal: { x: "$body-1", y: "1" } }
+                  then: "1"
+                - else: "0"
+```
+
+#### Caesar Cipher (map with nested cond)
+
+```yaml
+caesar_cipher:
+  inputs:
+    - s: "String"
+    - k: "Number"
+  bindings:
+    s: "\"HELLO\""
+    k: "3"
+  steps:
+    - string_to_list: "$s"
+    - map:
+        var: "c"
+        over: "$step-1"
+        body:
+          - cond:
+              clauses:
+                - test: { char_alphabetic: "$c" }
+                  then:
+                    - cond:
+                        clauses:
+                          - test: { char_upper_case: "$c" }
+                            then: "65"
+                          - else: "97"
+                    - char_to_integer: "$c"
+                    - subtract: { x: "$body-2", y: "$body-1" }
+                    - add: { x: "$body-3", y: "$k" }
+                    - modulo: { x: "$body-4", y: "26" }
+                    - add: { x: "$body-1", y: "$body-5" }
+                    - integer_to_char: "$body-6"
+                - else: "$c"
+    - list_to_string: "$step-2"
+```
+
+#### Counting Sort (for_each with mutation)
+
+```yaml
+counting_sort:
+  inputs:
+    - lst: "List(Number)"
+  bindings:
+    lst: "(list 4 2 2 8 3 3 1)"
+  steps:
+    - apply_max: "$lst"
+    - add: { x: "$step-1", y: "1" }
+    - make_vector: { size: "$step-2", init: "0" }
+    - for_each:
+        var: "x"
+        over: "$lst"
+        body:
+          - vector_ref: { v: "$step-3", i: "$x" }
+          - add: { x: "$body-1", y: "1" }
+          - vector_set: { v: "$step-3", i: "$x", val: "$body-2" }
+    - for_list_star:
+        vars:
+          - { var: "i", start: "0", end: "$step-2" }
+          - { var: "_", start: "0", end: { vector_ref: { v: "$step-3", i: "$i" } } }
+        body:
+          - identity: "$i"
+```
+
+#### 0/1 Knapsack (nested for_range with mutation)
+
+```yaml
+zero_one_knapsack:
+  inputs:
+    - capacity: "Number"
+  bindings:
+    capacity: "7"
+  steps:
+    - vector_new: "1 3 4 5"
+    - vector_new: "1 4 5 7"
+    - vector_length: "$step-1"
+    - add: { x: "$capacity", y: "1" }
+    - make_vector: { size: "$step-4", init: "0" }
+    - for_range:
+        var: "i"
+        start: "0"
+        end: "$step-3"
+        body:
+          - for_range_down:
+              var: "w"
+              start: "$capacity"
+              end: { subtract: { x: { vector_ref: { v: "$step-1", i: "$i" } }, y: "1" } }
+              body:
+                - vector_ref: { v: "$step-5", i: "$w" }
+                - subtract: { x: "$w", y: { vector_ref: { v: "$step-1", i: "$i" } } }
+                - vector_ref: { v: "$step-5", i: "$body-2" }
+                - add: { x: "$body-3", y: { vector_ref: { v: "$step-2", i: "$i" } } }
+                - max: { x: "$body-1", y: "$body-4" }
+                - vector_set: { v: "$step-5", i: "$w", val: "$body-5" }
+    - vector_ref: { v: "$step-5", i: "$capacity" }
+```
+
+#### Bellman-Ford (for_each over list with mutation)
+
+```yaml
+bellman_ford:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "5"
+  steps:
+    - list_new: "(list (list 0 1 4) (list 0 2 1) (list 1 3 1) (list 2 1 -2) (list 2 3 5) (list 3 4 3))"
+    - make_vector: { size: "$n", init: "+inf.0" }
+    - vector_set: { v: "$step-2", i: "0", val: "0" }
+    - for_range:
+        var: "_"
+        start: "0"
+        end: { subtract: { x: "$n", y: "1" } }
+        body:
+          - for_each:
+              var: "e"
+              over: "$step-1"
+              body:
+                - first_elem: "$e"
+                - second_elem: "$e"
+                - third_elem: "$e"
+                - vector_ref: { v: "$step-2", i: "$body-1" }
+                - add: { x: "$body-4", y: "$body-3" }
+                - vector_ref: { v: "$step-2", i: "$body-2" }
+                - cond:
+                    clauses:
+                      - test: { less_than: { x: "$body-5", y: "$body-6" } }
+                        then:
+                          - vector_set: { v: "$step-2", i: "$body-2", val: "$body-5" }
+                      - else: "0"
+    - vector_to_list: "$step-2"
+```
+
+### Deferred: Recursive Plans (55 plans)
+
+Plans requiring general recursion (iterate/named-let, recursive lambda)
+retain their current string-expression form. These will be addressed in
+a future phase with a `recur` step type for named recursive functions.

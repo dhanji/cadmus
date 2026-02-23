@@ -8,6 +8,13 @@ reservoir_sampling:
   bindings:
     n: "20"
   steps:
-    - let_bind:
-        bindings: "[k 5] [stream (range 1 (+ n 1))]"
-        body: "(length (take stream k))"
+    - range:
+        start: "1"
+        end:
+          add:
+            x: "$n"
+            y: "1"
+    - take:
+        x: "$step-1"
+        y: "5"
+    - length: "$step-2"

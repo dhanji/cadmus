@@ -4,10 +4,51 @@
 
 closest_pair_of_points:
   inputs:
-    - n: "Number"
+    - pts: "List(Any)"
   bindings:
-    n: "5"
+    pts: "(list (cons 0 0) (cons 3 4) (cons 1 1) (cons 5 5) (cons 2 2))"
   steps:
-    - let_bind:
-        bindings: "[pts (list (cons 0 0) (cons 3 4) (cons 1 1) (cons 5 5) (cons 2 2))]"
-        body: "(let ([best +inf.0]) (for* ([i (in-range (length pts))] [j (in-range (+ i 1) (length pts))]) (let* ([a (list-ref pts i)] [b (list-ref pts j)] [dx (- (car a) (car b))] [dy (- (cdr a) (cdr b))] [d (sqrt (+ (* dx dx) (* dy dy)))]) (when (< d best) (set! best d)))) best)"
+    - length: "$pts"
+    - box_new: "+inf.0"
+    - for_star:
+        vars:
+          - { var: "i", start: "0", end: "$step-1" }
+          - { var: "j", start: { add: { x: "$i", y: "1" } }, end: "$step-1" }
+        body:
+          - list_ref:
+              x: "$pts"
+              y: "$i"
+          - list_ref:
+              x: "$pts"
+              y: "$j"
+          - car: "$body-1"
+          - car: "$body-2"
+          - subtract:
+              x: "$body-3"
+              y: "$body-4"
+          - cdr: "$body-1"
+          - cdr: "$body-2"
+          - subtract:
+              x: "$body-6"
+              y: "$body-7"
+          - multiply:
+              x: "$body-5"
+              y: "$body-5"
+          - multiply:
+              x: "$body-8"
+              y: "$body-8"
+          - add:
+              x: "$body-9"
+              y: "$body-10"
+          - sqrt: "$body-11"
+          - when_do:
+              test:
+                less_than:
+                  x: "$body-12"
+                  y:
+                    unbox_val: "$step-2"
+              body:
+                - set_box:
+                    x: "$step-2"
+                    y: "$body-12"
+    - unbox_val: "$step-2"

@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use crate::nl::intent::{Intent, EditAction};
 use crate::nl::slots::{ExtractedSlots, SlotValue, StepRef, Anchor, Modifier};
-use crate::plan::{PlanDef, RawStep, StepArgs, PlanInput};
+use crate::plan::{PlanDef, RawStep, StepArgs, StepParam, PlanInput};
 
 // ---------------------------------------------------------------------------
 // Focus stack for anaphora resolution
@@ -225,7 +225,7 @@ pub fn build_plan(
                     .unwrap_or("*.cbz");
                 let mut filter_params = HashMap::new();
                 filter_params.insert("pattern".to_string(), filter_pattern.to_string());
-                steps.push(RawStep { op: "find_matching".to_string(), args: StepArgs::Map(filter_params) });
+                steps.push(RawStep { op: "find_matching".to_string(), args: StepArgs::from_string_map(filter_params) });
 
                 steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) });
 
@@ -241,7 +241,7 @@ pub fn build_plan(
                     .unwrap_or(".cbz"));
                 let mut pack_params = HashMap::new();
                 pack_params.insert("output".to_string(), output_name);
-                steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::Map(pack_params) });
+                steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::from_string_map(pack_params) });
             } else {
                 // ── Simple pack: walk → filter → pack ──
                 inputs.push(PlanInput::bare("path"));
@@ -249,7 +249,7 @@ pub fn build_plan(
                 if let Some(pattern) = slots.patterns.first() {
                     let mut params = HashMap::new();
                     params.insert("pattern".to_string(), pattern.clone());
-                    steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                    steps.push(RawStep { op: "filter".to_string(), args: StepArgs::from_string_map(params) });
                 }
                 steps.push(RawStep { op: "pack_archive".to_string(), args: StepArgs::None });
             }
@@ -266,11 +266,11 @@ pub fn build_plan(
             if !slots.patterns.is_empty() {
                 let mut params = HashMap::new();
                 params.insert("pattern".to_string(), join_patterns(&slots.patterns));
-                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::from_string_map(params) });
             } else if let Some(kw) = first_filterable_keyword(slots) {
                 let mut params = HashMap::new();
                 params.insert("pattern".to_string(), format!("*{}*", kw));
-                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::from_string_map(params) });
             }
             if slots.modifiers.contains(&Modifier::Reverse) {
                 steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) });
@@ -282,11 +282,11 @@ pub fn build_plan(
             if !slots.patterns.is_empty() {
                 let mut params = HashMap::new();
                 params.insert("pattern".to_string(), join_patterns(&slots.patterns));
-                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::from_string_map(params) });
             } else if let Some(kw) = first_filterable_keyword(slots) {
                 let mut params = HashMap::new();
                 params.insert("pattern".to_string(), format!("*{}*", kw));
-                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::from_string_map(params) });
             }
         }
 
@@ -300,7 +300,7 @@ pub fn build_plan(
             } else if let Some(kw) = slots.keywords.first() {
                 params.insert("pattern".to_string(), format!("*{}*", kw));
             }
-            steps.push(RawStep { op: "find_matching".to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
+            steps.push(RawStep { op: "find_matching".to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::from_string_map(params) } });
             steps.push(RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) });
         }
         "search_content" => {
@@ -319,14 +319,14 @@ pub fn build_plan(
                 let fname = filename_of(&target_path);
                 let mut filter_params = HashMap::new();
                 filter_params.insert("pattern".to_string(), fname);
-                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(filter_params) });
+                steps.push(RawStep { op: "filter".to_string(), args: StepArgs::from_string_map(filter_params) });
             } else {
                 inputs.push(PlanInput::bare("textdir"));
                 steps.push(RawStep { op: "walk_tree".to_string(), args: StepArgs::None });
             }
             steps.push(RawStep {
                 op: "search_content".to_string(),
-                args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) },
+                args: if params.is_empty() { StepArgs::None } else { StepArgs::from_string_map(params) },
             });
         }
 
@@ -348,7 +348,7 @@ pub fn build_plan(
             if let Some(pattern) = slots.patterns.first() {
                 params.insert("pattern".to_string(), pattern.clone());
             }
-            steps.push(RawStep { op: "filter".to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
+            steps.push(RawStep { op: "filter".to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::from_string_map(params) } });
         }
 
         // Racket arithmetic operations
@@ -387,7 +387,7 @@ pub fn build_plan(
                 params.insert("x".to_string(), all_numbers[0].clone());
                 params.insert("y".to_string(), all_numbers[1].clone());
             }
-            steps.push(RawStep { op: primary_op.to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::Map(params) } });
+            steps.push(RawStep { op: primary_op.to_string(), args: if params.is_empty() { StepArgs::None } else { StepArgs::from_string_map(params) } });
         }
 
         // Default: just use the op directly
@@ -409,7 +409,7 @@ pub fn build_plan(
                 if !filter_name.is_empty() {
                     let mut params = HashMap::new();
                     params.insert("pattern".to_string(), filter_name);
-                    steps.push(RawStep { op: "filter".to_string(), args: StepArgs::Map(params) });
+                    steps.push(RawStep { op: "filter".to_string(), args: StepArgs::from_string_map(params) });
                 }
                 // Apply the op to each matching entry
                 let mut op_args = StepArgs::Scalar("each".to_string());
@@ -420,7 +420,7 @@ pub fn build_plan(
                         let mut params = HashMap::new();
                         params.insert("to".to_string(), new_name);
                         params.insert("each".to_string(), "true".to_string());
-                        op_args = StepArgs::Map(params);
+                        op_args = StepArgs::from_string_map(params);
                     }
                 }
                 steps.push(RawStep { op: other.to_string(), args: op_args });
@@ -717,7 +717,7 @@ fn apply_skip(
 
     let new_step = RawStep {
         op: "filter".to_string(),
-        args: StepArgs::Map(params),
+        args: StepArgs::from_string_map(params),
     };
 
     wf.steps.insert(insert_pos, new_step);
@@ -848,11 +848,11 @@ fn apply_change(
 
     if let Some(pattern) = slots.patterns.first() {
         let mut params = match &step.args {
-            StepArgs::Map(m) => m.clone(),
+            StepArgs::Map(m) => m.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect(),
             _ => HashMap::new(),
         };
         params.insert("pattern".to_string(), pattern.clone());
-        step.args = StepArgs::Map(params);
+        step.args = StepArgs::from_string_map(params);
     } else if slots.keywords.len() >= 2 {
         // "change X to Y" — keywords[0] is old value, keywords[1] is new value
         let new_val = slots.keywords.last().unwrap().clone();
@@ -861,16 +861,18 @@ fn apply_change(
                 step.args = StepArgs::Scalar(new_val.clone());
             }
             StepArgs::Map(m) => {
-                let mut params = m.clone();
+                let mut params: HashMap<String, String> = m.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect();
                 // Try to find and update the matching param
                 let old_val = &slots.keywords[0];
                 for (_, v) in params.iter_mut() {
-                    if v == old_val {
+                    if v == old_val.as_str() {
                         *v = new_val.clone();
                         break;
                     }
                 }
-                step.args = StepArgs::Map(params);
+                step.args = StepArgs::from_string_map(params);
             }
             StepArgs::None => {
                 step.args = StepArgs::Scalar(new_val.clone());
@@ -964,7 +966,7 @@ fn build_step_from_slots(op: &str, slots: &ExtractedSlots) -> RawStep {
     let args = if params.is_empty() {
         StepArgs::None
     } else {
-        StepArgs::Map(params)
+        StepArgs::from_string_map(params)
     };
 
     RawStep {
@@ -981,6 +983,8 @@ fn build_step_from_slots(op: &str, slots: &ExtractedSlots) -> RawStep {
 fn yaml_quote_if_needed(s: &str) -> String {
     if s.contains(' ') || s.contains(':') || s.contains('#')
         || s.contains('"') || s.contains('\'') || s.contains('\n')
+        || s.contains('*') || s.contains('&') || s.contains('!')
+        || s.contains('{') || s.contains('}') || s.contains('[') || s.contains(']')
     {
         format!("{:?}", s) // Rust debug format gives us double-quoted with escapes
     } else {
@@ -1031,7 +1035,13 @@ pub fn plan_to_yaml(wf: &PlanDef) -> String {
                 let mut keys: Vec<&String> = m.keys().collect();
                 keys.sort();
                 for key in keys {
-                    lines.push(format!("        {}: {:?}", key, m[key]));
+                    let val_str = match &m[key] {
+                        StepParam::Value(s) => yaml_quote_if_needed(s),
+                        StepParam::Steps(steps) => format!("[{} sub-steps]", steps.len()),
+                        StepParam::Inline(step) => format!("{{{}}}", step.op),
+                        StepParam::Clauses(c) => format!("[{} clauses]", c.len()),
+                    };
+                    lines.push(format!("        {}: {}", key, val_str));
                 }
             }
         }
@@ -1117,7 +1127,8 @@ mod tests {
                 let filter_step = wf.steps.iter().find(|s| s.op == "filter").unwrap();
                 match &filter_step.args {
                     StepArgs::Map(m) => {
-                        let pat = m.get("pattern").expect("filter should have pattern");
+                        let pat_param = m.get("pattern").expect("filter should have pattern");
+                        let pat = pat_param.as_str().expect("pattern should be a string");
                         assert!(pat.contains("cbz"), "pattern should include cbz: {}", pat);
                         assert!(pat.contains("cbr"), "pattern should include cbr: {}", pat);
                     }
@@ -1224,7 +1235,7 @@ mod tests {
                 RawStep { op: "list_dir".to_string(), args: StepArgs::None },
                 RawStep {
                     op: "filter".to_string(),
-                    args: StepArgs::Map({
+                    args: StepArgs::from_string_map({
                         let mut m = HashMap::new();
                         m.insert("pattern".to_string(), "*.pdf".to_string());
                         m
@@ -1561,7 +1572,8 @@ mod tests {
         let filter_step = edited.steps.iter().find(|s| s.op == "filter").unwrap();
         match &filter_step.args {
             StepArgs::Map(m) => {
-                let exclude = m.get("exclude").unwrap();
+                let exclude_param = m.get("exclude").unwrap();
+                let exclude = exclude_param.as_str().expect("exclude should be a string");
                 assert_eq!(exclude, ".git", "filter should exclude '.git', got '{}'", exclude);
             }
             other => panic!("expected Map args, got: {:?}", other),

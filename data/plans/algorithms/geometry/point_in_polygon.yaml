@@ -8,6 +8,81 @@ point_in_polygon:
   bindings:
     n: "4"
   steps:
-    - let_bind:
-        bindings: "[px 1] [py 1] [xs (vector 0 4 4 0)] [ys (vector 0 0 4 4)]"
-        body: "(odd? (for/sum ([i (in-range n)]) (let* ([j (modulo (+ i 1) n)] [xi (vector-ref xs i)] [yi (vector-ref ys i)] [xj (vector-ref xs j)] [yj (vector-ref ys j)]) (if (and (or (and (<= yi py) (> yj py)) (and (<= yj py) (> yi py))) (< px (+ xi (/ (* (- py yi) (- xj xi)) (- yj yi))))) 1 0))))"
+    - vector_new: "0 4 4 0"
+    - vector_new: "0 0 4 4"
+    - range:
+        start: "0"
+        end: "$n"
+    - for_sum:
+        var: "i"
+        over: "$step-3"
+        body:
+          - add:
+              x: "$i"
+              y: "1"
+          - modulo:
+              x: "$body-1"
+              y: "$n"
+          - vector_ref:
+              v: "$step-1"
+              i: "$i"
+          - vector_ref:
+              v: "$step-2"
+              i: "$i"
+          - vector_ref:
+              v: "$step-1"
+              i: "$body-2"
+          - vector_ref:
+              v: "$step-2"
+              i: "$body-2"
+          - cond:
+              clauses:
+                - test:
+                    and_logic:
+                      x:
+                        or_logic:
+                          x:
+                            and_logic:
+                              x:
+                                less_than_or_equal:
+                                  x: "$body-4"
+                                  y: "1"
+                              y:
+                                greater_than:
+                                  x: "$body-6"
+                                  y: "1"
+                          y:
+                            and_logic:
+                              x:
+                                less_than_or_equal:
+                                  x: "$body-6"
+                                  y: "1"
+                              y:
+                                greater_than:
+                                  x: "$body-4"
+                                  y: "1"
+                      y:
+                        less_than:
+                          x: "1"
+                          y:
+                            add:
+                              x: "$body-3"
+                              y:
+                                divide:
+                                  x:
+                                    multiply:
+                                      x:
+                                        subtract:
+                                          x: "1"
+                                          y: "$body-4"
+                                      y:
+                                        subtract:
+                                          x: "$body-5"
+                                          y: "$body-3"
+                                  y:
+                                    subtract:
+                                      x: "$body-6"
+                                      y: "$body-4"
+                  then: "1"
+                - else: "0"
+    - odd_check: "$step-4"

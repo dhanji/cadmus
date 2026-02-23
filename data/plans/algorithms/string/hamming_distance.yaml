@@ -10,7 +10,25 @@ hamming_distance:
     s1: "\"karolin\""
     s2: "\"kathrin\""
   steps:
+    - string_length: "$s1"
+    - range:
+        start: "0"
+        end: "$step-1"
     - for_sum:
         var: "i"
-        sequence: "(in-range (string-length s1))"
-        body: "(if (char=? (string-ref s1 i) (string-ref s2 i)) 0 1)"
+        over: "$step-2"
+        body:
+          - string_ref:
+              x: "$s1"
+              y: "$i"
+          - string_ref:
+              x: "$s2"
+              y: "$i"
+          - cond:
+              clauses:
+                - test:
+                    char_equal:
+                      x: "$body-1"
+                      y: "$body-2"
+                  then: "0"
+                - else: "1"

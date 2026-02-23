@@ -385,7 +385,7 @@ mod tests {
                 crate::plan::RawStep {
                     op: "find_matching".to_string(),
                     args: crate::plan::StepArgs::Map(
-                        [("pattern".to_string(), "*.pdf".to_string())].into_iter().collect()
+                        [("pattern".to_string(), crate::plan::StepParam::Value("*.pdf".to_string()))].into_iter().collect()
                     ),
                 },
             ],

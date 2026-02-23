@@ -242,7 +242,12 @@ fn run_plan_mode(path: &Path, dry_run: bool) {
             plan::StepArgs::Scalar(v) => format!("{} {}", ui::icon::ARROW_RIGHT, v),
             plan::StepArgs::Map(m) => {
                 let pairs: Vec<String> = m.iter()
-                    .map(|(k, v)| format!("{}={}", k, v))
+                    .map(|(k, v)| match v {
+                        plan::StepParam::Value(s) => format!("{}={}", k, s),
+                        plan::StepParam::Steps(steps) => format!("{}=[{} sub-steps]", k, steps.len()),
+                        plan::StepParam::Inline(step) => format!("{}={{{}}}", k, step.op),
+                        plan::StepParam::Clauses(c) => format!("{}=[{} clauses]", k, c.len()),
+                    })
                     .collect();
                 format!("{{{}}}", pairs.join(", "))
             }

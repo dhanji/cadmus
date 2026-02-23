@@ -8,6 +8,9 @@ palindrome_check:
   bindings:
     s: "\"racecar\""
   steps:
-    - let_bind:
-        bindings: "[rev (list->string (reverse (string->list s)))]"
-        body: "(string=? s rev)"
+    - string_to_list: "$s"
+    - reverse_list: "$step-1"
+    - list_to_string: "$step-2"
+    - string_equal:
+        x: "$s"
+        y: "$step-3"

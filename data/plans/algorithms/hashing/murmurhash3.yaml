@@ -8,6 +8,100 @@ murmurhash3:
   bindings:
     s: "\"hello\""
   steps:
-    - let_bind:
-        bindings: "[seed 42] [c1 3432918353] [c2 461845907] [m 4294967296]"
-        body: "(let* ([bytes (map char->integer (string->list s))] [h (for/fold ([h seed]) ([b (in-list bytes)]) (let* ([k (modulo (* b c1) m)] [k (modulo (bitwise-ior (arithmetic-shift k 15) (arithmetic-shift k -17)) m)] [k (modulo (* k c2) m)] [h (bitwise-xor h k)] [h (modulo (bitwise-ior (arithmetic-shift h 13) (arithmetic-shift h -19)) m)] [h (modulo (+ (* h 5) 3864292196) m)]) h))] [h (bitwise-xor h (length bytes))] [h (bitwise-xor h (arithmetic-shift h -16))] [h (modulo (* h 2246822507) m)] [h (bitwise-xor h (arithmetic-shift h -13))] [h (modulo (* h 3266489909) m)] [h (bitwise-xor h (arithmetic-shift h -16))]) (modulo h m))"
+    - string_to_list: "$s"
+    - map:
+        var: "c"
+        over: "$step-1"
+        body:
+          - char_to_integer: "$c"
+    - fold:
+        acc: "h"
+        init: "42"
+        var: "b"
+        over: "$step-2"
+        body:
+          - multiply:
+              x: "$b"
+              y: "3432918353"
+          - modulo:
+              x: "$body-1"
+              y: "4294967296"
+          - bitwise_or:
+              x:
+                arithmetic_shift:
+                  x: "$body-2"
+                  y: "15"
+              y:
+                arithmetic_shift:
+                  x: "$body-2"
+                  y: "-17"
+          - modulo:
+              x: "$body-3"
+              y: "4294967296"
+          - multiply:
+              x: "$body-4"
+              y: "461845907"
+          - modulo:
+              x: "$body-5"
+              y: "4294967296"
+          - bitwise_xor:
+              x: "$h"
+              y: "$body-6"
+          - bitwise_or:
+              x:
+                arithmetic_shift:
+                  x: "$body-7"
+                  y: "13"
+              y:
+                arithmetic_shift:
+                  x: "$body-7"
+                  y: "-19"
+          - modulo:
+              x: "$body-8"
+              y: "4294967296"
+          - multiply:
+              x: "$body-9"
+              y: "5"
+          - add:
+              x: "$body-10"
+              y: "3864292196"
+          - modulo:
+              x: "$body-11"
+              y: "4294967296"
+    - length: "$step-2"
+    - bitwise_xor:
+        x: "$step-3"
+        y: "$step-4"
+    - arithmetic_shift:
+        x: "$step-5"
+        y: "-16"
+    - bitwise_xor:
+        x: "$step-5"
+        y: "$step-6"
+    - multiply:
+        x: "$step-7"
+        y: "2246822507"
+    - modulo:
+        x: "$step-8"
+        y: "4294967296"
+    - arithmetic_shift:
+        x: "$step-9"
+        y: "-13"
+    - bitwise_xor:
+        x: "$step-9"
+        y: "$step-10"
+    - multiply:
+        x: "$step-11"
+        y: "3266489909"
+    - modulo:
+        x: "$step-12"
+        y: "4294967296"
+    - arithmetic_shift:
+        x: "$step-13"
+        y: "-16"
+    - bitwise_xor:
+        x: "$step-13"
+        y: "$step-14"
+    - modulo:
+        x: "$step-15"
+        y: "4294967296"

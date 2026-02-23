@@ -124,7 +124,7 @@ fn try_promote_bytes(
             // propagate through the chain.
             if step.op == "find_matching" || step.op == "filter" {
                 if let StepArgs::Map(params) = &step.args {
-                    if let Some(pattern) = params.get("pattern") {
+                    if let Some(pattern) = params.get("pattern").and_then(|p| p.as_str()) {
                         if let Some(narrowed) = narrow_type_from_pattern(&current, pattern) {
                             // Apply the narrowed type and try to bind _promote
                             if let Ok(sub) = unify(&current, &narrowed) {
@@ -148,10 +148,10 @@ fn try_promote_bytes(
         None => input_type.clone(),
     }
 }
-
 /// Extract the operation name and parameters from a RawStep.
 ///
-/// Returns (op_name, params_map). For bare steps, params is empty.
+/// Returns (op_name, string_params_map). For bare steps, params is empty.
+/// Sub-step and inline params are omitted — use step.args directly for those.
 pub fn raw_step_to_op_params(step: &RawStep) -> (String, HashMap<String, String>) {
     let op = step.op.clone();
     let params = match &step.args {
@@ -161,7 +161,11 @@ pub fn raw_step_to_op_params(step: &RawStep) -> (String, HashMap<String, String>
             m.insert("value".to_string(), s.clone());
             m
         }
-        StepArgs::Map(m) => m.clone(),
+        StepArgs::Map(m) => {
+            m.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        }
     };
     (op, params)
 }
@@ -416,7 +420,7 @@ impl<'de> Deserialize<'de> for PlanDef {
 ///   - `read_file: each`     → op with scalar mode
 ///   - `filter: { ext: .pdf }` → op with named params
 ///   - `sort_by: name`       → op with scalar flag
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RawStep {
     /// The operation name (the YAML key)
     pub op: String,
@@ -431,8 +435,63 @@ pub enum StepArgs {
     None,
     /// A single scalar value (mode or flag)
     Scalar(String),
-    /// Named parameters (key-value pairs)
-    Map(HashMap<String, String>),
+    /// Named parameters (key-value pairs, possibly containing sub-step lists)
+    Map(HashMap<String, StepParam>),
+}
+
+/// A single parameter value in a step's Map args.
+///
+/// Parameters can be:
+/// - `Value(s)` — a plain string (number, path, $var reference, etc.)
+/// - `Steps(vec)` — a sub-step pipeline (for body, then, else, etc.)
+/// - `Inline(step)` — a single inline step used as a value expression
+#[derive(Debug, Clone, PartialEq)]
+pub enum StepParam {
+    /// A plain string value.
+    Value(String),
+    /// A list of clause maps (for cond).
+    Clauses(Vec<serde_yaml::Value>),
+    /// A sub-step pipeline (list of steps).
+    Steps(Vec<RawStep>),
+    /// A single inline step used as a value expression.
+    Inline(Box<RawStep>),
+}
+
+impl fmt::Display for StepParam {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StepParam::Value(s) => write!(f, "{}", s),
+            StepParam::Clauses(c) => write!(f, "[{} clauses]", c.len()),
+            StepParam::Steps(steps) => write!(f, "[{} sub-steps]", steps.len()),
+            StepParam::Inline(step) => write!(f, "{{{}}}", step.op),
+        }
+    }
+}
+
+impl StepParam {
+    /// Get the string value if this is a Value variant.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            StepParam::Value(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Get the sub-steps if this is a Steps variant.
+    pub fn as_steps(&self) -> Option<&[RawStep]> {
+        match self {
+            StepParam::Steps(steps) => Some(steps),
+            _ => None,
+        }
+    }
+
+    /// Get the inline step if this is an Inline variant.
+    pub fn as_inline(&self) -> Option<&RawStep> {
+        match self {
+            StepParam::Inline(step) => Some(step),
+            _ => None,
+        }
+    }
 }
 
 impl StepArgs {
@@ -441,13 +500,53 @@ impl StepArgs {
         matches!(self, StepArgs::Scalar(s) if s == "each")
     }
 
-    /// Get a named parameter value.
+    /// Get a named parameter value (string only — ignores sub-steps).
     pub fn get_param(&self, key: &str) -> Option<String> {
         match self {
             StepArgs::Map(map) => {
-                map.get(key).cloned()
+                map.get(key).and_then(|p| p.as_str().map(|s| s.to_string()))
             }
             _ => None,
+        }
+    }
+
+    /// Get a named sub-step list parameter.
+    pub fn get_substeps(&self, key: &str) -> Option<&[RawStep]> {
+        match self {
+            StepArgs::Map(map) => {
+                map.get(key).and_then(|p| p.as_steps())
+            }
+            _ => None,
+        }
+    }
+
+    /// Get a named inline step parameter.
+    pub fn get_inline(&self, key: &str) -> Option<&RawStep> {
+        match self {
+            StepArgs::Map(map) => {
+                map.get(key).and_then(|p| p.as_inline())
+            }
+            _ => None,
+        }
+    }
+
+    /// Get the raw StepParam for a key.
+    pub fn get_raw(&self, key: &str) -> Option<&StepParam> {
+        match self {
+            StepArgs::Map(map) => map.get(key),
+            _ => None,
+        }
+    }
+
+    /// Get all string parameters as a HashMap (for backward compatibility).
+    pub fn string_params(&self) -> HashMap<String, String> {
+        match self {
+            StepArgs::Map(map) => {
+                map.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect()
+            }
+            _ => HashMap::new(),
         }
     }
 
@@ -457,6 +556,15 @@ impl StepArgs {
             StepArgs::Scalar(s) => Some(s.clone()),
             _ => None,
         }
+    }
+
+    /// Create a Map from a HashMap<String, String> (convenience for backward compat).
+    pub fn from_string_map(m: HashMap<String, String>) -> Self {
+        StepArgs::Map(
+            m.into_iter()
+                .map(|(k, v)| (k, StepParam::Value(v)))
+                .collect(),
+        )
     }
 }
 
@@ -468,6 +576,73 @@ impl StepArgs {
 // Each step in the YAML list is either:
 //   - A bare string: "walk_tree"
 //   - A single-key mapping: { read_file: each } or { filter: { extension: ".pdf" } }
+
+/// Parse a YAML value into a StepParam.
+///
+/// - String/Number/Bool → Value(string)
+/// - Sequence → Steps(vec of RawStep)
+/// - Mapping with a single key that looks like an op → Inline(RawStep)
+/// - Mapping with multiple keys → Value(debug string) (legacy fallback)
+fn parse_step_param<'de, M: serde::de::MapAccess<'de>>(
+    v: serde_yaml::Value,
+) -> Result<StepParam, M::Error> {
+    use serde::de;
+    match v {
+        serde_yaml::Value::String(s) => Ok(StepParam::Value(s)),
+        serde_yaml::Value::Number(n) => Ok(StepParam::Value(n.to_string())),
+        serde_yaml::Value::Bool(b) => Ok(StepParam::Value(b.to_string())),
+        serde_yaml::Value::Null => Ok(StepParam::Value(String::new())),
+        serde_yaml::Value::Sequence(seq) => {
+            // Check if this is a clause list (cond clauses) vs a step list.
+            // Clause maps have "test"/"then"/"else" keys.
+            // Var binding maps have "var"/"start"/"end" keys.
+            // Step maps have a single op key.
+            let is_raw_yaml = seq.iter().any(|item| {
+                if let serde_yaml::Value::Mapping(m) = item {
+                    m.contains_key(&serde_yaml::Value::String("test".into()))
+                        || m.contains_key(&serde_yaml::Value::String("else".into()))
+                        || m.contains_key(&serde_yaml::Value::String("var".into()))
+                } else {
+                    false
+                }
+            });
+            if is_raw_yaml {
+                Ok(StepParam::Clauses(seq))
+            } else {
+                let steps: Vec<RawStep> = seq
+                    .into_iter()
+                    .map(|item| {
+                        let yaml_str = serde_yaml::to_string(&item)
+                            .map_err(|e| de::Error::custom(format!("sub-step serialize: {}", e)))?;
+                        serde_yaml::from_str::<RawStep>(&yaml_str)
+                            .map_err(|e| de::Error::custom(format!("sub-step parse: {}", e)))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(StepParam::Steps(steps))
+            }
+        }
+        serde_yaml::Value::Mapping(m) => {
+            // Single-key mapping → try as inline step
+            if m.len() == 1 {
+                let yaml_val = serde_yaml::Value::Mapping(m);
+                let yaml_str = serde_yaml::to_string(&yaml_val)
+                    .map_err(|e| de::Error::custom(format!("inline step serialize: {}", e)))?;
+                match serde_yaml::from_str::<RawStep>(&yaml_str) {
+                    Ok(step) => Ok(StepParam::Inline(Box::new(step))),
+                    Err(_) => Ok(StepParam::Value(yaml_str)),
+                }
+            } else {
+                // Multi-key mapping — legacy format, serialize as debug string
+                let yaml_str = serde_yaml::to_string(&serde_yaml::Value::Mapping(m))
+                    .unwrap_or_default();
+                Ok(StepParam::Value(yaml_str.trim().to_string()))
+            }
+        }
+        serde_yaml::Value::Tagged(_) => {
+            Err(de::Error::custom("tagged values not supported in step params"))
+        }
+    }
+}
 
 impl<'de> Deserialize<'de> for RawStep {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -511,20 +686,25 @@ impl<'de> Deserialize<'de> for RawStep {
                                 serde_yaml::Value::String(s) => s,
                                 other => other.as_str().unwrap_or("").to_string(),
                             };
-                            let val = match v {
-                                serde_yaml::Value::String(s) => s,
-                                serde_yaml::Value::Number(n) => n.to_string(),
-                                serde_yaml::Value::Bool(b) => b.to_string(),
-                                other => format!("{:?}", other),
-                            };
-                            params.insert(key, val);
+                            let param = parse_step_param::<M>(v)?;
+                            params.insert(key, param);
                         }
                         StepArgs::Map(params)
                     }
-                    serde_yaml::Value::Sequence(_) => {
-                        return Err(de::Error::custom(
-                            "step value cannot be a sequence",
-                        ));
+                    serde_yaml::Value::Sequence(seq) => {
+                        // A bare sequence as the step value is a sub-step list.
+                        // Wrap it as a Map with a single "body" key.
+                        let steps: Vec<RawStep> = seq.into_iter()
+                            .map(|v| {
+                                let yaml_str = serde_yaml::to_string(&v)
+                                    .map_err(|e| de::Error::custom(format!("sub-step serialize: {}", e)))?;
+                                serde_yaml::from_str::<RawStep>(&yaml_str)
+                                    .map_err(|e| de::Error::custom(format!("sub-step parse: {}", e)))
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let mut params = HashMap::new();
+                        params.insert("body".to_string(), StepParam::Steps(steps));
+                        StepArgs::Map(params)
                     }
                     serde_yaml::Value::Tagged(_) => {
                         return Err(de::Error::custom(
@@ -634,13 +814,16 @@ fn validate_plan(def: &PlanDef) -> Result<(), PlanError> {
     // Check for unknown $var references
     for (i, step) in def.steps.iter().enumerate() {
         if let StepArgs::Map(params) = &step.args {
-            for (_, v) in params {
-                if let Some(var_name) = v.strip_prefix('$') {
-                    if !var_name.starts_with("step-") && !def.has_input(var_name) {
-                        return Err(PlanError::UnknownVar {
-                            step: i,
-                            var_name: var_name.to_string(),
-                        });
+            for (_, param) in params {
+                // Only validate string values — sub-steps have their own scope
+                if let StepParam::Value(v) = param {
+                    if let Some(var_name) = v.strip_prefix('$') {
+                        if !var_name.starts_with("step-") && !var_name.starts_with("body-") && !def.has_input(var_name) {
+                            return Err(PlanError::UnknownVar {
+                                step: i,
+                                var_name: var_name.to_string(),
+                            });
+                        }
                     }
                 }
             }
@@ -731,6 +914,10 @@ pub struct CompiledStep {
     pub output_type: TypeExpr,
     /// Resolved parameters (after $var expansion)
     pub params: HashMap<String, String>,
+    /// Sub-step pipelines for structured control flow (body, then, else, etc.)
+    pub sub_steps: HashMap<String, Vec<RawStep>>,
+    /// Raw YAML clause lists (for cond clauses, for_star vars, etc.)
+    pub clause_params: HashMap<String, Vec<serde_yaml::Value>>,
     /// Whether this step requires filesystem isolation when run in map mode.
     ///
     /// Set by the compiler when an op with filesystem side effects (e.g.,
@@ -829,9 +1016,15 @@ pub fn compile_plan(
 
         // Resolve params
         let mut params = HashMap::new();
+        let mut sub_steps: HashMap<String, Vec<RawStep>> = HashMap::new();
         if let StepArgs::Map(map) = &step.args {
-            for (k, v) in map {
-                params.insert(k.clone(), v.clone());
+            for (k, param) in map {
+                match param {
+                    StepParam::Value(v) => { params.insert(k.clone(), v.clone()); }
+                    StepParam::Clauses(_) => { /* handled below */ }
+                    StepParam::Steps(steps) => { sub_steps.insert(k.clone(), steps.clone()); }
+                    StepParam::Inline(step) => { params.insert(k.clone(), format!("__inline_step__")); sub_steps.insert(k.clone(), vec![(**step).clone()]); }
+                }
             }
         } else if let StepArgs::Scalar(s) = &step.args {
             if s != "each" {
@@ -997,12 +1190,24 @@ pub fn compile_plan(
         // executors create per-item temp directories.
         let isolate = is_each && needs_isolation(&resolved_op);
 
+        // Extract raw YAML clause params from step args
+        let mut clause_params: HashMap<String, Vec<serde_yaml::Value>> = HashMap::new();
+        if let StepArgs::Map(map) = &step.args {
+            for (k, param) in map {
+                if let StepParam::Clauses(c) = param {
+                    clause_params.insert(k.clone(), c.clone());
+                }
+            }
+        }
+
         compiled_steps.push(CompiledStep {
             index: i,
             op: resolved_op,
             input_type: step_input,
             output_type: step_output.clone(),
             params,
+            sub_steps,
+            clause_params,
             isolate,
         });
 
@@ -1154,9 +1359,14 @@ fn narrow_type_from_pattern(current: &TypeExpr, pattern: &str) -> Option<TypeExp
 fn count_value_params(params: &HashMap<String, String>) -> usize {
     const CONTROL_PARAMS: &[&str] = &[
         "function", "f", "predicate", "pred", "format", "fmt",
-        "comparator", "init", "mode",
+        "comparator", "mode",
     ];
-    params.keys().filter(|k| !CONTROL_PARAMS.contains(&k.as_str())).count()
+    params.iter().filter(|(k, v)| {
+        // Don't exclude "mode" when it holds a real value (scalar arg like `op: "value"`)
+        // "mode" is only a control param when it's literally a mode string like "each"
+        if k.as_str() == "mode" && *v != "each" { return true; }
+        !CONTROL_PARAMS.contains(&k.as_str())
+    }).count()
 }
 
 fn unwrap_seq(ty: &TypeExpr) -> Option<&TypeExpr> {
@@ -1498,7 +1708,7 @@ test:
         assert_eq!(def.steps[0].op, "filter");
         match &def.steps[0].args {
             StepArgs::Map(m) => {
-                assert_eq!(m.get("extension").unwrap(), ".pdf");
+                assert_eq!(m.get("extension").unwrap().as_str().unwrap(), ".pdf");
             }
             other => panic!("expected Map, got: {:?}", other),
         }
@@ -1518,7 +1728,7 @@ test:
         let def = parse_plan(yaml).unwrap();
         match &def.steps[0].args {
             StepArgs::Map(m) => {
-                assert_eq!(m.get("pattern").unwrap(), "$keyword");
+                assert_eq!(m.get("pattern").unwrap().as_str().unwrap(), "$keyword");
                 let expanded = def.steps[0].args.get_param("pattern");
                 assert_eq!(expanded, Some("$keyword".to_string()));
             }
@@ -1996,5 +2206,92 @@ bad-backref:
         assert!(result.is_err());
         let err = format!("{}", result.unwrap_err());
         assert!(err.contains("$step-99"), "error should mention the bad ref: {}", err);
+    }
+
+    // ── Sub-step parsing tests ──
+
+    #[test]
+    fn test_parse_substep_body() {
+        let yaml = r#"
+test-substeps:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "10"
+  steps:
+    - map:
+        var: "i"
+        over: "$step-0"
+        body:
+          - add:
+              x: "$i"
+              y: "1"
+          - multiply:
+              x: "$body-1"
+              y: "2"
+"#;
+        let def = parse_plan(yaml).unwrap();
+        assert_eq!(def.steps.len(), 1);
+        assert_eq!(def.steps[0].op, "map");
+        assert_eq!(def.steps[0].args.get_param("var"), Some("i".to_string()));
+        assert_eq!(def.steps[0].args.get_param("over"), Some("$step-0".to_string()));
+        let body = def.steps[0].args.get_substeps("body").expect("should have body sub-steps");
+        assert_eq!(body.len(), 2);
+        assert_eq!(body[0].op, "add");
+        assert_eq!(body[1].op, "multiply");
+    }
+
+    #[test]
+    fn test_parse_inline_step() {
+        let yaml = r#"
+test-inline:
+  inputs:
+    - n: "Number"
+  bindings:
+    n: "10"
+  steps:
+    - range:
+        start: "1"
+        end:
+          add:
+            x: "$n"
+            y: "1"
+"#;
+        let def = parse_plan(yaml).unwrap();
+        assert_eq!(def.steps.len(), 1);
+        assert_eq!(def.steps[0].op, "range");
+        assert_eq!(def.steps[0].args.get_param("start"), Some("1".to_string()));
+        let inline = def.steps[0].args.get_inline("end").expect("should have inline step");
+        assert_eq!(inline.op, "add");
+        assert_eq!(inline.args.get_param("x"), Some("$n".to_string()));
+        assert_eq!(inline.args.get_param("y"), Some("1".to_string()));
+    }
+
+    #[test]
+    fn test_parse_nested_substeps() {
+        // cond with clauses as a sub-step list — each clause is a single-key step
+        let yaml = r#"
+test-nested:
+  inputs:
+    - lst: "List(Number)"
+  steps:
+    - for_each:
+        var: "x"
+        over: "$lst"
+        body:
+          - add:
+              x: "$x"
+              y: "1"
+          - multiply:
+              x: "$body-1"
+              y: "2"
+"#;
+        let def = parse_plan(yaml).unwrap();
+        assert_eq!(def.steps.len(), 1);
+        assert_eq!(def.steps[0].op, "for_each");
+        let body = def.steps[0].args.get_substeps("body").expect("should have body");
+        assert_eq!(body.len(), 2);
+        assert_eq!(body[0].op, "add");
+        assert_eq!(body[1].op, "multiply");
     }
 }

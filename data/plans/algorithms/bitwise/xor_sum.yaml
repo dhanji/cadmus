@@ -1,5 +1,5 @@
-# XOR sum of range 0..n
-# Example: xor_sum(10) = 11 (0^1^2^...^10)
+# XOR sum: XOR of all integers from 1 to n
+# Example: xor_sum(10) = 11 (1^2^3^...^10)
 # expected: 11
 
 xor_sum:
@@ -8,8 +8,18 @@ xor_sum:
   bindings:
     n: "10"
   steps:
-    - for_fold:
-        bindings: "[acc 0]"
+    - range:
+        start: "1"
+        end:
+          add:
+            x: "$n"
+            y: "1"
+    - fold:
+        acc: "result"
+        init: "0"
         var: "i"
-        sequence: "(in-range (+ n 1))"
-        body: "(bitwise-xor acc i)"
+        over: "$step-1"
+        body:
+          - bitwise_xor:
+              x: "$result"
+              y: "$i"

@@ -8,8 +8,12 @@ single_number_xor:
   bindings:
     lst: "(list 2 3 5 3 2)"
   steps:
-    - for_fold:
-        bindings: "[acc 0]"
+    - fold:
+        acc: "result"
+        init: "0"
         var: "x"
-        sequence: "(in-list lst)"
-        body: "(bitwise-xor acc x)"
+        over: "$lst"
+        body:
+          - bitwise_xor:
+              x: "$result"
+              y: "$x"

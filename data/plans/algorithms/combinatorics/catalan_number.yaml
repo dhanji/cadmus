@@ -8,6 +8,33 @@ catalan_number:
   bindings:
     n: "5"
   steps:
-    - let_bind:
-        bindings: "[binom (for/fold ([r 1]) ([i (in-range n)]) (quotient (* r (- (* 2 n) i)) (+ i 1)))]"
-        body: "(quotient binom (+ n 1))"
+    - range:
+        start: "0"
+        end: "$n"
+    - fold:
+        acc: "r"
+        init: "1"
+        var: "i"
+        over: "$step-1"
+        body:
+          - multiply:
+              x: "2"
+              y: "$n"
+          - subtract:
+              x: "$body-1"
+              y: "$i"
+          - multiply:
+              x: "$r"
+              y: "$body-2"
+          - add:
+              x: "$i"
+              y: "1"
+          - quotient:
+              x: "$body-3"
+              y: "$body-4"
+    - add:
+        x: "$n"
+        y: "1"
+    - quotient:
+        x: "$step-2"
+        y: "$step-3"

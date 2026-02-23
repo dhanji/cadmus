@@ -9,6 +9,56 @@ zero_one_knapsack:
   bindings:
     capacity: "7"
   steps:
-    - let_bind:
-        bindings: "[weights (vector 1 3 4 5)] [values (vector 1 4 5 7)] [n 4] [dp (make-vector (+ capacity 1) 0)]"
-        body: "(begin (for ([i (in-range n)]) (for ([w (in-range capacity (- (vector-ref weights i) 1) -1)]) (vector-set! dp w (max (vector-ref dp w) (+ (vector-ref values i) (vector-ref dp (- w (vector-ref weights i)))))))) (vector-ref dp capacity))"
+    - vector_new: "1 3 4 5"
+    - vector_new: "1 4 5 7"
+    - vector_length: "$step-1"
+    - add:
+        x: "$capacity"
+        y: "1"
+    - make_vector:
+        size: "$step-4"
+        init: "0"
+    - for_range:
+        var: "i"
+        start: "0"
+        end: "$step-3"
+        body:
+          - for_range_down:
+              var: "w"
+              start: "$capacity"
+              end:
+                subtract:
+                  x:
+                    vector_ref:
+                      v: "$step-1"
+                      i: "$i"
+                  y: "1"
+              body:
+                - vector_ref:
+                    v: "$step-5"
+                    i: "$w"
+                - vector_ref:
+                    v: "$step-1"
+                    i: "$i"
+                - subtract:
+                    x: "$w"
+                    y: "$body-2"
+                - vector_ref:
+                    v: "$step-5"
+                    i: "$body-3"
+                - vector_ref:
+                    v: "$step-2"
+                    i: "$i"
+                - add:
+                    x: "$body-4"
+                    y: "$body-5"
+                - max:
+                    x: "$body-1"
+                    y: "$body-6"
+                - vector_set:
+                    v: "$step-5"
+                    i: "$w"
+                    val: "$body-7"
+    - vector_ref:
+        v: "$step-5"
+        i: "$capacity"

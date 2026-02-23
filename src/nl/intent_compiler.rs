@@ -258,14 +258,14 @@ fn compile_select_step(
         params.insert("pattern".to_string(), pattern_str);
         steps.push(RawStep {
             op: "find_matching".to_string(),
-            args: StepArgs::Map(params),
+            args: StepArgs::from_string_map(params),
         });
     } else if let Some(ref pat) = explicit_pattern {
         let mut params = HashMap::new();
         params.insert("pattern".to_string(), pat.clone());
         steps.push(RawStep {
             op: "find_matching".to_string(),
-            args: StepArgs::Map(params),
+            args: StepArgs::from_string_map(params),
         });
     }
     // If no patterns and no concept, still add find_matching (no filter)
@@ -412,7 +412,7 @@ fn generate_plan_name(steps: &[RawStep], target_path: &str) -> String {
     let filter_info: Option<String> = steps.iter()
         .find(|s| s.op == "find_matching")
         .and_then(|s| match &s.args {
-            StepArgs::Map(m) => m.get("pattern").cloned(),
+            StepArgs::Map(m) => m.get("pattern").and_then(|p| p.as_str().map(|s| s.to_string())),
             _ => None,
         });
 
@@ -473,7 +473,7 @@ mod tests {
         let filter = plan.steps.iter().find(|s| s.op == "find_matching").unwrap();
         match &filter.args {
             StepArgs::Map(m) => {
-                let pattern = m.get("pattern").expect("should have pattern");
+                let pattern = m.get("pattern").and_then(|p| p.as_str()).expect("should have pattern");
                 assert!(pattern.contains("cbz") || pattern.contains("cbr"),
                     "pattern should contain cbz/cbr: {}", pattern);
             }
@@ -502,7 +502,7 @@ mod tests {
         let filter = plan.steps.iter().find(|s| s.op == "find_matching").unwrap();
         match &filter.args {
             StepArgs::Map(m) => {
-                let pattern = m.get("pattern").expect("should have pattern");
+                let pattern = m.get("pattern").and_then(|p| p.as_str()).expect("should have pattern");
                 assert!(pattern.contains("pdf"), "pattern should contain pdf: {}", pattern);
             }
             _ => panic!("find_matching should have Map args"),

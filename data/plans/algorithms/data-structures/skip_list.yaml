@@ -8,6 +8,23 @@ skip_list:
   bindings:
     n: "0"
   steps:
-    - let_bind:
-        bindings: "[elements (list 3 6 7 9 12)] [sorted (sort (list 3 6 7 9 12) <)]"
-        body: "(list (if (member 7 sorted) #t #f) (if (member 5 sorted) #t #f))"
+    - list_new: "3 6 7 9 12"
+    - sort_list:
+        comparator: "<"
+    - member:
+        x: "7"
+        y: "$step-2"
+    - cond:
+        clauses:
+          - test: "$step-3"
+            then: "#t"
+          - else: "#f"
+    - member:
+        x: "5"
+        y: "$step-2"
+    - cond:
+        clauses:
+          - test: "$step-5"
+            then: "#t"
+          - else: "#f"
+    - list_new: "$step-4 $step-6"

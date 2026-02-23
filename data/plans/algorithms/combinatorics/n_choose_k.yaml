@@ -10,8 +10,24 @@ n_choose_k:
     n: "10"
     k: "3"
   steps:
-    - for_fold:
-        bindings: "[result 1]"
+    - range:
+        start: "0"
+        end: "$k"
+    - fold:
+        acc: "result"
+        init: "1"
         var: "i"
-        sequence: "(in-range k)"
-        body: "(quotient (* result (- n i)) (+ i 1))"
+        over: "$step-1"
+        body:
+          - subtract:
+              x: "$n"
+              y: "$i"
+          - multiply:
+              x: "$result"
+              y: "$body-1"
+          - add:
+              x: "$i"
+              y: "1"
+          - quotient:
+              x: "$body-2"
+              y: "$body-3"

@@ -8,8 +8,20 @@ fnv1a_hash:
   bindings:
     s: "\"hello\""
   steps:
-    - for_fold:
-        bindings: "[hash 2166136261]"
+    - string_to_list: "$s"
+    - fold:
+        acc: "hash"
+        init: "2166136261"
         var: "c"
-        sequence: "(in-string s)"
-        body: "(modulo (* (bitwise-xor hash (char->integer c)) 16777619) 4294967296)"
+        over: "$step-1"
+        body:
+          - char_to_integer: "$c"
+          - bitwise_xor:
+              x: "$hash"
+              y: "$body-1"
+          - multiply:
+              x: "$body-2"
+              y: "16777619"
+          - modulo:
+              x: "$body-3"
+              y: "4294967296"

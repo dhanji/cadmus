@@ -35,7 +35,7 @@ use std::collections::HashMap;
 
 
 use crate::registry::OperationRegistry;
-use crate::plan::{CompiledPlan, CompiledStep, PlanDef, PlanInput};
+use crate::plan::{CompiledPlan, CompiledStep, PlanDef, PlanInput, RawStep, StepArgs, StepParam};
 
 // ---------------------------------------------------------------------------
 // Racket registry builder (shared by all call sites)
@@ -494,6 +494,498 @@ pub struct RacketExpr {
 ///
 /// `prev_binding` is the variable name holding the previous step's result
 /// (e.g., "step-1"). For the first step, this is None and the expression
+
+// ---------------------------------------------------------------------------
+// Sub-step compilation: turns Vec<RawStep> into nested Racket expressions
+// ---------------------------------------------------------------------------
+
+/// Compile a list of sub-steps into a Racket expression.
+///
+/// Sub-steps are compiled as a `let*` chain where each step's result is
+/// bound to `body-N` (1-indexed). The last step's result is the return value.
+pub fn compile_substeps(
+    steps: &[RawStep],
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    if steps.is_empty() {
+        return Err(RacketError::MissingParam {
+            op: "sub-steps".into(),
+            param: "body".into(),
+        });
+    }
+
+    if steps.len() == 1 {
+        return compile_single_substep(&steps[0], registry);
+    }
+
+    let mut bindings = Vec::new();
+    for (i, step) in steps.iter().enumerate() {
+        let expr = compile_single_substep(step, registry)?;
+        bindings.push(format!("[body-{} {}]", i + 1, expr));
+    }
+    let last = format!("body-{}", steps.len());
+    Ok(format!("(let* ({}) {})", bindings.join(" "), last))
+}
+
+/// Compile a single sub-step (RawStep) into a Racket expression.
+fn compile_single_substep(
+    step: &RawStep,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let op = step.op.as_str();
+    let params = step.args.string_params();
+
+    // Handle sub-step-aware control flow ops
+    match op {
+        "range" => {
+            // range with named params: start, end
+            let start = match step.args.get_raw("start") {
+                Some(StepParam::Value(v)) => resolve_substep_ref(v),
+                Some(StepParam::Inline(s)) => compile_single_substep(s, registry)?,
+                _ => "0".to_string(),
+            };
+            let end = match step.args.get_raw("end") {
+                Some(StepParam::Value(v)) => resolve_substep_ref(v),
+                Some(StepParam::Inline(s)) => compile_single_substep(s, registry)?,
+                _ => return Err(RacketError::MissingParam { op: "range".into(), param: "end".into() }),
+            };
+            return Ok(format!("(range {} {})", start, end));
+        }
+        "map" | "for_each" | "for_sum" | "for_product" => {
+            return compile_loop_substep(op, &step.args, registry);
+        }
+        "fold" => {
+            return compile_fold_substep(&step.args, registry);
+        }
+        "cond" => {
+            return compile_cond_substep(&step.args, registry);
+        }
+        "for_range" | "for_list" => {
+            return compile_for_range_substep(op, &step.args, registry);
+        }
+        "for_star" | "for_list_star" => {
+            return compile_for_star_substep(op, &step.args, registry);
+        }
+        "when_do" => {
+            return compile_when_do_substep(&step.args, registry);
+        }
+        "for_range_down" => {
+            return compile_for_range_down_substep(&step.args, registry);
+        }
+        "vector_set" | "vector_ref" | "make_vector" | "substring_op" => {
+            return compile_ordered_params_substep(op, &step.args, registry);
+        }
+        _ => {}
+    }
+
+    // Check for inline sub-steps in params
+    if let StepArgs::Map(map) = &step.args {
+        let has_substeps = map.values().any(|v| matches!(v, StepParam::Inline(_) | StepParam::Steps(_)));
+        if has_substeps {
+            return compile_op_with_inlines(op, &step.args, registry);
+        }
+    }
+
+    // Simple op: look up racket_symbol and generate call
+    let sym = registry.racket_symbol(op).unwrap_or(op);
+
+    // Handle scalar arg (e.g., char_to_integer: "$c")
+    if let StepArgs::Scalar(s) = &step.args {
+        if s.is_empty() {
+            // No-arg call (e.g., random: "")
+            return Ok(format!("({})", sym));
+        }
+        let arg = resolve_substep_ref(s);
+        return Ok(format!("({} {})", sym, arg));
+    }
+
+    // Collect all string param values as arguments
+    let mut args: Vec<String> = Vec::new();
+    let mut sorted_params: Vec<_> = params.iter().collect();
+    sorted_params.sort_by_key(|(k, _)| k.clone());
+    for (_, v) in &sorted_params {
+        args.push(resolve_substep_ref(v));
+    }
+
+    if args.is_empty() {
+        Ok(format!("({})", sym))
+    } else {
+        Ok(format!("({} {})", sym, args.join(" ")))
+    }
+}
+
+/// Resolve a value reference in a sub-step context.
+fn resolve_substep_ref(val: &str) -> String {
+    if let Some(rest) = val.strip_prefix('$') {
+        rest.to_string()
+    } else {
+        val.to_string()
+    }
+}
+
+/// Reconstruct StepArgs from a CompiledStep (merging string params and sub-steps).
+fn reconstruct_step_args(step: &CompiledStep) -> StepArgs {
+    let mut map: HashMap<String, StepParam> = step.params.iter()
+        .filter(|(_, v)| *v != "__inline_step__")
+        .map(|(k, v)| (k.clone(), StepParam::Value(v.clone())))
+        .collect();
+    // Restore clause params (clauses, vars, etc.)
+    for (k, c) in &step.clause_params {
+        map.insert(k.clone(), StepParam::Clauses(c.clone()));
+    }
+    for (k, steps) in &step.sub_steps {
+        // Inline steps are for value expressions (end: {add: ...})
+        // Body/then/else sub-step lists should always be Steps, even with 1 step
+        let is_value_expr = k != "body" && k != "then" && k != "else" && k != "clauses" && k != "over";
+        if steps.len() == 1 && is_value_expr {
+            map.insert(k.clone(), StepParam::Inline(Box::new(steps[0].clone())));
+        } else {
+            map.insert(k.clone(), StepParam::Steps(steps.clone()));
+        }
+    }
+    StepArgs::Map(map)
+}
+
+/// Compile an op that has inline step params.
+fn compile_op_with_inlines(
+    op: &str,
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let sym = registry.racket_symbol(op).unwrap_or(op);
+    let mut racket_args = Vec::new();
+
+    if let StepArgs::Map(map) = args {
+        let mut sorted: Vec<_> = map.iter().collect();
+        sorted.sort_by_key(|(k, _)| k.clone());
+        for (_, param) in &sorted {
+            match param {
+                StepParam::Value(v) => racket_args.push(resolve_substep_ref(v)),
+                StepParam::Inline(step) => {
+                    racket_args.push(compile_single_substep(step, registry)?);
+                }
+                StepParam::Steps(steps) => {
+                    racket_args.push(compile_substeps(steps, registry)?);
+                }
+                StepParam::Clauses(_) => { /* clauses handled by cond codegen */ }
+            }
+        }
+    }
+
+    Ok(format!("({} {})", sym, racket_args.join(" ")))
+}
+
+/// Compile a loop sub-step (map, for_each, for_sum, for_product).
+fn compile_loop_substep(
+    op: &str,
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let var = args.get_param("var")
+        .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "var".into() })?;
+    let over = match args.get_raw("over") {
+        Some(StepParam::Value(v)) => resolve_substep_ref(v),
+        Some(StepParam::Inline(step)) => compile_single_substep(step, registry)?,
+        _ => return Err(RacketError::MissingParam { op: op.into(), param: "over".into() }),
+    };
+
+    // Body can be sub-steps or a string
+    let body_expr = match args.get_substeps("body") {
+        Some(steps) => compile_substeps(steps, registry)?,
+        None => match args.get_param("body") {
+            Some(b) => resolve_substep_ref(&b),
+            None => var.clone(), // Default: identity (e.g., for_product over range)
+        }
+    };
+
+    let racket_form = match op {
+        "map" => "map",
+        "for_each" => "for-each",
+        "for_sum" => "for/sum",
+        "for_product" => "for/product",
+        _ => op,
+    };
+
+    match op {
+        "map" | "for_each" => {
+            Ok(format!("({} (lambda ({}) {}) {})", racket_form, var, body_expr, over))
+        }
+        "for_sum" | "for_product" => {
+            Ok(format!("({} ([{} (in-list {})]) {})", racket_form, var, over, body_expr))
+        }
+        _ => Ok(format!("({} (lambda ({}) {}) {})", racket_form, var, body_expr, over)),
+    }
+}
+
+/// Compile a fold sub-step.
+fn compile_fold_substep(
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let acc = args.get_param("acc")
+        .ok_or_else(|| RacketError::MissingParam { op: "fold".into(), param: "acc".into() })?;
+    let init = args.get_param("init")
+        .ok_or_else(|| RacketError::MissingParam { op: "fold".into(), param: "init".into() })?;
+    let var = args.get_param("var")
+        .ok_or_else(|| RacketError::MissingParam { op: "fold".into(), param: "var".into() })?;
+    let over = match args.get_raw("over") {
+        Some(StepParam::Value(v)) => resolve_substep_ref(v),
+        Some(StepParam::Inline(step)) => compile_single_substep(step, registry)?,
+        _ => return Err(RacketError::MissingParam { op: "fold".into(), param: "over".into() }),
+    };
+
+    let body_expr = match args.get_substeps("body") {
+        Some(steps) => compile_substeps(steps, registry)?,
+        None => args.get_param("body")
+            .map(|b| resolve_substep_ref(&b))
+            .ok_or_else(|| RacketError::MissingParam { op: "fold".into(), param: "body".into() })?,
+    };
+
+    let init_val = resolve_substep_ref(&init);
+    Ok(format!("(for/fold ([{} {}]) ([{} (in-list {})]) {})", acc, init_val, var, over, body_expr))
+}
+
+/// Compile a cond sub-step (switch/case).
+fn compile_cond_substep(
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    // Try structured clauses first
+    if let StepArgs::Map(map) = args {
+        if let Some(StepParam::Clauses(clauses)) = map.get("clauses") {
+            return compile_structured_clauses(clauses, registry);
+        }
+    }
+    // Fall back to string params
+    if let Some(clauses_str) = args.get_param("clauses") {
+        return Ok(format!("(cond {})", clauses_str));
+    }
+    Err(RacketError::MissingParam { op: "cond".into(), param: "clauses".into() })
+}
+
+/// Compile structured cond clauses from YAML values.
+fn compile_structured_clauses(
+    clauses: &[serde_yaml::Value],
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let mut parts = Vec::new();
+    for clause in clauses {
+        if let serde_yaml::Value::Mapping(m) = clause {
+            if let Some(else_val) = m.get(&serde_yaml::Value::String("else".into())) {
+                // else clause
+                let body = compile_clause_body(else_val, registry)?;
+                parts.push(format!("[else {}]", body));
+            } else if let Some(test_val) = m.get(&serde_yaml::Value::String("test".into())) {
+                // test + then clause
+                let test_expr = compile_clause_value(test_val, registry)?;
+                let then_val = m.get(&serde_yaml::Value::String("then".into()))
+                    .ok_or_else(|| RacketError::MissingParam { op: "cond".into(), param: "then".into() })?;
+                let then_expr = compile_clause_body(then_val, registry)?;
+                parts.push(format!("[{} {}]", test_expr, then_expr));
+            }
+        }
+    }
+    Ok(format!("(cond {})", parts.join(" ")))
+}
+
+/// Compile a clause value (test expression or simple value).
+fn compile_clause_value(val: &serde_yaml::Value, registry: &OperationRegistry) -> Result<String, RacketError> {
+    match val {
+        serde_yaml::Value::String(s) => Ok(resolve_substep_ref(s)),
+        serde_yaml::Value::Number(n) => Ok(n.to_string()),
+        serde_yaml::Value::Bool(b) => Ok(if *b { "#t" } else { "#f" }.to_string()),
+        serde_yaml::Value::Mapping(_) => {
+            // Inline step: {op: {params}}
+            let yaml_str = serde_yaml::to_string(val).map_err(|e| RacketError::MissingParam { op: "cond".into(), param: format!("clause: {}", e) })?;
+            let step: RawStep = serde_yaml::from_str(&yaml_str).map_err(|e| RacketError::MissingParam { op: "cond".into(), param: format!("clause step: {}", e) })?;
+            compile_single_substep(&step, registry)
+        }
+        _ => Ok("void".to_string()),
+    }
+}
+
+/// Compile a clause body (then/else value — can be a string, steps list, or inline step).
+fn compile_clause_body(val: &serde_yaml::Value, registry: &OperationRegistry) -> Result<String, RacketError> {
+    match val {
+        serde_yaml::Value::Sequence(seq) => {
+            // Sub-step pipeline
+            let steps: Vec<RawStep> = seq.iter().map(|item| {
+                let yaml_str = serde_yaml::to_string(item).unwrap_or_default();
+                serde_yaml::from_str(&yaml_str).map_err(|e| RacketError::MissingParam { op: "cond".into(), param: format!("clause body: {}", e) })
+            }).collect::<Result<Vec<_>, _>>()?;
+            compile_substeps(&steps, registry)
+        }
+        _ => compile_clause_value(val, registry),
+    }
+}
+
+/// Compile a for_range or for_list sub-step.
+fn compile_for_range_substep(
+    op: &str,
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let var = args.get_param("var")
+        .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "var".into() })?;
+    let start = match args.get_raw("start") {
+        Some(StepParam::Value(v)) => resolve_substep_ref(v),
+        Some(StepParam::Inline(step)) => compile_single_substep(step, registry)?,
+        _ => "0".to_string(),
+    };
+    let end = match args.get_raw("end") {
+        Some(StepParam::Value(v)) => resolve_substep_ref(v),
+        Some(StepParam::Inline(step)) => compile_single_substep(step, registry)?,
+        _ => return Err(RacketError::MissingParam { op: op.into(), param: "end".into() }),
+    };
+
+    let body_expr = match args.get_substeps("body") {
+        Some(steps) => compile_substeps(steps, registry)?,
+        None => args.get_param("body")
+            .map(|b| resolve_substep_ref(&b))
+            .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?,
+    };
+
+    let racket_form = match op {
+        "for_list" => "for/list",
+        _ => "for",
+    };
+
+    let step_expr = match args.get_raw("step") {
+        Some(StepParam::Value(v)) => Some(resolve_substep_ref(v)),
+        Some(StepParam::Inline(step)) => Some(compile_single_substep(step, registry)?),
+        _ => None,
+    };
+    match step_expr {
+        Some(s) => Ok(format!("({} ([{} (in-range {} {} {})]) {})", racket_form, var, start, end, s, body_expr)),
+        None => Ok(format!("({} ([{} (in-range {} {})]) {})", racket_form, var, start, end, body_expr)),
+    }
+}
+
+/// Compile a for_range_down sub-step (reverse iteration).
+fn compile_for_range_down_substep(
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let var = args.get_param("var")
+        .ok_or_else(|| RacketError::MissingParam { op: "for_range_down".into(), param: "var".into() })?;
+    let start = match args.get_raw("start") {
+        Some(StepParam::Value(v)) => resolve_substep_ref(v),
+        Some(StepParam::Inline(step)) => compile_single_substep(step, registry)?,
+        _ => return Err(RacketError::MissingParam { op: "for_range_down".into(), param: "start".into() }),
+    };
+    let end = match args.get_raw("end") {
+        Some(StepParam::Value(v)) => resolve_substep_ref(v),
+        Some(StepParam::Inline(step)) => compile_single_substep(step, registry)?,
+        _ => return Err(RacketError::MissingParam { op: "for_range_down".into(), param: "end".into() }),
+    };
+    let body_expr = match args.get_substeps("body") {
+        Some(steps) => compile_substeps(steps, registry)?,
+        None => args.get_param("body")
+            .map(|b| resolve_substep_ref(&b))
+            .ok_or_else(|| RacketError::MissingParam { op: "for_range_down".into(), param: "body".into() })?,
+    };
+    Ok(format!("(for ([{} (in-range {} {} -1)]) {})", var, start, end, body_expr))
+}
+
+/// Compile a when_do sub-step (conditional execution).
+fn compile_when_do_substep(
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let test_expr = match args.get_raw("test") {
+        Some(StepParam::Value(v)) => resolve_substep_ref(v),
+        Some(StepParam::Inline(step)) => compile_single_substep(step, registry)?,
+        _ => return Err(RacketError::MissingParam { op: "when_do".into(), param: "test".into() }),
+    };
+    let body_expr = match args.get_substeps("body") {
+        Some(steps) => compile_substeps(steps, registry)?,
+        None => args.get_param("body")
+            .map(|b| resolve_substep_ref(&b))
+            .ok_or_else(|| RacketError::MissingParam { op: "when_do".into(), param: "body".into() })?,
+    };
+    Ok(format!("(when {} {})", test_expr, body_expr))
+}
+
+/// Compile a for_star or for_list_star sub-step (nested iteration).
+fn compile_for_star_substep(
+    op: &str,
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    // vars come as Clauses (raw YAML values)
+    let vars_yaml = if let StepArgs::Map(map) = args {
+        match map.get("vars") {
+            Some(StepParam::Clauses(c)) => c.clone(),
+            _ => vec![],
+        }
+    } else {
+        vec![]
+    };
+    if vars_yaml.is_empty() {
+        return Err(RacketError::MissingParam { op: op.into(), param: "vars".into() });
+    }
+
+    let mut var_clauses = Vec::new();
+    for v in &vars_yaml {
+        if let serde_yaml::Value::Mapping(m) = v {
+            let var = m.get(&serde_yaml::Value::String("var".into()))
+                .and_then(|v| v.as_str()).unwrap_or("_");
+            let start_val = m.get(&serde_yaml::Value::String("start".into()));
+            let end_val = m.get(&serde_yaml::Value::String("end".into()));
+            let start = match start_val {
+                Some(serde_yaml::Value::String(s)) => resolve_substep_ref(s),
+                Some(serde_yaml::Value::Number(n)) => n.to_string(),
+                Some(serde_yaml::Value::Mapping(_)) => compile_clause_value(start_val.unwrap(), registry)?,
+                _ => "0".to_string(),
+            };
+            let end = match end_val {
+                Some(serde_yaml::Value::String(s)) => resolve_substep_ref(s),
+                Some(serde_yaml::Value::Number(n)) => n.to_string(),
+                Some(serde_yaml::Value::Mapping(_)) => compile_clause_value(end_val.unwrap(), registry)?,
+                _ => return Err(RacketError::MissingParam { op: op.into(), param: "end".into() }),
+            };
+            var_clauses.push(format!("[{} (in-range {} {})]", var, start, end));
+        }
+    }
+
+    let body_expr = match args.get_substeps("body") {
+        Some(steps) => compile_substeps(steps, registry)?,
+        None => args.get_param("body")
+            .map(|b| resolve_substep_ref(&b))
+            .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?,
+    };
+
+    let racket_form = if op == "for_list_star" { "for*/list" } else { "for*" };
+    Ok(format!("({} ({}) {})", racket_form, var_clauses.join(" "), body_expr))
+}
+
+/// Compile an op with ordered named params (vector_set, vector_ref, etc.)
+fn compile_ordered_params_substep(
+    op: &str,
+    args: &StepArgs,
+    registry: &OperationRegistry,
+) -> Result<String, RacketError> {
+    let sym = registry.racket_symbol(op).unwrap_or(op);
+    let param_order: &[&str] = match op {
+        "vector_set" => &["v", "i", "val"],
+        "vector_ref" => &["v", "i"],
+        "make_vector" => &["size", "init"],
+        "substring_op" => &["x", "y", "z"],
+        _ => &[],
+    };
+
+    let mut racket_args = Vec::new();
+    for &key in param_order {
+        match args.get_raw(key) {
+            Some(StepParam::Value(v)) => racket_args.push(resolve_substep_ref(v)),
+            Some(StepParam::Inline(step)) => racket_args.push(compile_single_substep(step, registry)?),
+            _ => return Err(RacketError::MissingParam { op: op.into(), param: key.into() }),
+        }
+    }
+
+    Ok(format!("({} {})", sym, racket_args.join(" ")))
+}
+/// `prev_binding` is the variable name holding the previous step's result
 /// uses the plan's input values directly.
 ///
 /// `prev_is_seq` indicates whether the previous step's output is a list/sequence
@@ -510,10 +1002,43 @@ pub fn op_to_racket(
     let params = &step.params;
 
     // -----------------------------------------------------------------------
+    // Sub-step compilation: if this step has structured sub-steps, compile
+    // them recursively instead of using string params.
+    // -----------------------------------------------------------------------
+    if !step.sub_steps.is_empty() || !step.clause_params.is_empty() {
+        // Reconstruct a RawStep from the CompiledStep for sub-step compilation
+        let raw_args = reconstruct_step_args(step);
+        let expr = compile_single_substep(&RawStep { op: op.to_string(), args: raw_args }, registry)?;
+        return Ok(RacketExpr { expr, uses_prev: false });
+    }
+
+    // -----------------------------------------------------------------------
     // Special ops: these need extra parameters beyond simple operands.
     // They can't be handled by the generic data-driven path.
     // -----------------------------------------------------------------------
     match op {
+        "range" => {
+            let start = params.get("start").map(|s| racket_value(s)).unwrap_or_else(|| "0".to_string());
+            let end = params.get("end").map(|s| racket_value(s))
+                .ok_or_else(|| RacketError::MissingParam { op: "range".into(), param: "end".into() })?;
+            return Ok(RacketExpr { expr: format!("(range {} {})", start, end), uses_prev: false });
+        }
+        "vector_set" => {
+            let v = params.get("v").map(|s| racket_value(s)).ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "v".into() })?;
+            let i = params.get("i").map(|s| racket_value(s)).ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "i".into() })?;
+            let val = params.get("val").map(|s| racket_value(s)).ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "val".into() })?;
+            return Ok(RacketExpr { expr: format!("(vector-set! {} {} {})", v, i, val), uses_prev: false });
+        }
+        "vector_ref" => {
+            let v = params.get("v").map(|s| racket_value(s)).ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "v".into() })?;
+            let i = params.get("i").map(|s| racket_value(s)).ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "i".into() })?;
+            return Ok(RacketExpr { expr: format!("(vector-ref {} {})", v, i), uses_prev: false });
+        }
+        "make_vector" => {
+            let size = params.get("size").map(|s| racket_value(s)).ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "size".into() })?;
+            let init = params.get("init").map(|s| racket_value(s)).ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "init".into() })?;
+            return Ok(RacketExpr { expr: format!("(make-vector {} {})", size, init), uses_prev: false });
+        }
         "sort_list" => {
             let sym = registry.racket_symbol(op).unwrap_or("sort");
             let a = get_one_operand(step, input_values, prev_binding)?;
@@ -587,11 +1112,20 @@ pub fn op_to_racket(
         "for_sum" | "for_product" | "for_and" | "for_or" => {
             let sym = registry.racket_symbol(op).unwrap_or(op);
             let sequence = params.get("sequence")
-                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "sequence".into() })?;
-            let body = params.get("body")
-                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
+                .or_else(|| params.get("over"))
+                .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "sequence/over".into() })?;
+            // If over is a $step-N reference, wrap in (in-list ...)
+            let sequence = if sequence.starts_with("$step-") || sequence.starts_with("step-") {
+                format!("(in-list {})", resolve_substep_ref(sequence))
+            } else {
+                sequence.clone()
+            };
             let var = params.get("var").map(|s| s.as_str()).unwrap_or("x");
-            let expr = format!("({} ([{} {}]) {})", sym, var, sequence, body);
+            let body = params.get("body")
+                .map(|b| b.clone())
+                .unwrap_or_else(|| var.to_string());
+            let body_str = if body == var { var.to_string() } else { body };
+            let expr = format!("({} ([{} {}]) {})", sym, var, sequence, body_str);
             return Ok(RacketExpr { expr, uses_prev: false });
         }
         "iterate" => {
@@ -925,6 +1459,13 @@ fn get_one_operand(
     _input_values: &[PlanInput],
     prev_binding: Option<&str>,
 ) -> Result<String, RacketError> {
+    // If the step has an explicit $-reference in "mode" (from scalar arg), use it
+    if let Some(mode) = step.params.get("mode") {
+        if mode.starts_with('$') {
+            return Ok(racket_value(mode));
+        }
+    }
+
     if let Some(prev) = prev_binding {
         return Ok(prev.to_string());
     }
@@ -1033,11 +1574,9 @@ fn parse_iterate_bindings(s: &str) -> Vec<String> {
 }
 
 fn racket_value(s: &str) -> String {
-     // Step back-references: $step-N → step-N (Racket binding name)
+    // $-references: $step-N → step-N, $var → var (Racket binding names)
     if let Some(rest) = s.strip_prefix('$') {
-        if rest.starts_with("step-") {
-            return rest.to_string();
-        }
+        return rest.to_string();
     }
     // If it parses as a number, use it directly
     if s.parse::<f64>().is_ok() {
@@ -1045,6 +1584,10 @@ fn racket_value(s: &str) -> String {
     }
     // If it looks like a Racket expression (starts with '(' or '#' or '\'')
     if s.starts_with('(') || s.starts_with('#') || s.starts_with('\'') {
+        return s.to_string();
+    }
+    // Racket special numeric literals
+    if s == "+inf.0" || s == "-inf.0" || s == "+nan.0" || s == "-nan.0" {
         return s.to_string();
     }
     // Otherwise, quote it as a string

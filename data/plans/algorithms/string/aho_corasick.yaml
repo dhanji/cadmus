@@ -1,5 +1,5 @@
 # Aho-Corasick: multi-pattern search (simplified — count total matches)
-# Example: count "he","she","his","hers" in "ahishers" = 5
+# Example: count "he","she","his","hers" in "ahishers" = 4
 # expected: 4
 
 aho_corasick:
@@ -8,6 +8,38 @@ aho_corasick:
   bindings:
     text: "\"ahishers\""
   steps:
-    - let_bind:
-        bindings: "[patterns (list \"he\" \"she\" \"his\" \"hers\")]"
-        body: "(for/sum ([pat (in-list patterns)]) (let ([plen (string-length pat)] [tlen (string-length text)]) (for/sum ([i (in-range (+ (- tlen plen) 1))]) (if (string=? (substring text i (+ i plen)) pat) 1 0))))"
+    - list_new: "\"he\" \"she\" \"his\" \"hers\""
+    - for_sum:
+        var: "pat"
+        over: "$step-1"
+        body:
+          - string_length: "$pat"
+          - string_length: "$text"
+          - subtract:
+              x: "$body-2"
+              y: "$body-1"
+          - add:
+              x: "$body-3"
+              y: "1"
+          - range:
+              start: "0"
+              end: "$body-4"
+          - for_sum:
+              var: "i"
+              over: "$body-5"
+              body:
+                - add:
+                    x: "$i"
+                    y: "$body-1"
+                - cond:
+                    clauses:
+                      - test:
+                          string_equal:
+                            x:
+                              substring_op:
+                                x: "$text"
+                                y: "$i"
+                                z: "$body-1"
+                            y: "$pat"
+                        then: "1"
+                      - else: "0"

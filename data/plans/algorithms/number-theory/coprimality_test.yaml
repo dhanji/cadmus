@@ -10,6 +10,9 @@ coprimality_test:
     a: "15"
     b: "28"
   steps:
+    - gcd:
+        x: "$a"
+        y: "$b"
     - equal:
-        x: "(gcd a b)"
+        x: "$step-1"
         y: "1"
