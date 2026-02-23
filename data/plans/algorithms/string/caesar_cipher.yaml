@@ -1,36 +1,15 @@
-# prompt: "encrypt a message using the Caesar cipher with shift 3"
-#
-# Caesar Cipher
-# =============
-# Substitution cipher that shifts each letter by a fixed number of
-# positions in the alphabet. Named after Julius Caesar, who used
-# a shift of 3.
-#
-# Time:  O(n)
-# Space: O(n) for the output
-#
-# Algorithm:
-#   for each character c in plaintext:
-#     if c is a letter:
-#       shifted = (c - 'A' + shift) mod 26 + 'A'
-#       output shifted
-#     else:
-#       output c  (non-letters unchanged)
-#
-# Example (shift=3): "HELLO" → "KHOOR"
-# Decrypt: shift by (26 - shift), i.e., shift left.
-#
-# Trivially breakable (only 25 possible keys). Historical interest.
+# Caesar cipher: shift each letter by k positions
+# Example: caesar("HELLO", 3) = "KHOOR"
+# expected: KHOOR
 
-caesar-cipher:
+caesar_cipher:
   inputs:
-    - plaintext: "String"
-    - shift: "Number"
+    - s: "String"
+    - k: "Number"
+  bindings:
+    s: "\"HELLO\""
+    k: "3"
   steps:
-    # Shift each letter by the given amount, wrapping at Z→A.
-    # Non-alphabetic characters pass through unchanged.
-    - string_length:
-        s: "HELLO WORLD"
-    # Caesar(3): "HELLO WORLD" → "KHOOR ZRUOG"
-    - add:
-        y: "3"
+    - let_bind:
+        bindings: "[chars (string->list s)]"
+        body: "(list->string (map (lambda (c) (if (char-alphabetic? c) (let* ([base (if (char-upper-case? c) 65 97)] [shifted (modulo (+ (- (char->integer c) base) k) 26)]) (integer->char (+ base shifted))) c)) chars))"

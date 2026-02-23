@@ -1,35 +1,15 @@
-# prompt: "compute the XOR of all numbers from 1 to n"
-#
-# XOR Sum (1 to N)
-# ================
-# Compute 1 XOR 2 XOR 3 XOR ... XOR n efficiently using the
-# repeating pattern of XOR sums.
-#
-# Time:  O(1)
-# Space: O(1)
-#
-# Pattern (n mod 4):
-#   n mod 4 == 0: result = n
-#   n mod 4 == 1: result = 1
-#   n mod 4 == 2: result = n + 1
-#   n mod 4 == 3: result = 0
-#
-# Proof: XOR of four consecutive numbers starting from 4k is 0.
-#   4k XOR (4k+1) XOR (4k+2) XOR (4k+3) = 0
-#
-# Example: XOR(1..7) = 1^2^3^4^5^6^7 = 0 (7 mod 4 = 3)
-# Example: XOR(1..10) = 11 (10 mod 4 = 2, result = 10+1)
-#
-# Application: find missing number in array [1..n] with one missing.
+# XOR sum of range 0..n
+# Example: xor_sum(10) = 11 (0^1^2^...^10)
+# expected: 11
 
-xor-sum-1-to-n:
+xor_sum:
   inputs:
     - n: "Number"
+  bindings:
+    n: "10"
   steps:
-    # Use the mod-4 pattern for O(1) computation.
-    - modulo:
-        x: "10"
-        y: "4"
-    # 10 mod 4 = 2 → result = 10 + 1 = 11
-    - add:
-        y: "0"
+    - for_fold:
+        bindings: "[acc 0]"
+        var: "i"
+        sequence: "(in-range (+ n 1))"
+        body: "(bitwise-xor acc i)"

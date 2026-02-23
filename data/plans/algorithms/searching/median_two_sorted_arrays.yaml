@@ -1,35 +1,15 @@
-# prompt: "find the median of two sorted arrays"
-#
-# Median of Two Sorted Arrays
-# ============================
-# Find the median of the combined sorted array without merging them.
-# Classic binary search problem.
-#
-# Time:  O(log(min(m, n)))
-# Space: O(1)
-#
-# Algorithm:
-#   Binary search on the smaller array to find partition point.
-#   Partition both arrays such that:
-#     left_count = (m + n + 1) / 2
-#     max(left_partition) <= min(right_partition)
-#
-#   If m + n is odd: median = max(left_partition)
-#   If even: median = (max(left) + min(right)) / 2
-#
-# Example: A = [1, 3], B = [2]
-#   Merged: [1, 2, 3] → median = 2
-#
-# Example: A = [1, 2], B = [3, 4]
-#   Merged: [1, 2, 3, 4] → median = 2.5
+# Median of two sorted arrays
+# Example: median of (1 3) and (2) = 2
+# expected: 2
 
-median-two-sorted-arrays:
+median_two_sorted_arrays:
   inputs:
     - a: "List(Number)"
     - b: "List(Number)"
+  bindings:
+    a: "(list 1 3)"
+    b: "(list 2)"
   steps:
-    # Binary search on smaller array for correct partition.
-    - list_new:
-        elements: "1 3 5 7"
-    # A = [1,3,5,7], B = [2,4,6,8] → median = (4+5)/2 = 4.5
-    - length
+    - let_bind:
+        bindings: "[merged (let merge ([a a] [b b] [acc (list)]) (cond [(null? a) (append (reverse acc) b)] [(null? b) (append (reverse acc) a)] [(<= (car a) (car b)) (merge (cdr a) b (cons (car a) acc))] [else (merge a (cdr b) (cons (car b) acc))]))] [n (+ (length a) (length b))]"
+        body: "(if (odd? n) (list-ref merged (quotient n 2)) (/ (+ (list-ref merged (- (quotient n 2) 1)) (list-ref merged (quotient n 2))) 2))"

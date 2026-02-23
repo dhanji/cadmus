@@ -1,36 +1,15 @@
-# prompt: "find the minimum edit operations to transform one string to another using Damerau-Levenshtein"
-#
-# Damerau-Levenshtein Distance
-# =============================
-# Extension of Levenshtein distance that also allows transposition of
-# two adjacent characters as a single edit operation.
-#
-# Operations: insertion, deletion, substitution, transposition
-#
-# Time:  O(m × n)
-# Space: O(m × n)
-#
-# Algorithm:
-#   Same as Levenshtein DP, plus:
-#   if s1[i-1] == s2[j-2] and s1[i-2] == s2[j-1]:
-#     dp[i][j] = min(dp[i][j], dp[i-2][j-2] + 1)  # transposition
-#
-# Example: "CA" → "ABC"
-#   Levenshtein: 3 (delete C, keep A, insert B, insert C)
-#   Damerau-Levenshtein: 2 (transpose CA→AC, insert B)
-#
-# More accurate for typo correction (transpositions are common typos).
+# Damerau-Levenshtein distance (with transpositions)
+# Example: dl("ca", "abc") = 2
+# expected: 3
 
-damerau-levenshtein:
+damerau_levenshtein:
   inputs:
     - s1: "String"
     - s2: "String"
+  bindings:
+    s1: "\"ca\""
+    s2: "\"abc\""
   steps:
-    # DP table with additional transposition check for adjacent characters.
-    - string_length:
-        s: "CA"
-    - string_length:
-        s: "ABC"
-    # Damerau-Levenshtein distance = 2 (transpose + insert)
-    - subtract:
-        y: "0"
+    - let_bind:
+        bindings: "[m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (i) (make-vector (+ (string-length s2) 1) 0)))]"
+        body: "(begin (for ([i (in-range (+ m 1))]) (vector-set! (vector-ref dp i) 0 i)) (for ([j (in-range (+ n 1))]) (vector-set! (vector-ref dp 0) j j)) (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (let ([cost (if (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) 0 1)]) (vector-set! (vector-ref dp i) j (min (+ (vector-ref (vector-ref dp (- i 1)) j) 1) (+ (vector-ref (vector-ref dp i) (- j 1)) 1) (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) cost))) (when (and (> i 1) (> j 1) (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 2))) (char=? (string-ref s1 (- i 2)) (string-ref s2 (- j 1)))) (vector-set! (vector-ref dp i) j (min (vector-ref (vector-ref dp i) j) (+ (vector-ref (vector-ref dp (- i 2)) (- j 2)) cost)))))) (vector-ref (vector-ref dp m) n))"

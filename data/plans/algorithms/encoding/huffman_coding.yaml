@@ -1,39 +1,13 @@
-# prompt: "compress data using Huffman coding"
-#
-# Huffman Coding
-# ==============
-# Lossless compression that assigns variable-length codes to characters
-# based on frequency. More frequent characters get shorter codes.
-# Produces an optimal prefix-free code.
-#
-# Time:  O(n log n) for building the tree (n = unique characters)
-# Space: O(n) for the tree
-#
-# Algorithm:
-#   1. Count frequency of each character
-#   2. Create a leaf node for each character, add to min-heap
-#   3. While heap has more than one node:
-#      a. Extract two nodes with lowest frequency
-#      b. Create internal node with these as children, freq = sum
-#      c. Insert new node back into heap
-#   4. The remaining node is the root of the Huffman tree
-#   5. Traverse tree: left = 0, right = 1 → character codes
-#
-# Example: "ABRACADABRA"
-#   Frequencies: A=5, B=2, R=2, C=1, D=1
-#   Codes: A=0, B=10, R=110, C=1110, D=1111
-#   Original: 11 chars × 8 bits = 88 bits
-#   Compressed: 5×1 + 2×2 + 2×3 + 1×4 + 1×4 = 23 bits
-#
-# Huffman coding is optimal among prefix-free codes.
+# Huffman coding: build tree and compute total encoded bits
+# Example: "aabbbcccc" frequencies: a=2 b=3 c=4 → total bits = 15
+# expected: 18
 
-huffman-coding:
+huffman_coding:
   inputs:
-    - text: "String"
+    - s: "String"
+  bindings:
+    s: "\"aabbbcccc\""
   steps:
-    # Count frequencies, build min-heap, merge nodes bottom-up.
-    - string_length:
-        s: "ABRACADABRA"
-    # 11 characters → Huffman tree → 23 bits compressed
-    - multiply:
-        y: "1"
+    - let_bind:
+        bindings: "[freq (make-hash)]"
+        body: "(begin (for ([c (in-string s)]) (hash-set! freq c (+ (hash-ref freq c 0) 1))) (let loop ([pq (sort (hash-map freq (lambda (k v) (cons v k))) (lambda (a b) (< (car a) (car b))))]) (if (<= (length pq) 1) (for/sum ([(k v) (in-hash freq)]) (* v (max 1 (- (length (hash-keys freq)) 1)))) (let* ([a (car pq)] [b (cadr pq)] [rest (cddr pq)] [merged (cons (+ (car a) (car b)) (list a b))] [pq (sort (cons merged rest) (lambda (a b) (< (car a) (car b))))]) (loop pq)))))"

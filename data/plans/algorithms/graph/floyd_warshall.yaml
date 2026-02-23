@@ -1,32 +1,14 @@
-# prompt: "find shortest paths from all vertices using Floyd-Warshall"
-#
-# Floyd-Warshall All-Pairs Shortest Paths
-# =========================================
-# Compute shortest paths between all pairs of vertices in a weighted
-# graph. Handles negative weights (but not negative cycles).
-#
-# Time:  O(V³)
-# Space: O(V²)
-#
-# Algorithm:
-#   dist[i][j] = weight(i, j) if edge exists, else infinity
-#   dist[i][i] = 0
-#   for k in 1..V:
-#     for i in 1..V:
-#       for j in 1..V:
-#         dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
-#
-# The key insight: at step k, dist[i][j] is the shortest path from i
-# to j using only vertices {1, ..., k} as intermediates.
-#
-# Negative cycle detection: if dist[i][i] < 0 for any i after completion.
+# Floyd-Warshall: all-pairs shortest paths
+# 4 nodes, edges: 0→1(3) 0→2(6) 1→2(2) 2→3(1) 3→0(7)
+# Example: dist matrix row 0 = (0 3 5 6)
+# expected: (0 3 5 6)
 
-floyd-warshall:
+floyd_warshall:
   inputs:
-    - graph: "List(String)"
+    - n: "Number"
+  bindings:
+    n: "4"
   steps:
-    # Initialize V×V distance matrix. Triple nested loop over intermediates.
-    - list_new:
-        elements: "A B C D"
-    # All-pairs shortest paths for 4 vertices.
-    - length
+    - let_bind:
+        bindings: "[d (vector (vector 0 3 6 +inf.0) (vector +inf.0 0 2 +inf.0) (vector +inf.0 +inf.0 0 1) (vector 7 +inf.0 +inf.0 0))]"
+        body: "(begin (for* ([k (in-range n)] [i (in-range n)] [j (in-range n)]) (let ([via (+ (vector-ref (vector-ref d i) k) (vector-ref (vector-ref d k) j))]) (when (< via (vector-ref (vector-ref d i) j)) (vector-set! (vector-ref d i) j via)))) (vector->list (vector-ref d 0)))"

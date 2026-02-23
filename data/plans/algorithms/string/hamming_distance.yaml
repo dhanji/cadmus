@@ -1,39 +1,16 @@
-# prompt: "compute the Hamming distance between two strings"
-#
-# Hamming Distance
-# ================
-# Number of positions at which the corresponding characters of two
-# equal-length strings differ. Originally defined for binary strings
-# in error-detecting codes.
-#
-# Time:  O(n)
-# Space: O(1)
-# Prerequisite: strings must be equal length
-#
-# Algorithm:
-#   distance = 0
-#   for i in 0..n:
-#     if s1[i] != s2[i]:
-#       distance += 1
-#   return distance
-#
-# Example: Hamming("karolin", "kathrin") = 3
-#   positions 2 (r≠t), 3 (o≠h), 4 (l≠r)
-#
-# For binary: Hamming("10101", "10010") = 3
-# Related to XOR popcount for binary strings.
+# Hamming distance: count positions where strings differ
+# Example: hamming("karolin", "kathrin") = 3
+# expected: 3
 
-hamming-distance:
+hamming_distance:
   inputs:
     - s1: "String"
     - s2: "String"
+  bindings:
+    s1: "\"karolin\""
+    s2: "\"kathrin\""
   steps:
-    # Compare character by character, count mismatches.
-    # Strings must be equal length.
-    - string_length:
-        s: "karolin"
-    - string_length:
-        s: "kathrin"
-    # Hamming distance = 3 (positions 2, 3, 4 differ)
-    - subtract:
-        y: "0"
+    - for_sum:
+        var: "i"
+        sequence: "(in-range (string-length s1))"
+        body: "(if (char=? (string-ref s1 i) (string-ref s2 i)) 0 1)"

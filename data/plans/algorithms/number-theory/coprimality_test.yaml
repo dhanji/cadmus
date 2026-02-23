@@ -1,36 +1,15 @@
-# prompt: "check if two numbers are coprime"
-#
-# Coprimality Test
-# ================
-# Two integers a and b are coprime (relatively prime) if their greatest
-# common divisor is 1: gcd(a, b) = 1.
-#
-# Time:  O(log(min(a, b))) — same as Euclidean GCD
-# Space: O(1)
-#
-# Algorithm:
-#   return gcd(a, b) == 1
-#
-# Examples:
-#   coprime(14, 15) = true  (gcd = 1)
-#   coprime(14, 21) = false (gcd = 7)
-#   coprime(1, n) = true for all n
-#   coprime(p, q) = true if p, q are distinct primes
-#
-# Properties:
-#   - If coprime(a, b), then ax + by = 1 has integer solutions (Bézout)
-#   - Euler's totient counts numbers coprime to n
+# Coprimality test: gcd(a,b) = 1?
+# Example: coprime(15, 28) = #t
+# expected: #t
 
-coprimality-test:
+coprimality_test:
   inputs:
     - a: "Number"
     - b: "Number"
+  bindings:
+    a: "15"
+    b: "28"
   steps:
-    # Compute gcd(a, b) and check if it equals 1.
-    - modulo:
-        x: "14"
-        y: "15"
-    # gcd(14, 15): 14 mod 15 = 14, 15 mod 14 = 1, 14 mod 1 = 0 → gcd = 1
-    # 14 and 15 are coprime.
-    - add:
-        y: "0"
+    - equal:
+        x: "(gcd a b)"
+        y: "1"

@@ -1,34 +1,13 @@
-# prompt: "compute the area of a polygon using the shoelace formula"
-#
-# Shoelace Formula (Polygon Area)
-# ================================
-# Compute the area of a simple polygon given its vertices in order.
-# Named for the cross-multiplication pattern resembling lacing a shoe.
-#
-# Time:  O(n)
-# Space: O(1)
-#
-# Formula:
-#   A = ½ |Σ(i=0..n-1) (xᵢ × yᵢ₊₁ - xᵢ₊₁ × yᵢ)|
-#   where indices wrap: (n) = (0)
-#
-# Algorithm:
-#   sum = 0
-#   for i in 0..n-1:
-#     sum += x[i] * y[i+1] - x[i+1] * y[i]
-#   area = abs(sum) / 2
-#
-# Example: triangle (0,0), (4,0), (0,3)
-#   A = ½ |0×0 - 4×0 + 4×3 - 0×0 + 0×0 - 0×3| = ½ |12| = 6
-#
-# Works for any simple (non-self-intersecting) polygon.
+# Shoelace formula: area of polygon given vertices
+# Example: triangle (0,0) (4,0) (0,3) → area = 6
+# expected: 6
 
-shoelace-polygon-area:
+shoelace_polygon_area:
   inputs:
-    - vertices: "List(String)"
+    - n: "Number"
+  bindings:
+    n: "3"
   steps:
-    # Cross-multiply adjacent vertex coordinates, sum, halve.
-    - list_new:
-        elements: "0,0 4,0 0,3"
-    # Triangle area = 6 (base 4, height 3, area = ½ × 4 × 3)
-    - length
+    - let_bind:
+        bindings: "[xs (vector 0 4 0)] [ys (vector 0 0 3)]"
+        body: "(/ (abs (for/sum ([i (in-range n)]) (let ([j (modulo (+ i 1) n)]) (- (* (vector-ref xs i) (vector-ref ys j)) (* (vector-ref xs j) (vector-ref ys i)))))) 2)"

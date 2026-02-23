@@ -1,35 +1,14 @@
-# prompt: "compute the number of ways to climb n stairs"
-#
-# Staircase Problem (Climbing Stairs)
-# ====================================
-# Count the number of distinct ways to climb n stairs, taking either
-# 1 or 2 steps at a time. Classic DP / Fibonacci variant.
-#
-# Time:  O(n)
-# Space: O(1)
-#
-# Algorithm:
-#   dp[0] = 1, dp[1] = 1
-#   for i in 2..n:
-#     dp[i] = dp[i-1] + dp[i-2]
-#   return dp[n]
-#
-# This is exactly the (n+1)th Fibonacci number.
-#
-# Example: n=4 → 5 ways:
-#   1+1+1+1, 1+1+2, 1+2+1, 2+1+1, 2+2
-#
-# Generalization: if steps can be 1, 2, or 3 → tribonacci.
+# Climbing stairs: ways to climb n stairs (1 or 2 steps at a time)
+# Example: stairs(10) = 89
+# expected: 89
 
-climbing-stairs:
+climbing_stairs:
   inputs:
     - n: "Number"
+  bindings:
+    n: "10"
   steps:
-    # Same as Fibonacci: ways(n) = ways(n-1) + ways(n-2)
-    - add:
-        x: "3"
-        y: "5"
-    # ways(4) = ways(3) + ways(2) = 3 + 2 = 5
-    # Or: F(5) = 5
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "a=1 b=1 i=2"
+        body: "(if (> i n) b (loop b (+ a b) (+ i 1)))"

@@ -1,36 +1,15 @@
-# prompt: "find the single non-duplicate number using XOR"
-#
-# Single Number (XOR Trick)
-# =========================
-# Given an array where every element appears twice except one,
-# find the element that appears only once.
-#
-# Time:  O(n)
-# Space: O(1)
-#
-# Algorithm:
-#   result = 0
-#   for x in array:
-#     result = result XOR x
-#   return result
-#
-# Why it works: XOR is self-inverse (a XOR a = 0) and associative.
-# All pairs cancel out, leaving only the single element.
-#
-# Example: [4, 1, 2, 1, 2] → 4^1^2^1^2 = 4^(1^1)^(2^2) = 4^0^0 = 4
-#
-# Variants:
-#   - Two missing numbers: XOR all, split by a set bit
-#   - Three occurrences except one: use bit counting mod 3
+# Single number: find element appearing once (others appear twice)
+# Example: single in (2 3 5 3 2) = 5
+# expected: 5
 
-single-number-xor:
+single_number_xor:
   inputs:
     - lst: "List(Number)"
+  bindings:
+    lst: "(list 2 3 5 3 2)"
   steps:
-    # XOR all elements. Pairs cancel, singleton remains.
-    - list_new:
-        elements: "4 1 2 1 2"
-    # 4 XOR 1 XOR 2 XOR 1 XOR 2 = 4
-    - racket_foldl:
-        function: "bitwise-xor"
-        init: "0"
+    - for_fold:
+        bindings: "[acc 0]"
+        var: "x"
+        sequence: "(in-list lst)"
+        body: "(bitwise-xor acc x)"

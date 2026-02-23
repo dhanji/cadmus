@@ -1,28 +1,13 @@
-# prompt: "sort integers using radix sort"
-#
-# Radix Sort (LSD — Least Significant Digit)
-# ===========================================
-# Sort integers digit by digit, starting from the least significant
-# digit. Uses a stable sub-sort (typically counting sort) at each
-# digit position.
-#
-# Time:  O(d × (n + b)) where d = digits, b = base (usually 10)
-# Space: O(n + b)
-# Stable: yes
-#
-# Algorithm:
-#   for digit_position in 0..max_digits:
-#     stable_sort(input, key = digit at digit_position)
-#
-# Works for non-negative integers. Extends to strings (MSD variant).
+# Radix sort (LSD, base 10)
+# Example: sort (170 45 75 90 802 24 2 66) = (2 24 45 66 75 90 170 802)
+# expected: (2 24 45 66 75 90 170 802)
 
-radix-sort:
+radix_sort:
   inputs:
     - lst: "List(Number)"
+  bindings:
+    lst: "(list 170 45 75 90 802 24 2 66)"
   steps:
-    - list_new:
-        elements: "170 45 75 90 802 24 2 66"
-    # Radix sort (LSD): sort by each digit position using stable sub-sort.
-    # O(d × n) for d digit positions. Stable. Non-comparison.
-    - sort_list:
-        comparator: "<"
+    - let_bind:
+        bindings: "[mx (apply max lst)]"
+        body: "(let loop ([xs lst] [exp 1]) (if (> exp mx) xs (let ([buckets (make-vector 10 (list))]) (for-each (lambda (x) (let ([d (modulo (quotient x exp) 10)]) (vector-set! buckets d (append (vector-ref buckets d) (list x))))) xs) (loop (for*/list ([i (in-range 10)] [x (in-list (vector-ref buckets i))]) x) (* exp 10)))))"

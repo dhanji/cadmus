@@ -1,36 +1,16 @@
-# prompt: "find two numbers that sum to a target using two pointers"
-#
-# Two Sum (Sorted Array — Two Pointer)
-# =====================================
-# Given a sorted array and a target sum, find two elements that add
-# up to the target.
-#
-# Time:  O(n)
-# Space: O(1)
-#
-# Algorithm:
-#   left = 0, right = n - 1
-#   while left < right:
-#     sum = arr[left] + arr[right]
-#     if sum == target: return (left, right)
-#     elif sum < target: left += 1
-#     else: right -= 1
-#   return None  # no pair found
-#
-# For unsorted arrays: use a hash set for O(n) time, O(n) space.
-#
-# Example: [2, 7, 11, 15], target = 9
-#   2 + 15 = 17 > 9 → move right
-#   2 + 11 = 13 > 9 → move right
-#   2 + 7 = 9 → found! indices (0, 1)
+# Two sum on sorted array: find indices of two elements that sum to target
+# Example: two_sum (2 7 11 15) 9 = (0 1)
+# expected: (0 1)
 
-two-sum-sorted:
+two_sum_sorted:
   inputs:
     - lst: "List(Number)"
     - target: "Number"
+  bindings:
+    lst: "(list 2 7 11 15)"
+    target: "9"
   steps:
-    - list_new:
-        elements: "2 7 11 15"
-    # Two pointers from ends. Target = 9. Found: 2 + 7 = 9.
-    - racket_filter:
-        predicate: "(lambda (x) (or (equal? x 2) (equal? x 7)))"
+    - iterate:
+        name: "loop"
+        bindings: "lo=0 hi=(-(length lst) 1)"
+        body: "(let ([s (+ (list-ref lst lo) (list-ref lst hi))]) (cond [(= s target) (list lo hi)] [(< s target) (loop (+ lo 1) hi)] [else (loop lo (- hi 1))]))"

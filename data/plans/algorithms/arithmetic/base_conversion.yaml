@@ -1,41 +1,16 @@
-# prompt: "convert a number between bases (e.g., decimal to binary)"
-#
-# Base Conversion
-# ===============
-# Convert a number from one base to another by repeated division.
-#
-# Time:  O(log_b(n)) where b = target base
-# Space: O(log_b(n)) for the digits
-#
-# Algorithm (decimal to base b):
-#   digits = []
-#   while n > 0:
-#     digits.prepend(n mod b)
-#     n = n / b
-#   return digits (or "" if n was 0)
-#
-# Algorithm (base b to decimal):
-#   result = 0
-#   for digit in digits:
-#     result = result × b + digit
-#
-# Example: 42 in binary = 101010
-#   42 / 2 = 21 r 0
-#   21 / 2 = 10 r 1
-#   10 / 2 = 5  r 0
-#   5  / 2 = 2  r 1
-#   2  / 2 = 1  r 0
-#   1  / 2 = 0  r 1 → 101010
+# Base conversion: convert decimal to given base
+# Example: 255 in base 16 = "FF"
+# expected: FF
 
-base-conversion:
+base_conversion:
   inputs:
     - n: "Number"
     - base: "Number"
+  bindings:
+    n: "255"
+    base: "16"
   steps:
-    # Repeated division: collect remainders in reverse order.
-    - modulo:
-        x: "42"
-        y: "2"
-    # 42 mod 2 = 0 (LSB). Continue dividing: 42 → 101010₂
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "x=n acc=(list)"
+        body: "(if (= x 0) (if (null? acc) \"0\" (apply string-append (map (lambda (d) (string (integer->char (if (< d 10) (+ d 48) (+ d 55))))) acc))) (loop (quotient x base) (cons (remainder x base) acc)))"

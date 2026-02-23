@@ -1,37 +1,15 @@
-# prompt: "find the longest common substring of two strings"
-#
-# Longest Common Substring
-# ========================
-# Find the longest string that is a contiguous substring of both input
-# strings. Unlike LCS, characters must be consecutive.
-#
-# Time:  O(m × n)
-# Space: O(m × n) for the DP table; O(min(m,n)) with rolling row
-#
-# Algorithm (dynamic programming):
-#   dp[i][j] = length of longest common suffix of s1[0..i] and s2[0..j]
-#
-#   if s1[i-1] == s2[j-1]:
-#     dp[i][j] = dp[i-1][j-1] + 1
-#   else:
-#     dp[i][j] = 0
-#
-#   max_len = max of all dp[i][j]
-#   Backtrack from the position of max_len to extract the substring.
-#
-# Example: LCSubstr("ABABC", "BABCBA") = "BABC" (length 4)
+# Longest common substring length
+# Example: lcstr("ABABC", "BABCBA") = 4 ("BABC")
+# expected: 4
 
-longest-common-substring:
+longest_common_substring:
   inputs:
     - s1: "String"
     - s2: "String"
+  bindings:
+    s1: "\"ABABC\""
+    s2: "\"BABCBA\""
   steps:
-    # Build DP table where dp[i][j] = common suffix length.
-    # Track maximum and its position for extraction.
-    - string_length:
-        s: "ABABC"
-    - string_length:
-        s: "BABCBA"
-    # Longest common substring = "BABC", length = 4
-    - subtract:
-        y: "0"
+    - let_bind:
+        bindings: "[m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (_) (make-vector (+ (string-length s2) 1) 0)))] [best (box 0)]"
+        body: "(begin (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (when (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) (let ([v (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) 1)]) (vector-set! (vector-ref dp i) j v) (when (> v (unbox best)) (set-box! best v))))) (unbox best))"

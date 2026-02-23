@@ -1,40 +1,13 @@
-# prompt: "check if line segments intersect"
-#
-# Line Segment Intersection Test
-# ===============================
-# Determine whether two line segments AB and CD intersect.
-# Uses the cross product orientation test.
-#
-# Time:  O(1)
-# Space: O(1)
-#
-# Algorithm:
-#   orientation(P, Q, R):
-#     val = (Q.y - P.y) × (R.x - Q.x) - (Q.x - P.x) × (R.y - Q.y)
-#     if val == 0: collinear
-#     if val > 0: clockwise
-#     if val < 0: counterclockwise
-#
-#   segments_intersect(A, B, C, D):
-#     o1 = orientation(A, B, C)
-#     o2 = orientation(A, B, D)
-#     o3 = orientation(C, D, A)
-#     o4 = orientation(C, D, B)
-#     if o1 != o2 and o3 != o4: return true  # general case
-#     # Special cases: collinear segments that overlap
-#     if o1 == 0 and on_segment(A, C, B): return true
-#     ... (similar for other collinear cases)
-#     return false
-#
-# Example: (1,1)-(4,4) and (1,4)-(4,1) → intersect at (2.5, 2.5)
+# Line segment intersection: do segments (0,0)-(2,2) and (0,2)-(2,0) intersect?
+# Example: intersect? = #t
+# expected: #t
 
-line-segment-intersection:
+line_segment_intersection:
   inputs:
-    - segment1: "String"
-    - segment2: "String"
+    - n: "Number"
+  bindings:
+    n: "0"
   steps:
-    # Compute four orientations, check for proper intersection.
-    - list_new:
-        elements: "1,1 4,4 1,4 4,1"
-    # Segments (1,1)-(4,4) and (1,4)-(4,1): intersect = true
-    - length
+    - let_bind:
+        bindings: "[cross (lambda (ox oy ax ay bx by) (- (* (- ax ox) (- by oy)) (* (- ay oy) (- bx ox))))]"
+        body: "(let* ([d1 (cross 0 2 2 0 0 0)] [d2 (cross 0 2 2 0 2 2)] [d3 (cross 0 0 2 2 0 2)] [d4 (cross 0 0 2 2 2 0)]) (and (< (* d1 d2) 0) (< (* d3 d4) 0)))"

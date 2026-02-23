@@ -1,37 +1,13 @@
-# prompt: "encode data as base64"
-#
-# Base64 Encoding
-# ===============
-# Encode binary data as ASCII text using a 64-character alphabet.
-# Every 3 bytes of input become 4 characters of output.
-#
-# Time:  O(n)
-# Space: O(4n/3) — output is ~33% larger than input
-#
-# Algorithm:
-#   alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-#   for each group of 3 bytes (24 bits):
-#     split into four 6-bit values
-#     output alphabet[value] for each
-#   if 1 byte remains: output 2 chars + "=="
-#   if 2 bytes remain: output 3 chars + "="
-#
-# Example: "Man" → TWFu
-#   M=77 a=97 n=110
-#   Binary: 01001101 01100001 01101110
-#   6-bit groups: 010011 010110 000101 101110
-#   Indices: 19 22 5 46 → T W F u
-#
-# Variants: base64url (- and _ instead of + and /), no padding.
-# Used in: email (MIME), data URIs, JWT tokens, HTTP Basic auth.
+# Base64 encode a string
+# Example: base64("Hello") = "SGVsbG8="
+# expected: SGVsbG8=
 
-base64-encode:
+base64_encode:
   inputs:
-    - data: "String"
+    - s: "String"
+  bindings:
+    s: "\"Hello\""
   steps:
-    # Split input into 3-byte groups, encode each as 4 base64 characters.
-    - string_length:
-        s: "Man"
-    # "Man" → "TWFu" (3 bytes → 4 chars, no padding needed)
-    - multiply:
-        y: "1"
+    - let_bind:
+        bindings: "[table \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\"] [bytes (map char->integer (string->list s))]"
+        body: "(let loop ([bs bytes] [bits 0] [buf 0] [out (list)]) (cond [(and (null? bs) (= bits 0)) (let* ([result (list->string (reverse out))] [pad (modulo (- 4 (modulo (string-length result) 4)) 4)]) (if (= pad 4) result (string-append result (make-string pad #\\=))))] [(and (null? bs) (> bits 0)) (loop bs 0 0 (cons (string-ref table (arithmetic-shift buf (- 6 bits))) out))] [(>= (+ bits 8) 6) (let* ([buf (+ (arithmetic-shift buf 8) (car bs))] [bits (+ bits 8)]) (let extract ([bits bits] [buf buf] [out out]) (if (< bits 6) (loop (cdr bs) bits buf out) (extract (- bits 6) (modulo buf (expt 2 (- bits 6))) (cons (string-ref table (quotient buf (expt 2 (- bits 6)))) out)))))] [else (loop (cdr bs) (+ bits 8) (+ (arithmetic-shift buf 8) (car bs)) out)]))"

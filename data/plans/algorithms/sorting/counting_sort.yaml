@@ -1,32 +1,13 @@
-# prompt: "sort integers using counting sort"
-#
-# Counting Sort
-# =============
-# Non-comparison sort for integers in a known range [0, k].
-# Count occurrences of each value, then reconstruct the sorted output
-# from the counts.
-#
-# Time:  O(n + k) where k is the range of input values
-# Space: O(k) for the count array
-# Stable: yes (with careful output placement)
-#
-# Algorithm:
-#   count = array of zeros, size k+1
-#   for x in input:
-#     count[x] += 1
-#   output = []
-#   for i in 0..k:
-#     append i to output, count[i] times
-#
-# Only works for non-negative integers. Very fast when k is small.
+# Counting sort: sort non-negative integers by counting occurrences
+# Example: sort (4 2 2 8 3 3 1) = (1 2 2 3 3 4 8)
+# expected: (1 2 2 3 3 4 8)
 
-counting-sort:
+counting_sort:
   inputs:
     - lst: "List(Number)"
+  bindings:
+    lst: "(list 4 2 2 8 3 3 1)"
   steps:
-    - list_new:
-        elements: "4 2 2 8 3 3 1 7 5 4"
-    # Counting sort: count occurrences, reconstruct from counts.
-    # O(n + k). Stable. Non-comparison based.
-    - sort_list:
-        comparator: "<"
+    - let_bind:
+        bindings: "[mx (apply max lst)] [counts (make-vector (+ mx 1) 0)]"
+        body: "(begin (for-each (lambda (x) (vector-set! counts x (+ (vector-ref counts x) 1))) lst) (for*/list ([i (in-range (+ mx 1))] [_ (in-range (vector-ref counts i))]) i))"

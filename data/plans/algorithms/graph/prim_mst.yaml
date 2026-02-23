@@ -1,36 +1,14 @@
-# prompt: "find the minimum spanning tree using Prim's algorithm"
-#
-# Prim's Minimum Spanning Tree
-# =============================
-# Grow a minimum spanning tree one vertex at a time. Start from any
-# vertex, repeatedly add the cheapest edge connecting the tree to a
-# non-tree vertex.
-#
-# Time:  O((V + E) log V) with binary heap; O(V²) with array
-# Space: O(V)
-#
-# Algorithm:
-#   key[v] = infinity for all v; key[start] = 0
-#   in_mst = {} (empty set)
-#   pq = min-heap with (0, start)
-#   while pq is not empty:
-#     (cost, u) = pq.extract_min()
-#     if u in in_mst: continue
-#     in_mst.add(u)
-#     for (v, weight) in adjacency[u]:
-#       if v not in in_mst and weight < key[v]:
-#         key[v] = weight
-#         pq.insert((weight, v))
-#
-# Prim's vs Kruskal's: Prim grows from a vertex (good for dense graphs),
-# Kruskal sorts edges (good for sparse graphs).
+# Prim's MST: minimum spanning tree using greedy approach
+# Edges: (0,1,4) (0,2,1) (1,2,2) (1,3,5) (2,3,3)
+# MST weight = 1+2+3 = 6
+# expected: 6
 
-prim-mst:
+prim_mst:
   inputs:
-    - graph: "List(String)"
+    - n: "Number"
+  bindings:
+    n: "4"
   steps:
-    # Grow MST from start vertex, always adding cheapest crossing edge.
-    - list_new:
-        elements: "A B C D E"
-    # Prim's MST for 5-vertex graph.
-    - length
+    - let_bind:
+        bindings: "[adj (vector (list (cons 1 4) (cons 2 1)) (list (cons 0 4) (cons 2 2) (cons 3 5)) (list (cons 0 1) (cons 1 2) (cons 3 3)) (list (cons 1 5) (cons 2 3)))] [in-mst (make-vector 4 #f)] [key (make-vector 4 +inf.0)]"
+        body: "(begin (vector-set! key 0 0) (for/sum ([_ (in-range n)]) (let* ([u (for/fold ([best -1]) ([i (in-range n)]) (if (and (not (vector-ref in-mst i)) (or (= best -1) (< (vector-ref key i) (vector-ref key best)))) i best))]) (vector-set! in-mst u #t) (for ([edge (in-list (vector-ref adj u))]) (let ([v (car edge)] [w (cdr edge)]) (when (and (not (vector-ref in-mst v)) (< w (vector-ref key v))) (vector-set! key v w)))) (vector-ref key u))))"

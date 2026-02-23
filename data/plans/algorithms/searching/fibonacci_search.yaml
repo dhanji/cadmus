@@ -1,38 +1,15 @@
-# prompt: "search for a number using Fibonacci search"
-#
-# Fibonacci Search
-# ================
-# Similar to binary search but divides the array using Fibonacci numbers
-# instead of halving. Uses only addition and subtraction (no division).
-#
-# Time:  O(log n)
-# Space: O(1)
-# Prerequisite: sorted input
-#
-# Algorithm:
-#   Find smallest Fibonacci number >= n: fib(m)
-#   offset = -1
-#   while fib(m) > 1:
-#     i = min(offset + fib(m-2), n-1)
-#     if list[i] < target:
-#       fib(m) = fib(m-1); fib(m-1) = fib(m-2)
-#       offset = i
-#     elif list[i] > target:
-#       fib(m) = fib(m-2); fib(m-1) -= fib(m-2)
-#     else: return i
-#   if fib(m-1) and list[offset+1] == target: return offset+1
-#   return -1
-#
-# Useful on systems where division is expensive (embedded).
+# Fibonacci search: search sorted list using Fibonacci numbers
+# Example: search 7 in (1 3 5 7 9 11 13) = 3
+# expected: 3
 
-fibonacci-search:
+fibonacci_search:
   inputs:
     - lst: "List(Number)"
     - target: "Number"
+  bindings:
+    lst: "(list 1 3 5 7 9 11 13)"
+    target: "7"
   steps:
-    - list_new:
-        elements: "10 22 35 40 45 50 80 82 85 90 100"
-    # Fibonacci search: divide using Fibonacci numbers, no division needed.
-    # O(log n). Requires sorted input.
-    - racket_filter:
-        predicate: "(lambda (x) (equal? x 85))"
+    - let_bind:
+        bindings: "[n (length lst)]"
+        body: "(let fib-init ([f2 0] [f1 1]) (let ([f (+ f2 f1)]) (if (>= f n) (let loop ([f2 f2] [f1 f1] [f f] [offset -1]) (cond [(< f 1) -1] [else (let ([i (min (+ offset f2) (- n 1))]) (cond [(< (list-ref lst i) target) (loop (- f1 f2) f2 f1 i)] [(> (list-ref lst i) target) (loop (- f2 (- f1 f2)) (- f1 f2) f2 offset)] [else i]))])) (fib-init f1 f))))"

@@ -1,37 +1,13 @@
-# prompt: "sort a list using heap sort"
-#
-# Heap Sort
-# =========
-# Build a max-heap from the input, then repeatedly extract the maximum
-# element and place it at the end of the sorted region.
-#
-# Time:  O(n log n) in all cases
-# Space: O(1) — in-place
-# Stable: no
-#
-# Algorithm:
-#   build_max_heap(lst)          # O(n)
-#   for i in n-1 downto 1:
-#     swap(lst[0], lst[i])       # move max to end
-#     heapify(lst, 0, i)         # restore heap on reduced range
-#
-#   heapify(lst, i, size):
-#     largest = i
-#     left  = 2*i + 1
-#     right = 2*i + 2
-#     if left < size and lst[left] > lst[largest]: largest = left
-#     if right < size and lst[right] > lst[largest]: largest = right
-#     if largest != i:
-#       swap(lst[i], lst[largest])
-#       heapify(lst, largest, size)
+# Heap sort using Racket's built-in sort (heap-based)
+# Example: sort (5 3 8 1 9 2 7 4 6) = (1 2 3 4 5 6 7 8 9)
+# expected: (1 2 3 4 5 6 7 8 9)
 
-heap-sort:
+heap_sort:
   inputs:
     - lst: "List(Number)"
+  bindings:
+    lst: "(list 5 3 8 1 9 2 7 4 6)"
   steps:
-    - list_new:
-        elements: "12 11 13 5 6 7 3 1"
-    # Heap sort: build max-heap, extract max repeatedly.
-    # O(n log n) guaranteed. Not stable. In-place.
-    - sort_list:
-        comparator: "<"
+    - let_bind:
+        bindings: "[sift-down (lambda (sift-down vec n i) (let loop ([i i]) (let* ([largest i] [l (+ (* 2 i) 1)] [r (+ (* 2 i) 2)] [largest (if (and (< l n) (> (vector-ref vec l) (vector-ref vec largest))) l largest)] [largest (if (and (< r n) (> (vector-ref vec r) (vector-ref vec largest))) r largest)]) (when (not (= largest i)) (let ([tmp (vector-ref vec i)]) (vector-set! vec i (vector-ref vec largest)) (vector-set! vec largest tmp) (loop largest))))))]"
+        body: "(let ([v (list->vector lst)] [n (length lst)]) (for ([i (in-range (- (quotient n 2) 1) -1 -1)]) (sift-down sift-down v n i)) (for ([i (in-range (- n 1) 0 -1)]) (let ([tmp (vector-ref v 0)]) (vector-set! v 0 (vector-ref v i)) (vector-set! v i tmp) (sift-down sift-down v i 0))) (vector->list v))"

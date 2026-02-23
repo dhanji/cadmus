@@ -1,38 +1,13 @@
-# prompt: "encode and decode data using run-length encoding for binary"
-#
-# Binary Run-Length Encoding
-# ==========================
-# Specialized RLE for binary data: encode runs of 0s and 1s.
-# Store the length of each run, alternating between 0-runs and 1-runs.
-#
-# Time:  O(n)
-# Space: O(r) where r = number of runs
-#
-# Algorithm:
-#   Assume first run is 0s (prepend 0-length run if starts with 1)
-#   runs = []
-#   current = data[0], count = 1
-#   for i in 1..n:
-#     if data[i] == current:
-#       count += 1
-#     else:
-#       runs.append(count)
-#       current = data[i]
-#       count = 1
-#   runs.append(count)
-#
-# Example: 0000011111110010 → [5, 7, 2, 1, 1]
-#   5 zeros, 7 ones, 2 zeros, 1 one, 1 zero
-#
-# Used in: fax machines (Group 3/4), bitmap compression, JPEG.
+# Binary run-length encoding: encode binary string as run lengths
+# Example: "000011101" = (4 3 1 1)
+# expected: (4 3 1 1)
 
-binary-run-length-encoding:
+binary_run_length_encoding:
   inputs:
-    - data: "String"
+    - s: "String"
+  bindings:
+    s: "\"000011101\""
   steps:
-    # Count consecutive identical bits, output run lengths.
-    - string_length:
-        s: "0000011111110010"
-    # 16 bits → runs [5, 7, 2, 1, 1] → 5 values
-    - subtract:
-        y: "0"
+    - let_bind:
+        bindings: "[chars (string->list s)]"
+        body: "(let loop ([cs chars] [cur #f] [cnt 0] [acc (list)]) (cond [(null? cs) (reverse (if cur (cons cnt acc) acc))] [(equal? (car cs) cur) (loop (cdr cs) cur (+ cnt 1) acc)] [else (loop (cdr cs) (car cs) 1 (if cur (cons cnt acc) acc))]))"

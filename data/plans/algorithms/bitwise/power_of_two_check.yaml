@@ -1,34 +1,14 @@
-# prompt: "check if a number is a power of two using bit manipulation"
-#
-# Power of Two Check (Bit Trick)
-# ===============================
-# Determine if n is a power of 2 using a single bitwise operation.
-#
-# Time:  O(1)
-# Space: O(1)
-#
-# Algorithm:
-#   return n > 0 and (n & (n - 1)) == 0
-#
-# Why it works: a power of 2 has exactly one bit set.
-#   n     = 1000...0  (single 1-bit)
-#   n - 1 = 0111...1  (all lower bits set)
-#   n & (n-1) = 0     (no bits in common)
-#
-# Non-powers of 2 have multiple bits set, so n & (n-1) != 0.
-#
-# Examples:
-#   16 = 10000₂, 15 = 01111₂ → 16 & 15 = 0 → power of 2 ✓
-#   12 = 01100₂, 11 = 01011₂ → 12 & 11 = 8 → not power of 2 ✗
+# Power of two check: n > 0 and n & (n-1) = 0
+# Example: is_pow2(64) = #t
+# expected: #t
 
-power-of-two-check:
+power_of_two_check:
   inputs:
     - n: "Number"
+  bindings:
+    n: "64"
   steps:
-    # n & (n - 1) == 0 iff n is a power of 2 (and n > 0)
-    - subtract:
-        x: "16"
-        y: "1"
-    # 16 - 1 = 15. 16 AND 15 = 0 → 16 is a power of 2.
-    - add:
-        y: "0"
+    - if_then:
+        test: "(and (> n 0) (= (bitwise-and n (- n 1)) 0))"
+        then: "#t"
+        else: "#f"

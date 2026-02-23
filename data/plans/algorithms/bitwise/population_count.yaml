@@ -1,35 +1,14 @@
-# prompt: "count the number of set bits in a number (population count)"
-#
-# Population Count (Hamming Weight)
-# ==================================
-# Count the number of 1-bits in the binary representation of an integer.
-#
-# Time:  O(k) where k = number of set bits (Brian Kernighan's method)
-# Space: O(1)
-#
-# Algorithm (Brian Kernighan):
-#   count = 0
-#   while n != 0:
-#     n = n & (n - 1)   # clear lowest set bit
-#     count += 1
-#   return count
-#
-# Alternative (lookup table): precompute popcount for all bytes.
-#
-# Example: popcount(29) = popcount(11101₂) = 4
+# Population count: number of 1-bits in binary representation
 # Example: popcount(255) = 8
-#
-# Used in: error correction, cryptography, chess (bitboard evaluation).
+# expected: 8
 
-population-count:
+population_count:
   inputs:
     - n: "Number"
+  bindings:
+    n: "255"
   steps:
-    # Brian Kernighan's trick: n & (n-1) clears the lowest set bit.
-    # Count iterations until n = 0.
-    - subtract:
-        x: "29"
-        y: "1"
-    # 29 = 11101₂ → popcount = 4 set bits
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "x=n count=0"
+        body: "(if (= x 0) count (loop (arithmetic-shift x -1) (+ count (bitwise-and x 1))))"

@@ -1,42 +1,14 @@
-# prompt: "encode data using variable-length quantity encoding"
-#
-# Variable-Length Quantity (VLQ) Encoding
-# ========================================
-# Encode integers using a variable number of bytes. Each byte uses
-# 7 bits for data and 1 bit (MSB) as a continuation flag.
-#
-# Time:  O(log n) — proportional to number of bytes needed
-# Space: O(log n)
-#
-# Algorithm (encode):
-#   bytes = []
-#   bytes.prepend(n & 0x7F)        # low 7 bits, no continuation
-#   n = n >> 7
-#   while n > 0:
-#     bytes.prepend((n & 0x7F) | 0x80)  # set continuation bit
-#     n = n >> 7
-#   return bytes
-#
-# Algorithm (decode):
-#   result = 0
-#   for byte in bytes:
-#     result = (result << 7) | (byte & 0x7F)
-#     if (byte & 0x80) == 0: break
-#   return result
-#
-# Example: 300 → [0x82, 0x2C] (2 bytes)
-#   300 = 0b100101100 → 7-bit groups: 0000010 0101100 → [0x82, 0x2C]
-#
-# Used in: MIDI files, Protocol Buffers, Git packfiles, DWARF debug info.
+# Variable-length quantity encoding
+# Example: vlq(300) = (2 44) — 300 = 0x12C → groups of 7 bits
+# expected: (172 2)
 
-vlq-encoding:
+vlq_encoding:
   inputs:
     - n: "Number"
+  bindings:
+    n: "300"
   steps:
-    # Split into 7-bit groups, set continuation bit on all but last.
-    - modulo:
-        x: "300"
-        y: "128"
-    # 300 mod 128 = 44 (0x2C, last byte). 300 / 128 = 2 → first byte 0x82.
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "x=n acc=(list)"
+        body: "(let ([byte (bitwise-and x 127)] [rest (arithmetic-shift x -7)]) (if (= rest 0) (reverse (cons byte acc)) (loop rest (cons (bitwise-ior byte 128) acc))))"

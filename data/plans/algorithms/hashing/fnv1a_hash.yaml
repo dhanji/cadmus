@@ -1,40 +1,15 @@
-# prompt: "compute the FNV-1a hash of a string"
-#
-# FNV-1a Hash (Fowler-Noll-Vo)
-# =============================
-# Fast, non-cryptographic hash function with good distribution.
-# The "1a" variant XORs before multiplying (better avalanche than FNV-1).
-#
-# Time:  O(n) where n = input length
-# Space: O(1)
-#
-# Algorithm (FNV-1a, 32-bit):
-#   hash = 2166136261  (FNV offset basis)
-#   for each byte b in input:
-#     hash = hash XOR b
-#     hash = hash × 16777619  (FNV prime)
-#     hash = hash mod 2^32
-#   return hash
-#
-# 64-bit variant:
-#   offset_basis = 14695981039346656037
-#   prime = 1099511628211
-#
-# Properties:
-#   - Very fast (one XOR + one multiply per byte)
-#   - Good distribution for hash tables
-#   - NOT cryptographically secure
-#
-# Used in: DNS, data structures, checksums.
+# FNV-1a hash (32-bit)
+# Example: fnv1a("hello") = 1335831723
+# expected: 1335831723
 
-fnv1a-hash:
+fnv1a_hash:
   inputs:
-    - data: "String"
+    - s: "String"
+  bindings:
+    s: "\"hello\""
   steps:
-    # Initialize with offset basis, then XOR each byte and multiply by prime.
-    - add:
-        x: "2166136261"
-        y: "0"
-    # FNV-1a("hello") = process each byte through XOR + multiply chain
-    - multiply:
-        y: "1"
+    - for_fold:
+        bindings: "[hash 2166136261]"
+        var: "c"
+        sequence: "(in-string s)"
+        body: "(modulo (* (bitwise-xor hash (char->integer c)) 16777619) 4294967296)"

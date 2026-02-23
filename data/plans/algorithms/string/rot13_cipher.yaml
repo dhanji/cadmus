@@ -1,32 +1,13 @@
-# prompt: "apply ROT13 encoding to a string"
-#
-# ROT13 Cipher
-# ============
-# Special case of Caesar cipher with shift = 13. Since 13 is half of 26,
-# applying ROT13 twice returns the original text (self-inverse).
-#
-# Time:  O(n)
-# Space: O(n)
-#
-# Algorithm:
-#   for each character c:
-#     if 'A' <= c <= 'Z': output (c - 'A' + 13) mod 26 + 'A'
-#     elif 'a' <= c <= 'z': output (c - 'a' + 13) mod 26 + 'a'
-#     else: output c
-#
-# Example: "Hello World" → "Uryyb Jbeyq"
-#          "Uryyb Jbeyq" → "Hello World"  (self-inverse)
-#
-# Used historically for obscuring spoilers and puzzle answers.
+# ROT13: Caesar cipher with shift 13
+# Example: rot13("Hello") = "Uryyb"
+# expected: Uryyb
 
-rot13-cipher:
+rot13_cipher:
   inputs:
-    - text: "String"
+    - s: "String"
+  bindings:
+    s: "\"Hello\""
   steps:
-    # ROT13: Caesar cipher with shift=13. Self-inverse.
-    # Apply twice to recover original.
-    - string_length:
-        s: "Hello World"
-    # ROT13: "Hello World" → "Uryyb Jbeyq"
-    - add:
-        y: "13"
+    - let_bind:
+        bindings: "[chars (string->list s)]"
+        body: "(list->string (map (lambda (c) (if (char-alphabetic? c) (let* ([base (if (char-upper-case? c) 65 97)] [shifted (modulo (+ (- (char->integer c) base) 13) 26)]) (integer->char (+ base shifted))) c)) chars))"

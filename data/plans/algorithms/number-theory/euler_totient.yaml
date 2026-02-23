@@ -1,38 +1,14 @@
-# prompt: "compute the Euler totient of a number"
-#
-# Euler's Totient Function φ(n)
-# =============================
-# Count the number of integers from 1 to n that are coprime with n
-# (i.e., gcd(k, n) = 1).
-#
-# Time:  O(√n) using prime factorization
-# Space: O(1)
-#
-# Algorithm:
-#   result = n
-#   p = 2
-#   while p × p <= n:
-#     if n mod p == 0:
-#       while n mod p == 0: n = n / p
-#       result -= result / p
-#     p += 1
-#   if n > 1: result -= result / n
-#   return result
-#
-# Formula: φ(n) = n × ∏(1 - 1/p) for each prime factor p of n
-#
-# Example: φ(12) = 12 × (1-1/2) × (1-1/3) = 4
-#   Coprimes of 12: {1, 5, 7, 11}
+# Euler's totient: count integers 1..n coprime to n
+# Example: phi(12) = 4 (1, 5, 7, 11)
+# expected: 4
 
-euler-totient:
+euler_totient:
   inputs:
     - n: "Number"
+  bindings:
+    n: "12"
   steps:
-    # Factor n, then apply product formula.
-    # φ(n) = n × ∏(1 - 1/p) for prime factors p.
-    - modulo:
-        x: "12"
-        y: "2"
-    # φ(12) = 4. Coprimes: 1, 5, 7, 11.
-    - add:
-        y: "0"
+    - for_sum:
+        var: "i"
+        sequence: "(in-range 1 n)"
+        body: "(if (= (gcd i n) 1) 1 0)"

@@ -1,36 +1,13 @@
-# prompt: "encode a string using run-length encoding"
-#
-# Run-Length Encoding (RLE)
-# =========================
-# Lossless data compression that replaces consecutive identical
-# characters with a single character and its count.
-#
-# Time:  O(n)
-# Space: O(n) for the output
-#
-# Algorithm:
-#   result = ""
-#   i = 0
-#   while i < n:
-#     count = 1
-#     while i + count < n and s[i + count] == s[i]:
-#       count += 1
-#     result += s[i] + str(count)
-#     i += count
-#
-# Example: "AAABBBCCDDDDDD" → "A3B3C2D6"
-# Decode: reverse the process — repeat each char by its count.
-#
-# Effective for data with many consecutive repeats (e.g., pixel rows).
+# Run-length encoding: compress consecutive chars
+# Example: rle("aaabbc") = "3a2b1c"
+# expected: 3a2b1c
 
-run-length-encoding:
+run_length_encoding:
   inputs:
     - s: "String"
+  bindings:
+    s: "\"aaabbc\""
   steps:
-    # Scan string, count consecutive identical characters.
-    # Emit character + count pairs.
-    - string_length:
-        s: "AAABBBCCDDDDDD"
-    # RLE output: "A3B3C2D6" (14 chars → 8 chars)
-    - subtract:
-        y: "0"
+    - let_bind:
+        bindings: "[chars (string->list s)]"
+        body: "(let loop ([cs chars] [result \"\"] [cur #f] [cnt 0]) (cond [(null? cs) (if cur (string-append result (number->string cnt) (string cur)) result)] [(equal? (car cs) cur) (loop (cdr cs) result cur (+ cnt 1))] [else (let ([result (if cur (string-append result (number->string cnt) (string cur)) result)]) (loop (cdr cs) result (car cs) 1))]))"

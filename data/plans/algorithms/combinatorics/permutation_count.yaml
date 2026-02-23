@@ -1,35 +1,16 @@
-# prompt: "compute the number of permutations of n items"
-#
-# Permutation Count P(n, r)
-# =========================
-# Number of ways to arrange r items chosen from n distinct items,
-# where order matters.
-#
-# Formula: P(n, r) = n! / (n - r)!
-# Special case: P(n, n) = n!
-#
-# Time:  O(r) — multiply r terms
-# Space: O(1)
-#
-# Algorithm:
-#   result = 1
-#   for i in 0..r:
-#     result *= (n - i)
-#   return result
-#
-# Example: P(5, 3) = 5 × 4 × 3 = 60
-# Example: P(10, 2) = 10 × 9 = 90
+# Permutation count: P(n,k) = n! / (n-k)!
+# Example: P(5, 3) = 60
+# expected: 60
 
-permutation-count:
+permutation_count:
   inputs:
     - n: "Number"
-    - r: "Number"
+    - k: "Number"
+  bindings:
+    n: "5"
+    k: "3"
   steps:
-    # P(5, 3) = 5 × 4 × 3
-    - multiply:
-        x: "5"
-        y: "4"
-    # 5 × 4 = 20
-    - multiply:
-        y: "3"
-    # 20 × 3 = 60 = P(5, 3)
+    - for_product:
+        var: "i"
+        sequence: "(in-range (- n k) n)"
+        body: "(+ i 1)"

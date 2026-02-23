@@ -1,39 +1,16 @@
-# prompt: "compute the extended Euclidean GCD of two numbers"
-#
-# Extended Euclidean Algorithm
-# ============================
-# Computes gcd(a, b) and also finds integers x, y such that:
-#   a × x + b × y = gcd(a, b)    (Bézout's identity)
-#
-# Time:  O(log(min(a, b)))
-# Space: O(1) iterative
-#
-# Algorithm:
-#   old_r, r = a, b
-#   old_s, s = 1, 0
-#   old_t, t = 0, 1
-#   while r != 0:
-#     quotient = old_r / r
-#     old_r, r = r, old_r - quotient × r
-#     old_s, s = s, old_s - quotient × s
-#     old_t, t = t, old_t - quotient × t
-#   return (old_r, old_s, old_t)  # (gcd, x, y)
-#
-# Example: ext_gcd(35, 15)
-#   gcd = 5, x = 1, y = -2  →  35×1 + 15×(-2) = 5
-#
-# Used in modular inverse computation and RSA key generation.
+# Extended Euclidean GCD: find x,y such that ax + by = gcd(a,b)
+# Example: ext_gcd(48, 18) = (6 -1 3) meaning 48*(-1) + 18*3 = 6
+# expected: (6 -1 3)
 
-extended-euclidean-gcd:
+extended_euclidean_gcd:
   inputs:
     - a: "Number"
     - b: "Number"
+  bindings:
+    a: "48"
+    b: "18"
   steps:
-    # Track (r, s, t) triples through the Euclidean iterations.
-    # Final s, t are the Bézout coefficients.
-    - modulo:
-        x: "35"
-        y: "15"
-    # ext_gcd(35, 15) → gcd=5, x=1, y=-2
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "old-r=a r=b old-s=1 s=0 old-t=0 t=1"
+        body: "(if (= r 0) (list old-r old-s old-t) (let ([q (quotient old-r r)]) (loop r (- old-r (* q r)) s (- old-s (* q s)) t (- old-t (* q t)))))"

@@ -1,40 +1,13 @@
-# prompt: "implement a binary heap with insert and extract-min"
-#
-# Binary Min-Heap
-# ===============
-# Complete binary tree where each node is smaller than its children.
-# Supports efficient insert and extract-min operations.
-#
-# Time:  O(log n) insert, O(log n) extract-min, O(1) peek-min
-# Space: O(n) — stored as an array
-#
-# Array representation: parent(i) = (i-1)/2, left(i) = 2i+1, right(i) = 2i+2
-#
-# Algorithm:
-#   insert(x):
-#     append x to end of array
-#     sift_up(last_index)  # bubble up until heap property restored
-#
-#   extract_min():
-#     min = array[0]
-#     array[0] = array[last]
-#     remove last
-#     sift_down(0)  # bubble down until heap property restored
-#     return min
-#
-#   sift_up(i): while parent > child: swap
-#   sift_down(i): while child < parent: swap with smaller child
-#
-# Used in: priority queues, Dijkstra's algorithm, heap sort.
+# Binary min-heap: insert elements and extract-min
+# Insert 5,3,8,1,9 then extract-min 3 times → (1 3 5)
+# expected: (1 3 5)
 
-binary-min-heap:
+binary_min_heap:
   inputs:
-    - elements: "List(Number)"
+    - n: "Number"
+  bindings:
+    n: "5"
   steps:
-    # Build heap by inserting elements one by one (or heapify in O(n)).
-    - list_new:
-        elements: "5 3 8 1 9 2 7"
-    # After heapify: [1, 3, 2, 5, 9, 8, 7]
-    # Extract-min returns 1, then 2, then 3, ...
-    - sort_list:
-        comparator: "<"
+    - let_bind:
+        bindings: "[heap (make-vector 10 0)] [size (box 0)] [swap! (lambda (i j) (let ([t (vector-ref heap i)]) (vector-set! heap i (vector-ref heap j)) (vector-set! heap j t)))] [insert! (lambda (insert! v) (let ([i (unbox size)]) (set-box! size (+ i 1)) (vector-set! heap i v) (let up ([i i]) (when (and (> i 0) (< (vector-ref heap i) (vector-ref heap (quotient (- i 1) 2)))) (swap! i (quotient (- i 1) 2)) (up (quotient (- i 1) 2))))))] [extract-min! (lambda (extract-min!) (let ([mn (vector-ref heap 0)] [last-idx (- (unbox size) 1)]) (vector-set! heap 0 (vector-ref heap last-idx)) (set-box! size last-idx) (let down ([i 0]) (let* ([l (+ (* 2 i) 1)] [r (+ (* 2 i) 2)] [smallest (if (and (< l (unbox size)) (< (vector-ref heap l) (vector-ref heap i))) l i)] [smallest (if (and (< r (unbox size)) (< (vector-ref heap r) (vector-ref heap smallest))) r smallest)]) (unless (= smallest i) (swap! i smallest) (down smallest)))) mn))]"
+        body: "(begin (for-each (lambda (v) (insert! insert! v)) (list 5 3 8 1 9)) (for/list ([_ (in-range 3)]) (extract-min! extract-min!)))"

@@ -1,34 +1,13 @@
-# prompt: "distribute keys across servers using consistent hashing"
-#
-# Consistent Hashing
-# ==================
-# Distribute keys across a dynamic set of servers such that adding or
-# removing a server only remaps ~K/N keys (K = total keys, N = servers).
-#
-# Time:  O(log N) per lookup (binary search on the ring)
-# Space: O(N × V) where V = virtual nodes per server
-#
-# Algorithm:
-#   1. Hash each server to multiple points on a ring [0, 2^32)
-#      (virtual nodes improve balance)
-#   2. To find which server owns a key:
-#      hash the key → walk clockwise on the ring → first server found
-#   3. Adding a server: only keys between the new node and its
-#      predecessor need to move
-#   4. Removing a server: its keys move to the next server clockwise
-#
-# Virtual nodes: each physical server gets V positions on the ring.
-# With V=150, standard deviation of load is ~5-10%.
-#
-# Used in: Amazon DynamoDB, Apache Cassandra, Akamai CDN, memcached.
+# Consistent hashing: assign keys to nodes on a ring
+# 3 nodes at positions 100, 200, 300; key at position 150 → node 200
+# expected: 200
 
-consistent-hashing:
+consistent_hashing:
   inputs:
-    - servers: "List(String)"
-    - key: "String"
+    - n: "Number"
+  bindings:
+    n: "0"
   steps:
-    # Hash servers to ring positions. Hash key, walk clockwise to find owner.
-    - list_new:
-        elements: "server-A server-B server-C"
-    # 3 servers on ring. Key "user:42" → hash → nearest server clockwise.
-    - length
+    - let_bind:
+        bindings: "[nodes (list 100 200 300)] [key-pos 150]"
+        body: "(let loop ([ns (sort nodes <)]) (cond [(null? ns) (car (sort nodes <))] [(>= (car ns) key-pos) (car ns)] [else (loop (cdr ns))]))"

@@ -1,36 +1,15 @@
-# prompt: "compute a row of Pascal's triangle"
-#
-# Pascal's Triangle Row
-# =====================
-# Row n of Pascal's triangle contains the binomial coefficients C(n, k)
-# for k = 0, 1, ..., n. Each element is the sum of the two elements
-# above it.
-#
-# Time:  O(n) per row
-# Space: O(n) for one row
-#
-# Algorithm:
-#   row = [1]
-#   for k in 1..n:
-#     row[k] = row[k-1] × (n - k + 1) / k
-#   return row
-#
-# Row 0: [1]
-# Row 1: [1, 1]
-# Row 2: [1, 2, 1]
-# Row 3: [1, 3, 3, 1]
-# Row 4: [1, 4, 6, 4, 1]
-# Row 5: [1, 5, 10, 10, 5, 1]
-#
-# Properties: symmetric, sum of row n = 2^n, diagonal = triangular numbers.
+# Pascal's triangle row: row n (0-indexed)
+# Example: row 5 = (1 5 10 10 5 1)
+# expected: (1 5 10 10 5 1)
 
-pascals-triangle-row:
+pascals_triangle_row:
   inputs:
     - n: "Number"
+  bindings:
+    n: "5"
   steps:
-    # Build row iteratively: each element from the previous.
-    # C(n, k) = C(n, k-1) × (n - k + 1) / k
-    - list_new:
-        elements: "1 5 10 10 5 1"
-    # Row 5 of Pascal's triangle: [1, 5, 10, 10, 5, 1]
-    - length
+    - for_fold:
+        bindings: "[row (list 1)]"
+        var: "i"
+        sequence: "(in-range 1 (+ n 1))"
+        body: "(append row (list (quotient (* (list-ref row (- i 1)) (- n i -1)) i)))"

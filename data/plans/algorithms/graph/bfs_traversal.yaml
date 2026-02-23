@@ -1,40 +1,14 @@
-# prompt: "traverse a graph using breadth-first search"
-#
-# Breadth-First Search (BFS)
-# ==========================
-# Explore a graph level by level, visiting all neighbors of a node
-# before moving to the next depth level. Uses a queue.
-#
-# Time:  O(V + E) where V = vertices, E = edges
-# Space: O(V) for the visited set and queue
-#
-# Algorithm:
-#   queue = [start]
-#   visited = {start}
-#   while queue is not empty:
-#     node = queue.dequeue()
-#     process(node)
-#     for neighbor in adjacency[node]:
-#       if neighbor not in visited:
-#         visited.add(neighbor)
-#         queue.enqueue(neighbor)
-#
-# Properties:
-#   - Finds shortest path in unweighted graphs
-#   - Visits nodes in order of distance from start
-#   - Can detect connected components
-#
-# Graph representation: adjacency list
-#   {A: [B, C], B: [A, D, E], C: [A, F], D: [B], E: [B, F], F: [C, E]}
-# BFS from A: A → B → C → D → E → F
+# BFS traversal: breadth-first search from start node
+# Graph: 0→1,2  1→3  2→3,4  3→5  4→5
+# Example: BFS from 0 = (0 1 2 3 4 5)
+# expected: (0 1 2 3 4 5)
 
-bfs-traversal:
+bfs_traversal:
   inputs:
-    - graph: "List(String)"
-    - start: "String"
+    - n: "Number"
+  bindings:
+    n: "6"
   steps:
-    # Initialize queue with start node. Process level by level.
-    - list_new:
-        elements: "A B C D E F"
-    # BFS from A: visits A, B, C, D, E, F (level order)
-    - length
+    - let_bind:
+        bindings: "[adj (vector (list 1 2) (list 3) (list 3 4) (list 5) (list 5) (list))]"
+        body: "(let loop ([queue (list 0)] [visited (set)] [result (list)]) (if (null? queue) (reverse result) (let ([node (car queue)] [rest (cdr queue)]) (if (set-member? visited node) (loop rest visited result) (let ([nbrs (vector-ref adj node)]) (loop (append rest nbrs) (set-add visited node) (cons node result)))))))"

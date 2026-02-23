@@ -1,31 +1,14 @@
-# prompt: "solve the rod cutting problem for maximum revenue"
-#
-# Rod Cutting Problem
-# ===================
-# Given a rod of length n and a price table, determine the maximum
-# revenue obtainable by cutting the rod and selling the pieces.
-#
-# Time:  O(n²)
-# Space: O(n)
-#
-# Algorithm (bottom-up DP):
-#   dp[0] = 0
-#   for j in 1..n:
-#     dp[j] = max(price[i] + dp[j-i]) for i in 1..j
-#
-# Example: prices = [1, 5, 8, 9, 10, 17, 17, 20], n = 8
-#   Optimal: cut into lengths 2+6 → revenue 5+17 = 22
-#
-# Related to: unbounded knapsack (each piece length can be used multiple times).
+# Rod cutting: maximum revenue from cutting rod of length n
+# Prices: length 1=1, 2=5, 3=8, 4=9, 5=10, 6=17, 7=17, 8=20
+# Example: rod length 8 = 22 (cut into 2+6)
+# expected: 22
 
-rod-cutting:
+rod_cutting:
   inputs:
-    - prices: "List(Number)"
     - n: "Number"
+  bindings:
+    n: "8"
   steps:
-    # DP: for each length j, try all first-cut positions i.
-    - list_new:
-        elements: "1 5 8 9 10 17 17 20"
-    # Prices for lengths 1-8. Rod length 8.
-    # Optimal revenue = 22 (cut 2 + 6)
-    - length
+    - let_bind:
+        bindings: "[prices (vector 0 1 5 8 9 10 17 17 20)] [dp (make-vector (+ n 1) 0)]"
+        body: "(begin (for ([i (in-range 1 (+ n 1))]) (for ([j (in-range 1 (+ i 1))]) (vector-set! dp i (max (vector-ref dp i) (+ (vector-ref prices j) (vector-ref dp (- i j))))))) (vector-ref dp n))"

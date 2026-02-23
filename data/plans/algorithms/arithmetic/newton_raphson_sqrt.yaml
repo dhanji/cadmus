@@ -1,39 +1,14 @@
-# prompt: "compute the square root of a number using Newton-Raphson"
-#
-# Newton-Raphson Square Root
-# ==========================
-# Iterative method to approximate √S by finding the root of f(x) = x² - S.
-# Each iteration refines the guess using the tangent line.
-#
-# Time:  O(log(1/ε)) — quadratic convergence (digits of precision double each step)
-# Space: O(1)
-#
-# Algorithm:
-#   guess = S / 2  (initial estimate)
-#   repeat:
-#     next_guess = (guess + S / guess) / 2
-#     if |next_guess - guess| < epsilon: break
-#     guess = next_guess
-#   return guess
-#
-# Example: √2
-#   guess = 1.0
-#   → (1.0 + 2/1.0) / 2 = 1.5
-#   → (1.5 + 2/1.5) / 2 = 1.4167
-#   → (1.4167 + 2/1.4167) / 2 = 1.4142...
-#
-# Also known as Heron's method (ancient Babylon, ~1500 BC).
+# Newton-Raphson square root approximation
+# Example: sqrt(2) ≈ 1.4142135623730951
+# expected: 1.414213562373095
 
-newton-raphson-sqrt:
+newton_raphson_sqrt:
   inputs:
-    - s: "Number"
+    - n: "Number"
+  bindings:
+    n: "2"
   steps:
-    # Iteratively refine: guess = (guess + S/guess) / 2
-    # Converges quadratically to √S.
-    - add:
-        x: "2"
-        y: "0"
-    # √2 ≈ 1.41421356...
-    # After 5 iterations from guess=1: accurate to ~15 decimal places.
-    - multiply:
-        y: "1"
+    - iterate:
+        name: "loop"
+        bindings: "x=1.0 i=0"
+        body: "(if (= i 20) x (loop (/ (+ x (/ n x)) 2.0) (+ i 1)))"

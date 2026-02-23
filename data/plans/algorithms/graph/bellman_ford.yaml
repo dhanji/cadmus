@@ -1,34 +1,14 @@
-# prompt: "find shortest paths using Bellman-Ford algorithm"
-#
-# Bellman-Ford Shortest Path
-# ===========================
-# Find shortest paths from a source vertex to all other vertices.
-# Unlike Dijkstra, handles negative edge weights and detects negative cycles.
-#
-# Time:  O(V × E)
-# Space: O(V)
-#
-# Algorithm:
-#   dist[v] = infinity for all v; dist[source] = 0
-#   for i in 1..V-1:           # relax all edges V-1 times
-#     for (u, v, w) in edges:
-#       if dist[u] + w < dist[v]:
-#         dist[v] = dist[u] + w
-#   # Check for negative cycles
-#   for (u, v, w) in edges:
-#     if dist[u] + w < dist[v]:
-#       negative cycle exists!
-#
-# Use when: graph has negative weights (Dijkstra fails).
-# Slower than Dijkstra for non-negative weights.
+# Bellman-Ford: shortest paths with negative edges
+# Graph: 0→1(4) 0→2(1) 1→3(1) 2→1(-2) 2→3(5) 3→4(3)
+# Example: distances from 0 = (0 -1 1 0 3)
+# expected: (0 -1 1 0 3)
 
-bellman-ford:
+bellman_ford:
   inputs:
-    - edges: "List(String)"
-    - source: "String"
+    - n: "Number"
+  bindings:
+    n: "5"
   steps:
-    # Relax all edges V-1 times. One more pass detects negative cycles.
-    - list_new:
-        elements: "A B C D E"
-    # Shortest paths from source, handling negative weights.
-    - length
+    - let_bind:
+        bindings: "[edges (list (list 0 1 4) (list 0 2 1) (list 1 3 1) (list 2 1 -2) (list 2 3 5) (list 3 4 3))] [dist (make-vector n +inf.0)]"
+        body: "(begin (vector-set! dist 0 0) (for ([_ (in-range (- n 1))]) (for ([e (in-list edges)]) (let ([u (first e)] [v (second e)] [w (third e)]) (when (< (+ (vector-ref dist u) w) (vector-ref dist v)) (vector-set! dist v (+ (vector-ref dist u) w)))))) (vector->list dist))"

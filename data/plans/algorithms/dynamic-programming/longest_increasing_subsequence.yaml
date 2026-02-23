@@ -1,34 +1,13 @@
-# prompt: "find the longest increasing subsequence in a list"
-#
-# Longest Increasing Subsequence (LIS)
-# =====================================
-# Find the length of the longest subsequence where each element is
-# strictly greater than the previous. Elements need not be contiguous.
-#
-# Time:  O(n log n) with patience sorting; O(n²) with basic DP
-# Space: O(n)
-#
-# Algorithm (DP, O(n²)):
-#   dp[i] = length of LIS ending at index i
-#   dp[i] = 1 + max(dp[j] for j < i if list[j] < list[i])
-#   return max(dp)
-#
-# Algorithm (patience sorting, O(n log n)):
-#   tails = []  # tails[i] = smallest tail of all increasing subseqs of length i+1
-#   for x in list:
-#     if x > tails[-1]: tails.append(x)
-#     else: tails[bisect_left(tails, x)] = x
-#   return len(tails)
-#
-# Example: [10, 9, 2, 5, 3, 7, 101, 18]
-#   LIS = [2, 3, 7, 18] or [2, 5, 7, 18] → length 4
+# Longest increasing subsequence length
+# Example: LIS of (10 9 2 5 3 7 101 18) = 4
+# expected: 4
 
-longest-increasing-subsequence:
+longest_increasing_subsequence:
   inputs:
     - lst: "List(Number)"
+  bindings:
+    lst: "(list 10 9 2 5 3 7 101 18)"
   steps:
-    # DP: for each element, find longest increasing subseq ending there.
-    - list_new:
-        elements: "10 9 2 5 3 7 101 18"
-    # LIS length = 4 (e.g., 2 → 3 → 7 → 18)
-    - length
+    - let_bind:
+        bindings: "[n (length lst)] [dp (make-vector (length lst) 1)]"
+        body: "(begin (for ([i (in-range 1 n)]) (for ([j (in-range i)]) (when (< (list-ref lst j) (list-ref lst i)) (vector-set! dp i (max (vector-ref dp i) (+ (vector-ref dp j) 1)))))) (for/fold ([mx 0]) ([i (in-range n)]) (max mx (vector-ref dp i))))"

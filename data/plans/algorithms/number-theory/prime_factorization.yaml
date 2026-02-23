@@ -1,36 +1,14 @@
-# prompt: "compute the prime factorization of a number"
-#
-# Prime Factorization (Trial Division)
-# =====================================
-# Decompose a number into its prime factors.
-#
-# Time:  O(√n)
-# Space: O(log n) for the factors
-#
-# Algorithm:
-#   factors = []
-#   d = 2
-#   while d × d <= n:
-#     while n mod d == 0:
-#       factors.append(d)
-#       n = n / d
-#     d += 1
-#   if n > 1: factors.append(n)
-#   return factors
-#
-# Example: 360 = 2³ × 3² × 5 = [2, 2, 2, 3, 3, 5]
-# Example: 97 = [97] (prime)
-#
-# For large numbers, use Pollard's rho or quadratic sieve.
+# Prime factorization: list prime factors of n
+# Example: factors(84) = (2 2 3 7)
+# expected: (2 2 3 7)
 
-prime-factorization:
+prime_factorization:
   inputs:
     - n: "Number"
+  bindings:
+    n: "84"
   steps:
-    # Divide by 2, then odd numbers up to √n.
-    - modulo:
-        x: "360"
-        y: "2"
-    # 360 mod 2 = 0 → factor 2. Continue: 360 = 2³ × 3² × 5
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "x=n d=2 acc=(list)"
+        body: "(cond [(> (* d d) x) (if (> x 1) (append acc (list x)) acc)] [(= (modulo x d) 0) (loop (quotient x d) d (append acc (list d)))] [else (loop x (+ d 1) acc)])"

@@ -601,16 +601,8 @@ pub fn op_to_racket(
                 .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "bindings".into() })?;
             let body = params.get("body")
                 .ok_or_else(|| RacketError::MissingParam { op: op.into(), param: "body".into() })?;
-            // Parse bindings: "a=48 b=18" → ([a 48] [b 18])
-            let binding_parts: Vec<String> = bindings.split_whitespace()
-                .map(|pair| {
-                    if let Some((var, val)) = pair.split_once('=') {
-                        format!("[{} {}]", var, racket_value(val))
-                    } else {
-                        format!("[{} 0]", pair)
-                    }
-                })
-                .collect();
+            // Parse bindings: "a=48 b=18" or "x=n acc=(list)" → ([a 48] [b 18])
+            let binding_parts = parse_iterate_bindings(bindings);
             let expr = format!("(let {} ({}) {})", name, binding_parts.join(" "), body);
             return Ok(RacketExpr { expr, uses_prev: false });
         }
@@ -820,6 +812,16 @@ pub fn generate_racket_script(
     // Collect input values for operand resolution
     let input_values = &def.inputs;
 
+    // Emit input bindings as (define name value) for algorithm plans
+    if !def.bindings.is_empty() {
+        script.push_str("\n;; Input bindings\n");
+        for input in &def.inputs {
+            if let Some(val) = def.bindings.get(&input.name) {
+                script.push_str(&format!("(define {} {})\n", input.name, racket_value(val)));
+            }
+        }
+    }
+
     let num_steps = compiled.steps.len();
 
     if num_steps == 0 {
@@ -932,6 +934,11 @@ fn get_one_operand(
         return Ok(racket_value(val));
     }
 
+    // Fall back to the first input name as a variable reference
+    // (it should be defined via bindings at the top of the script)
+    if !_input_values.is_empty() {
+        return Ok(_input_values[0].name.clone());
+    }
 
     Err(RacketError::MissingParam {
         op: step.op.clone(),
@@ -988,10 +995,45 @@ fn get_two_operands(
 
 /// Convert a string value to a Racket literal.
 ///
-/// Numbers pass through as-is. Strings get quoted.
-/// Racket identifiers (starting with lowercase or special chars) pass through.
+/// Parse iterate bindings string into [var val] pairs.
+///
+/// Handles parenthesized values: "x=n acc=(list)" → ["[x n]", "[acc (list)]"]
+fn parse_iterate_bindings(s: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut chars = s.chars().peekable();
+    while chars.peek().is_some() {
+        // Skip whitespace
+        while chars.peek() == Some(&' ') { chars.next(); }
+        if chars.peek().is_none() { break; }
+        // Read var name (up to '=')
+        let mut var = String::new();
+        while let Some(&c) = chars.peek() {
+            if c == '=' { chars.next(); break; }
+            var.push(c);
+            chars.next();
+        }
+        if var.is_empty() { break; }
+        // Read value — respect parentheses
+        let mut val = String::new();
+        let mut depth = 0i32;
+        while let Some(&c) = chars.peek() {
+            if c == '(' { depth += 1; }
+            if c == ')' { depth -= 1; }
+            if c == ' ' && depth == 0 { break; }
+            val.push(c);
+            chars.next();
+        }
+        if val.is_empty() {
+            result.push(format!("[{} 0]", var));
+        } else {
+            result.push(format!("[{} {}]", var, val));
+        }
+    }
+    result
+}
+
 fn racket_value(s: &str) -> String {
-    // Step back-references: $step-N → step-N (Racket binding name)
+     // Step back-references: $step-N → step-N (Racket binding name)
     if let Some(rest) = s.strip_prefix('$') {
         if rest.starts_with("step-") {
             return rest.to_string();

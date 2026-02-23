@@ -1,31 +1,13 @@
-# prompt: "compute the longest palindromic subsequence"
-#
-# Longest Palindromic Subsequence (LPS)
-# ======================================
-# Find the length of the longest subsequence that is a palindrome.
-# Unlike longest palindromic substring, characters need not be contiguous.
-#
-# Time:  O(n²)
-# Space: O(n²); O(n) with optimization
-#
-# Algorithm (DP):
-#   dp[i][j] = length of LPS in s[i..j]
-#
-#   Base: dp[i][i] = 1
-#   if s[i] == s[j]: dp[i][j] = dp[i+1][j-1] + 2
-#   else: dp[i][j] = max(dp[i+1][j], dp[i][j-1])
-#
-# Alternative: LPS(s) = LCS(s, reverse(s))
-#
-# Example: "BBABCBCAB" → LPS = "BABCBAB" (length 7)
+# Longest palindromic subsequence length
+# Example: LPS of "bbbab" = 4
+# expected: 4
 
-longest-palindromic-subsequence:
+longest_palindromic_subsequence:
   inputs:
     - s: "String"
+  bindings:
+    s: "\"bbbab\""
   steps:
-    # DP on substrings: expand from single chars to full string.
-    - string_length:
-        s: "BBABCBCAB"
-    # LPS = "BABCBAB", length 7
-    - subtract:
-        y: "0"
+    - let_bind:
+        bindings: "[n (string-length s)] [dp (build-vector (string-length s) (lambda (_) (make-vector (string-length s) 0)))]"
+        body: "(begin (for ([i (in-range n)]) (vector-set! (vector-ref dp i) i 1)) (for ([len (in-range 2 (+ n 1))]) (for ([i (in-range (- n len -1))]) (let ([j (+ i len -1)]) (if (char=? (string-ref s i) (string-ref s j)) (vector-set! (vector-ref dp i) j (+ (vector-ref (vector-ref dp (+ i 1)) (- j 1)) 2)) (vector-set! (vector-ref dp i) j (max (vector-ref (vector-ref dp (+ i 1)) j) (vector-ref (vector-ref dp i) (- j 1)))))))) (vector-ref (vector-ref dp 0) (- n 1)))"

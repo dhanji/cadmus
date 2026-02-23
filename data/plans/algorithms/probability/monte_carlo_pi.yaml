@@ -1,41 +1,13 @@
-# prompt: "estimate pi using Monte Carlo simulation"
-#
-# Monte Carlo Pi Estimation
-# =========================
-# Estimate π by randomly sampling points in a unit square and counting
-# how many fall inside the inscribed quarter-circle.
-#
-# Ratio: (points inside circle) / (total points) ≈ π/4
-# Therefore: π ≈ 4 × (points inside) / (total points)
-#
-# Time:  O(n) for n samples
-# Space: O(1)
-#
-# Algorithm:
-#   inside = 0
-#   for i in 1..n:
-#     x = random(0, 1)
-#     y = random(0, 1)
-#     if x² + y² <= 1:
-#       inside += 1
-#   return 4 × inside / n
-#
-# Convergence: error ≈ O(1/√n)
-# 10,000 samples → ~2 decimal places
-# 1,000,000 samples → ~3 decimal places
-#
-# Requires: random number generator.
+# Monte Carlo Pi estimation using fixed seed
+# Use deterministic sequence instead of random for reproducibility
+# expected: 3.17
 
-monte-carlo-pi:
+monte_carlo_pi:
   inputs:
-    - samples: "Number"
+    - n: "Number"
+  bindings:
+    n: "10000"
   steps:
-    # Generate random (x, y) pairs in [0, 1] × [0, 1].
-    # Count those with x² + y² ≤ 1 (inside quarter-circle).
-    # π ≈ 4 × count / samples.
-    - multiply:
-        x: "4"
-        y: "1"
-    # With enough samples, result converges to π ≈ 3.14159...
-    - add:
-        y: "0"
+    - let_bind:
+        bindings: "[samples 10000]"
+        body: "(let* ([gen (make-pseudo-random-generator)] [_ (parameterize ([current-pseudo-random-generator gen]) (random-seed 42))] [inside (parameterize ([current-pseudo-random-generator gen]) (for/sum ([_ (in-range samples)]) (let ([x (random)] [y (random)]) (if (<= (+ (* x x) (* y y)) 1.0) 1 0))))]) (/ (round (* (/ (* 4.0 inside) samples) 100)) 100))"

@@ -1,38 +1,14 @@
-# prompt: "compute a topological sort of a directed acyclic graph"
-#
-# Topological Sort (Kahn's Algorithm)
-# ====================================
-# Produce a linear ordering of vertices in a DAG such that for every
-# directed edge u→v, u comes before v in the ordering.
-#
-# Time:  O(V + E)
-# Space: O(V)
-#
-# Algorithm (Kahn's — BFS-based):
-#   in_degree[v] = number of incoming edges for each v
-#   queue = [v for v in V if in_degree[v] == 0]
-#   order = []
-#   while queue is not empty:
-#     u = queue.dequeue()
-#     order.append(u)
-#     for v in adjacency[u]:
-#       in_degree[v] -= 1
-#       if in_degree[v] == 0:
-#         queue.enqueue(v)
-#   if len(order) != |V|: cycle detected!
-#   return order
-#
-# Alternative: DFS-based (reverse post-order)
-#
-# Example DAG: A→C, B→C, B→D, C→E, D→E
-#   Topological order: A B C D E or B A C D E or B A D C E ...
+# Topological sort using Kahn's algorithm (BFS-based)
+# DAG: 0→1,2  1→3  2→3,4  4→5  3→5
+# Example: one valid order = (0 1 2 3 4 5)
+# expected: (0 1 2 3 4 5)
 
-topological-sort:
+topological_sort:
   inputs:
-    - graph: "List(String)"
+    - n: "Number"
+  bindings:
+    n: "6"
   steps:
-    # Kahn's algorithm: start with zero in-degree nodes, peel layers.
-    - list_new:
-        elements: "A B C D E"
-    # One valid topological order: B A D C E
-    - length
+    - let_bind:
+        bindings: "[adj (vector (list 1 2) (list 3) (list 3 4) (list 5) (list 5) (list))] [indeg (make-vector 6 0)]"
+        body: "(begin (for* ([u (in-range n)] [v (in-list (vector-ref adj u))]) (vector-set! indeg v (+ (vector-ref indeg v) 1))) (let loop ([queue (for/list ([i (in-range n)] #:when (= (vector-ref indeg i) 0)) i)] [result (list)]) (if (null? queue) (reverse result) (let ([u (car queue)]) (let ([queue (for/fold ([q (cdr queue)]) ([v (in-list (vector-ref adj u))]) (vector-set! indeg v (- (vector-ref indeg v) 1)) (if (= (vector-ref indeg v) 0) (append q (list v)) q))]) (loop queue (cons u result)))))))"

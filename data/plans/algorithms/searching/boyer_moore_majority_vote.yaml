@@ -1,36 +1,14 @@
-# prompt: "find the majority element in an array using Boyer-Moore voting"
-#
-# Boyer-Moore Majority Vote
-# =========================
-# Find the element that appears more than n/2 times in an array.
-# Uses a clever cancellation trick requiring only O(1) space.
-#
-# Time:  O(n)
-# Space: O(1)
-#
-# Algorithm:
-#   candidate = None, count = 0
-#   for x in array:
-#     if count == 0:
-#       candidate = x
-#       count = 1
-#     elif x == candidate:
-#       count += 1
-#     else:
-#       count -= 1
-#   # Verify: count occurrences of candidate (may not exist)
-#   return candidate if count(candidate) > n/2 else None
-#
-# Intuition: the majority element "survives" all cancellations.
-#
-# Example: [2, 2, 1, 1, 1, 2, 2] → candidate = 2 (appears 4/7 times)
+# Boyer-Moore majority vote: find element appearing > n/2 times
+# Example: majority in (3 3 4 2 3 3 3) = 3
+# expected: 3
 
-boyer-moore-majority-vote:
+boyer_moore_majority_vote:
   inputs:
     - lst: "List(Number)"
+  bindings:
+    lst: "(list 3 3 4 2 3 3 3)"
   steps:
-    # Track candidate and count. Cancel different elements.
-    - list_new:
-        elements: "2 2 1 1 1 2 2"
-    # Majority element = 2 (4 out of 7). O(n) time, O(1) space.
-    - length
+    - iterate:
+        name: "loop"
+        bindings: "xs=lst candidate=0 count=0"
+        body: "(if (null? xs) candidate (let ([x (car xs)]) (if (= count 0) (loop (cdr xs) x 1) (if (= x candidate) (loop (cdr xs) candidate (+ count 1)) (loop (cdr xs) candidate (- count 1))))))"

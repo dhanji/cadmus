@@ -1,36 +1,14 @@
-# prompt: "check if a number is prime using trial division"
-#
-# Primality Test (Trial Division)
-# ================================
-# Test whether a number n is prime by checking divisibility by all
-# integers from 2 to √n.
-#
-# Time:  O(√n)
-# Space: O(1)
-#
-# Algorithm:
-#   if n < 2: return false
-#   if n < 4: return true
-#   if n mod 2 == 0 or n mod 3 == 0: return false
-#   i = 5
-#   while i × i <= n:
-#     if n mod i == 0 or n mod (i+2) == 0: return false
-#     i += 6
-#   return true
-#
-# The 6k±1 optimization skips even numbers and multiples of 3.
-# For large numbers, use Miller-Rabin or AKS instead.
+# Primality test by trial division
+# Example: is_prime(97) = #t
+# expected: #t
 
-primality-trial-division:
+primality_trial_division:
   inputs:
     - n: "Number"
+  bindings:
+    n: "97"
   steps:
-    # Check divisibility from 2 to √n.
-    # Optimization: only check 2, 3, then 6k±1.
-    - modulo:
-        x: "97"
-        y: "2"
-    # 97 mod 2 = 1 (not even). Check 3, 5, 7, 9... up to √97 ≈ 9.8
-    # 97 is prime.
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "i=2"
+        body: "(cond [(> (* i i) n) #t] [(= (modulo n i) 0) #f] [else (loop (+ i 1))])"

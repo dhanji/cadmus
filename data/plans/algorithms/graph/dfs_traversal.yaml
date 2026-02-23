@@ -1,45 +1,14 @@
-# prompt: "traverse a graph using depth-first search"
-#
-# Depth-First Search (DFS)
-# ========================
-# Explore a graph by going as deep as possible along each branch before
-# backtracking. Uses a stack (or recursion).
-#
-# Time:  O(V + E)
-# Space: O(V) for the visited set and stack
-#
-# Algorithm (iterative):
-#   stack = [start]
-#   visited = {}
-#   while stack is not empty:
-#     node = stack.pop()
-#     if node not in visited:
-#       visited.add(node)
-#       process(node)
-#       for neighbor in adjacency[node]:
-#         if neighbor not in visited:
-#           stack.push(neighbor)
-#
-# Algorithm (recursive):
-#   dfs(node, visited):
-#     visited.add(node)
-#     process(node)
-#     for neighbor in adjacency[node]:
-#       if neighbor not in visited:
-#         dfs(neighbor, visited)
-#
-# Applications: cycle detection, topological sort, connected components,
-# maze solving, path finding.
-#
-# DFS from A: A → B → D → E → F → C (one possible order)
+# DFS traversal: depth-first search from start node
+# Graph: 0→1,2  1→3  2→3,4  3→5  4→5
+# Example: DFS from 0 = (0 1 3 5 2 4)
+# expected: (0 1 3 5 2 4)
 
-dfs-traversal:
+dfs_traversal:
   inputs:
-    - graph: "List(String)"
-    - start: "String"
+    - n: "Number"
+  bindings:
+    n: "6"
   steps:
-    # Initialize stack with start node. Go deep before backtracking.
-    - list_new:
-        elements: "A B C D E F"
-    # DFS from A: visits A, B, D, E, F, C (depth-first order)
-    - length
+    - let_bind:
+        bindings: "[adj (vector (list 1 2) (list 3) (list 3 4) (list 5) (list 5) (list))]"
+        body: "(let loop ([stack (list 0)] [visited (set)] [result (list)]) (if (null? stack) (reverse result) (let ([node (car stack)] [rest (cdr stack)]) (if (set-member? visited node) (loop rest visited result) (let ([nbrs (vector-ref adj node)]) (loop (append nbrs rest) (set-add visited node) (cons node result)))))))"

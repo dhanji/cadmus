@@ -1,39 +1,15 @@
-# prompt: "compute the edit distance between two strings using Wagner-Fischer"
-#
-# Wagner-Fischer Algorithm
-# ========================
-# Tabular DP computation of the Levenshtein edit distance.
-# Named after Robert Wagner and Michael Fischer (1974).
-# This is the standard implementation of Levenshtein distance.
-#
-# Time:  O(m × n)
-# Space: O(m × n); O(min(m,n)) with two-row optimization
-#
-# Algorithm:
-#   Create (m+1) × (n+1) matrix D
-#   D[i][0] = i for all i (delete i chars from s1)
-#   D[0][j] = j for all j (insert j chars into s1)
-#   for i in 1..m:
-#     for j in 1..n:
-#       cost = 0 if s1[i] == s2[j] else 1
-#       D[i][j] = min(
-#         D[i-1][j] + 1,        # deletion
-#         D[i][j-1] + 1,        # insertion
-#         D[i-1][j-1] + cost    # substitution
-#       )
-#   return D[m][n]
-#
-# Example: "sunday" → "saturday" = 3
+# Wagner-Fischer: edit distance (same as Levenshtein)
+# Example: wf("sunday", "saturday") = 3
+# expected: 3
 
-wagner-fischer:
+wagner_fischer:
   inputs:
     - s1: "String"
     - s2: "String"
+  bindings:
+    s1: "\"sunday\""
+    s2: "\"saturday\""
   steps:
-    - string_length:
-        s: "sunday"
-    - string_length:
-        s: "saturday"
-    # Wagner-Fischer: edit distance = 3
-    - subtract:
-        y: "0"
+    - let_bind:
+        bindings: "[m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (i) (make-vector (+ (string-length s2) 1) 0)))]"
+        body: "(begin (for ([i (in-range (+ m 1))]) (vector-set! (vector-ref dp i) 0 i)) (for ([j (in-range (+ n 1))]) (vector-set! (vector-ref dp 0) j j)) (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (let ([cost (if (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) 0 1)]) (vector-set! (vector-ref dp i) j (min (+ (vector-ref (vector-ref dp (- i 1)) j) 1) (+ (vector-ref (vector-ref dp i) (- j 1)) 1) (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) cost))))) (vector-ref (vector-ref dp m) n))"

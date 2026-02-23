@@ -1,34 +1,14 @@
-# prompt: "compute the nth Fibonacci number"
-#
-# Fibonacci Sequence
-# ==================
-# Each number is the sum of the two preceding ones:
-#   F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2)
-#
-# Time:  O(n) iterative; O(2^n) naive recursive; O(log n) matrix exponentiation
-# Space: O(1) iterative
-#
-# Algorithm (iterative):
-#   a, b = 0, 1
-#   for i in 2..n:
-#     a, b = b, a + b
-#   return b
-#
-# Sequence: 0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 ...
-#
-# Closed form (Binet's formula): F(n) = (φ^n - ψ^n) / √5
-#   where φ = (1+√5)/2, ψ = (1-√5)/2
-# Imprecise for large n due to floating point.
+# Fibonacci: F(n) where F(0)=0, F(1)=1, F(n)=F(n-1)+F(n-2)
+# Example: F(10) = 55
+# expected: 55
 
 fibonacci:
   inputs:
     - n: "Number"
+  bindings:
+    n: "10"
   steps:
-    # Iterative: maintain two variables, sum them n times.
-    # F(10) = 55
-    - add:
-        x: "0"
-        y: "1"
-    # Step through: 0,1 → 1,1 → 1,2 → 2,3 → 3,5 → 5,8 → 8,13 → 13,21 → 21,34 → 34,55
-    - add:
-        y: "0"
+    - iterate:
+        name: "loop"
+        bindings: "a=0 b=1 i=0"
+        body: "(if (= i n) a (loop b (+ a b) (+ i 1)))"

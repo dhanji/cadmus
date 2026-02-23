@@ -1,42 +1,18 @@
-# prompt: "compute modular exponentiation: base^exp mod m"
-#
-# Modular Exponentiation (Fast Power)
-# ====================================
-# Compute (base^exp) mod m efficiently using repeated squaring.
-# Essential for RSA, Diffie-Hellman, and other cryptographic protocols.
-#
-# Time:  O(log exp)
-# Space: O(1)
-#
-# Algorithm (binary exponentiation):
-#   result = 1
-#   base = base mod m
-#   while exp > 0:
-#     if exp is odd:
-#       result = (result × base) mod m
-#     exp = exp >> 1        # divide by 2
-#     base = (base × base) mod m
-#   return result
-#
-# Example: 3^13 mod 7
-#   13 = 1101 in binary
-#   3^1 mod 7 = 3
-#   3^2 mod 7 = 2
-#   3^4 mod 7 = 4
-#   3^8 mod 7 = 2
-#   result = 3^8 × 3^4 × 3^1 mod 7 = 2 × 4 × 3 mod 7 = 3
+# Modular exponentiation: (base^exp) mod m using fast exponentiation
+# Example: (2^10) mod 1000 = 24
+# expected: 24
 
-modular-exponentiation:
+modular_exponentiation:
   inputs:
     - base: "Number"
     - exp: "Number"
     - m: "Number"
+  bindings:
+    base: "2"
+    exp: "10"
+    m: "1000"
   steps:
-    # Binary exponentiation: square and multiply.
-    # Process exponent bits from LSB to MSB.
-    - expt:
-        x: "3"
-        y: "13"
-    # 3^13 = 1594323; 1594323 mod 7 = 3
-    - modulo:
-        y: "7"
+    - iterate:
+        name: "loop"
+        bindings: "b=base e=exp result=1"
+        body: "(if (= e 0) result (let ([result (if (odd? e) (modulo (* result b) m) result)]) (loop (modulo (* b b) m) (quotient e 2) result)))"

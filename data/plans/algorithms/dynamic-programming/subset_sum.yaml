@@ -1,34 +1,13 @@
-# prompt: "solve the subset sum problem"
-#
-# Subset Sum Problem
-# ==================
-# Given a set of integers and a target sum, determine if there exists
-# a subset whose elements sum to the target.
-#
-# Time:  O(n × target) pseudo-polynomial DP
-# Space: O(target) with 1D DP
-#
-# Algorithm (DP):
-#   dp[0] = true
-#   dp[j] = false for j > 0
-#   for x in set:
-#     for j in target downto x:
-#       dp[j] = dp[j] OR dp[j - x]
-#   return dp[target]
-#
-# Example: set = {3, 34, 4, 12, 5, 2}, target = 9
-#   Subset {4, 5} sums to 9 → true
-#
-# NP-complete in general, but pseudo-polynomial DP is practical
-# for moderate target values.
+# Subset sum: can a subset sum to target?
+# Example: (3 34 4 12 5 2), target 9 = #t (4+5)
+# expected: #t
 
-subset-sum:
+subset_sum:
   inputs:
-    - set: "List(Number)"
     - target: "Number"
+  bindings:
+    target: "9"
   steps:
-    # DP: for each element, update reachable sums from target down to element.
-    - list_new:
-        elements: "3 34 4 12 5 2"
-    # Target = 9. Subset {4, 5} = 9 → true.
-    - length
+    - let_bind:
+        bindings: "[nums (list 3 34 4 12 5 2)] [dp (make-vector (+ target 1) #f)]"
+        body: "(begin (vector-set! dp 0 #t) (for ([x (in-list nums)]) (for ([j (in-range target (- x 1) -1)]) (when (vector-ref dp (- j x)) (vector-set! dp j #t)))) (vector-ref dp target))"

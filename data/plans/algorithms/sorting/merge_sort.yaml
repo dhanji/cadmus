@@ -1,41 +1,13 @@
-# prompt: "sort a list using merge sort"
-#
-# Merge Sort
-# ==========
-# Divide-and-conquer: split the list in half, recursively sort each
-# half, then merge the two sorted halves.
-#
-# Time:  O(n log n) in all cases
-# Space: O(n) — requires auxiliary space for merging
-# Stable: yes
-#
-# Algorithm:
-#   merge_sort(lst):
-#     if length(lst) <= 1: return lst
-#     mid = length(lst) / 2
-#     left  = merge_sort(lst[0..mid])
-#     right = merge_sort(lst[mid..n])
-#     return merge(left, right)
-#
-#   merge(left, right):
-#     result = []
-#     while left and right:
-#       if left[0] <= right[0]:
-#         result.append(left.pop(0))
-#       else:
-#         result.append(right.pop(0))
-#     return result + left + right
-#
-# The recursive split-merge structure is described in comments;
-# the plan compiles to a sort primitive.
+# Merge sort
+# Example: sort (5 3 8 1 9 2 7 4 6) = (1 2 3 4 5 6 7 8 9)
+# expected: (1 2 3 4 5 6 7 8 9)
 
-merge-sort:
+merge_sort:
   inputs:
     - lst: "List(Number)"
+  bindings:
+    lst: "(list 5 3 8 1 9 2 7 4 6)"
   steps:
-    - list_new:
-        elements: "38 27 43 3 9 82 10"
-    # Merge sort: recursive divide → sort halves → merge.
-    # O(n log n) guaranteed. Stable.
-    - sort_list:
-        comparator: "<"
+    - let_bind:
+        bindings: "[merge (lambda (a b) (let loop ([a a] [b b] [acc (list)]) (cond [(null? a) (append (reverse acc) b)] [(null? b) (append (reverse acc) a)] [(<= (car a) (car b)) (loop (cdr a) b (cons (car a) acc))] [else (loop a (cdr b) (cons (car b) acc))])))] [msort (lambda (msort xs) (if (<= (length xs) 1) xs (let-values ([(l r) (split-at xs (quotient (length xs) 2))]) (merge (msort msort l) (msort msort r)))))]"
+        body: "(msort msort lst)"

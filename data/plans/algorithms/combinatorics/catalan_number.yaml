@@ -1,32 +1,13 @@
-# prompt: "compute the nth Catalan number"
-#
-# Catalan Number
-# ==============
-# The nth Catalan number counts many combinatorial structures:
-#   - Valid arrangements of n pairs of parentheses
-#   - Number of full binary trees with n+1 leaves
-#   - Number of paths in an n×n grid staying below the diagonal
-#   - Number of triangulations of a polygon with n+2 sides
-#
-# Formula: C(n) = C(2n, n) / (n + 1) = (2n)! / ((n+1)! × n!)
-# Recurrence: C(n) = Σ(i=0..n-1) C(i) × C(n-1-i), C(0) = 1
-#
-# Time:  O(n) with the direct formula
-# Space: O(1)
-#
-# Sequence: 1, 1, 2, 5, 14, 42, 132, 429, 1430, 4862, ...
-#
+# Catalan number: C(n) = C(2n,n)/(n+1)
 # Example: C(5) = 42
+# expected: 42
 
-catalan-number:
+catalan_number:
   inputs:
     - n: "Number"
+  bindings:
+    n: "5"
   steps:
-    # C(n) = C(2n, n) / (n + 1)
-    # C(5) = C(10, 5) / 6 = 252 / 6 = 42
-    - multiply:
-        x: "5"
-        y: "2"
-    # 2n = 10; C(10, 5) = 252
-    - add:
-        y: "0"
+    - let_bind:
+        bindings: "[binom (for/fold ([r 1]) ([i (in-range n)]) (quotient (* r (- (* 2 n) i)) (+ i 1)))]"
+        body: "(quotient binom (+ n 1))"
