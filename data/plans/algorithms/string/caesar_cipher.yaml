@@ -7,9 +7,7 @@ caesar_cipher:
     - s: "String"
     - k: "Number"
   bindings:
-    s: "\"HELLO\""
+    s: '"HELLO"'
     k: "3"
   steps:
-    - let_bind:
-        bindings: "[chars (string->list s)]"
-        body: "(list->string (map (lambda (c) (if (char-alphabetic? c) (let* ([base (if (char-upper-case? c) 65 97)] [shifted (modulo (+ (- (char->integer c) base) k) 26)]) (integer->char (+ base shifted))) c)) chars))"
+    - caesar_cipher

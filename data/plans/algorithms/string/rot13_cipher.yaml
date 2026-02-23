@@ -6,8 +6,6 @@ rot13_cipher:
   inputs:
     - s: "String"
   bindings:
-    s: "\"Hello\""
+    s: '"Hello"'
   steps:
-    - let_bind:
-        bindings: "[chars (string->list s)]"
-        body: "(list->string (map (lambda (c) (if (char-alphabetic? c) (let* ([base (if (char-upper-case? c) 65 97)] [shifted (modulo (+ (- (char->integer c) base) 13) 26)]) (integer->char (+ base shifted))) c)) chars))"
+    - rot13_cipher

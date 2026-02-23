@@ -8,6 +8,4 @@ floyd_cycle_detection:
   bindings:
     n: "6"
   steps:
-    - let_bind:
-        bindings: "[next (vector 1 2 3 4 5 3)]"
-        body: "(let ([slow (let phase1 ([slow 0] [fast 0]) (let ([slow (vector-ref next slow)] [fast (vector-ref next (vector-ref next fast))]) (if (= slow fast) slow (phase1 slow fast))))]) (let phase2 ([a 0] [b slow]) (if (= a b) a (phase2 (vector-ref next a) (vector-ref next b)))))"
+    - floyd_cycle_detection

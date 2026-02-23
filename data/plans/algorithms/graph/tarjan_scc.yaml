@@ -9,6 +9,4 @@ tarjan_scc:
   bindings:
     n: "5"
   steps:
-    - let_bind:
-        bindings: "[adj (vector (list 1) (list 2) (list 0 3) (list 4) (list 3))] [idx (make-vector 5 -1)] [low (make-vector 5 -1)] [on-stack (make-vector 5 #f)] [counter (box 0)] [stack (box (list))] [sccs (box (list))]"
-        body: "(begin (define (strongconnect u) (let ([c (unbox counter)]) (set-box! counter (+ c 1)) (vector-set! idx u c) (vector-set! low u c) (set-box! stack (cons u (unbox stack))) (vector-set! on-stack u #t) (for ([v (in-list (vector-ref adj u))]) (cond [(= (vector-ref idx v) -1) (strongconnect v) (vector-set! low u (min (vector-ref low u) (vector-ref low v)))] [(vector-ref on-stack v) (vector-set! low u (min (vector-ref low u) (vector-ref idx v)))])) (when (= (vector-ref low u) (vector-ref idx u)) (let pop ([scc (list)]) (let ([w (car (unbox stack))]) (set-box! stack (cdr (unbox stack))) (vector-set! on-stack w #f) (if (= w u) (set-box! sccs (cons (cons w scc) (unbox sccs))) (pop (cons w scc)))))))) (for ([i (in-range n)]) (when (= (vector-ref idx i) -1) (strongconnect i))) (unbox sccs))"
+    - tarjan_scc

@@ -8,6 +8,4 @@ binary_min_heap:
   bindings:
     n: "5"
   steps:
-    - let_bind:
-        bindings: "[heap (make-vector 10 0)] [size (box 0)] [swap! (lambda (i j) (let ([t (vector-ref heap i)]) (vector-set! heap i (vector-ref heap j)) (vector-set! heap j t)))] [insert! (lambda (insert! v) (let ([i (unbox size)]) (set-box! size (+ i 1)) (vector-set! heap i v) (let up ([i i]) (when (and (> i 0) (< (vector-ref heap i) (vector-ref heap (quotient (- i 1) 2)))) (swap! i (quotient (- i 1) 2)) (up (quotient (- i 1) 2))))))] [extract-min! (lambda (extract-min!) (let ([mn (vector-ref heap 0)] [last-idx (- (unbox size) 1)]) (vector-set! heap 0 (vector-ref heap last-idx)) (set-box! size last-idx) (let down ([i 0]) (let* ([l (+ (* 2 i) 1)] [r (+ (* 2 i) 2)] [smallest (if (and (< l (unbox size)) (< (vector-ref heap l) (vector-ref heap i))) l i)] [smallest (if (and (< r (unbox size)) (< (vector-ref heap r) (vector-ref heap smallest))) r smallest)]) (unless (= smallest i) (swap! i smallest) (down smallest)))) mn))]"
-        body: "(begin (for-each (lambda (v) (insert! insert! v)) (list 5 3 8 1 9)) (for/list ([_ (in-range 3)]) (extract-min! extract-min!)))"
+    - binary_min_heap

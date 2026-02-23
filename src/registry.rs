@@ -551,6 +551,10 @@ pub struct PolyOpEntry {
     pub meta: Option<MetaSignature>,
     /// The Racket symbol for this op (e.g., "+", "set-member?", "reverse").
     pub racket_symbol: Option<String>,
+    /// Optional Racket implementation body for opaque algorithm ops.
+    pub racket_body: Option<String>,
+    /// Parameter names for racket_body ops (parallel to signature.inputs).
+    pub input_names: Vec<String>,
 }
 
 impl fmt::Debug for PolyOpEntry {
@@ -563,6 +567,8 @@ impl fmt::Debug for PolyOpEntry {
             .field("description", &self.description)
             .field("meta", &self.meta)
             .field("racket_symbol", &self.racket_symbol)
+            .field("racket_body", &self.racket_body)
+            .field("input_names", &self.input_names)
             .finish()
     }
 }
@@ -622,6 +628,8 @@ impl OperationRegistry {
             description: description.into(),
             meta,
             racket_symbol: None,
+            racket_body: None,
+            input_names: Vec::new(),
         });
         self
     }
@@ -644,6 +652,20 @@ impl OperationRegistry {
     /// Look up the Racket symbol for a named poly op.
     pub fn racket_symbol(&self, name: &str) -> Option<&str> {
         self.get_poly(name).and_then(|e| e.racket_symbol.as_deref())
+    }
+
+    /// Set the Racket implementation body for a named poly op.
+    pub fn set_racket_body(&mut self, name: &str, body: String) {
+        if let Some(entry) = self.poly_ops.iter_mut().rfind(|e| e.name == name) {
+            entry.racket_body = Some(body);
+        }
+    }
+
+    /// Set the input parameter names for a named poly op.
+    pub fn set_input_names(&mut self, name: &str, names: Vec<String>) {
+        if let Some(entry) = self.poly_ops.iter_mut().rfind(|e| e.name == name) {
+            entry.input_names = names;
+        }
     }
 
     /// Look up all polymorphic operations whose output type unifies with the
@@ -774,6 +796,16 @@ pub struct OpDef {
     /// Used by the data-driven executor to emit s-expressions without hardcoding.
     #[serde(default)]
     pub racket_symbol: Option<String>,
+    /// Optional Racket implementation body for opaque algorithm ops.
+    /// When present, the executor emits a `(define (name params...) body)` at
+    /// the top of the script and calls `(name args...)` at the step site.
+    #[serde(default)]
+    pub racket_body: Option<String>,
+    /// Parameter names for racket_body ops (parallel to `inputs`).
+    /// Used by the executor to generate `(define (name p1 p2 ...) body)`.
+    /// Only needed when `racket_body` is present.
+    #[serde(default)]
+    pub input_names: Vec<String>,
 }
 
 /// YAML schema for algebraic properties.
@@ -834,6 +866,8 @@ pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> 
         let props: AlgebraicProperties = op_def.properties.into();
 
         let racket_sym = op_def.racket_symbol;
+        let racket_body = op_def.racket_body;
+        let input_names = op_def.input_names;
         let op_name = op_def.name;
         reg.register_poly_with_meta(&op_name, sig, props, op_def.description, op_def.meta);
         // Set the racket_symbol on the just-registered entry
@@ -843,6 +877,14 @@ pub fn load_ops_pack_str(yaml: &str) -> Result<OperationRegistry, OpsPackError> 
         // Set variadic flag if declared
         if variadic {
             reg.set_variadic(&op_name, true);
+        }
+        // Set the racket_body on the just-registered entry
+        if let Some(body) = racket_body {
+            reg.set_racket_body(&op_name, body);
+        }
+        // Set input_names if present
+        if !input_names.is_empty() {
+            reg.set_input_names(&op_name, input_names);
         }
     }
 
@@ -870,6 +912,15 @@ pub fn load_ops_pack_str_into(yaml: &str, reg: &mut OperationRegistry) -> Result
             reg.register_poly_with_meta(&op.name, op.signature.clone(), op.properties.clone(), &op.description, op.meta.clone());
             if let Some(sym) = &op.racket_symbol {
                 reg.set_racket_symbol(&op.name, sym.clone());
+            }
+            if let Some(body) = &op.racket_body {
+                reg.set_racket_body(&op.name, body.clone());
+            }
+            if op.variadic {
+                reg.set_variadic(&op.name, true);
+            }
+            if !op.input_names.is_empty() {
+                reg.set_input_names(&op.name, op.input_names.clone());
             }
         }
     }

@@ -8,6 +8,4 @@ union_find:
   bindings:
     n: "5"
   steps:
-    - let_bind:
-        bindings: "[parent (build-vector 5 values)] [rank (make-vector 5 0)] [find (lambda (find x) (if (= (vector-ref parent x) x) x (let ([r (find find (vector-ref parent x))]) (vector-set! parent x r) r)))] [union! (lambda (find x y) (let ([rx (find find x)] [ry (find find y)]) (unless (= rx ry) (cond [(< (vector-ref rank rx) (vector-ref rank ry)) (vector-set! parent rx ry)] [(> (vector-ref rank rx) (vector-ref rank ry)) (vector-set! parent ry rx)] [else (vector-set! parent ry rx) (vector-set! rank rx (+ (vector-ref rank rx) 1))]))))]"
-        body: "(begin (union! find 0 1) (union! find 2 3) (union! find 0 2) (length (remove-duplicates (for/list ([i (in-range n)]) (find find i)))))"
+    - union_find

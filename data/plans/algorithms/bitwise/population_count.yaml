@@ -8,7 +8,4 @@ population_count:
   bindings:
     n: "255"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=n count=0"
-        body: "(if (= x 0) count (loop (arithmetic-shift x -1) (+ count (bitwise-and x 1))))"
+    - population_count

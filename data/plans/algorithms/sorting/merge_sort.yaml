@@ -6,8 +6,6 @@ merge_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 5 3 8 1 9 2 7 4 6)"
+    lst: '(list 5 3 8 1 9 2 7 4 6)'
   steps:
-    - let_bind:
-        bindings: "[merge (lambda (a b) (let loop ([a a] [b b] [acc (list)]) (cond [(null? a) (append (reverse acc) b)] [(null? b) (append (reverse acc) a)] [(<= (car a) (car b)) (loop (cdr a) b (cons (car a) acc))] [else (loop a (cdr b) (cons (car b) acc))])))] [msort (lambda (msort xs) (if (<= (length xs) 1) xs (let-values ([(l r) (split-at xs (quotient (length xs) 2))]) (merge (msort msort l) (msort msort r)))))]"
-        body: "(msort msort lst)"
+    - merge_sort

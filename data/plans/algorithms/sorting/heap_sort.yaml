@@ -6,8 +6,6 @@ heap_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 5 3 8 1 9 2 7 4 6)"
+    lst: '(list 5 3 8 1 9 2 7 4 6)'
   steps:
-    - let_bind:
-        bindings: "[sift-down (lambda (sift-down vec n i) (let loop ([i i]) (let* ([largest i] [l (+ (* 2 i) 1)] [r (+ (* 2 i) 2)] [largest (if (and (< l n) (> (vector-ref vec l) (vector-ref vec largest))) l largest)] [largest (if (and (< r n) (> (vector-ref vec r) (vector-ref vec largest))) r largest)]) (when (not (= largest i)) (let ([tmp (vector-ref vec i)]) (vector-set! vec i (vector-ref vec largest)) (vector-set! vec largest tmp) (loop largest))))))]"
-        body: "(let ([v (list->vector lst)] [n (length lst)]) (for ([i (in-range (- (quotient n 2) 1) -1 -1)]) (sift-down sift-down v n i)) (for ([i (in-range (- n 1) 0 -1)]) (let ([tmp (vector-ref v 0)]) (vector-set! v 0 (vector-ref v i)) (vector-set! v i tmp) (sift-down sift-down v i 0))) (vector->list v))"
+    - heap_sort

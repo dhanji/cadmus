@@ -7,10 +7,7 @@ ternary_search:
     - lst: "List(Number)"
     - target: "Number"
   bindings:
-    lst: "(list 1 3 5 7 9 11 13)"
+    lst: '(list 1 3 5 7 9 11 13)'
     target: "7"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "lo=0 hi=(-(length lst) 1)"
-        body: "(if (> lo hi) -1 (let* ([third (quotient (- hi lo) 3)] [m1 (+ lo third)] [m2 (- hi third)]) (cond [(= (list-ref lst m1) target) m1] [(= (list-ref lst m2) target) m2] [(< target (list-ref lst m1)) (loop lo (- m1 1))] [(> target (list-ref lst m2)) (loop (+ m2 1) hi)] [else (loop (+ m1 1) (- m2 1))])))"
+    - ternary_search

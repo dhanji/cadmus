@@ -9,6 +9,4 @@ ford_fulkerson_max_flow:
   bindings:
     n: "6"
   steps:
-    - let_bind:
-        bindings: "[cap (vector (vector 0 10 10 0 0 0) (vector 0 0 2 4 8 0) (vector 0 0 0 0 9 0) (vector 0 0 0 0 0 10) (vector 0 0 0 6 0 10) (vector 0 0 0 0 0 0))] [bfs (lambda (bfs s t parent) (let ([visited (make-vector n #f)]) (vector-set! visited s #t) (let loop ([queue (list s)]) (cond [(null? queue) (vector-ref visited t)] [else (let ([u (car queue)]) (loop (append (cdr queue) (for/list ([v (in-range n)] #:when (and (not (vector-ref visited v)) (> (vector-ref (vector-ref cap u) v) 0))) (vector-set! visited v #t) (vector-set! parent v u) v))))]))))]"
-        body: "(let flow-loop ([max-flow 0]) (let ([parent (make-vector n -1)]) (if (not (bfs bfs 0 5 parent)) max-flow (let path-flow ([v 5] [pf +inf.0]) (if (= v 0) (begin (let update ([v 5]) (when (not (= v 0)) (let ([u (vector-ref parent v)]) (vector-set! (vector-ref cap u) v (- (vector-ref (vector-ref cap u) v) pf)) (vector-set! (vector-ref cap v) u (+ (vector-ref (vector-ref cap v) u) pf)) (update u)))) (flow-loop (+ max-flow pf))) (path-flow (vector-ref parent v) (min pf (vector-ref (vector-ref cap (vector-ref parent v)) v))))))))"
+    - ford_fulkerson_max_flow

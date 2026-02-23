@@ -1,0 +1,677 @@
+# Algorithm Operations Pack
+# =========================
+# Opaque atomic operations for classic algorithms. Each op has a typed
+# signature and a Racket implementation body. The executor emits the body
+# as a (define ...) form and calls it by name at the step site.
+#
+# These ops are "library calls" — plans use them as single steps:
+#   steps:
+#     - quicksort
+#
+# The Racket body is opaque to the plan compiler. Type checking happens
+# via the input/output signature, not by inspecting the body.
+
+name: algorithm
+description: "Classic algorithm implementations: sorting, searching, graph, DP, string, number theory, etc."
+
+ops:
+
+  # =========================================================================
+  # Arithmetic
+  # =========================================================================
+
+  - name: base_conversion
+    inputs: ['Number', 'Number']
+    input_names: ['n', 'base']
+    output: "String"
+    racket_symbol: "base_conversion"
+    description: "Base conversion: convert decimal to given base"
+    racket_body: |
+      (let loop ([x n] [acc (list)]) (if (= x 0) (if (null? acc) "0" (apply string-append (map (lambda (d) (string (integer->char (if (< d 10) (+ d 48) (+ d 55))))) acc))) (loop (quotient x base) (cons (remainder x base) acc))))
+
+  - name: collatz_sequence
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "collatz_sequence"
+    description: "Collatz sequence: start at n, if even n/2, if odd 3n+1, until 1"
+    racket_body: |
+      (let loop ([x n] [acc (list)]) (let ([acc (append acc (list x))]) (if (= x 1) acc (loop (if (even? x) (/ x 2) (+ (* 3 x) 1)) acc))))
+
+  - name: digital_root
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "digital_root"
+    description: "Digital root: repeatedly sum digits until single digit"
+    racket_body: |
+      (let loop ([x n]) (if (< x 10) x (loop (for/sum ([c (in-string (number->string x))]) (- (char->integer c) 48)))))
+
+  - name: fibonacci
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "fibonacci"
+    description: "Fibonacci: F(n) where F(0)=0, F(1)=1, F(n)=F(n-1)+F(n-2)"
+    racket_body: |
+      (let loop ([a 0] [b 1] [i 0]) (if (= i n) a (loop b (+ a b) (+ i 1))))
+
+  - name: integer_square_root
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "integer_square_root"
+    description: "Integer square root: floor(sqrt(n)) using Newton's method"
+    racket_body: |
+      (let loop ([x n]) (let ([next (quotient (+ x (quotient n x)) 2)]) (if (>= next x) x (loop next))))
+
+  - name: newton_raphson_sqrt
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "newton_raphson_sqrt"
+    description: "Newton-Raphson square root approximation"
+    racket_body: |
+      (let loop ([x 1.0] [i 0]) (if (= i 20) x (loop (/ (+ x (/ n x)) 2.0) (+ i 1))))
+
+  # =========================================================================
+  # Bitwise
+  # =========================================================================
+
+  - name: population_count
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "population_count"
+    description: "Population count: number of 1-bits in binary representation"
+    racket_body: |
+      (let loop ([x n] [count 0]) (if (= x 0) count (loop (arithmetic-shift x -1) (+ count (bitwise-and x 1)))))
+
+  # =========================================================================
+  # Combinatorics
+  # =========================================================================
+
+  - name: derangement_count
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "derangement_count"
+    description: "Derangement count: D(n) = (n-1)(D(n-1) + D(n-2))"
+    racket_body: |
+      (let loop ([a 0] [b 1] [i 2]) (if (> i n) a (loop (+ (* (- i 1) (+ a b))) a (+ i 1))))
+
+  # =========================================================================
+  # Data Structures
+  # =========================================================================
+
+  - name: binary_min_heap
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "binary_min_heap"
+    description: "Binary min-heap: insert elements and extract-min"
+    racket_body: |
+      (let* ([heap (make-vector 10 0)] [size (box 0)] [swap! (lambda (i j) (let ([t (vector-ref heap i)]) (vector-set! heap i (vector-ref heap j)) (vector-set! heap j t)))] [insert! (lambda (insert! v) (let ([i (unbox size)]) (set-box! size (+ i 1)) (vector-set! heap i v) (let up ([i i]) (when (and (> i 0) (< (vector-ref heap i) (vector-ref heap (quotient (- i 1) 2)))) (swap! i (quotient (- i 1) 2)) (up (quotient (- i 1) 2))))))] [extract-min! (lambda (extract-min!) (let ([mn (vector-ref heap 0)] [last-idx (- (unbox size) 1)]) (vector-set! heap 0 (vector-ref heap last-idx)) (set-box! size last-idx) (let down ([i 0]) (let* ([l (+ (* 2 i) 1)] [r (+ (* 2 i) 2)] [smallest (if (and (< l (unbox size)) (< (vector-ref heap l) (vector-ref heap i))) l i)] [smallest (if (and (< r (unbox size)) (< (vector-ref heap r) (vector-ref heap smallest))) r smallest)]) (unless (= smallest i) (swap! i smallest) (down smallest)))) mn))]) (begin (for-each (lambda (v) (insert! insert! v)) (list 5 3 8 1 9)) (for/list ([_ (in-range 3)]) (extract-min! extract-min!))))
+
+  - name: bloom_filter
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Boolean)"
+    racket_symbol: "bloom_filter"
+    description: "Bloom filter: probabilistic set membership (simplified)"
+    racket_body: |
+      (let* ([size 64] [bits (make-vector 64 #f)] [hash1 (lambda (s) (modulo (for/fold ([h 0]) ([c (in-string s)]) (+ (* h 31) (char->integer c))) 64))] [hash2 (lambda (s) (modulo (for/fold ([h 0]) ([c (in-string s)]) (+ (* h 37) (char->integer c))) 64))] [insert! (lambda (s) (vector-set! bits (hash1 s) #t) (vector-set! bits (hash2 s) #t))] [member? (lambda (s) (and (vector-ref bits (hash1 s)) (vector-ref bits (hash2 s))))]) (begin (insert! "hello") (insert! "world") (list (member? "hello") (member? "foo"))))
+
+  - name: floyd_cycle_detection
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "floyd_cycle_detection"
+    description: "Floyd's cycle detection: find cycle start in linked list"
+    racket_body: |
+      (let* ([next (vector 1 2 3 4 5 3)]) (let ([slow (let phase1 ([slow 0] [fast 0]) (let ([slow (vector-ref next slow)] [fast (vector-ref next (vector-ref next fast))]) (if (= slow fast) slow (phase1 slow fast))))]) (let phase2 ([a 0] [b slow]) (if (= a b) a (phase2 (vector-ref next a) (vector-ref next b))))))
+
+  - name: lru_cache_eviction
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "lru_cache_eviction"
+    description: "LRU cache: simulate cache with capacity 2"
+    racket_body: |
+      (let* ([capacity 2]) (let loop ([ops (list 1 2 3 1)] [cache (list)]) (if (null? ops) cache (let* ([key (car ops)] [cache (remove key cache)] [cache (cons key cache)] [cache (if (> (length cache) capacity) (take cache capacity) cache)]) (loop (cdr ops) cache)))))
+
+  - name: union_find
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "union_find"
+    description: "Union-Find: count connected components after unions"
+    racket_body: |
+      (let* ([parent (build-vector 5 values)] [rank (make-vector 5 0)] [find (lambda (find x) (if (= (vector-ref parent x) x) x (let ([r (find find (vector-ref parent x))]) (vector-set! parent x r) r)))] [union! (lambda (find x y) (let ([rx (find find x)] [ry (find find y)]) (unless (= rx ry) (cond [(< (vector-ref rank rx) (vector-ref rank ry)) (vector-set! parent rx ry)] [(> (vector-ref rank rx) (vector-ref rank ry)) (vector-set! parent ry rx)] [else (vector-set! parent ry rx) (vector-set! rank rx (+ (vector-ref rank rx) 1))]))))]) (begin (union! find 0 1) (union! find 2 3) (union! find 0 2) (length (remove-duplicates (for/list ([i (in-range n)]) (find find i))))))
+
+  # =========================================================================
+  # Dynamic Programming
+  # =========================================================================
+
+  - name: climbing_stairs
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "climbing_stairs"
+    description: "Climbing stairs: ways to climb n stairs (1 or 2 steps at a time)"
+    racket_body: |
+      (let loop ([a 1] [b 1] [i 2]) (if (> i n) b (loop b (+ a b) (+ i 1))))
+
+  - name: kadanes_maximum_subarray
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "kadanes_maximum_subarray"
+    description: "Kadane's algorithm: maximum subarray sum"
+    racket_body: |
+      (let loop ([xs (cdr lst)] [best (car lst)] [current (car lst)]) (if (null? xs) best (let* ([x (car xs)] [current (max x (+ current x))] [best (max best current)]) (loop (cdr xs) best current))))
+
+  - name: longest_palindromic_subsequence
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "longest_palindromic_subsequence"
+    description: "Longest palindromic subsequence length"
+    racket_body: |
+      (let* ([n (string-length s)] [dp (build-vector (string-length s) (lambda (_) (make-vector (string-length s) 0)))]) (begin (for ([i (in-range n)]) (vector-set! (vector-ref dp i) i 1)) (for ([len (in-range 2 (+ n 1))]) (for ([i (in-range (- n len -1))]) (let ([j (+ i len -1)]) (if (char=? (string-ref s i) (string-ref s j)) (vector-set! (vector-ref dp i) j (+ (vector-ref (vector-ref dp (+ i 1)) (- j 1)) 2)) (vector-set! (vector-ref dp i) j (max (vector-ref (vector-ref dp (+ i 1)) j) (vector-ref (vector-ref dp i) (- j 1)))))))) (vector-ref (vector-ref dp 0) (- n 1))))
+
+  - name: matrix_chain_multiplication
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "matrix_chain_multiplication"
+    description: "Matrix chain multiplication: minimum scalar multiplications"
+    racket_body: |
+      (let* ([dims (vector 10 30 5 60)] [n 3] [dp (build-vector 3 (lambda (_) (make-vector 3 0)))]) (begin (for ([len (in-range 2 (+ n 1))]) (for ([i (in-range (- n len -1))]) (let ([j (+ i len -1)]) (vector-set! (vector-ref dp i) j +inf.0) (for ([k (in-range i j)]) (let ([cost (+ (vector-ref (vector-ref dp i) k) (vector-ref (vector-ref dp (+ k 1)) j) (* (vector-ref dims i) (vector-ref dims (+ k 1)) (vector-ref dims (+ j 1))))]) (when (< cost (vector-ref (vector-ref dp i) j)) (vector-set! (vector-ref dp i) j cost))))))) (exact-round (vector-ref (vector-ref dp 0) (- n 1)))))
+
+  - name: wagner_fischer
+    inputs: ['String', 'String']
+    input_names: ['s1', 's2']
+    output: "Number"
+    racket_symbol: "wagner_fischer"
+    description: "Wagner-Fischer: edit distance (same as Levenshtein)"
+    racket_body: |
+      (let* ([m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (i) (make-vector (+ (string-length s2) 1) 0)))]) (begin (for ([i (in-range (+ m 1))]) (vector-set! (vector-ref dp i) 0 i)) (for ([j (in-range (+ n 1))]) (vector-set! (vector-ref dp 0) j j)) (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (let ([cost (if (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) 0 1)]) (vector-set! (vector-ref dp i) j (min (+ (vector-ref (vector-ref dp (- i 1)) j) 1) (+ (vector-ref (vector-ref dp i) (- j 1)) 1) (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) cost))))) (vector-ref (vector-ref dp m) n)))
+
+  # =========================================================================
+  # Encoding
+  # =========================================================================
+
+  - name: base64_enc
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "base64_enc"
+    description: "Base64 encode a string"
+    racket_body: |
+      (let* ([table "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"] [bytes (map char->integer (string->list s))]) (let loop ([bs bytes] [bits 0] [buf 0] [out (list)]) (cond [(and (null? bs) (= bits 0)) (let* ([result (list->string (reverse out))] [pad (modulo (- 4 (modulo (string-length result) 4)) 4)]) (if (= pad 4) result (string-append result (make-string pad #\=))))] [(and (null? bs) (> bits 0)) (loop bs 0 0 (cons (string-ref table (arithmetic-shift buf (- 6 bits))) out))] [(>= (+ bits 8) 6) (let* ([buf (+ (arithmetic-shift buf 8) (car bs))] [bits (+ bits 8)]) (let extract ([bits bits] [buf buf] [out out]) (if (< bits 6) (loop (cdr bs) bits buf out) (extract (- bits 6) (modulo buf (expt 2 (- bits 6))) (cons (string-ref table (quotient buf (expt 2 (- bits 6)))) out)))))] [else (loop (cdr bs) (+ bits 8) (+ (arithmetic-shift buf 8) (car bs)) out)])))
+
+  - name: binary_run_length_encoding
+    inputs: ['String']
+    input_names: ['s']
+    output: "List(Number)"
+    racket_symbol: "binary_run_length_encoding"
+    description: "Binary run-length encoding: encode binary string as run lengths"
+    racket_body: |
+      (let* ([chars (string->list s)]) (let loop ([cs chars] [cur #f] [cnt 0] [acc (list)]) (cond [(null? cs) (reverse (if cur (cons cnt acc) acc))] [(equal? (car cs) cur) (loop (cdr cs) cur (+ cnt 1) acc)] [else (loop (cdr cs) (car cs) 1 (if cur (cons cnt acc) acc))])))
+
+  - name: huffman_coding
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "huffman_coding"
+    description: "Huffman coding: build tree and compute total encoded bits"
+    racket_body: |
+      (let* ([freq (make-hash)]) (begin (for ([c (in-string s)]) (hash-set! freq c (+ (hash-ref freq c 0) 1))) (let loop ([pq (sort (hash-map freq (lambda (k v) (cons v k))) (lambda (a b) (< (car a) (car b))))]) (if (<= (length pq) 1) (for/sum ([(k v) (in-hash freq)]) (* v (max 1 (- (length (hash-keys freq)) 1)))) (let* ([a (car pq)] [b (cadr pq)] [rest (cddr pq)] [merged (cons (+ (car a) (car b)) (list a b))] [pq (sort (cons merged rest) (lambda (a b) (< (car a) (car b))))]) (loop pq))))))
+
+  - name: vlq_encoding
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "vlq_encoding"
+    description: "Variable-length quantity encoding"
+    racket_body: |
+      (let loop ([x n] [acc (list)]) (let ([byte (bitwise-and x 127)] [rest (arithmetic-shift x -7)]) (if (= rest 0) (reverse (cons byte acc)) (loop rest (cons (bitwise-ior byte 128) acc)))))
+
+  # =========================================================================
+  # Geometry
+  # =========================================================================
+
+  - name: graham_scan_convex_hull
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "graham_scan_convex_hull"
+    description: "Graham scan convex hull: find convex hull of points"
+    racket_body: |
+      (let* ([pts (list (cons 0 0) (cons 1 1) (cons 2 2) (cons 0 2) (cons 2 0) (cons 1 0))] [cross (lambda (o a b) (- (* (- (car a) (car o)) (- (cdr b) (cdr o))) (* (- (cdr a) (cdr o)) (- (car b) (car o)))))]) (let* ([sorted (sort pts (lambda (a b) (or (< (car a) (car b)) (and (= (car a) (car b)) (< (cdr a) (cdr b))))))] [lower (for/fold ([hull (list)]) ([p (in-list sorted)]) (let trim ([h hull]) (if (and (>= (length h) 2) (<= (cross (second h) (first h) p) 0)) (trim (cdr h)) (cons p h))))] [upper (for/fold ([hull (list)]) ([p (in-list (reverse sorted))]) (let trim ([h hull]) (if (and (>= (length h) 2) (<= (cross (second h) (first h) p) 0)) (trim (cdr h)) (cons p h))))]) (length (remove-duplicates (append (reverse lower) (reverse upper))))))
+
+  - name: line_segment_intersection
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "line_segment_intersection"
+    description: "Line segment intersection: do segments (0,0)-(2,2) and (0,2)-(2,0) intersect?"
+    racket_body: |
+      (let* ([cross (lambda (ox oy ax ay bx by) (- (* (- ax ox) (- by oy)) (* (- ay oy) (- bx ox))))]) (let* ([d1 (cross 0 2 2 0 0 0)] [d2 (cross 0 2 2 0 2 2)] [d3 (cross 0 0 2 2 0 2)] [d4 (cross 0 0 2 2 2 0)]) (and (< (* d1 d2) 0) (< (* d3 d4) 0))))
+
+  # =========================================================================
+  # Graph
+  # =========================================================================
+
+  - name: bfs_traversal
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "bfs_traversal"
+    description: "BFS traversal: breadth-first search from start node"
+    racket_body: |
+      (let* ([adj (vector (list 1 2) (list 3) (list 3 4) (list 5) (list 5) (list))]) (let loop ([queue (list 0)] [visited (set)] [result (list)]) (if (null? queue) (reverse result) (let ([node (car queue)] [rest (cdr queue)]) (if (set-member? visited node) (loop rest visited result) (let ([nbrs (vector-ref adj node)]) (loop (append rest nbrs) (set-add visited node) (cons node result))))))))
+
+  - name: dfs_traversal
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "dfs_traversal"
+    description: "DFS traversal: depth-first search from start node"
+    racket_body: |
+      (let* ([adj (vector (list 1 2) (list 3) (list 3 4) (list 5) (list 5) (list))]) (let loop ([stack (list 0)] [visited (set)] [result (list)]) (if (null? stack) (reverse result) (let ([node (car stack)] [rest (cdr stack)]) (if (set-member? visited node) (loop rest visited result) (let ([nbrs (vector-ref adj node)]) (loop (append nbrs rest) (set-add visited node) (cons node result))))))))
+
+  - name: dijkstra_shortest_path
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "dijkstra_shortest_path"
+    description: "Dijkstra's shortest path: find shortest distances from source"
+    racket_body: |
+      (let* ([adj (vector (list (cons 1 4) (cons 2 1)) (list (cons 3 1)) (list (cons 1 2) (cons 3 5)) (list (cons 4 3)) (list))] [dist (make-vector n +inf.0)]) (begin (vector-set! dist 0 0) (let loop ([pq (list (cons 0 0))]) (if (null? pq) (vector->list dist) (let* ([best (argmin cdr pq)] [u (car best)] [d (cdr best)] [pq (remove best pq)]) (if (> d (vector-ref dist u)) (loop pq) (let ([pq (for/fold ([pq pq]) ([edge (in-list (vector-ref adj u))]) (let* ([v (car edge)] [w (cdr edge)] [nd (+ d w)]) (if (< nd (vector-ref dist v)) (begin (vector-set! dist v nd) (cons (cons v nd) pq)) pq)))]) (loop pq))))))))
+
+  - name: ford_fulkerson_max_flow
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "ford_fulkerson_max_flow"
+    description: "Ford-Fulkerson max flow using BFS (Edmonds-Karp)"
+    racket_body: |
+      (let* ([cap (vector (vector 0 10 10 0 0 0) (vector 0 0 2 4 8 0) (vector 0 0 0 0 9 0) (vector 0 0 0 0 0 10) (vector 0 0 0 6 0 10) (vector 0 0 0 0 0 0))] [bfs (lambda (bfs s t parent) (let ([visited (make-vector n #f)]) (vector-set! visited s #t) (let loop ([queue (list s)]) (cond [(null? queue) (vector-ref visited t)] [else (let ([u (car queue)]) (loop (append (cdr queue) (for/list ([v (in-range n)] #:when (and (not (vector-ref visited v)) (> (vector-ref (vector-ref cap u) v) 0))) (vector-set! visited v #t) (vector-set! parent v u) v))))]))))]) (let flow-loop ([max-flow 0]) (let ([parent (make-vector n -1)]) (if (not (bfs bfs 0 5 parent)) max-flow (let path-flow ([v 5] [pf +inf.0]) (if (= v 0) (begin (let update ([v 5]) (when (not (= v 0)) (let ([u (vector-ref parent v)]) (vector-set! (vector-ref cap u) v (- (vector-ref (vector-ref cap u) v) pf)) (vector-set! (vector-ref cap v) u (+ (vector-ref (vector-ref cap v) u) pf)) (update u)))) (flow-loop (+ max-flow pf))) (path-flow (vector-ref parent v) (min pf (vector-ref (vector-ref cap (vector-ref parent v)) v)))))))))
+
+  - name: kruskal_mst
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "kruskal_mst"
+    description: "Kruskal's MST: minimum spanning tree using union-find"
+    racket_body: |
+      (let* ([edges (sort (list (list 0 1 4) (list 0 2 1) (list 1 2 2) (list 1 3 5) (list 2 3 3)) (lambda (a b) (< (third a) (third b))))] [parent (build-vector 4 values)] [find (lambda (find x) (if (= (vector-ref parent x) x) x (let ([r (find find (vector-ref parent x))]) (vector-set! parent x r) r)))]) (for/fold ([total 0]) ([e (in-list edges)]) (let ([u (find find (first e))] [v (find find (second e))]) (if (= u v) total (begin (vector-set! parent u v) (+ total (third e)))))))
+
+  - name: tarjan_scc
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(List(Number))"
+    racket_symbol: "tarjan_scc"
+    description: "Tarjan's SCC: find strongly connected components"
+    racket_body: |
+      (let* ([adj (vector (list 1) (list 2) (list 0 3) (list 4) (list 3))] [idx (make-vector 5 -1)] [low (make-vector 5 -1)] [on-stack (make-vector 5 #f)] [counter (box 0)] [stack (box (list))] [sccs (box (list))]) (begin (define (strongconnect u) (let ([c (unbox counter)]) (set-box! counter (+ c 1)) (vector-set! idx u c) (vector-set! low u c) (set-box! stack (cons u (unbox stack))) (vector-set! on-stack u #t) (for ([v (in-list (vector-ref adj u))]) (cond [(= (vector-ref idx v) -1) (strongconnect v) (vector-set! low u (min (vector-ref low u) (vector-ref low v)))] [(vector-ref on-stack v) (vector-set! low u (min (vector-ref low u) (vector-ref idx v)))])) (when (= (vector-ref low u) (vector-ref idx u)) (let pop ([scc (list)]) (let ([w (car (unbox stack))]) (set-box! stack (cdr (unbox stack))) (vector-set! on-stack w #f) (if (= w u) (set-box! sccs (cons (cons w scc) (unbox sccs))) (pop (cons w scc)))))))) (for ([i (in-range n)]) (when (= (vector-ref idx i) -1) (strongconnect i))) (unbox sccs)))
+
+  - name: topological_sort
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "topological_sort"
+    description: "Topological sort using Kahn's algorithm (BFS-based)"
+    racket_body: |
+      (let* ([adj (vector (list 1 2) (list 3) (list 3 4) (list 5) (list 5) (list))] [indeg (make-vector 6 0)]) (begin (for* ([u (in-range n)] [v (in-list (vector-ref adj u))]) (vector-set! indeg v (+ (vector-ref indeg v) 1))) (let loop ([queue (for/list ([i (in-range n)] #:when (= (vector-ref indeg i) 0)) i)] [result (list)]) (if (null? queue) (reverse result) (let ([u (car queue)]) (let ([queue (for/fold ([q (cdr queue)]) ([v (in-list (vector-ref adj u))]) (vector-set! indeg v (- (vector-ref indeg v) 1)) (if (= (vector-ref indeg v) 0) (append q (list v)) q))]) (loop queue (cons u result))))))))
+
+  # =========================================================================
+  # Number Theory
+  # =========================================================================
+
+  - name: chinese_remainder_theorem
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "chinese_remainder_theorem"
+    description: "Chinese Remainder Theorem: solve system of congruences"
+    racket_body: |
+      (let* ([remainders (list 2 3 2)] [moduli (list 3 5 7)] [mod-inv (lambda (a m) (let loop ([old-r a] [r m] [old-s 1] [s 0]) (if (= r 0) (modulo old-s m) (let ([q (quotient old-r r)]) (loop r (- old-r (* q r)) s (- old-s (* q s)))))))]) (let ([N (apply * moduli)]) (modulo (for/sum ([r (in-list remainders)] [m (in-list moduli)]) (let* ([ni (quotient N m)] [xi (mod-inv ni m)]) (* r ni xi))) N)))
+
+  - name: euclidean_gcd
+    inputs: ['Number', 'Number']
+    input_names: ['a', 'b']
+    output: "Number"
+    racket_symbol: "euclidean_gcd"
+    description: "Euclidean GCD: gcd(a,b) using Euclid's algorithm"
+    racket_body: |
+      (let loop ([x a] [y b]) (if (= y 0) x (loop y (modulo x y))))
+
+  - name: extended_euclidean_gcd
+    inputs: ['Number', 'Number']
+    input_names: ['a', 'b']
+    output: "List(Number)"
+    racket_symbol: "extended_euclidean_gcd"
+    description: "Extended Euclidean GCD: find x,y such that ax + by = gcd(a,b)"
+    racket_body: |
+      (let loop ([old-r a] [r b] [old-s 1] [s 0] [old-t 0] [t 1]) (if (= r 0) (list old-r old-s old-t) (let ([q (quotient old-r r)]) (loop r (- old-r (* q r)) s (- old-s (* q s)) t (- old-t (* q t))))))
+
+  - name: modular_exponentiation
+    inputs: ['Number', 'Number', 'Number']
+    input_names: ['base', 'exp', 'm']
+    output: "Number"
+    racket_symbol: "modular_exponentiation"
+    description: "Modular exponentiation: (base^exp) mod m using fast exponentiation"
+    racket_body: |
+      (let loop ([b base] [e exp] [result 1]) (if (= e 0) result (let ([result (if (odd? e) (modulo (* result b) m) result)]) (loop (modulo (* b b) m) (quotient e 2) result))))
+
+  - name: primality_trial_division
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Boolean"
+    racket_symbol: "primality_trial_division"
+    description: "Primality test by trial division"
+    racket_body: |
+      (let loop ([i 2]) (cond [(> (* i i) n) #t] [(= (modulo n i) 0) #f] [else (loop (+ i 1))]))
+
+  - name: prime_factorization
+    inputs: ['Number']
+    input_names: ['n']
+    output: "List(Number)"
+    racket_symbol: "prime_factorization"
+    description: "Prime factorization: list prime factors of n"
+    racket_body: |
+      (let loop ([x n] [d 2] [acc (list)]) (cond [(> (* d d) x) (if (> x 1) (append acc (list x)) acc)] [(= (modulo x d) 0) (loop (quotient x d) d (append acc (list d)))] [else (loop x (+ d 1) acc)]))
+
+  # =========================================================================
+  # Searching
+  # =========================================================================
+
+  - name: binary_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "binary_search"
+    description: "Binary search: find index of target in sorted list, -1 if not found"
+    racket_body: |
+      (let loop ([lo 0] [hi (-(length lst) 1)]) (if (> lo hi) -1 (let ([mid (quotient (+ lo hi) 2)]) (let ([v (list-ref lst mid)]) (cond [(= v target) mid] [(< v target) (loop (+ mid 1) hi)] [else (loop lo (- mid 1))])))))
+
+  - name: boyer_moore_majority_vote
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "boyer_moore_majority_vote"
+    description: "Boyer-Moore majority vote: find element appearing > n/2 times"
+    racket_body: |
+      (let loop ([xs lst] [candidate 0] [count 0]) (if (null? xs) candidate (let ([x (car xs)]) (if (= count 0) (loop (cdr xs) x 1) (if (= x candidate) (loop (cdr xs) candidate (+ count 1)) (loop (cdr xs) candidate (- count 1)))))))
+
+  - name: exponential_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "exponential_search"
+    description: "Exponential search: find range then binary search"
+    racket_body: |
+      (let* ([n (length lst)] [bsearch (lambda (bsearch lo hi) (if (> lo hi) -1 (let ([mid (quotient (+ lo hi) 2)]) (cond [(= (list-ref lst mid) target) mid] [(< (list-ref lst mid) target) (bsearch bsearch (+ mid 1) hi)] [else (bsearch bsearch lo (- mid 1))]))))]) (if (= (list-ref lst 0) target) 0 (let bound ([i 1]) (if (and (< i n) (<= (list-ref lst i) target)) (bound (* i 2)) (bsearch bsearch (quotient i 2) (min (- i 1) (- n 1)))))))
+
+  - name: fibonacci_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "fibonacci_search"
+    description: "Fibonacci search: search sorted list using Fibonacci numbers"
+    racket_body: |
+      (let* ([n (length lst)]) (let fib-init ([f2 0] [f1 1]) (let ([f (+ f2 f1)]) (if (>= f n) (let loop ([f2 f2] [f1 f1] [f f] [offset -1]) (cond [(< f 1) -1] [else (let ([i (min (+ offset f2) (- n 1))]) (cond [(< (list-ref lst i) target) (loop (- f1 f2) f2 f1 i)] [(> (list-ref lst i) target) (loop (- f2 (- f1 f2)) (- f1 f2) f2 offset)] [else i]))])) (fib-init f1 f)))))
+
+  - name: interpolation_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "interpolation_search"
+    description: "Interpolation search: search sorted uniformly distributed list"
+    racket_body: |
+      (let loop ([lo 0] [hi (-(length lst) 1)]) (if (or (> lo hi) (= (list-ref lst lo) (list-ref lst hi))) (if (and (<= lo hi) (= (list-ref lst lo) target)) lo -1) (let* ([lo-val (list-ref lst lo)] [hi-val (list-ref lst hi)] [pos (+ lo (quotient (* (- target lo-val) (- hi lo)) (- hi-val lo-val)))]) (cond [(or (< pos lo) (> pos hi)) -1] [(= (list-ref lst pos) target) pos] [(< (list-ref lst pos) target) (loop (+ pos 1) hi)] [else (loop lo (- pos 1))]))))
+
+  - name: jump_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "jump_search"
+    description: "Jump search: search sorted list with jump size sqrt(n)"
+    racket_body: |
+      (let* ([n (length lst)] [step (exact-floor (sqrt (length lst)))]) (let jump ([prev 0] [curr (min step n)]) (cond [(>= prev n) -1] [(< (list-ref lst (- curr 1)) target) (jump curr (min (+ curr step) n))] [else (let scan ([i prev]) (cond [(= i curr) -1] [(= (list-ref lst i) target) i] [else (scan (+ i 1))]))])))
+
+  - name: linear_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "linear_search"
+    description: "Linear search: find index of target in list, -1 if not found"
+    racket_body: |
+      (let loop ([i 0]) (cond [(= i (length lst)) -1] [(= (list-ref lst i) target) i] [else (loop (+ i 1))]))
+
+  - name: median_two_sorted_arrays
+    inputs: ['List(Number)', 'List(Number)']
+    input_names: ['a', 'b']
+    output: "Number"
+    racket_symbol: "median_two_sorted_arrays"
+    description: "Median of two sorted arrays"
+    racket_body: |
+      (let* ([merged (let merge ([a a] [b b] [acc (list)]) (cond [(null? a) (append (reverse acc) b)] [(null? b) (append (reverse acc) a)] [(<= (car a) (car b)) (merge (cdr a) b (cons (car a) acc))] [else (merge a (cdr b) (cons (car b) acc))]))] [n (+ (length a) (length b))]) (if (odd? n) (list-ref merged (quotient n 2)) (/ (+ (list-ref merged (- (quotient n 2) 1)) (list-ref merged (quotient n 2))) 2)))
+
+  - name: quickselect
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'k']
+    output: "Number"
+    racket_symbol: "quickselect"
+    description: "Quickselect: find k-th smallest element (0-indexed)"
+    racket_body: |
+      (let* ([qs (lambda (qs xs k) (let* ([pivot (car xs)] [rest (cdr xs)] [lo (filter (lambda (x) (< x pivot)) rest)] [hi (filter (lambda (x) (>= x pivot)) rest)] [lo-len (length lo)]) (cond [(= k lo-len) pivot] [(< k lo-len) (qs qs lo k)] [else (qs qs hi (- k lo-len 1))])))]) (qs qs lst k))
+
+  - name: sentinel_linear_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "sentinel_linear_search"
+    description: "Sentinel linear search: place target at end to avoid bounds check"
+    racket_body: |
+      (let* ([v (list->vector lst)] [n (vector-length (list->vector lst))] [last (vector-ref (list->vector lst) (- (vector-length (list->vector lst)) 1))]) (begin (vector-set! v (- n 1) target) (let loop ([i 0]) (if (= (vector-ref v i) target) (if (or (< i (- n 1)) (= last target)) i -1) (loop (+ i 1))))))
+
+  - name: ternary_search
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "Number"
+    racket_symbol: "ternary_search"
+    description: "Ternary search: find target in sorted list using three-way split"
+    racket_body: |
+      (let loop ([lo 0] [hi (-(length lst) 1)]) (if (> lo hi) -1 (let* ([third (quotient (- hi lo) 3)] [m1 (+ lo third)] [m2 (- hi third)]) (cond [(= (list-ref lst m1) target) m1] [(= (list-ref lst m2) target) m2] [(< target (list-ref lst m1)) (loop lo (- m1 1))] [(> target (list-ref lst m2)) (loop (+ m2 1) hi)] [else (loop (+ m1 1) (- m2 1))]))))
+
+  - name: two_sum_sorted
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'target']
+    output: "List(Number)"
+    racket_symbol: "two_sum_sorted"
+    description: "Two sum on sorted array: find indices of two elements that sum to target"
+    racket_body: |
+      (let loop ([lo 0] [hi (-(length lst) 1)]) (let ([s (+ (list-ref lst lo) (list-ref lst hi))]) (cond [(= s target) (list lo hi)] [(< s target) (loop (+ lo 1) hi)] [else (loop lo (- hi 1))])))
+
+  # =========================================================================
+  # Sorting
+  # =========================================================================
+
+  - name: bubble_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "bubble_sort"
+    description: "Bubble sort"
+    racket_body: |
+      (let outer ([xs lst] [n (length lst)]) (if (<= n 1) xs (let ([result (for/fold ([acc xs]) ([i (in-range (- n 1))]) (let ([a (list-ref acc i)] [b (list-ref acc (+ i 1))]) (if (> a b) (append (take acc i) (list b a) (drop acc (+ i 2))) acc)))]) (outer result (- n 1)))))
+
+  - name: bucket_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "bucket_sort"
+    description: "Bucket sort for numbers in [0, 1) range (scaled to integers)"
+    racket_body: |
+      (let* ([n (length lst)] [mx (+ (apply max lst) 1)] [buckets (build-vector (length lst) (lambda (_) (list)))]) (begin (for-each (lambda (x) (let ([idx (min (- n 1) (quotient (* x n) mx))]) (vector-set! buckets idx (cons x (vector-ref buckets idx))))) lst) (for*/list ([i (in-range n)] [x (in-list (sort (vector-ref buckets i) <))]) x)))
+
+  - name: counting_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "counting_sort"
+    description: "Counting sort: sort non-negative integers by counting occurrences"
+    racket_body: |
+      (let* ([mx (apply max lst)] [counts (make-vector (+ mx 1) 0)]) (begin (for-each (lambda (x) (vector-set! counts x (+ (vector-ref counts x) 1))) lst) (for*/list ([i (in-range (+ mx 1))] [_ (in-range (vector-ref counts i))]) i)))
+
+  - name: heap_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "heap_sort"
+    description: "Heap sort using Racket's built-in sort (heap-based)"
+    racket_body: |
+      (let* ([sift-down (lambda (sift-down vec n i) (let loop ([i i]) (let* ([largest i] [l (+ (* 2 i) 1)] [r (+ (* 2 i) 2)] [largest (if (and (< l n) (> (vector-ref vec l) (vector-ref vec largest))) l largest)] [largest (if (and (< r n) (> (vector-ref vec r) (vector-ref vec largest))) r largest)]) (when (not (= largest i)) (let ([tmp (vector-ref vec i)]) (vector-set! vec i (vector-ref vec largest)) (vector-set! vec largest tmp) (loop largest))))))]) (let ([v (list->vector lst)] [n (length lst)]) (for ([i (in-range (- (quotient n 2) 1) -1 -1)]) (sift-down sift-down v n i)) (for ([i (in-range (- n 1) 0 -1)]) (let ([tmp (vector-ref v 0)]) (vector-set! v 0 (vector-ref v i)) (vector-set! v i tmp) (sift-down sift-down v i 0))) (vector->list v)))
+
+  - name: merge_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "merge_sort"
+    description: "Merge sort"
+    racket_body: |
+      (let* ([merge (lambda (a b) (let loop ([a a] [b b] [acc (list)]) (cond [(null? a) (append (reverse acc) b)] [(null? b) (append (reverse acc) a)] [(<= (car a) (car b)) (loop (cdr a) b (cons (car a) acc))] [else (loop a (cdr b) (cons (car b) acc))])))] [msort (lambda (msort xs) (if (<= (length xs) 1) xs (let-values ([(l r) (split-at xs (quotient (length xs) 2))]) (merge (msort msort l) (msort msort r)))))]) (msort msort lst))
+
+  - name: quicksort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "quicksort"
+    description: "Quicksort"
+    racket_body: |
+      (let* ([qsort (lambda (qsort xs) (if (<= (length xs) 1) xs (let* ([pivot (car xs)] [rest (cdr xs)] [lo (filter (lambda (x) (< x pivot)) rest)] [hi (filter (lambda (x) (>= x pivot)) rest)]) (append (qsort qsort lo) (list pivot) (qsort qsort hi)))))]) (qsort qsort lst))
+
+  - name: radix_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "radix_sort"
+    description: "Radix sort (LSD, base 10)"
+    racket_body: |
+      (let* ([mx (apply max lst)]) (let loop ([xs lst] [exp 1]) (if (> exp mx) xs (let ([buckets (make-vector 10 (list))]) (for-each (lambda (x) (let ([d (modulo (quotient x exp) 10)]) (vector-set! buckets d (append (vector-ref buckets d) (list x))))) xs) (loop (for*/list ([i (in-range 10)] [x (in-list (vector-ref buckets i))]) x) (* exp 10))))))
+
+  - name: selection_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "selection_sort"
+    description: "Selection sort"
+    racket_body: |
+      (let loop ([xs lst] [acc (list)]) (if (null? xs) (reverse acc) (let* ([mn (apply min xs)] [rest (let rem ([l xs] [found #f]) (cond [(null? l) (list)] [(and (= (car l) mn) (not found)) (rem (cdr l) #t)] [else (cons (car l) (rem (cdr l) found))]))]) (loop rest (cons mn acc)))))
+
+  - name: shellsort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "shellsort"
+    description: "Shell sort with gap sequence n/2, n/4, ..., 1"
+    racket_body: |
+      (let* ([v (list->vector lst)] [n (length lst)]) (let gap-loop ([gap (quotient n 2)]) (if (= gap 0) (vector->list v) (begin (for ([i (in-range gap n)]) (let ([tmp (vector-ref v i)]) (let j-loop ([j i]) (if (and (>= j gap) (> (vector-ref v (- j gap)) tmp)) (begin (vector-set! v j (vector-ref v (- j gap))) (j-loop (- j gap))) (vector-set! v j tmp))))) (gap-loop (quotient gap 2))))))
+
+  # =========================================================================
+  # String
+  # =========================================================================
+
+  - name: caesar_cipher
+    inputs: ['String', 'Number']
+    input_names: ['s', 'k']
+    output: "String"
+    racket_symbol: "caesar_cipher"
+    description: "Caesar cipher: shift each letter by k positions"
+    racket_body: |
+      (let* ([chars (string->list s)]) (list->string (map (lambda (c) (if (char-alphabetic? c) (let* ([base (if (char-upper-case? c) 65 97)] [shifted (modulo (+ (- (char->integer c) base) k) 26)]) (integer->char (+ base shifted))) c)) chars)))
+
+  - name: damerau_levenshtein
+    inputs: ['String', 'String']
+    input_names: ['s1', 's2']
+    output: "Number"
+    racket_symbol: "damerau_levenshtein"
+    description: "Damerau-Levenshtein distance (with transpositions)"
+    racket_body: |
+      (let* ([m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (i) (make-vector (+ (string-length s2) 1) 0)))]) (begin (for ([i (in-range (+ m 1))]) (vector-set! (vector-ref dp i) 0 i)) (for ([j (in-range (+ n 1))]) (vector-set! (vector-ref dp 0) j j)) (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (let ([cost (if (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) 0 1)]) (vector-set! (vector-ref dp i) j (min (+ (vector-ref (vector-ref dp (- i 1)) j) 1) (+ (vector-ref (vector-ref dp i) (- j 1)) 1) (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) cost))) (when (and (> i 1) (> j 1) (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 2))) (char=? (string-ref s1 (- i 2)) (string-ref s2 (- j 1)))) (vector-set! (vector-ref dp i) j (min (vector-ref (vector-ref dp i) j) (+ (vector-ref (vector-ref dp (- i 2)) (- j 2)) cost)))))) (vector-ref (vector-ref dp m) n)))
+
+  - name: knuth_morris_pratt
+    inputs: ['String', 'String']
+    input_names: ['text', 'pattern']
+    output: "Number"
+    racket_symbol: "knuth_morris_pratt"
+    description: "KMP string search: find first occurrence of pattern in text"
+    racket_body: |
+      (let* ([m (string-length pattern)] [n (string-length text)] [lps (make-vector (string-length pattern) 0)]) (begin (let build ([i 1] [len 0]) (when (< i m) (cond [(char=? (string-ref pattern i) (string-ref pattern len)) (vector-set! lps i (+ len 1)) (build (+ i 1) (+ len 1))] [(> len 0) (build i (vector-ref lps (- len 1)))] [else (vector-set! lps i 0) (build (+ i 1) 0)]))) (let search ([i 0] [j 0]) (cond [(= j m) (- i m)] [(= i n) -1] [(char=? (string-ref text i) (string-ref pattern j)) (search (+ i 1) (+ j 1))] [(> j 0) (search i (vector-ref lps (- j 1)))] [else (search (+ i 1) 0)]))))
+
+  - name: levenshtein_edit_distance
+    inputs: ['String', 'String']
+    input_names: ['s1', 's2']
+    output: "Number"
+    racket_symbol: "levenshtein_edit_distance"
+    description: "Levenshtein edit distance using DP"
+    racket_body: |
+      (let* ([m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (i) (make-vector (+ (string-length s2) 1) 0)))]) (begin (for ([i (in-range (+ m 1))]) (vector-set! (vector-ref dp i) 0 i)) (for ([j (in-range (+ n 1))]) (vector-set! (vector-ref dp 0) j j)) (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (let ([cost (if (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) 0 1)]) (vector-set! (vector-ref dp i) j (min (+ (vector-ref (vector-ref dp (- i 1)) j) 1) (+ (vector-ref (vector-ref dp i) (- j 1)) 1) (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) cost))))) (vector-ref (vector-ref dp m) n)))
+
+  - name: longest_common_subsequence
+    inputs: ['String', 'String']
+    input_names: ['s1', 's2']
+    output: "Number"
+    racket_symbol: "longest_common_subsequence"
+    description: "Longest common subsequence length"
+    racket_body: |
+      (let* ([m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (_) (make-vector (+ (string-length s2) 1) 0)))]) (begin (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (vector-set! (vector-ref dp i) j (if (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) 1) (max (vector-ref (vector-ref dp (- i 1)) j) (vector-ref (vector-ref dp i) (- j 1)))))) (vector-ref (vector-ref dp m) n)))
+
+  - name: longest_common_substring
+    inputs: ['String', 'String']
+    input_names: ['s1', 's2']
+    output: "Number"
+    racket_symbol: "longest_common_substring"
+    description: "Longest common substring length"
+    racket_body: |
+      (let* ([m (string-length s1)] [n (string-length s2)] [dp (build-vector (+ (string-length s1) 1) (lambda (_) (make-vector (+ (string-length s2) 1) 0)))] [best (box 0)]) (begin (for* ([i (in-range 1 (+ m 1))] [j (in-range 1 (+ n 1))]) (when (char=? (string-ref s1 (- i 1)) (string-ref s2 (- j 1))) (let ([v (+ (vector-ref (vector-ref dp (- i 1)) (- j 1)) 1)]) (vector-set! (vector-ref dp i) j v) (when (> v (unbox best)) (set-box! best v))))) (unbox best)))
+
+  - name: manacher_longest_palindrome
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "manacher_longest_palindrome"
+    description: "Manacher's algorithm: longest palindromic substring length"
+    racket_body: |
+      (let* ([n (string-length s)] [best (box 1)]) (begin (for ([center (in-range n)]) (let expand-odd ([l center] [r center]) (when (and (>= l 0) (< r n) (char=? (string-ref s l) (string-ref s r))) (set-box! best (max (unbox best) (+ (- r l) 1))) (expand-odd (- l 1) (+ r 1)))) (let expand-even ([l center] [r (+ center 1)]) (when (and (>= l 0) (< r n) (char=? (string-ref s l) (string-ref s r))) (set-box! best (max (unbox best) (+ (- r l) 1))) (expand-even (- l 1) (+ r 1))))) (unbox best)))
+
+  - name: rabin_karp
+    inputs: ['String', 'String']
+    input_names: ['text', 'pattern']
+    output: "Number"
+    racket_symbol: "rabin_karp"
+    description: "Rabin-Karp string search using rolling hash"
+    racket_body: |
+      (let* ([m (string-length pattern)] [n (string-length text)] [base 256] [mod 101]) (let* ([ph (for/fold ([h 0]) ([c (in-string pattern)]) (modulo (+ (* h base) (char->integer c)) mod))] [th (for/fold ([h 0]) ([c (in-string (substring text 0 m))]) (modulo (+ (* h base) (char->integer c)) mod))] [pow (for/fold ([p 1]) ([_ (in-range (- m 1))]) (modulo (* p base) mod))]) (let search ([i 0] [th th]) (cond [(= i (- n m -1)) -1] [(and (= ph th) (string=? (substring text i (+ i m)) pattern)) i] [else (search (+ i 1) (modulo (+ (* (- th (* (char->integer (string-ref text i)) pow)) base) (char->integer (string-ref text (+ i m)))) mod))]))))
+
+  - name: rot13_cipher
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "rot13_cipher"
+    description: "ROT13: Caesar cipher with shift 13"
+    racket_body: |
+      (let* ([chars (string->list s)]) (list->string (map (lambda (c) (if (char-alphabetic? c) (let* ([base (if (char-upper-case? c) 65 97)] [shifted (modulo (+ (- (char->integer c) base) 13) 26)]) (integer->char (+ base shifted))) c)) chars)))
+
+  - name: run_length_encoding
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "run_length_encoding"
+    description: "Run-length encoding: compress consecutive chars"
+    racket_body: |
+      (let* ([chars (string->list s)]) (let loop ([cs chars] [result ""] [cur #f] [cnt 0]) (cond [(null? cs) (if cur (string-append result (number->string cnt) (string cur)) result)] [(equal? (car cs) cur) (loop (cdr cs) result cur (+ cnt 1))] [else (let ([result (if cur (string-append result (number->string cnt) (string cur)) result)]) (loop (cdr cs) result (car cs) 1))])))

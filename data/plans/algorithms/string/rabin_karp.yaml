@@ -7,9 +7,7 @@ rabin_karp:
     - text: "String"
     - pattern: "String"
   bindings:
-    text: "\"ABABDABACDABABCABAB\""
-    pattern: "\"ABAB\""
+    text: '"ABABDABACDABABCABAB"'
+    pattern: '"ABAB"'
   steps:
-    - let_bind:
-        bindings: "[m (string-length pattern)] [n (string-length text)] [base 256] [mod 101]"
-        body: "(let* ([ph (for/fold ([h 0]) ([c (in-string pattern)]) (modulo (+ (* h base) (char->integer c)) mod))] [th (for/fold ([h 0]) ([c (in-string (substring text 0 m))]) (modulo (+ (* h base) (char->integer c)) mod))] [pow (for/fold ([p 1]) ([_ (in-range (- m 1))]) (modulo (* p base) mod))]) (let search ([i 0] [th th]) (cond [(= i (- n m -1)) -1] [(and (= ph th) (string=? (substring text i (+ i m)) pattern)) i] [else (search (+ i 1) (modulo (+ (* (- th (* (char->integer (string-ref text i)) pow)) base) (char->integer (string-ref text (+ i m)))) mod))])))"
+    - rabin_karp

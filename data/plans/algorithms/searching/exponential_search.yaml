@@ -7,9 +7,7 @@ exponential_search:
     - lst: "List(Number)"
     - target: "Number"
   bindings:
-    lst: "(list 1 3 5 7 9 11 13)"
+    lst: '(list 1 3 5 7 9 11 13)'
     target: "7"
   steps:
-    - let_bind:
-        bindings: "[n (length lst)] [bsearch (lambda (bsearch lo hi) (if (> lo hi) -1 (let ([mid (quotient (+ lo hi) 2)]) (cond [(= (list-ref lst mid) target) mid] [(< (list-ref lst mid) target) (bsearch bsearch (+ mid 1) hi)] [else (bsearch bsearch lo (- mid 1))]))))]"
-        body: "(if (= (list-ref lst 0) target) 0 (let bound ([i 1]) (if (and (< i n) (<= (list-ref lst i) target)) (bound (* i 2)) (bsearch bsearch (quotient i 2) (min (- i 1) (- n 1))))))"
+    - exponential_search

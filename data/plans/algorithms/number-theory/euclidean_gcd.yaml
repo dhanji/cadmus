@@ -10,7 +10,4 @@ euclidean_gcd:
     a: "48"
     b: "18"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=a y=b"
-        body: "(if (= y 0) x (loop y (modulo x y)))"
+    - euclidean_gcd

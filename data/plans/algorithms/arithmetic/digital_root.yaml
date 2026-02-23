@@ -8,7 +8,4 @@ digital_root:
   bindings:
     n: "493"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=n"
-        body: "(if (< x 10) x (loop (for/sum ([c (in-string (number->string x))]) (- (char->integer c) 48))))"
+    - digital_root

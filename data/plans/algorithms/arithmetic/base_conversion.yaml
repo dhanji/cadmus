@@ -10,7 +10,4 @@ base_conversion:
     n: "255"
     base: "16"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=n acc=(list)"
-        body: "(if (= x 0) (if (null? acc) \"0\" (apply string-append (map (lambda (d) (string (integer->char (if (< d 10) (+ d 48) (+ d 55))))) acc))) (loop (quotient x base) (cons (remainder x base) acc)))"
+    - base_conversion

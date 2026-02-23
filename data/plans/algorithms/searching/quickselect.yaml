@@ -7,9 +7,7 @@ quickselect:
     - lst: "List(Number)"
     - k: "Number"
   bindings:
-    lst: "(list 3 6 2 8 1 5 7 4)"
+    lst: '(list 3 6 2 8 1 5 7 4)'
     k: "3"
   steps:
-    - let_bind:
-        bindings: "[qs (lambda (qs xs k) (let* ([pivot (car xs)] [rest (cdr xs)] [lo (filter (lambda (x) (< x pivot)) rest)] [hi (filter (lambda (x) (>= x pivot)) rest)] [lo-len (length lo)]) (cond [(= k lo-len) pivot] [(< k lo-len) (qs qs lo k)] [else (qs qs hi (- k lo-len 1))])))]"
-        body: "(qs qs lst k)"
+    - quickselect

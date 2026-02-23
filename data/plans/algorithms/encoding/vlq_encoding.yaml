@@ -8,7 +8,4 @@ vlq_encoding:
   bindings:
     n: "300"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=n acc=(list)"
-        body: "(let ([byte (bitwise-and x 127)] [rest (arithmetic-shift x -7)]) (if (= rest 0) (reverse (cons byte acc)) (loop rest (cons (bitwise-ior byte 128) acc))))"
+    - vlq_encoding

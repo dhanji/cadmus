@@ -7,10 +7,7 @@ two_sum_sorted:
     - lst: "List(Number)"
     - target: "Number"
   bindings:
-    lst: "(list 2 7 11 15)"
+    lst: '(list 2 7 11 15)'
     target: "9"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "lo=0 hi=(-(length lst) 1)"
-        body: "(let ([s (+ (list-ref lst lo) (list-ref lst hi))]) (cond [(= s target) (list lo hi)] [(< s target) (loop (+ lo 1) hi)] [else (loop lo (- hi 1))]))"
+    - two_sum_sorted

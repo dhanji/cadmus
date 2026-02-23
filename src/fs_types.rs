@@ -51,6 +51,9 @@ const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket.facts.y
 /// The embedded macOS CLI facts YAML, used as fallback when the file is not found on disk.
 const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli.facts.yaml");
 
+/// The embedded algorithm ops pack YAML (opaque algorithm atoms).
+const ALGORITHM_OPS_YAML: &str = include_str!("../data/packs/ops/algorithm.ops.yaml");
+
 pub fn build_full_registry() -> OperationRegistry {
     // Start with embedded fs_ops (compatibility aliases)
     let mut reg = load_ops_pack_str(FS_OPS_YAML)
@@ -63,6 +66,13 @@ pub fn build_full_registry() -> OperationRegistry {
     let _ = load_ops_pack_str_into(
         &std::fs::read_to_string("data/packs/ops/racket.ops.yaml")
             .unwrap_or_else(|_| RACKET_OPS_YAML.to_string()),
+        &mut reg,
+    );
+
+    // Merge algorithm ops (opaque atoms with racket_body)
+    let _ = load_ops_pack_str_into(
+        &std::fs::read_to_string("data/packs/ops/algorithm.ops.yaml")
+            .unwrap_or_else(|_| ALGORITHM_OPS_YAML.to_string()),
         &mut reg,
     );
 

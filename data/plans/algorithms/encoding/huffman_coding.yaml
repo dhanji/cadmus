@@ -6,8 +6,6 @@ huffman_coding:
   inputs:
     - s: "String"
   bindings:
-    s: "\"aabbbcccc\""
+    s: '"aabbbcccc"'
   steps:
-    - let_bind:
-        bindings: "[freq (make-hash)]"
-        body: "(begin (for ([c (in-string s)]) (hash-set! freq c (+ (hash-ref freq c 0) 1))) (let loop ([pq (sort (hash-map freq (lambda (k v) (cons v k))) (lambda (a b) (< (car a) (car b))))]) (if (<= (length pq) 1) (for/sum ([(k v) (in-hash freq)]) (* v (max 1 (- (length (hash-keys freq)) 1)))) (let* ([a (car pq)] [b (cadr pq)] [rest (cddr pq)] [merged (cons (+ (car a) (car b)) (list a b))] [pq (sort (cons merged rest) (lambda (a b) (< (car a) (car b))))]) (loop pq)))))"
+    - huffman_coding

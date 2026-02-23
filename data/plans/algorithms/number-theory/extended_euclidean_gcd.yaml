@@ -10,7 +10,4 @@ extended_euclidean_gcd:
     a: "48"
     b: "18"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "old-r=a r=b old-s=1 s=0 old-t=0 t=1"
-        body: "(if (= r 0) (list old-r old-s old-t) (let ([q (quotient old-r r)]) (loop r (- old-r (* q r)) s (- old-s (* q s)) t (- old-t (* q t)))))"
+    - extended_euclidean_gcd

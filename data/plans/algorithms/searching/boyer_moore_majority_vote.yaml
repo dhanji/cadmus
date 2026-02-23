@@ -6,9 +6,6 @@ boyer_moore_majority_vote:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 3 3 4 2 3 3 3)"
+    lst: '(list 3 3 4 2 3 3 3)'
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "xs=lst candidate=0 count=0"
-        body: "(if (null? xs) candidate (let ([x (car xs)]) (if (= count 0) (loop (cdr xs) x 1) (if (= x candidate) (loop (cdr xs) candidate (+ count 1)) (loop (cdr xs) candidate (- count 1))))))"
+    - boyer_moore_majority_vote

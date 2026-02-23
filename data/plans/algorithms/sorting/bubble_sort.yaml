@@ -6,9 +6,6 @@ bubble_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 5 3 8 1 9 2 7 4 6)"
+    lst: '(list 5 3 8 1 9 2 7 4 6)'
   steps:
-    - iterate:
-        name: "outer"
-        bindings: "xs=lst n=(length lst)"
-        body: "(if (<= n 1) xs (let ([result (for/fold ([acc xs]) ([i (in-range (- n 1))]) (let ([a (list-ref acc i)] [b (list-ref acc (+ i 1))]) (if (> a b) (append (take acc i) (list b a) (drop acc (+ i 2))) acc)))]) (outer result (- n 1))))"
+    - bubble_sort

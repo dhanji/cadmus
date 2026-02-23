@@ -6,8 +6,6 @@ run_length_encoding:
   inputs:
     - s: "String"
   bindings:
-    s: "\"aaabbc\""
+    s: '"aaabbc"'
   steps:
-    - let_bind:
-        bindings: "[chars (string->list s)]"
-        body: "(let loop ([cs chars] [result \"\"] [cur #f] [cnt 0]) (cond [(null? cs) (if cur (string-append result (number->string cnt) (string cur)) result)] [(equal? (car cs) cur) (loop (cdr cs) result cur (+ cnt 1))] [else (let ([result (if cur (string-append result (number->string cnt) (string cur)) result)]) (loop (cdr cs) result (car cs) 1))]))"
+    - run_length_encoding

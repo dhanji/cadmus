@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-23T00:38:47Z | Size: 63.5k chars
+> Updated: 2026-02-23T05:56:07Z | Size: 65.9k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -809,3 +809,38 @@ plan-name:
 - `data/packs/ops/racket.ops.yaml` — 27 new ops: 7 iteration + 20 utility (canonical names)
 - `tests/algorithm_plans_tests.rs` — 16 integration tests (14 per-category + 1 aggregate + 1 compile-only)
 - **Total: 1468 tests**, 0 failures, 0 warnings
+
+### Algorithm Plan DSL Rewrite (plan `rewrite-algorithm-plans`, commit `c13e95e`)
+- **39 plans rewritten** from embedded Racket to pure Cadmus DSL sub-steps
+- **69 plans deferred** (use iterate/define/lambda/named-let patterns)
+- **All 108 plans** pass load→compile→codegen→execute
+
+### New Parser Features
+- `src/plan.rs:451` — `StepParam::Clauses(Vec<serde_yaml::Value>)` variant for cond clauses and for_star vars
+- `src/plan.rs:917` — `CompiledStep.clause_params: HashMap<String, Vec<serde_yaml::Value>>` field
+- `src/plan.rs:596-622` — `parse_step_param` detects clause/var lists (maps with test/else/var keys)
+- `src/plan.rs:1359-1370` — `count_value_params` fixed: mode param counts when it holds real values
+
+### New Codegen Functions
+- `src/racket_executor.rs:726-800` — `compile_cond_substep`, `compile_structured_clauses`, `compile_clause_value`, `compile_clause_body`
+- `src/racket_executor.rs:849-880` — `compile_for_range_down_substep` (reverse iteration)
+- `src/racket_executor.rs:882-900` — `compile_when_do_substep` (conditional execution)
+- `src/racket_executor.rs:902-950` — `compile_for_star_substep` (nested iteration with vars from Clauses)
+- `src/racket_executor.rs:951-980` — `compile_ordered_params_substep` (vector_set, vector_ref, make_vector, substring_op)
+- `src/racket_executor.rs:583-588` — Empty scalar args generate no-arg calls (e.g., `random: ""` → `(random)`)
+- `src/racket_executor.rs:1453-1460` — `get_one_operand` prefers explicit `$step-N` refs over prev_binding
+- `src/racket_executor.rs:1582-1586` — `racket_value` handles `+inf.0`, `-inf.0`, `+nan.0`, `-nan.0`
+
+### New Ops in Registry
+- `data/packs/ops/racket.ops.yaml` — Added: for_each, cond, map, round, take, drop, for_star (~140 total ops)
+
+### Key Design Patterns for Plans
+- **Mutation**: `make_vector` + `for_range`/`for_each` + `vector_set` (DP, graph algorithms)
+- **Conditional**: `cond` with `clauses` list (test/then/else maps stored as raw YAML)
+- **Nested loops**: `for_star` with `vars` list (each var has start/end)
+- **Accumulation**: `fold` with `acc`/`init`/`var`/`over`/`body`
+- **Short-circuit**: Use nested `cond` instead of eager `let*` to avoid invalid index access
+- **Complex data**: Use `bindings` for list/vector literals, not `list_new` (avoids whitespace splitting)
+- **No-arg ops**: Use `op: ""` for zero-argument calls
+
+### Test Count: 1471 (unchanged from pre-rewrite)

@@ -9,6 +9,4 @@ dijkstra_shortest_path:
   bindings:
     n: "5"
   steps:
-    - let_bind:
-        bindings: "[adj (vector (list (cons 1 4) (cons 2 1)) (list (cons 3 1)) (list (cons 1 2) (cons 3 5)) (list (cons 4 3)) (list))] [dist (make-vector n +inf.0)]"
-        body: "(begin (vector-set! dist 0 0) (let loop ([pq (list (cons 0 0))]) (if (null? pq) (vector->list dist) (let* ([best (argmin cdr pq)] [u (car best)] [d (cdr best)] [pq (remove best pq)]) (if (> d (vector-ref dist u)) (loop pq) (let ([pq (for/fold ([pq pq]) ([edge (in-list (vector-ref adj u))]) (let* ([v (car edge)] [w (cdr edge)] [nd (+ d w)]) (if (< nd (vector-ref dist v)) (begin (vector-set! dist v nd) (cons (cons v nd) pq)) pq)))]) (loop pq)))))))"
+    - dijkstra_shortest_path

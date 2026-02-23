@@ -7,9 +7,7 @@ sentinel_linear_search:
     - lst: "List(Number)"
     - target: "Number"
   bindings:
-    lst: "(list 3 5 7 1 9)"
+    lst: '(list 3 5 7 1 9)'
     target: "7"
   steps:
-    - let_bind:
-        bindings: "[v (list->vector lst)] [n (vector-length (list->vector lst))] [last (vector-ref (list->vector lst) (- (vector-length (list->vector lst)) 1))]"
-        body: "(begin (vector-set! v (- n 1) target) (let loop ([i 0]) (if (= (vector-ref v i) target) (if (or (< i (- n 1)) (= last target)) i -1) (loop (+ i 1)))))"
+    - sentinel_linear_search

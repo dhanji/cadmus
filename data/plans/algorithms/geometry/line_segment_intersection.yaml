@@ -8,6 +8,4 @@ line_segment_intersection:
   bindings:
     n: "0"
   steps:
-    - let_bind:
-        bindings: "[cross (lambda (ox oy ax ay bx by) (- (* (- ax ox) (- by oy)) (* (- ay oy) (- bx ox))))]"
-        body: "(let* ([d1 (cross 0 2 2 0 0 0)] [d2 (cross 0 2 2 0 2 2)] [d3 (cross 0 0 2 2 0 2)] [d4 (cross 0 0 2 2 2 0)]) (and (< (* d1 d2) 0) (< (* d3 d4) 0)))"
+    - line_segment_intersection

@@ -9,6 +9,4 @@ kruskal_mst:
   bindings:
     n: "4"
   steps:
-    - let_bind:
-        bindings: "[edges (sort (list (list 0 1 4) (list 0 2 1) (list 1 2 2) (list 1 3 5) (list 2 3 3)) (lambda (a b) (< (third a) (third b))))] [parent (build-vector 4 values)] [find (lambda (find x) (if (= (vector-ref parent x) x) x (let ([r (find find (vector-ref parent x))]) (vector-set! parent x r) r)))]"
-        body: "(for/fold ([total 0]) ([e (in-list edges)]) (let ([u (find find (first e))] [v (find find (second e))]) (if (= u v) total (begin (vector-set! parent u v) (+ total (third e))))))"
+    - kruskal_mst

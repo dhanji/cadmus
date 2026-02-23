@@ -6,9 +6,6 @@ kadanes_maximum_subarray:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list -2 1 -3 4 -1 2 1 -5 4)"
+    lst: '(list -2 1 -3 4 -1 2 1 -5 4)'
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "xs=(cdr lst) best=(car lst) current=(car lst)"
-        body: "(if (null? xs) best (let* ([x (car xs)] [current (max x (+ current x))] [best (max best current)]) (loop (cdr xs) best current)))"
+    - kadanes_maximum_subarray

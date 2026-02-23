@@ -6,8 +6,6 @@ manacher_longest_palindrome:
   inputs:
     - s: "String"
   bindings:
-    s: "\"babad\""
+    s: '"babad"'
   steps:
-    - let_bind:
-        bindings: "[n (string-length s)] [best (box 1)]"
-        body: "(begin (for ([center (in-range n)]) (let expand-odd ([l center] [r center]) (when (and (>= l 0) (< r n) (char=? (string-ref s l) (string-ref s r))) (set-box! best (max (unbox best) (+ (- r l) 1))) (expand-odd (- l 1) (+ r 1)))) (let expand-even ([l center] [r (+ center 1)]) (when (and (>= l 0) (< r n) (char=? (string-ref s l) (string-ref s r))) (set-box! best (max (unbox best) (+ (- r l) 1))) (expand-even (- l 1) (+ r 1))))) (unbox best))"
+    - manacher_longest_palindrome

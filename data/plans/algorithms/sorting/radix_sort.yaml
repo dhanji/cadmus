@@ -6,8 +6,6 @@ radix_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 170 45 75 90 802 24 2 66)"
+    lst: '(list 170 45 75 90 802 24 2 66)'
   steps:
-    - let_bind:
-        bindings: "[mx (apply max lst)]"
-        body: "(let loop ([xs lst] [exp 1]) (if (> exp mx) xs (let ([buckets (make-vector 10 (list))]) (for-each (lambda (x) (let ([d (modulo (quotient x exp) 10)]) (vector-set! buckets d (append (vector-ref buckets d) (list x))))) xs) (loop (for*/list ([i (in-range 10)] [x (in-list (vector-ref buckets i))]) x) (* exp 10)))))"
+    - radix_sort

@@ -8,7 +8,4 @@ collatz_sequence:
   bindings:
     n: "6"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=n acc=(list)"
-        body: "(let ([acc (append acc (list x))]) (if (= x 1) acc (loop (if (even? x) (/ x 2) (+ (* 3 x) 1)) acc)))"
+    - collatz_sequence

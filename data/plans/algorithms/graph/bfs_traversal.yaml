@@ -9,6 +9,4 @@ bfs_traversal:
   bindings:
     n: "6"
   steps:
-    - let_bind:
-        bindings: "[adj (vector (list 1 2) (list 3) (list 3 4) (list 5) (list 5) (list))]"
-        body: "(let loop ([queue (list 0)] [visited (set)] [result (list)]) (if (null? queue) (reverse result) (let ([node (car queue)] [rest (cdr queue)]) (if (set-member? visited node) (loop rest visited result) (let ([nbrs (vector-ref adj node)]) (loop (append rest nbrs) (set-add visited node) (cons node result)))))))"
+    - bfs_traversal

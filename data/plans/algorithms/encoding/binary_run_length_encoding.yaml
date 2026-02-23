@@ -6,8 +6,6 @@ binary_run_length_encoding:
   inputs:
     - s: "String"
   bindings:
-    s: "\"000011101\""
+    s: '"000011101"'
   steps:
-    - let_bind:
-        bindings: "[chars (string->list s)]"
-        body: "(let loop ([cs chars] [cur #f] [cnt 0] [acc (list)]) (cond [(null? cs) (reverse (if cur (cons cnt acc) acc))] [(equal? (car cs) cur) (loop (cdr cs) cur (+ cnt 1) acc)] [else (loop (cdr cs) (car cs) 1 (if cur (cons cnt acc) acc))]))"
+    - binary_run_length_encoding

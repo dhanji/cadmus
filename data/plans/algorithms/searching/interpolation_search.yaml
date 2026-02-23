@@ -7,10 +7,7 @@ interpolation_search:
     - lst: "List(Number)"
     - target: "Number"
   bindings:
-    lst: "(list 1 3 5 7 9 11 13)"
+    lst: '(list 1 3 5 7 9 11 13)'
     target: "7"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "lo=0 hi=(-(length lst) 1)"
-        body: "(if (or (> lo hi) (= (list-ref lst lo) (list-ref lst hi))) (if (and (<= lo hi) (= (list-ref lst lo) target)) lo -1) (let* ([lo-val (list-ref lst lo)] [hi-val (list-ref lst hi)] [pos (+ lo (quotient (* (- target lo-val) (- hi lo)) (- hi-val lo-val)))]) (cond [(or (< pos lo) (> pos hi)) -1] [(= (list-ref lst pos) target) pos] [(< (list-ref lst pos) target) (loop (+ pos 1) hi)] [else (loop lo (- pos 1))])))"
+    - interpolation_search

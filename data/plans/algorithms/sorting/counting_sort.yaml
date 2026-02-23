@@ -6,8 +6,6 @@ counting_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 4 2 2 8 3 3 1)"
+    lst: '(list 4 2 2 8 3 3 1)'
   steps:
-    - let_bind:
-        bindings: "[mx (apply max lst)] [counts (make-vector (+ mx 1) 0)]"
-        body: "(begin (for-each (lambda (x) (vector-set! counts x (+ (vector-ref counts x) 1))) lst) (for*/list ([i (in-range (+ mx 1))] [_ (in-range (vector-ref counts i))]) i))"
+    - counting_sort

@@ -6,9 +6,6 @@ selection_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 5 3 8 1 9 2 7 4 6)"
+    lst: '(list 5 3 8 1 9 2 7 4 6)'
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "xs=lst acc=(list)"
-        body: "(if (null? xs) (reverse acc) (let* ([mn (apply min xs)] [rest (let rem ([l xs] [found #f]) (cond [(null? l) (list)] [(and (= (car l) mn) (not found)) (rem (cdr l) #t)] [else (cons (car l) (rem (cdr l) found))]))]) (loop rest (cons mn acc))))"
+    - selection_sort

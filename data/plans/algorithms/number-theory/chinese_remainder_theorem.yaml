@@ -8,6 +8,4 @@ chinese_remainder_theorem:
   bindings:
     n: "0"
   steps:
-    - let_bind:
-        bindings: "[remainders (list 2 3 2)] [moduli (list 3 5 7)] [mod-inv (lambda (a m) (let loop ([old-r a] [r m] [old-s 1] [s 0]) (if (= r 0) (modulo old-s m) (let ([q (quotient old-r r)]) (loop r (- old-r (* q r)) s (- old-s (* q s)))))))]"
-        body: "(let ([N (apply * moduli)]) (modulo (for/sum ([r (in-list remainders)] [m (in-list moduli)]) (let* ([ni (quotient N m)] [xi (mod-inv ni m)]) (* r ni xi))) N))"
+    - chinese_remainder_theorem

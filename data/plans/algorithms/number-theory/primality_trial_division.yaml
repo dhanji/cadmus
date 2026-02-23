@@ -8,7 +8,4 @@ primality_trial_division:
   bindings:
     n: "97"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "i=2"
-        body: "(cond [(> (* i i) n) #t] [(= (modulo n i) 0) #f] [else (loop (+ i 1))])"
+    - primality_trial_division

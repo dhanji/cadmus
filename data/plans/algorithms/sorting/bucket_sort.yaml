@@ -6,8 +6,6 @@ bucket_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 5 3 8 1 9 2 7 4 6)"
+    lst: '(list 5 3 8 1 9 2 7 4 6)'
   steps:
-    - let_bind:
-        bindings: "[n (length lst)] [mx (+ (apply max lst) 1)] [buckets (build-vector (length lst) (lambda (_) (list)))]"
-        body: "(begin (for-each (lambda (x) (let ([idx (min (- n 1) (quotient (* x n) mx))]) (vector-set! buckets idx (cons x (vector-ref buckets idx))))) lst) (for*/list ([i (in-range n)] [x (in-list (sort (vector-ref buckets i) <))]) x))"
+    - bucket_sort

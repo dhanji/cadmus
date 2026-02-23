@@ -8,7 +8,4 @@ newton_raphson_sqrt:
   bindings:
     n: "2"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=1.0 i=0"
-        body: "(if (= i 20) x (loop (/ (+ x (/ n x)) 2.0) (+ i 1)))"
+    - newton_raphson_sqrt

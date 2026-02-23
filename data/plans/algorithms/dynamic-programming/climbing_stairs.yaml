@@ -8,7 +8,4 @@ climbing_stairs:
   bindings:
     n: "10"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "a=1 b=1 i=2"
-        body: "(if (> i n) b (loop b (+ a b) (+ i 1)))"
+    - climbing_stairs

@@ -6,8 +6,6 @@ quicksort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 5 3 8 1 9 2 7 4 6)"
+    lst: '(list 5 3 8 1 9 2 7 4 6)'
   steps:
-    - let_bind:
-        bindings: "[qsort (lambda (qsort xs) (if (<= (length xs) 1) xs (let* ([pivot (car xs)] [rest (cdr xs)] [lo (filter (lambda (x) (< x pivot)) rest)] [hi (filter (lambda (x) (>= x pivot)) rest)]) (append (qsort qsort lo) (list pivot) (qsort qsort hi)))))]"
-        body: "(qsort qsort lst)"
+    - quicksort

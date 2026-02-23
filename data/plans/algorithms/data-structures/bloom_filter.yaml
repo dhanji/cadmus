@@ -8,6 +8,4 @@ bloom_filter:
   bindings:
     n: "0"
   steps:
-    - let_bind:
-        bindings: "[size 64] [bits (make-vector 64 #f)] [hash1 (lambda (s) (modulo (for/fold ([h 0]) ([c (in-string s)]) (+ (* h 31) (char->integer c))) 64))] [hash2 (lambda (s) (modulo (for/fold ([h 0]) ([c (in-string s)]) (+ (* h 37) (char->integer c))) 64))] [insert! (lambda (s) (vector-set! bits (hash1 s) #t) (vector-set! bits (hash2 s) #t))] [member? (lambda (s) (and (vector-ref bits (hash1 s)) (vector-ref bits (hash2 s))))]"
-        body: "(begin (insert! \"hello\") (insert! \"world\") (list (member? \"hello\") (member? \"foo\")))"
+    - bloom_filter

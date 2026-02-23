@@ -8,6 +8,4 @@ graham_scan_convex_hull:
   bindings:
     n: "6"
   steps:
-    - let_bind:
-        bindings: "[pts (list (cons 0 0) (cons 1 1) (cons 2 2) (cons 0 2) (cons 2 0) (cons 1 0))] [cross (lambda (o a b) (- (* (- (car a) (car o)) (- (cdr b) (cdr o))) (* (- (cdr a) (cdr o)) (- (car b) (car o)))))]"
-        body: "(let* ([sorted (sort pts (lambda (a b) (or (< (car a) (car b)) (and (= (car a) (car b)) (< (cdr a) (cdr b))))))] [lower (for/fold ([hull (list)]) ([p (in-list sorted)]) (let trim ([h hull]) (if (and (>= (length h) 2) (<= (cross (second h) (first h) p) 0)) (trim (cdr h)) (cons p h))))] [upper (for/fold ([hull (list)]) ([p (in-list (reverse sorted))]) (let trim ([h hull]) (if (and (>= (length h) 2) (<= (cross (second h) (first h) p) 0)) (trim (cdr h)) (cons p h))))]) (length (remove-duplicates (append (reverse lower) (reverse upper)))))"
+    - graham_scan_convex_hull

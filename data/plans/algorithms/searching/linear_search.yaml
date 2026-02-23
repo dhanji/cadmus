@@ -7,10 +7,7 @@ linear_search:
     - lst: "List(Number)"
     - target: "Number"
   bindings:
-    lst: "(list 3 5 7 1 9)"
+    lst: '(list 3 5 7 1 9)'
     target: "7"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "i=0"
-        body: "(cond [(= i (length lst)) -1] [(= (list-ref lst i) target) i] [else (loop (+ i 1))])"
+    - linear_search

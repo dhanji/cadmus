@@ -6,8 +6,6 @@ shell_sort:
   inputs:
     - lst: "List(Number)"
   bindings:
-    lst: "(list 5 3 8 1 9 2 7 4 6)"
+    lst: '(list 5 3 8 1 9 2 7 4 6)'
   steps:
-    - let_bind:
-        bindings: "[v (list->vector lst)] [n (length lst)]"
-        body: "(let gap-loop ([gap (quotient n 2)]) (if (= gap 0) (vector->list v) (begin (for ([i (in-range gap n)]) (let ([tmp (vector-ref v i)]) (let j-loop ([j i]) (if (and (>= j gap) (> (vector-ref v (- j gap)) tmp)) (begin (vector-set! v j (vector-ref v (- j gap))) (j-loop (- j gap))) (vector-set! v j tmp))))) (gap-loop (quotient gap 2)))))"
+    - shellsort

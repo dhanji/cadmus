@@ -8,7 +8,4 @@ integer_square_root:
   bindings:
     n: "27"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=n"
-        body: "(let ([next (quotient (+ x (quotient n x)) 2)]) (if (>= next x) x (loop next)))"
+    - integer_square_root

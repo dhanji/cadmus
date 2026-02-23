@@ -6,8 +6,6 @@ base64_encode:
   inputs:
     - s: "String"
   bindings:
-    s: "\"Hello\""
+    s: '"Hello"'
   steps:
-    - let_bind:
-        bindings: "[table \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/\"] [bytes (map char->integer (string->list s))]"
-        body: "(let loop ([bs bytes] [bits 0] [buf 0] [out (list)]) (cond [(and (null? bs) (= bits 0)) (let* ([result (list->string (reverse out))] [pad (modulo (- 4 (modulo (string-length result) 4)) 4)]) (if (= pad 4) result (string-append result (make-string pad #\\=))))] [(and (null? bs) (> bits 0)) (loop bs 0 0 (cons (string-ref table (arithmetic-shift buf (- 6 bits))) out))] [(>= (+ bits 8) 6) (let* ([buf (+ (arithmetic-shift buf 8) (car bs))] [bits (+ bits 8)]) (let extract ([bits bits] [buf buf] [out out]) (if (< bits 6) (loop (cdr bs) bits buf out) (extract (- bits 6) (modulo buf (expt 2 (- bits 6))) (cons (string-ref table (quotient buf (expt 2 (- bits 6)))) out)))))] [else (loop (cdr bs) (+ bits 8) (+ (arithmetic-shift buf 8) (car bs)) out)]))"
+    - base64_enc

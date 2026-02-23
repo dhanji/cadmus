@@ -7,10 +7,7 @@ binary_search:
     - lst: "List(Number)"
     - target: "Number"
   bindings:
-    lst: "(list 1 3 5 7 9 11 13)"
+    lst: '(list 1 3 5 7 9 11 13)'
     target: "7"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "lo=0 hi=(-(length lst) 1)"
-        body: "(if (> lo hi) -1 (let ([mid (quotient (+ lo hi) 2)]) (let ([v (list-ref lst mid)]) (cond [(= v target) mid] [(< v target) (loop (+ mid 1) hi)] [else (loop lo (- mid 1))]))))"
+    - binary_search

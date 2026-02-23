@@ -9,6 +9,4 @@ lru_cache_eviction:
   bindings:
     n: "0"
   steps:
-    - let_bind:
-        bindings: "[capacity 2]"
-        body: "(let loop ([ops (list 1 2 3 1)] [cache (list)]) (if (null? ops) cache (let* ([key (car ops)] [cache (remove key cache)] [cache (cons key cache)] [cache (if (> (length cache) capacity) (take cache capacity) cache)]) (loop (cdr ops) cache))))"
+    - lru_cache_eviction

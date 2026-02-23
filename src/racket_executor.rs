@@ -54,6 +54,12 @@ pub fn build_racket_registry() -> OperationRegistry {
         include_str!("../data/packs/ops/racket.ops.yaml")
     ).unwrap_or_default();
 
+    // Merge algorithm ops (opaque atoms with racket_body)
+    let _ = crate::registry::load_ops_pack_str_into(
+        include_str!("../data/packs/ops/algorithm.ops.yaml"),
+        &mut reg,
+    );
+
     let racket_facts_yaml = include_str!("../data/packs/facts/racket.facts.yaml");
     if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(racket_facts_yaml) {
         crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);
@@ -1237,6 +1243,27 @@ pub fn op_to_racket(
     }
 
     // -----------------------------------------------------------------------
+    // Opaque algorithm atoms: ops with racket_body are emitted as simple
+    // function calls. The (define ...) is emitted once at the script top
+    // by generate_racket_script(). This MUST run before subsumption/shell
+    // dispatch to avoid name collisions (e.g., base64_encode).
+    // -----------------------------------------------------------------------
+    if let Some(poly) = registry.get_poly(op) {
+        if poly.racket_body.is_some() {
+            let mut args = Vec::new();
+            for pname in &poly.input_names {
+                if let Some(val) = params.get(pname.as_str()) {
+                    args.push(racket_value(val));
+                } else {
+                    args.push(pname.clone());
+                }
+            }
+            let expr = format!("({} {})", op.replace('_', "-"), args.join(" "));
+            return Ok(RacketExpr { expr, uses_prev: false });
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Tier 1: Subsumed fs_ops → shell-op codegen via type_lowering map.
     // World-touching ops (walk_tree, list_dir, search_content, etc.) are
     // routed through the shell-callable infrastructure.
@@ -1352,6 +1379,26 @@ pub fn generate_racket_script(
         for input in &def.inputs {
             if let Some(val) = def.bindings.get(&input.name) {
                 script.push_str(&format!("(define {} {})\n", input.name, racket_value(val)));
+            }
+        }
+    }
+
+    // Emit (define ...) blocks for any algorithm ops (ops with racket_body)
+    // used in this plan. Each define is emitted once, deduplicated by op name.
+    {
+        let mut emitted = std::collections::HashSet::new();
+        for step in &compiled.steps {
+            if emitted.contains(&step.op) {
+                continue;
+            }
+            if let Some(poly) = registry.get_poly(&step.op) {
+                if let Some(body) = &poly.racket_body {
+                    emitted.insert(step.op.clone());
+                    let fn_name = step.op.replace('_', "-");
+                    let param_list = poly.input_names.join(" ");
+                    script.push_str(&format!("\n(define ({} {})\n  {})\n",
+                        fn_name, param_list, body.trim()));
+                }
             }
         }
     }

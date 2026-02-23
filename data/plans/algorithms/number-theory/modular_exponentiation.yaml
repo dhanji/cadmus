@@ -12,7 +12,4 @@ modular_exponentiation:
     exp: "10"
     m: "1000"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "b=base e=exp result=1"
-        body: "(if (= e 0) result (let ([result (if (odd? e) (modulo (* result b) m) result)]) (loop (modulo (* b b) m) (quotient e 2) result)))"
+    - modular_exponentiation

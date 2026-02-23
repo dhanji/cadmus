@@ -8,7 +8,4 @@ prime_factorization:
   bindings:
     n: "84"
   steps:
-    - iterate:
-        name: "loop"
-        bindings: "x=n d=2 acc=(list)"
-        body: "(cond [(> (* d d) x) (if (> x 1) (append acc (list x)) acc)] [(= (modulo x d) 0) (loop (quotient x d) d (append acc (list d)))] [else (loop x (+ d 1) acc)])"
+    - prime_factorization
