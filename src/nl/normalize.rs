@@ -120,6 +120,22 @@ fn tokenize_segment(input: &str) -> Vec<String> {
         if is_path {
             let orig = find_original_path(&orig_words, &mut orig_idx, &stripped);
             tokens.push(orig);
+        } else if stripped.ends_with("'s") || stripped.ends_with("\u{2019}s") {
+            // Strip possessive suffix: "floyd's" → "floyd", "kadane's" → "kadane"
+            let base = stripped.trim_end_matches('s')
+                .trim_end_matches('\'')
+                .trim_end_matches('\u{2019}');
+            if !base.is_empty() {
+                tokens.push(base.to_string());
+            }
+        } else if stripped.contains('-') && !stripped.starts_with('-') {
+            // Split hyphenated words into separate tokens
+            // e.g., "newton-raphson" → ["newton", "raphson"]
+            for part in stripped.split('-') {
+                if !part.is_empty() {
+                    tokens.push(part.to_string());
+                }
+            }
         } else if let Some(num) = canonicalize_ordinal(&stripped) {
             tokens.push(num.to_string());
         } else {

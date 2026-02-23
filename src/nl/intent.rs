@@ -106,9 +106,16 @@ pub fn parse_intent(normalized: &NormalizedInput) -> Intent {
         return Intent::Reject;
     }
 
-    // 2. Check for explain/question patterns
-    if let Some(intent) = try_explain(tokens) {
-        return intent;
+    // 2. Check for explain/question patterns — but NOT if the first token
+    //    is a known verb/op (that's a command, not a question).
+    //    E.g., "fibonacci fn where f 0 0..." is a command, not "explain fibonacci".
+    let first_is_verb_or_op = tokens.first()
+        .map(|t| is_canonical_op(t))
+        .unwrap_or(false);
+    if !first_is_verb_or_op {
+        if let Some(intent) = try_explain(tokens) {
+            return intent;
+        }
     }
 
     // 3. Check for edit patterns (skip, add, remove, move, change, insert)

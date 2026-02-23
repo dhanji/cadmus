@@ -184,6 +184,22 @@ pub fn build_command_grammar() -> Grammar {
     rules.push(Rule::new("FillerSeq", vec![t("filler")]));
     rules.push(Rule::new("FillerSeq", vec![t("filler"), nt("FillerSeq")]));
 
+    // ── Tail (absorbs any remaining tokens after a verb) ─────────────
+    // Used for algorithm descriptions like "fibonacci f(n) where f(0)=0..."
+    // where only the verb matters and the rest is noise.
+    // Low weight so structured parses (Verb Object Modifiers) are preferred.
+    rules.push(Rule::new("Tail", vec![Symbol::AnyToken]));
+    rules.push(Rule::new("Tail", vec![Symbol::AnyToken, nt("Tail")]));
+
+    // Command → Verb Tail  (verb + noise: "fibonacci f(n) where...")
+    rules.push(Rule::weighted("Command", vec![
+        nt("Verb"), nt("Tail"),
+    ], 0.1));
+    // Command → FillerSeq Verb Tail  ("please compute fibonacci f(n)...")
+    rules.push(Rule::weighted("Command", vec![
+        nt("FillerSeq"), nt("Verb"), nt("Tail"),
+    ], 0.1));
+
     Grammar::new("Command", rules)
 }
 

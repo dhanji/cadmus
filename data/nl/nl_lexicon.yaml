@@ -496,6 +496,151 @@ verbs:
     action: remote_connect
     synonyms: [login, tunnel, proxy, jump, hop, bounce, mux]
 
+
+  # ==========================================================================
+  # DOMAIN 4: ALGORITHM OPERATIONS (auto-generated from algorithm.ops.yaml)
+  # ==========================================================================
+
+  - word: base_conversion
+    action: base_conversion
+  - word: collatz_sequence
+    action: collatz_sequence
+  - word: digital_root
+    action: digital_root
+  - word: fibonacci
+    action: fibonacci
+  - word: integer_square_root
+    action: integer_square_root
+  - word: newton_raphson_sqrt
+    action: newton_raphson_sqrt
+  - word: population_count
+    action: population_count
+  - word: derangement_count
+    action: derangement_count
+  - word: binary_min_heap
+    action: binary_min_heap
+  - word: bloom_filter
+    action: bloom_filter
+  - word: floyd_cycle_detection
+    action: floyd_cycle_detection
+  - word: lru_cache_eviction
+    action: lru_cache_eviction
+  - word: union_find
+    action: union_find
+  - word: climbing_stairs
+    action: climbing_stairs
+  - word: kadanes_maximum_subarray
+    action: kadanes_maximum_subarray
+  - word: longest_palindromic_subsequence
+    action: longest_palindromic_subsequence
+  - word: matrix_chain_multiplication
+    action: matrix_chain_multiplication
+  - word: wagner_fischer
+    action: wagner_fischer
+  - word: base64_enc
+    action: base64_enc
+  - word: binary_run_length_encoding
+    action: binary_run_length_encoding
+  - word: huffman_coding
+    action: huffman_coding
+  - word: vlq_encoding
+    action: vlq_encoding
+  - word: graham_scan_convex_hull
+    action: graham_scan_convex_hull
+  - word: line_segment_intersection
+    action: line_segment_intersection
+  - word: bfs_traversal
+    action: bfs_traversal
+  - word: dfs_traversal
+    action: dfs_traversal
+  - word: dijkstra_shortest_path
+    action: dijkstra_shortest_path
+  - word: ford_fulkerson_max_flow
+    action: ford_fulkerson_max_flow
+  - word: kruskal_mst
+    action: kruskal_mst
+  - word: tarjan_scc
+    action: tarjan_scc
+  - word: topological_sort
+    action: topological_sort
+  - word: chinese_remainder_theorem
+    action: chinese_remainder_theorem
+  - word: euclidean_gcd
+    action: euclidean_gcd
+  - word: extended_euclidean_gcd
+    action: extended_euclidean_gcd
+  - word: modular_exponentiation
+    action: modular_exponentiation
+  - word: primality_trial_division
+    action: primality_trial_division
+  - word: prime_factorization
+    action: prime_factorization
+  - word: binary_search
+    action: binary_search
+  - word: boyer_moore_majority_vote
+    action: boyer_moore_majority_vote
+  - word: exponential_search
+    action: exponential_search
+  - word: fibonacci_search
+    action: fibonacci_search
+  - word: interpolation_search
+    action: interpolation_search
+  - word: jump_search
+    action: jump_search
+  - word: linear_search
+    action: linear_search
+  - word: median_two_sorted_arrays
+    action: median_two_sorted_arrays
+  - word: quickselect
+    action: quickselect
+  - word: sentinel_linear_search
+    action: sentinel_linear_search
+  - word: ternary_search
+    action: ternary_search
+  - word: two_sum_sorted
+    action: two_sum_sorted
+  - word: bubble_sort
+    action: bubble_sort
+  - word: bucket_sort
+    action: bucket_sort
+  - word: counting_sort
+    action: counting_sort
+  - word: heap_sort
+    action: heap_sort
+  - word: merge_sort
+    action: merge_sort
+  - word: quicksort
+    action: quicksort
+  - word: radix_sort
+    action: radix_sort
+  - word: selection_sort
+    action: selection_sort
+  - word: shellsort
+    action: shellsort
+  - word: caesar_cipher
+    action: caesar_cipher
+  - word: damerau_levenshtein
+    action: damerau_levenshtein
+  - word: knuth_morris_pratt
+    action: knuth_morris_pratt
+    synonyms: [kmp]
+  - word: levenshtein_edit_distance
+    action: levenshtein_edit_distance
+  - word: longest_common_subsequence
+    action: longest_common_subsequence
+  - word: longest_common_substring
+    action: longest_common_substring
+  - word: manacher_longest_palindrome
+    action: manacher_longest_palindrome
+    synonyms: [manacher]
+  - word: rabin_karp
+    action: rabin_karp
+  - word: rot13_cipher
+    action: rot13_cipher
+    synonyms: [rot13]
+  - word: run_length_encoding
+    action: run_length_encoding
+
 # ---------------------------------------------------------------------------
 # Nouns: object words → concept labels
 # ---------------------------------------------------------------------------
@@ -818,6 +963,173 @@ phrase_groups:
   - skeleton: [dig, into]
     canonical: search
 
+  # --- Algorithm name phrases (auto-generated from algorithm.ops.yaml) ---
+  - skeleton: [base, conversion]
+    canonical: base_conversion
+  - skeleton: [collatz, sequence]
+    canonical: collatz_sequence
+  - skeleton: [digital, root]
+    canonical: digital_root
+  - skeleton: [integer, square, root]
+    canonical: integer_square_root
+  - skeleton: [newton, raphson, sqrt]
+    canonical: newton_raphson_sqrt
+  - skeleton: [population, count]
+    canonical: population_count
+  - skeleton: [derangement, count]
+    canonical: derangement_count
+  - skeleton: [binary, min, heap]
+    canonical: binary_min_heap
+  - skeleton: [bloom, filter]
+    canonical: bloom_filter
+  - skeleton: [floyd, cycle, detection]
+    canonical: floyd_cycle_detection
+  - skeleton: [lru, cache, eviction]
+    canonical: lru_cache_eviction
+  - skeleton: [union, find]
+    canonical: union_find
+  - skeleton: [climbing, stairs]
+    canonical: climbing_stairs
+  - skeleton: [kadanes, maximum, subarray]
+    canonical: kadanes_maximum_subarray
+  - skeleton: [longest, palindromic, subsequence]
+    canonical: longest_palindromic_subsequence
+  - skeleton: [matrix, chain, multiplication]
+    canonical: matrix_chain_multiplication
+  - skeleton: [wagner, fischer]
+    canonical: wagner_fischer
+  - skeleton: [base64, enc]
+    canonical: base64_enc
+  - skeleton: [binary, run, length, encoding]
+    canonical: binary_run_length_encoding
+  - skeleton: [huffman, coding]
+    canonical: huffman_coding
+  - skeleton: [vlq, encoding]
+    canonical: vlq_encoding
+  - skeleton: [graham, scan, convex, hull]
+    canonical: graham_scan_convex_hull
+  - skeleton: [line, segment, intersection]
+    canonical: line_segment_intersection
+  - skeleton: [bfs, traversal]
+    canonical: bfs_traversal
+  - skeleton: [dfs, traversal]
+    canonical: dfs_traversal
+  - skeleton: [dijkstra, shortest, path]
+    canonical: dijkstra_shortest_path
+  - skeleton: [ford, fulkerson, max, flow]
+    canonical: ford_fulkerson_max_flow
+  - skeleton: [kruskal, mst]
+    canonical: kruskal_mst
+  - skeleton: [tarjan, scc]
+    canonical: tarjan_scc
+  - skeleton: [topological, sort]
+    canonical: topological_sort
+  - skeleton: [chinese, remainder, theorem]
+    canonical: chinese_remainder_theorem
+  - skeleton: [euclidean, gcd]
+    canonical: euclidean_gcd
+  - skeleton: [extended, euclidean, gcd]
+    canonical: extended_euclidean_gcd
+  - skeleton: [modular, exponentiation]
+    canonical: modular_exponentiation
+  - skeleton: [primality, trial, division]
+    canonical: primality_trial_division
+  - skeleton: [prime, factorization]
+    canonical: prime_factorization
+  - skeleton: [binary, search]
+    canonical: binary_search
+  - skeleton: [boyer, moore, majority, vote]
+    canonical: boyer_moore_majority_vote
+  - skeleton: [exponential, search]
+    canonical: exponential_search
+  - skeleton: [fibonacci, search]
+    canonical: fibonacci_search
+  - skeleton: [interpolation, search]
+    canonical: interpolation_search
+  - skeleton: [jump, search]
+    canonical: jump_search
+  - skeleton: [linear, search]
+    canonical: linear_search
+  - skeleton: [median, two, sorted, arrays]
+    canonical: median_two_sorted_arrays
+  - skeleton: [sentinel, linear, search]
+    canonical: sentinel_linear_search
+  - skeleton: [ternary, search]
+    canonical: ternary_search
+  - skeleton: [two, sum, sorted]
+    canonical: two_sum_sorted
+  - skeleton: [bubble, sort]
+    canonical: bubble_sort
+  - skeleton: [bucket, sort]
+    canonical: bucket_sort
+  - skeleton: [counting, sort]
+    canonical: counting_sort
+  - skeleton: [heap, sort]
+    canonical: heap_sort
+  - skeleton: [merge, sort]
+    canonical: merge_sort
+  - skeleton: [radix, sort]
+    canonical: radix_sort
+  - skeleton: [selection, sort]
+    canonical: selection_sort
+  - skeleton: [caesar, cipher]
+    canonical: caesar_cipher
+  - skeleton: [damerau, levenshtein]
+    canonical: damerau_levenshtein
+  - skeleton: [knuth, morris, pratt]
+    canonical: knuth_morris_pratt
+  - skeleton: [levenshtein, edit, distance]
+    canonical: levenshtein_edit_distance
+  - skeleton: [longest, common, subsequence]
+    canonical: longest_common_subsequence
+  - skeleton: [longest, common, substring]
+    canonical: longest_common_substring
+  - skeleton: [manacher, longest, palindrome]
+    canonical: manacher_longest_palindrome
+  - skeleton: [rabin, karp]
+    canonical: rabin_karp
+  - skeleton: [rot13, cipher]
+    canonical: rot13_cipher
+  - skeleton: [run, length, encoding]
+    canonical: run_length_encoding
+
+
+
+  # --- Alternative algorithm name phrases (for description matching) ---
+  # These handle cases where the description uses different words than the op name
+  - skeleton: [newton, raphson, square, root]
+    canonical: newton_raphson_sqrt
+  - skeleton: [newton, raphson]
+    canonical: newton_raphson_sqrt
+  - skeleton: [lru, cache]
+    canonical: lru_cache_eviction
+  - skeleton: [kadane, maximum, subarray]
+    canonical: kadanes_maximum_subarray
+  - skeleton: [kadane, algorithm]
+    canonical: kadanes_maximum_subarray
+  - skeleton: [variable, length, quantity]
+    canonical: vlq_encoding
+  - skeleton: [primality, trial, division]
+    canonical: primality_trial_division
+  - skeleton: [primality, trial]
+    canonical: primality_trial_division
+  - skeleton: [median, two, sorted]
+    canonical: median_two_sorted_arrays
+  - skeleton: [two, sum, sorted]
+    canonical: two_sum_sorted
+  - skeleton: [two, sum]
+    canonical: two_sum_sorted
+  - skeleton: [kmp, string, search]
+    canonical: knuth_morris_pratt
+  - skeleton: [kmp, search]
+    canonical: knuth_morris_pratt
+  - skeleton: [manacher, algorithm]
+    canonical: manacher_longest_palindrome
+  - skeleton: [manacher, palindrome]
+    canonical: manacher_longest_palindrome
+  - skeleton: [rot13, cipher]
+    canonical: rot13_cipher
+
 fillers:
   - up
   - out
@@ -874,3 +1186,4 @@ fillers:
   - means
   - called
   - named
+

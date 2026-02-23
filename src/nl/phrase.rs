@@ -47,7 +47,9 @@ fn stopwords() -> &'static HashSet<&'static str> {
             "let", "gonna", "wanna", "gotta",
             "thing", "things", "stuff",
             // Prepositions that can appear inside phrases
-            "for", "about", "to",
+            "for", "about", "to", "of", "on", "by", "with", "using",
+            // Generic words that appear between algorithm name parts
+            "test", "algorithm", "method", "technique", "approach",
         ].into_iter().collect()
     })
 }
