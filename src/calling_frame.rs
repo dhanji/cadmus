@@ -194,7 +194,10 @@ impl CallingFrame for DefaultFrame {
 /// requires file-based execution (not `racket -e`).
 fn exec_racket_script(script: &str) -> Result<Execution, InvokeError> {
     let tmp_dir = std::env::temp_dir();
-    let tmp_path = tmp_dir.join(format!("cadmus_{}.rkt", std::process::id()));
+    // Use PID + thread ID + counter for uniqueness in parallel tests
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp_path = tmp_dir.join(format!("cadmus_{}_{}.rkt", std::process::id(), id));
 
     {
         let mut f = std::fs::File::create(&tmp_path)
