@@ -1633,6 +1633,8 @@ phrase_groups:
     canonical: rot13_cipher
 
   # --- Alternative phrases for new algorithm ops ---
+  - skeleton: [complex, arithmetic]
+    canonical: complex_arith
   - skeleton: [binary, tree, inorder]
     canonical: tree_inorder
   - skeleton: [binary, tree, preorder]
@@ -1643,6 +1645,8 @@ phrase_groups:
     canonical: tree_height
   - skeleton: [binary, tree, level, order]
     canonical: tree_level_order
+  - skeleton: [binary, tree, height, balanced]
+    canonical: is_balanced_tree
   - skeleton: [binary, tree, diameter]
     canonical: tree_diameter
   - skeleton: [mirror, binary, tree]

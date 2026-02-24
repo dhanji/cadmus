@@ -8,7 +8,7 @@
 //!   - CLARIFY: NL returned NeedsClarification
 //!   - ERROR: NL returned an error or unexpected response
 //!
-//! The test asserts >= 90% pass rate across all plans combined.
+//! The test asserts 100% pass rate across all plans combined.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -470,8 +470,8 @@ fn test_nl_autoregression_report() {
         total
     );
 
-    // Hard gate: >= 90% pass rate across all plans
-    let required_pct = 90.0;
+    // Hard gate: 100% pass rate across all plans
+    let required_pct = 100.0;
     assert!(
         pct >= required_pct,
         "NL autoregression pass rate {:.1}% is below required {:.0}%.\n\

@@ -3052,3 +3052,14 @@ algorithm_expansion:
   vertices: 100
   vertex: 100
   indexed: 100
+  lowest: 100
+  zeros: 100
+  radius: 100
+  centered: 100
+  arith: 50
+  permutations: 100
+  nodes: 100
+  permutation: 100
+  node: 100
+  walk: 100
+  contents: 100

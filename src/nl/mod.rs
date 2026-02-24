@@ -214,6 +214,23 @@ fn try_earley_create(
             .take_while(|t| !t.starts_with('/') && !t.starts_with('.') && !t.starts_with('~'))
             .filter(|t| !["the", "a", "an", "in", "of", "for", "with", "and", "to", "from", "by", "on", "at", "is", "it"].contains(t))
             .collect();
+
+                // ── Pre-check: first content token as a direct plan name ──
+        // e.g., "wagner_fischer" joined by phrase tokenizer → try as plan file directly.
+        // Only check the FIRST content token — it's most likely the plan name.
+        // Checking later tokens risks false matches (e.g., "caesar_cipher" in
+        // "ROT13: Caesar cipher with shift 13" when the plan is rot13_cipher).
+        {
+            let early: Vec<&str> = content_tokens.iter().take(1).copied().collect();
+            for token in early {
+                if let Some(plan_sexpr) = intent_compiler::try_load_plan_sexpr(token) {
+                    if let Ok(plan) = parse_plan_any(&plan_sexpr) {
+                        return finish_plan_creation(plan, plan_sexpr, state);
+                    }
+                }
+            }
+        }
+
         // Try longest match first (up to 5 tokens), also try with trailing 's'
         let max_len = content_tokens.len().min(5);
         for len in (2..=max_len).rev() {
@@ -546,6 +563,10 @@ fn validate_plan(plan: &crate::plan::PlanDef) -> Result<(), String> {
 /// Find a plan file whose name tokens are all present in the input tokens.
 /// Returns the plan file name (without extension) if found.
 fn find_plan_by_token_overlap(input_tokens: &[&str]) -> Option<String> {
+    // Stopwords that may appear in plan names but are filtered from content tokens.
+    // When checking overlap, we skip these in the plan name.
+    static NAME_STOPWORDS: &[&str] = &["with", "and", "is", "in", "of", "to", "by", "for", "a", "the"];
+
     // Build a set of input tokens (including de-pluralized forms)
     let mut token_set: std::collections::HashSet<&str> = input_tokens.iter().copied().collect();
     let de_plurals: Vec<String> = input_tokens.iter()
@@ -556,7 +577,19 @@ fn find_plan_by_token_overlap(input_tokens: &[&str]) -> Option<String> {
         token_set.insert(dp.as_str());
     }
 
+    // Also split compound tokens (e.g., "wagner_fischer" → "wagner", "fischer")
+    // and add their parts to the token set. This handles phrase-joined tokens.
+    let compound_parts: Vec<String> = input_tokens.iter()
+        .filter(|t| t.contains('_'))
+        .flat_map(|t| t.split('_').map(|s| s.to_string()).collect::<Vec<_>>())
+        .collect();
+    for part in &compound_parts {
+        token_set.insert(part.as_str());
+    }
+
     // Scan all plan files
+    // Score by non-stopword word count. Direct token matches (plan name IS a
+    // content token) are returned immediately as highest priority.
     let mut best: Option<(String, usize)> = None; // (name, word_count)
 
     let scan_dir = |dir: &std::path::Path, best: &mut Option<(String, usize)>| {
@@ -568,7 +601,9 @@ fn find_plan_by_token_overlap(input_tokens: &[&str]) -> Option<String> {
                 let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 let name_words: Vec<&str> = stem.split('_').collect();
                 if name_words.len() < 2 { continue; } // skip single-word names
-                let all_present = name_words.iter().all(|w| token_set.contains(w));
+
+                // Skip stopwords in plan name when checking overlap
+                let all_present = name_words.iter().all(|w| NAME_STOPWORDS.contains(w) || token_set.contains(w));
                 if all_present {
                     let wc = name_words.len();
                     if best.as_ref().map_or(true, |(_, bc)| wc > *bc) {

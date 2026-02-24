@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-24T02:18:35Z | Size: 72.0k chars
+> Updated: 2026-02-24T05:04:28Z | Size: 73.6k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -916,3 +916,15 @@ plan-name:
   - YAML parsing retained as fallback for 57 complex algorithm plans
 - **Total: 1447 tests passing**, 1 pre-existing flaky failure
 - **Commit**: `d3f531a`
+
+### NL Autoregression All Plans (plan `nl-autoregression-all-plans`, commit `987521f`)
+- `tests/nl_autoregression.rs` [1-500] — Rewrote harness: loads 218 plans (24 pipeline + 194 algorithm), structural matching via ordered subsequence + param checking, hard 90% assertion
+- `src/sexpr.rs:1737-1759` — `plan_to_sexpr()` emits bare `(op)` call when step op matches plan name and all args are `$var` refs (fixes recursion-check blocker for 134 algorithm plans)
+- `src/nl/mod.rs:208-290` — Multi-strategy plan-name matching: consecutive token joins, 2-token pairs, 3-token triples, pluralization (+s, de-s), token overlap scan
+- `src/nl/mod.rs:293-315` — `SKIP_TOKENS` filter (the/a/an/etc.) for single-token algorithm-op lookup
+- `src/nl/mod.rs:539-592` — `find_plan_by_token_overlap()` scans all plan files, matches when all name words appear in input tokens (order-independent)
+- `src/nl/intent_compiler.rs:332-386` — `try_load_plan_file()` and `try_load_plan_sexpr()` now search `data/plans/` (pipeline) in addition to `data/plans/algorithms/`; hyphen-to-underscore normalization
+- `data/nl/nl_dictionary.yaml:2963-3006` — 44 words added to prevent false SymSpell corrections (audit→edit, comic→commit, stack→slack, queue→query, peak→speak, height→weight, graph→grep, miller→filter, nth→kth)
+- Score progression: 20.2% → 81.7% (recursion fix) → 94.0% (vocab/lookup) → 95.4% (token fixes)
+- 10 remaining failures: 7 ERROR (type mismatch/unknown op), 2 CLARIFY, 1 WRONG
+- 1362 total tests passing, 1 pre-existing flaky (test_type_symmetric_discovery_tabular)
