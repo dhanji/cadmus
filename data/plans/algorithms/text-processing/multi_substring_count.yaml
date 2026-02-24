@@ -1,0 +1,22 @@
+# Multi-string substring count: count total occurrences of a pattern across comma-separated strings
+# Example: count "abc" in "abcabc,xyzxyzxyz,abcxyz" = 3
+# expected: 3
+
+multi_substring_count:
+  inputs:
+    - data: "String"
+    - sub: "String"
+  bindings:
+    data: '"abcabc,xyzxyzxyz,abcxyz"'
+    sub: '"abc"'
+  steps:
+    - string_split:
+        s: "$data"
+        delim: '","'
+    - for_sum:
+        var: "s"
+        over: "$step-1"
+        body:
+          - count_substring:
+              s: "$s"
+              sub: "$sub"

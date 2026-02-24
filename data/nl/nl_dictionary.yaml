@@ -3063,3 +3063,22 @@ algorithm_expansion:
   node: 100
   walk: 100
   contents: 100
+
+  # text-processing domain
+  camel: 100
+  csv: 100
+  substring: 100
+  truncate: 100
+  pad: 100
+  snake: 100
+  whitespace: 50
+  delimiter: 50
+  comma: 100
+  separated: 50
+  occurrences: 50
+  frequency: 50
+  title: 100
+  repeat: 100
+  parsing: 100
+  repack: 100
+  unpack: 100

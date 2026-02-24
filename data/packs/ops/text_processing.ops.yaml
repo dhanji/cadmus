@@ -1,0 +1,144 @@
+# Text Processing Operations Pack
+# ================================
+# Pure string-manipulation operations for text processing tasks.
+# Each op has a typed signature and a Racket implementation body.
+
+name: text_processing
+description: "Text processing operations: CSV parsing, word counting, string transforms"
+
+ops:
+
+  - name: string_split
+    inputs: ['String', 'String']
+    input_names: ['s', 'delim']
+    output: "List(String)"
+    racket_symbol: "string_split"
+    description: "Split a string by a delimiter into a list of substrings"
+    racket_body: |
+      (regexp-split (regexp-quote delim) s)
+
+  - name: string_join
+    inputs: ['List(String)', 'String']
+    input_names: ['lst', 'sep']
+    output: "String"
+    racket_symbol: "string_join"
+    description: "Join a list of strings with a separator"
+    racket_body: |
+      (string-join lst sep)
+
+  - name: chars_of
+    inputs: ['String']
+    input_names: ['s']
+    output: "List(String)"
+    racket_symbol: "chars_of"
+    description: "Convert a string to a list of single-character strings"
+    racket_body: |
+      (map string (string->list s))
+
+  - name: csv_parse_row
+    inputs: ['String']
+    input_names: ['row']
+    output: "List(String)"
+    racket_symbol: "csv_parse_row"
+    description: "Parse a CSV row into a list of fields by splitting on commas"
+    racket_body: |
+      (string-split row ",")
+
+  - name: word_count
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "word_count"
+    description: "Count the number of words in a string"
+    racket_body: |
+      (length (string-split s))
+
+  - name: char_frequency
+    inputs: ['String', 'String']
+    input_names: ['s', 'c']
+    output: "Number"
+    racket_symbol: "char_frequency"
+    description: "Count occurrences of a character in a string"
+    racket_body: |
+      (for/sum ([ch (in-string s)]) (if (char=? ch (string-ref c 0)) 1 0))
+
+  - name: char_frequency_report
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "char_frequency_report"
+    description: "Generate a frequency report of each unique character in a string"
+    racket_body: |
+      (let* ([chars (sort (remove-duplicates (map string (string->list s))) string<?)] [pairs (map (lambda (c) (format "~a:~a" c (for/sum ([ch (in-string s)]) (if (char=? ch (string-ref c 0)) 1 0)))) chars)]) (string-join pairs ","))
+
+  - name: title_case
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "title_case"
+    description: "Capitalize the first letter of each word"
+    racket_body: |
+      (string-join (map (lambda (w) (if (= (string-length w) 0) w (string-append (string-upcase (substring w 0 1)) (substring w 1)))) (string-split s)))
+
+  - name: repeat_string
+    inputs: ['String', 'Number']
+    input_names: ['s', 'n']
+    output: "String"
+    racket_symbol: "repeat_string"
+    description: "Repeat a string n times"
+    racket_body: |
+      (apply string-append (build-list n (lambda (_) s)))
+
+  - name: pad_left
+    inputs: ['String', 'Number', 'String']
+    input_names: ['s', 'width', 'pad_char']
+    output: "String"
+    racket_symbol: "pad_left"
+    description: "Left-pad a string to a given width with a padding character"
+    racket_body: |
+      (let ([deficit (- width (string-length s))]) (if (<= deficit 0) s (string-append (apply string-append (build-list deficit (lambda (_) pad_char))) s)))
+
+  - name: truncate_string
+    inputs: ['String', 'Number']
+    input_names: ['s', 'max_len']
+    output: "String"
+    racket_symbol: "truncate_string"
+    description: "Truncate a string to a maximum length, adding ellipsis if truncated"
+    racket_body: |
+      (if (<= (string-length s) max_len) s (string-append (substring s 0 (- max_len 3)) "..."))
+
+  - name: strip_whitespace
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "strip_whitespace"
+    description: "Remove leading and trailing whitespace from a string"
+    racket_body: |
+      (string-trim s)
+
+  - name: count_substring
+    inputs: ['String', 'String']
+    input_names: ['s', 'sub']
+    output: "Number"
+    racket_symbol: "count_substring"
+    description: "Count non-overlapping occurrences of a substring"
+    racket_body: |
+      (let ([slen (string-length s)] [sublen (string-length sub)]) (if (= sublen 0) 0 (let loop ([i 0] [count 0]) (if (> (+ i sublen) slen) count (if (string=? (substring s i (+ i sublen)) sub) (loop (+ i sublen) (+ count 1)) (loop (+ i 1) count))))))
+
+  - name: camel_to_snake
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "camel_to_snake"
+    description: "Convert camelCase string to snake_case"
+    racket_body: |
+      (let loop ([chars (string->list s)] [acc '()] [prev-lower #f]) (cond [(null? chars) (list->string (reverse acc))] [(and prev-lower (char-upper-case? (car chars))) (loop (cdr chars) (cons (char-downcase (car chars)) (cons #\_ acc)) #f)] [else (loop (cdr chars) (cons (char-downcase (car chars)) acc) (char-lower-case? (car chars)))]))
+
+  - name: text_statistics
+    inputs: ['String']
+    input_names: ['s']
+    output: "String"
+    racket_symbol: "text_statistics"
+    description: "Compute word count, total characters, and average word length"
+    racket_body: |
+      (let* ([words (string-split s)] [wc (length words)] [total-chars (for/sum ([w (in-list words)]) (string-length w))] [avg (quotient total-chars wc)]) (format "~a ~a ~a" wc total-chars avg))

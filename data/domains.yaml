@@ -1,0 +1,202 @@
+# Cadmus Domain Registry
+# ======================
+# Machine-readable inventory of all domains, their artifacts, and status.
+# Read by the RUNBOOK.md domain selection algorithm.
+#
+# Schema:
+#   categories:
+#     - name: <kebab-case>           # Directory name under data/plans/algorithms/
+#       ops_pack: <path>             # Path to ops YAML (null if uses shared ops)
+#       plan_dir: <path>             # Directory containing plan files
+#       plan_count: <int>            # Number of unique plans (deduplicated .sexp/.yaml)
+#       status: complete | partial   # Whether all plans pass execution + autoregression
+#
+#   pipeline:
+#     plan_dir: <path>
+#     plan_count: <int>
+#
+#   suggested_next:                  # Candidate domains for expansion
+#     - name: <kebab-case>
+#       description: <string>
+#       difficulty: easy | medium | hard
+#       notes: <string>              # Hints for the implementing agent
+
+categories:
+  - name: arithmetic
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/arithmetic
+    plan_count: 17
+    status: complete
+
+  - name: backtracking
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/backtracking
+    plan_count: 6
+    status: complete
+
+  - name: bitwise
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/bitwise
+    plan_count: 10
+    status: complete
+
+  - name: combinatorics
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/combinatorics
+    plan_count: 9
+    status: complete
+
+  - name: data-structures
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/data-structures
+    plan_count: 11
+    status: complete
+
+  - name: dynamic-programming
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/dynamic-programming
+    plan_count: 16
+    status: complete
+
+  - name: encoding
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/encoding
+    plan_count: 6
+    status: complete
+
+  - name: geometry
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/geometry
+    plan_count: 9
+    status: complete
+
+  - name: graph
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/graph
+    plan_count: 16
+    status: complete
+
+  - name: hashing
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/hashing
+    plan_count: 5
+    status: complete
+
+  - name: interval
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/interval
+    plan_count: 4
+    status: complete
+
+  - name: matrix
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/matrix
+    plan_count: 8
+    status: complete
+
+  - name: number-theory
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/number-theory
+    plan_count: 14
+    status: complete
+
+  - name: probability
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/probability
+    plan_count: 5
+    status: complete
+
+  - name: searching
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/searching
+    plan_count: 15
+    status: complete
+
+  - name: sorting
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/sorting
+    plan_count: 14
+    status: complete
+
+  - name: string
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/string
+    plan_count: 19
+    status: complete
+
+  - name: tree
+    ops_pack: data/packs/ops/algorithm.ops.yaml
+    plan_dir: data/plans/algorithms/tree
+    plan_count: 10
+    status: complete
+
+  - name: text-processing
+    ops_pack: data/packs/ops/text_processing.ops.yaml
+    plan_dir: data/plans/algorithms/text-processing
+    plan_count: 11
+    status: complete
+
+pipeline:
+  plan_dir: data/plans
+  plan_count: 24
+
+# ─── Candidate domains for expansion ─────────────────────────────────────────
+# Pick one, follow RUNBOOK.md, create ops pack + plans + NL wiring.
+# Difficulty: easy = mostly single-expression ops, medium = needs composition,
+#             hard = complex state or external semantics.
+
+suggested_next:
+  - name: set-theory
+    description: "Set operations: union, intersection, difference, subset, powerset"
+    difficulty: easy
+    notes: "Racket has native set support. Many multi-step plans possible (build set → operate → query)."
+
+  - name: statistics
+    description: "Mean, median, mode, variance, standard deviation, percentile, correlation"
+    difficulty: easy
+    notes: "Pure numeric. Multi-step: compute mean first, then variance from mean, then stddev from variance."
+
+  - name: date-time
+    description: "Date parsing, formatting, arithmetic, day-of-week, leap year"
+    difficulty: medium
+    notes: "Racket has racket/date. Some ops need multiple steps (parse → compute → format)."
+
+  - name: logic
+    description: "Propositional logic: truth tables, CNF/DNF conversion, satisfiability"
+    difficulty: medium
+    notes: "Boolean algebra. Multi-step: parse formula → normalize → evaluate."
+
+  - name: number-base
+    description: "Roman numerals, binary/hex/octal conversion, BCD encoding"
+    difficulty: easy
+    notes: "Pure conversion functions. Some overlap with existing arithmetic — check carefully."
+
+  - name: compression
+    description: "Run-length encoding, Huffman coding, LZ77, delta encoding"
+    difficulty: medium
+    notes: "Some overlap with existing encoding category (RLE, Huffman already exist). Focus on decode + round-trip plans."
+
+  - name: linear-algebra
+    description: "Vector operations, dot product, cross product, norm, projection"
+    difficulty: medium
+    notes: "Extends existing matrix category. Use List(Number) for vectors. Multi-step: normalize → project → compute angle."
+
+  - name: automata
+    description: "DFA/NFA simulation, regex to NFA, state machine execution"
+    difficulty: hard
+    notes: "Complex state. Represent automata as lists of transitions. Multi-step: build → simulate → accept/reject."
+
+  - name: cryptography
+    description: "Vigenere cipher, XOR cipher, simple hash, checksum"
+    difficulty: medium
+    notes: "Some overlap with existing encoding (Caesar, ROT13). Focus on keyed ciphers and checksums."
+
+  - name: signal-processing
+    description: "Moving average, convolution, FFT (simplified), peak detection"
+    difficulty: hard
+    notes: "Numeric heavy. FFT is complex but moving average and convolution are good multi-step targets."
+
+  - name: parsing
+    description: "Balanced parentheses, expression evaluation, tokenization, JSON subset"
+    difficulty: medium
+    notes: "Good multi-step potential. Tokenize → parse → evaluate pipelines."

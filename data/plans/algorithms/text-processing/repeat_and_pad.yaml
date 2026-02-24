@@ -1,0 +1,21 @@
+# Repeat and pad: repeat a string n times then left-pad to width
+# Example: repeat "ab" 3 times, pad to 10 with "." = "....ababab"
+# expected: ....ababab
+
+repeat_and_pad:
+  inputs:
+    - s: "String"
+    - n: "Number"
+    - width: "Number"
+  bindings:
+    s: '"ab"'
+    n: "3"
+    width: "10"
+  steps:
+    - repeat_string:
+        s: "$s"
+        n: "$n"
+    - pad_left:
+        s: "$step-1"
+        width: "$width"
+        pad_char: '"."'

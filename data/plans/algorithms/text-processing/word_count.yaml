@@ -1,0 +1,11 @@
+# Word count: count the number of words in a string
+# Example: word_count("the quick brown fox") = 4
+# expected: 4
+
+word_count:
+  inputs:
+    - s: "String"
+  bindings:
+    s: '"the quick brown fox"'
+  steps:
+    - word_count

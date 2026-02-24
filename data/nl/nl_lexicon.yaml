@@ -1852,6 +1852,36 @@ phrase_groups:
   - skeleton: [hamming, distance]
     canonical: hamming_distance
 
+  # text-processing domain
+  - skeleton: [camel, snake]
+    canonical: camel_to_snake
+  - skeleton: [csv, parse, row]
+    canonical: csv_parse_row
+  - skeleton: [csv, parse]
+    canonical: csv_parse_row
+  - skeleton: [csv, row]
+    canonical: csv_parse_row
+  - skeleton: [csv, column, sum]
+    canonical: csv_column_sum
+  - skeleton: [word, count]
+    canonical: word_count
+  - skeleton: [word, frequency]
+    canonical: word_frequency
+  - skeleton: [char, frequency, report]
+    canonical: char_frequency_report
+  - skeleton: [character, frequency]
+    canonical: char_frequency_report
+  - skeleton: [text, statistics]
+    canonical: text_statistics
+  - skeleton: [title, truncate]
+    canonical: title_and_truncate
+  - skeleton: [repeat, pad]
+    canonical: repeat_and_pad
+  - skeleton: [snake, title]
+    canonical: snake_to_title
+  - skeleton: [substring, count]
+    canonical: multi_substring_count
+
 fillers:
   - up
   - out

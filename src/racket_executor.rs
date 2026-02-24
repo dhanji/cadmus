@@ -60,6 +60,12 @@ pub fn build_racket_registry() -> OperationRegistry {
         &mut reg,
     );
 
+    // Merge text processing ops (opaque atoms with racket_body)
+    let _ = crate::registry::load_ops_pack_str_into(
+        include_str!("../data/packs/ops/text_processing.ops.yaml"),
+        &mut reg,
+    );
+
     let racket_facts_yaml = include_str!("../data/packs/facts/racket.facts.yaml");
     if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(racket_facts_yaml) {
         crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);
@@ -584,6 +590,24 @@ fn compile_single_substep(
         _ => {}
     }
 
+    // Handle if_then/conditional with named params (test, then, else)
+    match op {
+        "if_then" | "conditional" => {
+            let params = step.args.string_params();
+            let test = params.get("test")
+                .map(|v| resolve_substep_ref(v))
+                .unwrap_or_else(|| "#t".to_string());
+            let then_val = params.get("then")
+                .map(|v| resolve_substep_ref(v))
+                .unwrap_or_else(|| "#t".to_string());
+            let else_val = params.get("else")
+                .map(|v| resolve_substep_ref(v))
+                .unwrap_or_else(|| "#f".to_string());
+            return Ok(format!("(if {} {} {})", test, then_val, else_val));
+        }
+        _ => {}
+    }
+
     // Check for inline sub-steps in params
     if let StepArgs::Map(map) = &step.args {
         let has_substeps = map.values().any(|v| matches!(v, StepParam::Inline(_) | StepParam::Steps(_)));
@@ -607,10 +631,20 @@ fn compile_single_substep(
 
     // Collect all string param values as arguments
     let mut args: Vec<String> = Vec::new();
-    let mut sorted_params: Vec<_> = params.iter().collect();
-    sorted_params.sort_by_key(|(k, _)| k.clone());
-    for (_, v) in &sorted_params {
-        args.push(resolve_substep_ref(v));
+    // Use input_names order from registry if available, fall back to alphabetical
+    if let Some(poly) = registry.get_poly(op) {
+        for pname in &poly.input_names {
+            if let Some(v) = params.get(pname.as_str()) {
+                args.push(resolve_substep_ref(v));
+            }
+        }
+    }
+    if args.is_empty() {
+        let mut sorted_params: Vec<_> = params.iter().collect();
+        sorted_params.sort_by_key(|(k, _)| k.clone());
+        for (_, v) in &sorted_params {
+            args.push(resolve_substep_ref(v));
+        }
     }
 
     if args.is_empty() {
@@ -1258,7 +1292,8 @@ pub fn op_to_racket(
                     args.push(pname.clone());
                 }
             }
-            let expr = format!("({} {})", op.replace('_', "-"), args.join(" "));
+            let fn_name = poly.racket_symbol.as_deref().unwrap_or(op);
+            let expr = format!("({} {})", fn_name, args.join(" "));
             return Ok(RacketExpr { expr, uses_prev: false });
         }
     }
@@ -1340,6 +1375,67 @@ pub fn op_to_racket(
 }
 
 // ---------------------------------------------------------------------------
+// Racket body define emission (recursive over sub-steps)
+// ---------------------------------------------------------------------------
+
+/// Recursively scan compiled steps and their sub-steps for ops with
+/// `racket_body`. Emit `(define ...)` blocks for each, deduplicated.
+fn emit_racket_body_defines(
+    steps: &[CompiledStep],
+    registry: &OperationRegistry,
+    emitted: &mut std::collections::HashSet<String>,
+    script: &mut String,
+) {
+    for step in steps {
+        if !emitted.contains(&step.op) {
+            if let Some(poly) = registry.get_poly(&step.op) {
+                if let Some(body) = &poly.racket_body {
+                    emitted.insert(step.op.clone());
+                    let fn_name = poly.racket_symbol.as_deref().unwrap_or(&step.op);
+                    let param_list = poly.input_names.join(" ");
+                    script.push_str(&format!("\n(define ({} {})\n  {})\n",
+                        fn_name, param_list, body.trim()));
+                }
+            }
+        }
+        for raw_steps in step.sub_steps.values() {
+            emit_raw_step_defines(raw_steps, registry, emitted, script);
+        }
+    }
+}
+
+/// Recursively scan raw steps for ops with racket_body.
+fn emit_raw_step_defines(
+    steps: &[RawStep],
+    registry: &OperationRegistry,
+    emitted: &mut std::collections::HashSet<String>,
+    script: &mut String,
+) {
+    for step in steps {
+        if !emitted.contains(&step.op) {
+            if let Some(poly) = registry.get_poly(&step.op) {
+                if let Some(body) = &poly.racket_body {
+                    emitted.insert(step.op.clone());
+                    let fn_name = poly.racket_symbol.as_deref().unwrap_or(&step.op);
+                    let param_list = poly.input_names.join(" ");
+                    script.push_str(&format!("\n(define ({} {})\n  {})\n",
+                        fn_name, param_list, body.trim()));
+                }
+            }
+        }
+        if let StepArgs::Map(map) = &step.args {
+            for param in map.values() {
+                if let StepParam::Steps(sub) = param {
+                    emit_raw_step_defines(sub, registry, emitted, script);
+                } else if let StepParam::Inline(inline) = param {
+                    emit_raw_step_defines(&[*inline.clone()], registry, emitted, script);
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Script generation
 // ---------------------------------------------------------------------------
 
@@ -1387,20 +1483,7 @@ pub fn generate_racket_script(
     // used in this plan. Each define is emitted once, deduplicated by op name.
     {
         let mut emitted = std::collections::HashSet::new();
-        for step in &compiled.steps {
-            if emitted.contains(&step.op) {
-                continue;
-            }
-            if let Some(poly) = registry.get_poly(&step.op) {
-                if let Some(body) = &poly.racket_body {
-                    emitted.insert(step.op.clone());
-                    let fn_name = step.op.replace('_', "-");
-                    let param_list = poly.input_names.join(" ");
-                    script.push_str(&format!("\n(define ({} {})\n  {})\n",
-                        fn_name, param_list, body.trim()));
-                }
-            }
-        }
+        emit_racket_body_defines(&compiled.steps, registry, &mut emitted, &mut script);
     }
 
     let num_steps = compiled.steps.len();
