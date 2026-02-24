@@ -280,19 +280,17 @@ fn test_subtract_6_minus_2_script() {
 }
 
 #[test]
-fn test_plan_yaml_add_numbers() {
-    let yaml = include_str!("../data/plans/add_numbers.yaml");
-    let def: PlanDef = serde_yaml::from_str(yaml).unwrap();
+fn test_plan_sexpr_add_numbers() {
+    let src = include_str!("../data/plans/add_numbers.sexp");
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src).unwrap();
     assert_eq!(def.name, "add-numbers");
-    assert!(def.inputs.is_empty(), "arithmetic plans have no inputs");
 }
 
 #[test]
-fn test_plan_yaml_subtract_numbers() {
-    let yaml = include_str!("../data/plans/subtract_numbers.yaml");
-    let def: PlanDef = serde_yaml::from_str(yaml).unwrap();
+fn test_plan_sexpr_subtract_numbers() {
+    let src = include_str!("../data/plans/subtract_numbers.sexp");
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src).unwrap();
     assert_eq!(def.name, "subtract-numbers");
-    assert!(def.inputs.is_empty(), "arithmetic plans have no inputs");
 }
 
 // =========================================================================

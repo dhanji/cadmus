@@ -304,8 +304,8 @@ test:
 
 #[test]
 fn test_comic_repack_pipeline_compiles() {
-    let yaml = include_str!("../data/plans/repack_comics.yaml");
-    let def = parse_plan(yaml).unwrap();
+    let src = include_str!("../data/plans/repack_comics.sexp");
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src).unwrap();
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -321,8 +321,8 @@ fn test_comic_repack_pipeline_compiles() {
 
 #[test]
 fn test_comic_repack_pipeline_generates_racket() {
-    let yaml = include_str!("../data/plans/repack_comics.yaml");
-    let def = parse_plan(yaml).unwrap();
+    let src = include_str!("../data/plans/repack_comics.sexp");
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src).unwrap();
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
     let racket_reg = build_racket_registry();
@@ -494,8 +494,8 @@ fn test_extract_map_mode_uses_temp_dirs() {
     // each archive should extract into its own temp directory to prevent
     // filename collisions (e.g., issue_01.cbz and issue_02.cbz both
     // containing cover.jpg).
-    let yaml = include_str!("../data/plans/repack_comics.yaml");
-    let def = parse_plan(yaml).unwrap();
+    let src = include_str!("../data/plans/repack_comics.sexp");
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src).unwrap();
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
     let racket_reg = build_racket_registry();

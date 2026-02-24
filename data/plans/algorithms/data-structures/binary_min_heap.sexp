@@ -1,0 +1,8 @@
+;; Binary min-heap: insert elements and extract-min
+;; Insert 5,3,8,1,9 then extract-min 3 times → (1 3 5)
+;; expected: (1 3 5)
+
+(define (binary_min_heap (n : Number))
+  (bind n 5)
+  (binary_min_heap)
+)

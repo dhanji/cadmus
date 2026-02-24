@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-23T20:37:52Z | Size: 69.2k chars
+> Updated: 2026-02-23T22:44:14Z | Size: 70.9k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -881,3 +881,24 @@ plan-name:
 - `PLAYBOOK.md` — Section 11: Adding Algorithm Plans (full playbook)
 - `tests/algorithm_plans_tests.rs` — 20 tests (18 categories + aggregate + compile-only)
 - 1377 total tests passing, 1 pre-existing failure, 76 ignored
+
+### S-expression Plan DSL (plan `sexpr-plan-dsl`, commit `b1548e8`)
+- `src/sexpr.rs` [1..2000] — Full sexpr parser + lowering
+  - Tokenizer: parens, brackets, atoms, strings, booleans, comments
+  - S-expression parser: `parse_sexp()` → `Sexp` tree (List, Bracket, Atom)
+  - Typed AST: `PlanAst` with `Param`, `Expr` (15 variants), `parse_plan_sexpr()`
+  - Lowering: `lower_to_plan()` → `PlanDef` + `RawStep` chain
+  - Public API: `parse_sexpr_to_plan(src) → Result<PlanDef, ParseError>`
+- 10 core forms: `define`, `bind`, `let` (sequential/let*), `for/fold`, `for/each`, `cond`, `when`, `range`, `ref`, `set!`, `make`, `list`
+- `LowerCtx` tracks: `ref_prefix` ($step vs $body), `vectors` HashSet (make-created), `env` (var→ref mapping)
+- `ref` lowers to `list_ref` for list params, `vector_ref` for make-created collections
+- Scheme operators mapped: `+`→add, `-`→subtract, `*`→multiply, `/`→divide, `=`→equal, `<`→less_than, etc.
+- No recursion: `check_no_recursion()` walks AST and rejects self-calls
+- `src/plan.rs:794-807` — `load_plan()` detects `.sexp` extension, routes to sexpr parser
+- `src/main.rs:25-30` — CLI usage updated for `.sexp` files
+- 3 example plans:
+  - `data/plans/algorithms/arithmetic/factorial.sexp` — fold over range (7 lines)
+  - `data/plans/algorithms/number-theory/euler_totient.sexp` — fold with cond+gcd (9 lines)
+  - `data/plans/algorithms/dynamic-programming/longest_increasing_subsequence.sexp` — nested for/each, when, let, mutable DP (15 lines)
+- `tests/sexpr_tests.rs` — 9 integration tests (3 inline + 3 file-based + 3 error cases)
+- 48 new tests total (39 unit + 9 integration), 1343 total passing

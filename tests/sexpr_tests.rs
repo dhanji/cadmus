@@ -131,3 +131,44 @@ fn test_sexpr_file_lis() {
     let (actual, expected) = run_sexpr(&src);
     assert_eq!(actual, expected, "lis.sexp: got '{}', expected '{}'", actual, expected);
 }
+
+// ============================================================================
+// Pipeline plan tests (non-algorithm .sexp files)
+// ============================================================================
+
+/// Verify all 24 non-algorithm .sexp plans parse and compile.
+#[test]
+fn test_all_pipeline_plans_compile() {
+    let registry = cadmus::fs_types::build_full_registry();
+    let mut failures = Vec::new();
+
+    let plans_dir = std::path::Path::new("data/plans");
+    for entry in std::fs::read_dir(plans_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("sexp") {
+            continue;
+        }
+
+        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        let src = std::fs::read_to_string(&path).unwrap();
+
+        match parse_sexpr_to_plan(&src) {
+            Ok(def) => {
+                if let Err(e) = cadmus::plan::compile_plan(&def, &registry) {
+                    failures.push(format!("  {} — compile: {}", name, e));
+                }
+            }
+            Err(e) => {
+                failures.push(format!("  {} — parse: {}", name, e));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        panic!(
+            "{} pipeline plan failures:\n{}",
+            failures.len(), failures.join("\n")
+        );
+    }
+}

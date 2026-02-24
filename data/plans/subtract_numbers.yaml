@@ -1,8 +1,0 @@
-# Plan: Subtract two numbers
-# Produces: (- 6 2) → 4
-
-subtract-numbers:
-  steps:
-    - subtract:
-        x: "6"
-        y: "2"

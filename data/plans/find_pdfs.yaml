@@ -1,9 +1,0 @@
-find-pdfs:
-  inputs:
-    - path
-    - keyword
-  steps:
-    - list_dir
-    - find_matching:
-        pattern: "*.pdf"
-    - sort_by: name

@@ -1,0 +1,8 @@
+;; Cocktail shaker sort: bidirectional bubble sort
+;; Example: sort (5 3 8 1 9 2 7 4 6) = (1 2 3 4 5 6 7 8 9)
+;; expected: (1 2 3 4 5 6 7 8 9)
+
+(define (cocktail_shaker_sort (lst : (List Number)))
+  (bind lst (list 5 3 8 1 9 2 7 4 6))
+  (cocktail_shaker_sort)
+)

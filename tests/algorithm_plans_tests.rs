@@ -1,38 +1,47 @@
 /// Integration tests for all algorithm plans.
 ///
-/// Each test loads a plan YAML, compiles it, generates a Racket script,
+/// Each test loads a plan (.sexp or .yaml), compiles it, generates a Racket script,
 /// executes it, and verifies the output matches the expected value
-/// from the `# expected:` comment in the YAML.
+/// from the `# expected:` / `;; expected:` comment.
 
 use cadmus::calling_frame::{CallingFrame, DefaultFrame};
-use cadmus::plan::parse_plan;
+use cadmus::plan;
 use std::fs;
 use std::path::Path;
 
 /// Run a single algorithm plan and return (actual_output, expected_output).
-fn run_algorithm_plan(yaml_path: &str) -> (String, String) {
-    let yaml = fs::read_to_string(yaml_path)
-        .unwrap_or_else(|e| panic!("Failed to read {}: {}", yaml_path, e));
+fn run_algorithm_plan(plan_path: &str) -> (String, String) {
+    let content = fs::read_to_string(plan_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {}", plan_path, e));
 
-    // Extract expected output from `# expected: ...` comment
-    let expected = yaml.lines()
-        .find(|l| l.starts_with("# expected:"))
-        .map(|l| l.trim_start_matches("# expected:").trim().to_string())
-        .unwrap_or_else(|| panic!("No '# expected:' comment in {}", yaml_path));
+    // Extract expected output from `# expected:` or `;; expected:` comment
+    let expected = content.lines()
+        .find(|l| l.starts_with("# expected:") || l.starts_with(";; expected:"))
+        .map(|l| {
+            l.trim_start_matches("# expected:")
+             .trim_start_matches(";; expected:")
+             .trim().to_string()
+        })
+        .unwrap_or_else(|| panic!("No expected comment in {}", plan_path));
 
-    // Parse and compile
-    let def = parse_plan(&yaml)
-        .unwrap_or_else(|e| panic!("Parse failed for {}: {}", yaml_path, e));
+    // Parse based on extension
+    let def = if plan_path.ends_with(".sexp") {
+        cadmus::sexpr::parse_sexpr_to_plan(&content)
+            .unwrap_or_else(|e| panic!("Parse failed for {}: {}", plan_path, e))
+    } else {
+        plan::parse_plan(&content)
+            .unwrap_or_else(|e| panic!("Parse failed for {}: {}", plan_path, e))
+    };
 
     let frame = DefaultFrame::from_plan(&def);
     let execution = frame.invoke(&def)
-        .unwrap_or_else(|e| panic!("Invoke failed for {}: {}", yaml_path, e));
+        .unwrap_or_else(|e| panic!("Invoke failed for {}: {}", plan_path, e));
 
     let actual = execution.stdout.trim().to_string();
     (actual, expected)
 }
 
-/// Collect all YAML files in a directory.
+/// Collect all plan files (.sexp preferred, .yaml fallback) in a directory.
 fn collect_plans(dir: &str) -> Vec<String> {
     let path = Path::new(dir);
     if !path.exists() {
@@ -41,11 +50,26 @@ fn collect_plans(dir: &str) -> Vec<String> {
     let mut plans: Vec<String> = fs::read_dir(path)
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|x| x == "yaml").unwrap_or(false))
+        .filter(|e| {
+            let ext = e.path().extension().and_then(|x| x.to_str()).unwrap_or("").to_string();
+            ext == "sexp" || ext == "yaml"
+        })
         .map(|e| e.path().to_string_lossy().to_string())
         .collect();
-    plans.sort();
-    plans
+
+    // Deduplicate: if both .sexp and .yaml exist, prefer .sexp
+    let mut seen_stems = std::collections::HashSet::new();
+    let mut deduped = Vec::new();
+    plans.sort(); // .sexp comes before .yaml alphabetically
+    for p in &plans {
+        let stem = Path::new(p).file_stem().unwrap().to_string_lossy().to_string();
+        if seen_stems.insert(stem) {
+            deduped.push(p.clone());
+        }
+    }
+
+    deduped.sort();
+    deduped
 }
 
 // ============================================================================
@@ -175,15 +199,25 @@ fn test_all_plans_compile() {
     let mut failures = Vec::new();
 
     for plan_path in &all_plans {
-        let yaml = fs::read_to_string(&plan_path).unwrap();
-        let def = match parse_plan(&yaml) {
-            Ok(d) => d,
-            Err(e) => {
-                failures.push(format!("  {} — parse: {}", plan_path, e));
-                continue;
+        let content = fs::read_to_string(&plan_path).unwrap();
+        let def = if plan_path.ends_with(".sexp") {
+            match cadmus::sexpr::parse_sexpr_to_plan(&content) {
+                Ok(d) => d,
+                Err(e) => {
+                    failures.push(format!("  {} — parse: {}", plan_path, e));
+                    continue;
+                }
+            }
+        } else {
+            match plan::parse_plan(&content) {
+                Ok(d) => d,
+                Err(e) => {
+                    failures.push(format!("  {} — parse: {}", plan_path, e));
+                    continue;
+                }
             }
         };
-        if let Err(e) = cadmus::plan::compile_plan(&def, &registry) {
+        if let Err(e) = plan::compile_plan(&def, &registry) {
             failures.push(format!("  {} — compile: {}", plan_path, e));
         }
     }

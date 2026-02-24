@@ -79,7 +79,7 @@ fn load_test_cases() -> Vec<TestCase> {
             .filter(|e| {
                 e.path()
                     .extension()
-                    .map(|ext| ext == "yaml")
+                    .map(|ext| ext == "yaml" || ext == "sexp")
                     .unwrap_or(false)
             })
             .collect();
@@ -93,16 +93,24 @@ fn load_test_cases() -> Vec<TestCase> {
             let description = content
                 .lines()
                 .next()
-                .and_then(|line| line.strip_prefix("# "))
+                .and_then(|line| line.strip_prefix("# ").or_else(|| line.strip_prefix(";; ")))
                 .unwrap_or("")
                 .to_string();
 
-            // Extract plan name from first non-comment YAML key
-            let plan_name = content
-                .lines()
-                .find(|line| !line.starts_with('#') && !line.is_empty() && line.ends_with(':'))
-                .map(|line| line.trim_end_matches(':').to_string())
-                .unwrap_or_default();
+            // Extract plan name
+            let plan_name = if path.extension().map(|e| e == "sexp").unwrap_or(false) {
+                // For .sexp: parse to get the name
+                cadmus::sexpr::parse_sexpr_to_plan(&content)
+                    .map(|def| def.name.clone())
+                    .unwrap_or_default()
+            } else {
+                // For .yaml: first non-comment key ending with ':'
+                content
+                    .lines()
+                    .find(|line| !line.starts_with('#') && !line.is_empty() && line.ends_with(':'))
+                    .map(|line| line.trim_end_matches(':').to_string())
+                    .unwrap_or_default()
+            };
 
             if !description.is_empty() && !plan_name.is_empty() {
                 cases.push(TestCase {
@@ -114,6 +122,15 @@ fn load_test_cases() -> Vec<TestCase> {
             }
         }
     }
+
+    // Deduplicate: if both .sexp and .yaml exist for same plan, prefer .sexp
+    let mut seen = std::collections::HashSet::new();
+    cases.sort_by(|a, b| a.path.cmp(&b.path)); // .sexp sorts before .yaml
+    cases.retain(|c| {
+        let stem = std::path::Path::new(&c.path)
+            .file_stem().unwrap().to_string_lossy().to_string();
+        seen.insert(stem)
+    });
 
     cases
 }

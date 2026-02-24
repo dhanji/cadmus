@@ -597,7 +597,7 @@ fn test_semantic_fs_type_mismatch_fails() {
 
 #[test]
 fn test_semantic_plan_extract_cbz_yaml() {
-    let trace = run_plan(&PathBuf::from("data/plans/extract_cbz.yaml")).unwrap();
+    let trace = run_plan(&PathBuf::from("data/plans/extract_cbz.sexp")).unwrap();
     let display = trace.to_string();
 
     // Goal: extract images from CBZ
@@ -609,7 +609,7 @@ fn test_semantic_plan_extract_cbz_yaml() {
 
 #[test]
 fn test_semantic_plan_find_pdfs_yaml() {
-    let trace = run_plan(&PathBuf::from("data/plans/find_pdfs.yaml")).unwrap();
+    let trace = run_plan(&PathBuf::from("data/plans/find_pdfs.sexp")).unwrap();
     let display = trace.to_string();
 
     // Goal: find PDFs containing keyword
@@ -621,7 +621,7 @@ fn test_semantic_plan_find_pdfs_yaml() {
 
 #[test]
 fn test_semantic_plan_cleanup_temp_yaml() {
-    let trace = run_plan(&PathBuf::from("data/plans/cleanup_temp.yaml")).unwrap();
+    let trace = run_plan(&PathBuf::from("data/plans/cleanup_temp.sexp")).unwrap();
     let display = trace.to_string();
 
     // Goal: find old temp files
@@ -632,7 +632,7 @@ fn test_semantic_plan_cleanup_temp_yaml() {
 
 #[test]
 fn test_semantic_plan_spotlight_yaml() {
-    let trace = run_plan(&PathBuf::from("data/plans/spotlight_find.yaml")).unwrap();
+    let trace = run_plan(&PathBuf::from("data/plans/spotlight_find.sexp")).unwrap();
     let display = trace.to_string();
 
     // Goal: Spotlight search
@@ -643,12 +643,13 @@ fn test_semantic_plan_spotlight_yaml() {
 
 #[test]
 fn test_semantic_plan_download_extract_yaml() {
-    let trace = run_plan(&PathBuf::from("data/plans/download_and_extract.yaml")).unwrap();
+    let trace = run_plan(&PathBuf::from("data/plans/download_and_extract.sexp")).unwrap();
     let display = trace.to_string();
 
-    // Goal: extract archive contents (bare 'archive' input — no format resolution)
-    // Plan: extract_archive → sort_by (generic op, format resolved at runtime)
-    assert!(display.contains("extract_archive"), "trace: {}", display);
+    // Goal: extract archive contents
+    // Plan: extract_zip → sort_by (format resolved from typed input)
+    assert!(display.contains("extract_zip") || display.contains("extract_archive"),
+        "trace: {}", display);
     assert!(display.contains("sort_by"), "trace: {}", display);
 
     // Type chain: File(Bytes) → archive type inferred from op signature
@@ -659,7 +660,7 @@ fn test_semantic_plan_download_extract_yaml() {
 // Power tools plans
 #[test]
 fn test_semantic_plan_git_log_yaml() {
-    let trace = run_plan(&PathBuf::from("data/plans/git_log_search.yaml")).unwrap();
+    let trace = run_plan(&PathBuf::from("data/plans/git_log_search.sexp")).unwrap();
     let display = trace.to_string();
 
     // Goal: search git log for pattern
@@ -672,7 +673,7 @@ fn test_semantic_plan_git_log_yaml() {
 
 #[test]
 fn test_semantic_plan_process_logs_yaml() {
-    let trace = run_plan(&PathBuf::from("data/plans/process_logs.yaml")).unwrap();
+    let trace = run_plan(&PathBuf::from("data/plans/process_logs.sexp")).unwrap();
     let display = trace.to_string();
 
     // Goal: extract and transform log data

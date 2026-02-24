@@ -472,10 +472,12 @@ pub enum Expr {
     },
     /// List literal: (list expr ...)
     ListLit(Vec<Expr>),
-    /// Op call: (op-name arg ...)
+    /// Op call: (op-name arg ... :keyword value ...)
     Call {
         op: String,
         args: Vec<Expr>,
+        /// Named keyword arguments (:keyword value pairs)
+        keywords: Vec<(String, Expr)>,
     },
 }
 
@@ -507,8 +509,8 @@ fn analyze_define(sexp: &Sexp) -> Result<PlanAst, ParseError> {
         _ => return Err(ParseError::at(0, "expected 'define' as first form")),
     }
 
-    if items.len() < 4 {
-        return Err(ParseError::at(0, "define requires signature, return type, and body"));
+    if items.len() < 3 {
+        return Err(ParseError::at(0, "define requires signature and body"));
     }
 
     // Parse signature: (name (param : Type) ...)
@@ -700,7 +702,17 @@ fn analyze_expr(sexp: &Sexp) -> Result<Expr, ParseError> {
                 "for/each" => analyze_for_each(items),
                 "cond" => analyze_cond(items),
                 "when" => analyze_when(items),
-                "range" => analyze_range(items),
+                "range" => {
+                    // If range has keyword args, treat as op call
+                    let has_keywords = items[1..].iter().any(|s| {
+                        matches!(s, Sexp::Atom(Atom::Symbol(sym)) if sym.starts_with(':'))
+                    });
+                    if has_keywords {
+                        analyze_call("range", items)
+                    } else {
+                        analyze_range(items)
+                    }
+                }
                 "ref" => analyze_ref(items),
                 "set!" => analyze_set_bang(items),
                 "make" => analyze_make(items),
@@ -934,11 +946,59 @@ fn analyze_list_lit(items: &[Sexp]) -> Result<Expr, ParseError> {
 
 /// (op-name arg ...)
 fn analyze_call(op: &str, items: &[Sexp]) -> Result<Expr, ParseError> {
-    let args: Result<Vec<Expr>, _> = items[1..].iter().map(analyze_expr).collect();
-    Ok(Expr::Call {
-        op: op.to_string(),
-        args: args?,
-    })
+    // Parse arguments, separating positional args from :keyword value pairs.
+    // Positional args come first, then keyword args.
+    // :each is special — it's a keyword with no value (a modifier flag).
+    let tail = &items[1..];
+    let mut args = Vec::new();
+    let mut keywords: Vec<(String, Expr)> = Vec::new();
+    let mut seen_keywords = std::collections::HashSet::new();
+    let mut i = 0;
+
+    while i < tail.len() {
+        // Check if this is a keyword symbol (starts with ':')
+        if let Sexp::Atom(Atom::Symbol(s)) = &tail[i] {
+            if let Some(kw_name) = s.strip_prefix(':') {
+                // Validate no duplicate keywords
+                if !seen_keywords.insert(kw_name.to_string()) {
+                    return Err(ParseError::at(0, format!(
+                        "duplicate keyword :{} in call to {}", kw_name, op
+                    )));
+                }
+
+                // :each is a flag — no value follows
+                if kw_name == "each" {
+                    keywords.push(("each".to_string(), Expr::Bool(true)));
+                    i += 1;
+                    continue;
+                }
+
+                // Other keywords require a value
+                if i + 1 >= tail.len() {
+                    return Err(ParseError::at(0, format!(
+                        "keyword :{} requires a value in call to {}", kw_name, op
+                    )));
+                }
+
+                let val = analyze_expr(&tail[i + 1])?;
+                keywords.push((kw_name.to_string(), val));
+                i += 2;
+                continue;
+            }
+        }
+
+        // Positional arg — but not allowed after keywords
+        if !keywords.is_empty() {
+            return Err(ParseError::at(0, format!(
+                "positional argument after keyword argument in call to {}", op
+            )));
+        }
+
+        args.push(analyze_expr(&tail[i])?);
+        i += 1;
+    }
+
+    Ok(Expr::Call { op: op.to_string(), args, keywords })
 }
 
 /// Check that the body does not contain recursive calls to the plan name.
@@ -951,14 +1011,17 @@ fn check_no_recursion(name: &str, exprs: &[Expr]) -> Result<(), ParseError> {
 
 fn check_expr_no_recursion(name: &str, expr: &Expr) -> Result<(), ParseError> {
     match expr {
-        Expr::Call { op, args } => {
-            if op == name {
+        Expr::Call { op, args, keywords } => {
+            if op == name && (!args.is_empty() || !keywords.is_empty()) {
                 return Err(ParseError::at(0, format!(
                     "recursion not allowed: '{}' cannot call itself", name
                 )));
             }
             for arg in args {
                 check_expr_no_recursion(name, arg)?;
+            }
+            for (_, val) in keywords {
+                check_expr_no_recursion(name, val)?;
             }
         }
         Expr::Let { bindings, body } => {
@@ -1110,6 +1173,13 @@ fn lower_expr(expr: &Expr, ctx: &mut LowerCtx, _is_tail: bool) -> Result<String,
         Expr::Var(name) => {
             if let Some(r) = ctx.env.get(name) {
                 Ok(r.clone())
+            } else if let Some(bare) = name.strip_prefix('$') {
+                // $var references: look up bare name, pass through as $var
+                if ctx.env.contains_key(bare) || bare.starts_with("step-") || bare.starts_with("body-") {
+                    Ok(name.clone())
+                } else {
+                    Err(ParseError::at(0, format!("undefined variable: '{}'", name)))
+                }
             } else {
                 Err(ParseError::at(0, format!("undefined variable: '{}'", name)))
             }
@@ -1195,8 +1265,8 @@ fn lower_expr(expr: &Expr, ctx: &mut LowerCtx, _is_tail: bool) -> Result<String,
             Ok(ctx.push_step(step))
         }
 
-        Expr::Call { op, args } => {
-            lower_call(op, args, ctx)
+        Expr::Call { op, args, keywords } => {
+            lower_call(op, args, keywords, ctx)
         }
 
         Expr::ForFold { accumulators, var, seq, body } => {
@@ -1217,6 +1287,15 @@ fn lower_expr(expr: &Expr, ctx: &mut LowerCtx, _is_tail: bool) -> Result<String,
     }
 }
 
+/// Lower an expression to a raw string value (no Racket quoting).
+/// Used for keyword argument values where the plan compiler expects unquoted strings.
+fn lower_expr_raw(expr: &Expr, ctx: &mut LowerCtx) -> Result<String, ParseError> {
+    match expr {
+        Expr::Str(s) => Ok(s.clone()), // Raw string, no quotes
+        other => lower_expr(other, ctx, false),
+    }
+}
+
 /// Emit a step that just passes through a value, returning its $step-N ref.
 /// If the value is already a $step-N reference, return it as-is (no extra step).
 fn emit_value_step(val: &str, _ctx: &mut LowerCtx) -> String {
@@ -1234,7 +1313,7 @@ fn emit_value_step(val: &str, _ctx: &mut LowerCtx) -> String {
 }
 
 /// Lower an op call to a step.
-fn lower_call(op: &str, args: &[Expr], ctx: &mut LowerCtx) -> Result<String, ParseError> {
+fn lower_call(op: &str, args: &[Expr], keywords: &[(String, Expr)], ctx: &mut LowerCtx) -> Result<String, ParseError> {
     // Map common Scheme operators to Cadmus op names
     let cadmus_op = match op {
         "+" => "add",
@@ -1258,29 +1337,62 @@ fn lower_call(op: &str, args: &[Expr], ctx: &mut LowerCtx) -> Result<String, Par
         other => other,
     };
 
-    // Lower all arguments
-    let lowered_args: Result<Vec<String>, _> = args.iter()
-        .map(|a| lower_expr(a, ctx, false))
-        .collect();
-    let lowered_args = lowered_args?;
+    // Lower positional arguments (raw — no Racket quoting for plan IR values)
+    let lowered_args: Vec<String> = args.iter()
+        .map(|a| lower_expr_raw(a, ctx))
+        .collect::<Result<_, _>>()?;
 
-    // Build the step based on arity
-    let step = match lowered_args.len() {
-        0 => RawStep { op: cadmus_op.to_string(), args: StepArgs::None },
-        1 => RawStep { op: cadmus_op.to_string(), args: StepArgs::Scalar(lowered_args[0].clone()) },
-        _ => {
-            // Use x, y, z for positional params (matches most binary ops)
-            let mut params = HashMap::new();
-            let param_names = ["x", "y", "z", "w"];
-            for (i, arg) in lowered_args.iter().enumerate() {
-                let key = if i < param_names.len() {
-                    param_names[i].to_string()
-                } else {
-                    format!("arg{}", i)
-                };
-                params.insert(key, StepParam::Value(arg.clone()));
+    // Check for :each modifier (keyword with no real value)
+    let has_each = keywords.iter().any(|(k, _)| k == "each");
+    // Collect non-each keywords
+    let real_keywords: Vec<&(String, Expr)> = keywords.iter()
+        .filter(|(k, _)| k != "each")
+        .collect();
+
+    // Build the step
+    let step = if !real_keywords.is_empty() {
+        // Keyword args → StepArgs::Map
+        let mut params = HashMap::new();
+
+        // Add positional args with x, y, z names
+        let param_names = ["x", "y", "z", "w"];
+        for (i, arg) in lowered_args.iter().enumerate() {
+            let key = if i < param_names.len() {
+                param_names[i].to_string()
+            } else {
+                format!("arg{}", i)
+            };
+            params.insert(key, StepParam::Value(arg.clone()));
+        }
+
+        // Add keyword args
+        for (kw, val_expr) in &real_keywords {
+            let val = lower_expr_raw(val_expr, ctx)?;
+            params.insert(kw.to_string(), StepParam::Value(val));
+        }
+
+        RawStep { op: cadmus_op.to_string(), args: StepArgs::Map(params) }
+    } else if has_each {
+        // :each only → StepArgs::Scalar("each")
+        RawStep { op: cadmus_op.to_string(), args: StepArgs::Scalar("each".to_string()) }
+    } else {
+        // Pure positional args (original behavior)
+        match lowered_args.len() {
+            0 => RawStep { op: cadmus_op.to_string(), args: StepArgs::None },
+            1 => RawStep { op: cadmus_op.to_string(), args: StepArgs::Scalar(lowered_args[0].clone()) },
+            _ => {
+                let mut params = HashMap::new();
+                let param_names = ["x", "y", "z", "w"];
+                for (i, arg) in lowered_args.iter().enumerate() {
+                    let key = if i < param_names.len() {
+                        param_names[i].to_string()
+                    } else {
+                        format!("arg{}", i)
+                    };
+                    params.insert(key, StepParam::Value(arg.clone()));
+                }
+                RawStep { op: cadmus_op.to_string(), args: StepArgs::Map(params) }
             }
-            RawStep { op: cadmus_op.to_string(), args: StepArgs::Map(params) }
         }
     };
 
@@ -1444,7 +1556,7 @@ fn lower_expr_to_yaml(expr: &Expr, ctx: &mut LowerCtx) -> Result<serde_yaml::Val
                 Err(ParseError::at(0, format!("undefined variable in cond: '{}'", name)))
             }
         }
-        Expr::Call { op, args } => {
+        Expr::Call { op, args, .. } => {
             // For cond clause expressions, emit as inline YAML mapping
             let cadmus_op = match op.as_str() {
                 "+" => "add",
@@ -1504,7 +1616,7 @@ fn expr_to_racket_literal(expr: &Expr) -> String {
             let parts: Vec<String> = elems.iter().map(expr_to_racket_literal).collect();
             format!("(list {})", parts.join(" "))
         }
-        Expr::Call { op, args } => {
+        Expr::Call { op, args, .. } => {
             let parts: Vec<String> = args.iter().map(expr_to_racket_literal).collect();
             format!("({} {})", op, parts.join(" "))
         }
@@ -1520,6 +1632,139 @@ fn expr_to_racket_literal(expr: &Expr) -> String {
 pub fn parse_sexpr_to_plan(src: &str) -> Result<PlanDef, ParseError> {
     let ast = parse_plan_sexpr(src)?;
     lower_to_plan(&ast)
+}
+
+/// Serialize a PlanDef to sexpr string for display.
+///
+/// Handles simple pipeline plans (the NL layer output). Complex algorithm
+/// plans with nested body/clauses are loaded from .sexp files directly.
+pub fn plan_to_sexpr(plan: &PlanDef) -> String {
+    let mut out = String::new();
+
+    // Signature: (define (name (param : Type) ...) : ReturnType
+    out.push_str("(define (");
+    out.push_str(&plan.name);
+    for input in &plan.inputs {
+        out.push_str(" (");
+        out.push_str(&input.name);
+        out.push_str(" : ");
+        out.push_str(input.type_hint.as_deref().unwrap_or("Bytes"));
+        out.push(')');
+    }
+    out.push(')');
+
+    // Return type (if declared)
+    if let Some(output) = &plan.output {
+        if let Some(first) = output.first() {
+            out.push_str(" : ");
+            out.push_str(first);
+        }
+    }
+
+    // Bindings
+    let mut sorted_bindings: Vec<_> = plan.bindings.iter().collect();
+    sorted_bindings.sort_by_key(|(k, _)| k.as_str());
+    for (name, value) in &sorted_bindings {
+        out.push_str("\n  (bind ");
+        out.push_str(name);
+        out.push(' ');
+        // If value looks like a Racket expression (starts with '('), emit as-is
+        if value.starts_with('(') || value.parse::<f64>().is_ok() {
+            out.push_str(value);
+        } else {
+            out.push('"');
+            out.push_str(value);
+            out.push('"');
+        }
+        out.push(')');
+    }
+
+    // Steps
+    for step in &plan.steps {
+        out.push_str("\n  ");
+        format_step(step, &mut out);
+    }
+
+    out.push(')');
+    out.push('\n');
+    out
+}
+
+/// Format a single step as sexpr.
+fn format_step(step: &RawStep, out: &mut String) {
+    match &step.args {
+        StepArgs::None => {
+            // (op_name)
+            out.push('(');
+            out.push_str(&step.op);
+            out.push(')');
+        }
+        StepArgs::Scalar(s) if s == "each" => {
+            // (op_name :each)
+            out.push('(');
+            out.push_str(&step.op);
+            out.push_str(" :each)");
+        }
+        StepArgs::Scalar(s) => {
+            // (op_name "value")
+            out.push('(');
+            out.push_str(&step.op);
+            out.push_str(" \"");
+            out.push_str(s);
+            out.push_str("\")");
+        }
+        StepArgs::Map(m) => {
+            out.push('(');
+            out.push_str(&step.op);
+            let mut sorted: Vec<_> = m.iter().collect();
+            sorted.sort_by_key(|(k, _)| k.as_str());
+            for (key, param) in sorted {
+                match param {
+                    StepParam::Value(v) => {
+                        out.push_str(" :");
+                        out.push_str(key);
+                        out.push(' ');
+                        // Emit numbers and $refs unquoted, strings quoted
+                        if v.starts_with('$') || v.parse::<f64>().is_ok()
+                            || v == "#t" || v == "#f"
+                        {
+                            out.push_str(v);
+                        } else {
+                            out.push('"');
+                            out.push_str(v);
+                            out.push('"');
+                        }
+                    }
+                    StepParam::Steps(steps) => {
+                        // Sub-step body — emit as nested forms
+                        out.push_str(" :");
+                        out.push_str(key);
+                        out.push_str(" (");
+                        for (i, sub) in steps.iter().enumerate() {
+                            if i > 0 { out.push(' '); }
+                            format_step(sub, out);
+                        }
+                        out.push(')');
+                    }
+                    StepParam::Inline(inner) => {
+                        out.push_str(" :");
+                        out.push_str(key);
+                        out.push(' ');
+                        format_step(inner, out);
+                    }
+                    StepParam::Clauses(clauses) => {
+                        out.push_str(" :clauses (");
+                        for (i, c) in clauses.iter().enumerate() {
+                            if i > 0 { out.push(' '); }
+                            out.push_str(&format!("{}", serde_yaml::to_string(c).unwrap_or_default()).trim());
+                        }
+                        out.push(')');
+                    }
+                }
+            }
+            out.push(')');
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1993,5 +2238,334 @@ mod tests {
         let plan = parse_sexpr_to_plan(src).unwrap();
         // Should have make_vector, range, for_each, vector_ref steps
         assert!(plan.steps.len() >= 3);
+    }
+
+    // -----------------------------------------------------------------------
+    // Keyword argument tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_keyword_single_value() {
+        // (filter :pattern "*.pdf") → StepArgs::Map { pattern: "*.pdf" }
+        let src = r#"
+            (define (test (path : Dir)) : Dir
+              (filter :pattern "*.pdf"))
+        "#;
+        let plan = parse_sexpr_to_plan(src).unwrap();
+        assert_eq!(plan.steps.len(), 1);
+        assert_eq!(plan.steps[0].op, "filter");
+        match &plan.steps[0].args {
+            StepArgs::Map(m) => {
+                assert_eq!(m.get("pattern"), Some(&StepParam::Value("*.pdf".to_string())));
+            }
+            other => panic!("expected Map, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_keyword_multiple_values() {
+        // (awk_extract :program "{print $1}") → StepArgs::Map
+        let src = r#"
+            (define (test (logfile : File)) : File
+              (awk_extract :program "{print $1, $3}"))
+        "#;
+        let plan = parse_sexpr_to_plan(src).unwrap();
+        assert_eq!(plan.steps[0].op, "awk_extract");
+        match &plan.steps[0].args {
+            StepArgs::Map(m) => {
+                assert_eq!(m.get("program"), Some(&StepParam::Value("{print $1, $3}".to_string())));
+            }
+            other => panic!("expected Map, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_keyword_each_modifier() {
+        // (extract_archive :each) → StepArgs::Scalar("each")
+        let src = r#"
+            (define (test (path : Dir)) : Dir
+              (extract_archive :each))
+        "#;
+        let plan = parse_sexpr_to_plan(src).unwrap();
+        assert_eq!(plan.steps[0].op, "extract_archive");
+        assert_eq!(plan.steps[0].args, StepArgs::Scalar("each".to_string()));
+    }
+
+    #[test]
+    fn test_keyword_scalar_shorthand() {
+        // (sort_by :name) → StepArgs::Map { name: true }
+        // Actually, :name is a keyword with no value... but it's not :each.
+        // For (sort_by :name), the YAML equivalent is `sort_by: name`.
+        // This should be StepArgs::Scalar("name") — a single keyword that
+        // acts as a bare scalar value, not a key-value pair.
+        //
+        // Wait — :name has no value. It's like :each but for a different purpose.
+        // In YAML: `sort_by: name` is Scalar("name").
+        // In sexpr: (sort_by :name) should also be Scalar("name").
+        //
+        // Let's handle this: if there's exactly one keyword with Bool(true)
+        // value (i.e., a flag keyword) and it's not "each", treat it as
+        // a scalar argument.
+        //
+        // Actually, the cleaner approach: (sort_by "name") works as positional.
+        // But :name is more natural. Let me test the positional form first.
+        let src = r#"
+            (define (test (path : Dir)) : Dir
+              (sort_by "name"))
+        "#;
+        let plan = parse_sexpr_to_plan(src).unwrap();
+        assert_eq!(plan.steps[0].op, "sort_by");
+        assert_eq!(plan.steps[0].args, StepArgs::Scalar("name".to_string()));
+    }
+
+    #[test]
+    fn test_keyword_no_value_error() {
+        // (filter :pattern) → error: keyword requires a value
+        let src = r#"
+            (define (test (path : Dir)) : Dir
+              (filter :pattern))
+        "#;
+        let err = parse_sexpr_to_plan(src).unwrap_err();
+        assert!(err.message.contains("requires a value"), "got: {}", err.message);
+    }
+
+    #[test]
+    fn test_keyword_duplicate_error() {
+        // (filter :pattern "a" :pattern "b") → error: duplicate keyword
+        let src = r#"
+            (define (test (path : Dir)) : Dir
+              (filter :pattern "a" :pattern "b"))
+        "#;
+        let err = parse_sexpr_to_plan(src).unwrap_err();
+        assert!(err.message.contains("duplicate keyword"), "got: {}", err.message);
+    }
+
+    #[test]
+    fn test_keyword_positional_after_keyword_error() {
+        // (filter :pattern "a" extra) → error: positional after keyword
+        let src = r#"
+            (define (test (path : Dir)) : Dir
+              (filter :pattern "a" extra))
+        "#;
+        let err = parse_sexpr_to_plan(src).unwrap_err();
+        assert!(err.message.contains("positional argument after keyword"), "got: {}", err.message);
+    }
+
+    #[test]
+    fn test_keyword_pipeline_plan() {
+        // Full pipeline: (list_dir) (find_matching :pattern "*.pdf") (sort_by "name")
+        let src = r#"
+            (define (find-pdfs (path : Dir) (keyword : Pattern)) : Dir
+              (list_dir)
+              (find_matching :pattern "*.pdf")
+              (sort_by "name"))
+        "#;
+        let plan = parse_sexpr_to_plan(src).unwrap();
+        assert_eq!(plan.steps.len(), 3);
+        assert_eq!(plan.steps[0].op, "list_dir");
+        assert_eq!(plan.steps[0].args, StepArgs::None);
+        assert_eq!(plan.steps[1].op, "find_matching");
+        match &plan.steps[1].args {
+            StepArgs::Map(m) => {
+                assert_eq!(m.get("pattern"), Some(&StepParam::Value("*.pdf".to_string())));
+            }
+            other => panic!("expected Map, got {:?}", other),
+        }
+        assert_eq!(plan.steps[2].op, "sort_by");
+        assert_eq!(plan.steps[2].args, StepArgs::Scalar("name".to_string()));
+    }
+
+    #[test]
+    fn test_keyword_repack_pipeline() {
+        // Repack comics pipeline with :each
+        let src = r#"
+            (define (repack-comics (path : Dir)) : Dir
+              (list_dir)
+              (find_matching :pattern "*.cbz")
+              (sort_by "name")
+              (extract_archive :each)
+              (pack_archive :output "combined.cbz"))
+        "#;
+        let plan = parse_sexpr_to_plan(src).unwrap();
+        assert_eq!(plan.steps.len(), 5);
+        assert_eq!(plan.steps[3].op, "extract_archive");
+        assert_eq!(plan.steps[3].args, StepArgs::Scalar("each".to_string()));
+        assert_eq!(plan.steps[4].op, "pack_archive");
+        match &plan.steps[4].args {
+            StepArgs::Map(m) => {
+                assert_eq!(m.get("output"), Some(&StepParam::Value("combined.cbz".to_string())));
+            }
+            other => panic!("expected Map, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_keyword_two_keywords() {
+        // (head :count "100") → StepArgs::Map { count: "100" }
+        let src = r#"
+            (define (test (logfile : File)) : File
+              (head :count "100"))
+        "#;
+        let plan = parse_sexpr_to_plan(src).unwrap();
+        match &plan.steps[0].args {
+            StepArgs::Map(m) => {
+                assert_eq!(m.get("count"), Some(&StepParam::Value("100".to_string())));
+            }
+            other => panic!("expected Map, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_tokenize_keyword_symbol() {
+        // :pattern should tokenize as Symbol(":pattern"), not Colon + Symbol("pattern")
+        let tokens = tokenize(":pattern").unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].value, Token::Symbol(":pattern".to_string()));
+    }
+
+    #[test]
+    fn test_tokenize_standalone_colon() {
+        // : followed by space should be Colon token
+        let tokens = tokenize(": Number").unwrap();
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].value, Token::Colon);
+        assert_eq!(tokens[1].value, Token::Symbol("Number".to_string()));
+    }
+
+    // -----------------------------------------------------------------------
+    // plan_to_sexpr serializer tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_plan_to_sexpr_simple_pipeline() {
+        use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
+        let plan = PlanDef {
+            name: "find-pdfs".to_string(),
+            inputs: vec![
+                PlanInput::typed("path", "Dir"),
+                PlanInput::typed("keyword", "Pattern"),
+            ],
+            output: None,
+            steps: vec![
+                RawStep { op: "list_dir".to_string(), args: StepArgs::None },
+                RawStep { op: "find_matching".to_string(), args: StepArgs::Map({
+                    let mut m = HashMap::new();
+                    m.insert("pattern".to_string(), StepParam::Value("*.pdf".to_string()));
+                    m
+                })},
+                RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
+            ],
+            bindings: HashMap::new(),
+        };
+        let sexpr = plan_to_sexpr(&plan);
+        assert!(sexpr.contains("(define (find-pdfs"), "got: {}", sexpr);
+        assert!(sexpr.contains("(path : Dir)"), "got: {}", sexpr);
+        assert!(sexpr.contains("(list_dir)"), "got: {}", sexpr);
+        assert!(sexpr.contains(":pattern \"*.pdf\""), "got: {}", sexpr);
+        assert!(sexpr.contains("(sort_by \"name\")"), "got: {}", sexpr);
+    }
+
+    #[test]
+    fn test_plan_to_sexpr_roundtrip() {
+        use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
+        let plan = PlanDef {
+            name: "test-plan".to_string(),
+            inputs: vec![PlanInput::typed("path", "Dir")],
+            output: None,
+            steps: vec![
+                RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
+                RawStep { op: "filter".to_string(), args: StepArgs::Map({
+                    let mut m = HashMap::new();
+                    m.insert("pattern".to_string(), StepParam::Value("*.rs".to_string()));
+                    m
+                })},
+                RawStep { op: "sort_by".to_string(), args: StepArgs::Scalar("name".to_string()) },
+            ],
+            bindings: HashMap::new(),
+        };
+        let sexpr = plan_to_sexpr(&plan);
+        let parsed = parse_sexpr_to_plan(&sexpr).unwrap();
+        assert_eq!(parsed.name, "test-plan");
+        assert_eq!(parsed.steps.len(), 3);
+        assert_eq!(parsed.steps[0].op, "walk_tree");
+        assert_eq!(parsed.steps[1].op, "filter");
+        assert_eq!(parsed.steps[2].op, "sort_by");
+    }
+
+    #[test]
+    fn test_plan_to_sexpr_with_each() {
+        use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
+        let plan = PlanDef {
+            name: "repack".to_string(),
+            inputs: vec![PlanInput::typed("path", "Dir")],
+            output: None,
+            steps: vec![
+                RawStep { op: "list_dir".to_string(), args: StepArgs::None },
+                RawStep { op: "extract_archive".to_string(), args: StepArgs::Scalar("each".to_string()) },
+            ],
+            bindings: HashMap::new(),
+        };
+        let sexpr = plan_to_sexpr(&plan);
+        assert!(sexpr.contains("(extract_archive :each)"), "got: {}", sexpr);
+        // Round-trip
+        let parsed = parse_sexpr_to_plan(&sexpr).unwrap();
+        assert_eq!(parsed.steps[1].args, StepArgs::Scalar("each".to_string()));
+    }
+
+    #[test]
+    fn test_plan_to_sexpr_with_bindings() {
+        use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
+        let mut bindings = HashMap::new();
+        bindings.insert("n".to_string(), "10".to_string());
+        let plan = PlanDef {
+            name: "test".to_string(),
+            inputs: vec![PlanInput::typed("n", "Number")],
+            output: None,
+            steps: vec![
+                RawStep { op: "add".to_string(), args: StepArgs::Map({
+                    let mut m = HashMap::new();
+                    m.insert("x".to_string(), StepParam::Value("$n".to_string()));
+                    m.insert("y".to_string(), StepParam::Value("1".to_string()));
+                    m
+                })},
+            ],
+            bindings,
+        };
+        let sexpr = plan_to_sexpr(&plan);
+        assert!(sexpr.contains("(bind n 10)"), "got: {}", sexpr);
+        assert!(sexpr.contains(":x $n"), "got: {}", sexpr);
+        assert!(sexpr.contains(":y 1"), "got: {}", sexpr);
+    }
+
+    #[test]
+    fn test_plan_to_sexpr_empty_steps() {
+        use crate::plan::{PlanDef, PlanInput};
+        let plan = PlanDef {
+            name: "empty".to_string(),
+            inputs: vec![PlanInput::bare("path")],
+            output: None,
+            steps: vec![],
+            bindings: HashMap::new(),
+        };
+        let sexpr = plan_to_sexpr(&plan);
+        assert!(sexpr.contains("(define (empty"), "got: {}", sexpr);
+        // Should not crash, just produce a define with no body
+    }
+
+    #[test]
+    fn test_plan_to_sexpr_with_output_type() {
+        use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
+        let plan = PlanDef {
+            name: "count-files".to_string(),
+            inputs: vec![PlanInput::typed("path", "Dir")],
+            output: Some(vec!["Count".to_string()]),
+            steps: vec![
+                RawStep { op: "walk_tree".to_string(), args: StepArgs::None },
+                RawStep { op: "count".to_string(), args: StepArgs::None },
+            ],
+            bindings: HashMap::new(),
+        };
+        let sexpr = plan_to_sexpr(&plan);
+        assert!(sexpr.contains(": Count"), "got: {}", sexpr);
     }
 }

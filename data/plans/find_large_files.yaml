@@ -1,7 +1,0 @@
-find-large-files:
-  inputs:
-    - path
-    - min_size
-  steps:
-    - list_dir
-    - sort_by: name

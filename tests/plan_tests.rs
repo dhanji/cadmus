@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 #[test]
 fn test_plan_extract_cbz() {
-    let path = PathBuf::from("data/plans/extract_cbz.yaml");
+    let path = PathBuf::from("data/plans/extract_cbz.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -23,7 +23,7 @@ fn test_plan_extract_cbz() {
 
 #[test]
 fn test_plan_find_pdfs() {
-    let path = PathBuf::from("data/plans/find_pdfs.yaml");
+    let path = PathBuf::from("data/plans/find_pdfs.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -35,7 +35,7 @@ fn test_plan_find_pdfs() {
 
 #[test]
 fn test_plan_find_large_files() {
-    let path = PathBuf::from("data/plans/find_large_files.yaml");
+    let path = PathBuf::from("data/plans/find_large_files.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -235,7 +235,7 @@ search-with-keyword:
 
 #[test]
 fn test_plan_copy_and_organize() {
-    let path = PathBuf::from("data/plans/copy_and_organize.yaml");
+    let path = PathBuf::from("data/plans/copy_and_organize.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -246,7 +246,7 @@ fn test_plan_copy_and_organize() {
 
 #[test]
 fn test_plan_preview_log() {
-    let path = PathBuf::from("data/plans/preview_log.yaml");
+    let path = PathBuf::from("data/plans/preview_log.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -258,7 +258,7 @@ fn test_plan_preview_log() {
 
 #[test]
 fn test_plan_find_duplicates() {
-    let path = PathBuf::from("data/plans/find_duplicates.yaml");
+    let path = PathBuf::from("data/plans/find_duplicates.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -269,7 +269,7 @@ fn test_plan_find_duplicates() {
 
 #[test]
 fn test_plan_cleanup_temp() {
-    let path = PathBuf::from("data/plans/cleanup_temp.yaml");
+    let path = PathBuf::from("data/plans/cleanup_temp.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -280,7 +280,7 @@ fn test_plan_cleanup_temp() {
 
 #[test]
 fn test_plan_spotlight_find() {
-    let path = PathBuf::from("data/plans/spotlight_find.yaml");
+    let path = PathBuf::from("data/plans/spotlight_find.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -291,7 +291,7 @@ fn test_plan_spotlight_find() {
 
 #[test]
 fn test_plan_download_and_extract() {
-    let path = PathBuf::from("data/plans/download_and_extract.yaml");
+    let path = PathBuf::from("data/plans/download_and_extract.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -306,7 +306,7 @@ fn test_plan_download_and_extract() {
 
 #[test]
 fn test_plan_git_log_search() {
-    let path = PathBuf::from("data/plans/git_log_search.yaml");
+    let path = PathBuf::from("data/plans/git_log_search.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 
@@ -319,7 +319,7 @@ fn test_plan_git_log_search() {
 
 #[test]
 fn test_plan_process_logs() {
-    let path = PathBuf::from("data/plans/process_logs.yaml");
+    let path = PathBuf::from("data/plans/process_logs.sexp");
     let trace = run_plan(&path).unwrap();
     let display = trace.to_string();
 

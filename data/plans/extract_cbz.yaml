@@ -1,5 +1,0 @@
-extract-cbz:
-  inputs:
-    - path: "File(Archive(File(Image), Cbz))"
-  steps:
-    - extract_archive

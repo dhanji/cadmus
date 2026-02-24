@@ -208,14 +208,14 @@ test:
     println!("  Full 5-Step Comic Repack Pipeline");
     println!("══════════════════════════════════════════════════════════\n");
 
-    let yaml = std::fs::read_to_string("data/plans/repack_comics.yaml").unwrap();
-    println!("  Source YAML (data/plans/repack_comics.yaml):");
-    for line in yaml.trim().lines() {
+    let src = std::fs::read_to_string("data/plans/repack_comics.sexp").unwrap();
+    println!("  Source sexpr (data/plans/repack_comics.sexp):");
+    for line in src.trim().lines() {
         println!("    {}", line);
     }
     println!();
 
-    let def = plan::parse_plan(&yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&src).unwrap();
     let compiled = plan::compile_plan(&def, &registry).unwrap();
 
     println!("  Compiled pipeline:");

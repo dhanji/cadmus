@@ -1,0 +1,12 @@
+;; Server log forensics: 10-step text transformation pipeline
+(define (log-forensics (logfile : File))
+  (awk_extract :program "{print $1, $4, $7, $9}")
+  (sed_script :script "/[45][0-9][0-9]/!d")
+  (sed_script :script "s/\\[//g; s/\\]//g")
+  (awk_extract :program "{print $1, $3}")
+  (sed_script :script "s/ / | /g")
+  (awk_extract :program "{printf \"%04d %s\\n\", NR, $0}")
+  (head :count "200")
+  (tail :count "100")
+  (sed_script :script "1i\\--- ERROR REPORT ---")
+  (sed_script :script "/^$/d"))

@@ -1,0 +1,11 @@
+;; Lowest common ancestor: find LCA of two nodes in a tree
+;; Tree: (3 (5 (6 () ()) (2 (7 () ()) (4 () ()))) (1 (0 () ()) (8 () ())))
+;; LCA of 5 and 1 = 3
+;; expected: 3
+
+(define (lowest_common_ancestor (tree : (List Any)) (p : Number) (q : Number))
+  (bind p 5)
+  (bind q 1)
+  (bind tree (list 3 (list 5 (list 6 (list) (list)) (list 2 (list 7 (list) (list)) (list 4 (list) (list)))) (list 1 (list 0 (list) (list)) (list 8 (list) (list)))))
+  (lowest_common_ancestor)
+)
