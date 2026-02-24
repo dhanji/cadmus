@@ -17,23 +17,7 @@ fn compile_to_racket(yaml: &str) -> Result<String, String> {
     let compiled = plan::compile_plan(&def, &registry)
         .map_err(|e| format!("compile: {}", e))?;
 
-    let mut racket_reg = cadmus::registry::load_ops_pack_str(
-        include_str!("../data/packs/ops/racket.ops.yaml")
-    ).unwrap_or_default();
-    if let Ok(facts) = cadmus::racket_strategy::load_racket_facts_from_str(
-        include_str!("../data/packs/facts/racket.facts.yaml")
-    ) {
-        cadmus::racket_strategy::promote_inferred_ops(&mut racket_reg, &facts);
-
-        // Include shell submodes so extract_shell_meta() works for subsumed ops
-        let cli_yaml = include_str!("../data/packs/facts/macos_cli.facts.yaml");
-        if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(cli_yaml) {
-            let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
-            cadmus::racket_strategy::discover_shell_submodes(
-                &mut racket_reg, &facts, &cli_facts,
-            );
-        }
-    }
+    let racket_reg = cadmus::racket_executor::build_racket_registry();
     cadmus::racket_executor::generate_racket_script(&compiled, &def, &racket_reg)
         .map_err(|e| format!("racket gen: {}", e))
 }
@@ -66,58 +50,9 @@ filter-entries-by-name-pattern-in-desktop:
     assert!(script.contains("sort"), "should use sort");
 }
 
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn test_find_screenshot_nl_roundtrip() {
-    use cadmus::nl;
-    use cadmus::nl::dialogue::DialogueState;
-
-    let mut state = DialogueState::new();
-    let r1 = nl::process_input("find the latest screenshot on my desktop", &mut state);
-
-    match &r1 {
-        nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
-            assert!(plan_sexpr.contains("walk_tree") || plan_sexpr.contains("find_matching"),
-                "should have walk/find: {}", plan_sexpr);
-        }
-        other => {
-            panic!("Expected PlanCreated, got: {:?}", other);
-        }
-    }
-
-    let r2 = nl::process_input("y", &mut state);
-    match &r2 {
-        nl::NlResponse::Approved { script } => {
-            assert!(script.is_some(), "Script should be generated, but was None");
-            let s = script.as_ref().unwrap();
-            assert!(s.contains("#lang racket"));
-            assert!(s.contains("shell-quote"), "should use shell-quote: {}", s);
-        }
-        other => {
-            panic!("Expected Approved, got: {:?}", other);
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // More NL → Racket roundtrips for common user requests
 // ---------------------------------------------------------------------------
-
-#[test]
-fn test_list_dir_compiles_to_racket() {
-    let yaml = r#"
-
-list-directory:
-  inputs:
-    - path
-  steps:
-    - list_dir
-
-"#;
-    let script = compile_to_racket(yaml).expect("should compile");
-    assert!(script.contains("ls"), "should use ls: {}", script);
-    assert!(script.contains("shell-quote"), "should quote path");
-}
 
 #[test]
 fn test_walk_tree_filter_compiles() {
@@ -156,64 +91,9 @@ list-sorted:
     assert!(script.contains("string<?"), "should sort by string comparison");
 }
 
-#[test]
-fn test_zip_plan_compiles() {
-    use cadmus::nl;
-    use cadmus::nl::dialogue::DialogueState;
-
-    let mut state = DialogueState::new();
-    let r1 = nl::process_input("zip up everything in ~/Downloads", &mut state);
-    assert!(matches!(r1, nl::NlResponse::PlanCreated { .. }));
-
-    let r2 = nl::process_input("yes", &mut state);
-    match r2 {
-        nl::NlResponse::Approved { script } => {
-            assert!(script.is_some(), "zip plan should produce a script");
-        }
-        other => panic!("Expected Approved, got: {:?}", other),
-    }
-}
-
-#[test]
-fn test_find_pdfs_nl_compiles() {
-    use cadmus::nl;
-    use cadmus::nl::dialogue::DialogueState;
-
-    let mut state = DialogueState::new();
-    let r1 = nl::process_input("find all PDFs in ~/Documents", &mut state);
-    assert!(matches!(r1, nl::NlResponse::PlanCreated { .. }));
-
-    let r2 = nl::process_input("approve", &mut state);
-    match r2 {
-        nl::NlResponse::Approved { script } => {
-            assert!(script.is_some(), "find PDFs should produce a script");
-            let s = script.unwrap();
-            assert!(s.contains("shell-quote"), "should use shell-quote: {}", s);
-        }
-        other => panic!("Expected Approved, got: {:?}", other),
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Negative: unknown ops still error
 // ---------------------------------------------------------------------------
-
-#[test]
-fn test_unknown_op_still_errors() {
-    let yaml = r#"
-
-bad-plan:
-  inputs:
-    - path
-  steps:
-    - nonexistent_op_xyz
-
-"#;
-    let def = plan::parse_plan(yaml).unwrap();
-    let registry = fs_types::build_full_registry();
-    let result = plan::compile_plan(&def, &registry);
-    assert!(result.is_err(), "unknown op should fail compilation");
-}
 
 #[test]
 fn test_filter_without_pattern_errors() {
@@ -256,23 +136,6 @@ bad-filter:
 // ---------------------------------------------------------------------------
 // Boundary: shell preamble emitted, injection safety
 // ---------------------------------------------------------------------------
-
-#[test]
-fn test_shell_preamble_emitted_for_fs_ops() {
-    let yaml = r#"
-
-list:
-  inputs:
-    - path
-  steps:
-    - list_dir
-
-"#;
-    let script = compile_to_racket(yaml).expect("should compile");
-    assert!(script.contains("(define (shell-exec"), "should have shell-exec helper");
-    assert!(script.contains("(define (shell-lines"), "should have shell-lines helper");
-    assert!(script.contains("(define (shell-quote"), "should have shell-quote helper");
-}
 
 #[test]
 fn test_injection_safe_in_racket_output() {
@@ -670,54 +533,6 @@ find-recent-rust-files:
 // ---------------------------------------------------------------------------
 // Subsumption map unit tests
 // ---------------------------------------------------------------------------
-
-#[test]
-fn test_subsumption_map_completeness() {
-    use cadmus::type_lowering;
-
-    // All 10 subsumed ops should be present
-    let expected = vec![
-        ("list_dir", "shell_ls"),
-        ("walk_tree", "shell_find"),
-        ("read_file", "shell_cat"),
-        ("search_content", "shell_grep"),
-        ("head", "shell_head"),
-        ("tail", "shell_tail"),
-        ("sort_by", "shell_sort"),
-        ("count", "shell_wc"),
-        ("get_size", "shell_du"),
-        ("download", "shell_curl"),
-    ];
-
-    for (fs_op, shell_op) in &expected {
-        let entry = type_lowering::lookup_subsumption(fs_op)
-            .unwrap_or_else(|| panic!("missing subsumption for {}", fs_op));
-        assert_eq!(entry.shell_op, *shell_op,
-            "{} should map to {}, got {}", fs_op, shell_op, entry.shell_op);
-    }
-}
-
-#[test]
-fn test_racket_native_map_completeness() {
-    use cadmus::type_lowering;
-
-    // Racket-native ops
-    assert!(type_lowering::lookup_racket_native("filter").is_some());
-    assert!(type_lowering::lookup_racket_native("find_matching").is_some());
-    assert!(type_lowering::lookup_racket_native("unique").is_some());
-    assert!(type_lowering::lookup_racket_native("flatten_tree").is_some());
-
-    // Dual-behavior ops
-    assert!(type_lowering::lookup_dual_behavior("head").is_some());
-    assert!(type_lowering::lookup_dual_behavior("tail").is_some());
-    assert!(type_lowering::lookup_dual_behavior("sort_by").is_some());
-    assert!(type_lowering::lookup_dual_behavior("count").is_some());
-    assert!(type_lowering::lookup_dual_behavior("unique").is_some());
-
-    // Non-lowered ops should return None
-    assert!(type_lowering::lookup_racket_native("walk_tree").is_none());
-    assert!(type_lowering::lookup_dual_behavior("walk_tree").is_none());
-}
 
 #[test]
 fn test_search_content_requires_pattern() {

@@ -14,23 +14,7 @@ use cadmus::type_expr::TypeExpr;
 // Helper: build a racket registry with shell submodes
 // ---------------------------------------------------------------------------
 
-fn build_racket_registry() -> cadmus::registry::OperationRegistry {
-    let mut reg = cadmus::registry::load_ops_pack_str(
-        include_str!("../data/packs/ops/racket.ops.yaml")
-    ).expect("racket.ops.yaml");
-    let facts = cadmus::racket_strategy::load_racket_facts_from_str(
-        include_str!("../data/packs/facts/racket.facts.yaml")
-    ).expect("racket.facts.yaml");
-    cadmus::racket_strategy::promote_inferred_ops(&mut reg, &facts);
-
-    // Phase 4: discover shell submodes (needed for archive tool dispatch)
-    let cli_yaml = include_str!("../data/packs/facts/macos_cli.facts.yaml");
-    if let Ok(cli_pack) = serde_yaml::from_str::<cadmus::fact_pack::FactPack>(cli_yaml) {
-        let cli_facts = cadmus::fact_pack::FactPackIndex::build(cli_pack);
-        cadmus::racket_strategy::discover_shell_submodes(&mut reg, &facts, &cli_facts);
-    }
-    reg
-}
+use cadmus::racket_executor::build_racket_registry;
 
 fn compile_and_generate(yaml: &str) -> (cadmus::plan::CompiledPlan, String) {
     let def = parse_plan(yaml).unwrap();

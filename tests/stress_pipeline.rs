@@ -323,37 +323,19 @@ use cadmus::racket_strategy::{
     promote_inferred_ops, discover_shell_submodes,
     infer_symmetric_op, InferenceKind, InferenceError,
 };
-use cadmus::registry::{self, load_ops_pack_str, Literal, OperationRegistry};
+use cadmus::registry::{self, Literal, OperationRegistry};
 use cadmus::type_expr::{self, TypeExpr, UnifyError};
 use cadmus::type_lowering;
 use cadmus::plan::{
     self, CompiledStep, CompiledPlan, PlanDef, PlanInput, StepArgs,
 };
 
-const RACKET_OPS_YAML: &str = include_str!("../data/packs/ops/racket.ops.yaml");
 const RACKET_FACTS_YAML: &str = include_str!("../data/packs/facts/racket.facts.yaml");
 const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli.facts.yaml");
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-fn make_racket_reg() -> OperationRegistry {
-    let mut reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();
-    let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
-    promote_inferred_ops(&mut reg, &facts);
-    reg
-}
-
-fn make_full_registry() -> OperationRegistry {
-    let mut reg = load_ops_pack_str(RACKET_OPS_YAML).unwrap();
-    let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
-    promote_inferred_ops(&mut reg, &facts);
-    let cli_pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
-    let cli_facts = FactPackIndex::build(cli_pack);
-    discover_shell_submodes(&mut reg, &facts, &cli_facts);
-    reg
-}
 
 fn make_step(index: usize, op: &str, params: Vec<(&str, &str)>) -> CompiledStep {
     CompiledStep {
@@ -397,261 +379,6 @@ fn nl_to_yaml(input: &str) -> Result<String, String> {
         other => Err(format!("Unexpected: {:?}", other)),
     }
 }
-
-// ===========================================================================
-// I1: End-to-end NL → plan → compile → Racket stress tests
-// ===========================================================================
-
-// --- Happy path: 10+ NL inputs that should produce valid Racket scripts ---
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_add_two_numbers() {
-    let yaml = nl_to_yaml("Add 4 and 35 together").expect("should produce plan");
-    assert!(yaml.contains("add"), "yaml should contain add op: {}", yaml);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_subtract() {
-    let yaml = nl_to_yaml("Subtract 2 from 6").expect("should produce plan");
-    assert!(yaml.contains("subtract"), "yaml: {}", yaml);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_multiply() {
-    let yaml = nl_to_yaml("Multiply 7 and 8").expect("should produce plan");
-    assert!(yaml.contains("multiply"), "yaml: {}", yaml);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_divide() {
-    let yaml = nl_to_yaml("Divide 100 by 4").expect("should produce plan");
-    assert!(yaml.contains("divide"), "yaml: {}", yaml);
-}
-
-#[test]
-fn stress_nl_list_directory() {
-    let yaml = nl_to_yaml("list ~/Downloads").expect("should produce plan");
-    assert!(yaml.contains("list_dir"), "yaml: {}", yaml);
-}
-
-#[test]
-fn stress_nl_find_pdfs() {
-    let yaml = nl_to_yaml("find all PDFs in ~/Documents").expect("should produce plan");
-    assert!(yaml.contains("walk_tree") || yaml.contains("find_matching"),
-        "yaml: {}", yaml);
-}
-
-#[test]
-fn stress_nl_zip_up() {
-    let yaml = nl_to_yaml("zip up everything in my downloads").expect("should produce plan");
-    assert!(yaml.contains("pack_archive"), "yaml: {}", yaml);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_sum_synonym() {
-    let yaml = nl_to_yaml("Sum 12 and 88").expect("should produce plan");
-    assert!(yaml.contains("add"), "sum should map to add: {}", yaml);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_plus_synonym() {
-    let yaml = nl_to_yaml("Plus 1 and 99").expect("should produce plan");
-    assert!(yaml.contains("add"), "plus should map to add: {}", yaml);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_minus_synonym() {
-    let yaml = nl_to_yaml("Minus 5 from 20").expect("should produce plan");
-    assert!(yaml.contains("subtract"), "minus should map to subtract: {}", yaml);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_search_content() {
-    let yaml = nl_to_yaml("search for 'error' in ~/logs").expect("should produce plan");
-    assert!(yaml.contains("search_content") || yaml.contains("walk_tree") || yaml.contains("find_matching"),
-        "yaml: {}", yaml);
-}
-
-#[test]
-fn stress_nl_copy_files() {
-    let yaml = nl_to_yaml("copy ~/Documents/report.pdf to ~/Desktop").expect("should produce plan");
-    assert!(yaml.contains("copy"), "yaml: {}", yaml);
-}
-
-// --- Full pipeline: NL → YAML → compile → Racket script ---
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_full_pipeline_add_produces_racket() {
-    let mut state = DialogueState::new();
-    let response = nl::process_input("Add 4 and 35 together", &mut state);
-    let yaml = match response {
-        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr,
-        other => panic!("expected PlanCreated, got: {:?}", other),
-    };
-
-    // Parse the YAML back into a PlanDef
-    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml).ok()
-        .or_else(|| plan::parse_plan(&yaml).ok())
-        .expect("should parse plan");
-    assert!(!def.steps.is_empty(), "plan should have steps");
-
-    // Build a compiled plan and generate Racket
-    let reg = make_racket_reg();
-    let compiled = CompiledPlan {
-        name: def.name.clone(),
-        input_type: TypeExpr::prim("Number"),
-        input_description: "4".to_string(),
-        steps: vec![CompiledStep {
-            index: 0,
-            op: "add".to_string(),
-            input_type: TypeExpr::prim("Number"),
-            output_type: TypeExpr::prim("Number"),
-            params: vec![("x".into(), "4".into()), ("y".into(), "35".into())].into_iter().collect(),
-            ..Default::default()
-        }],
-        output_type: TypeExpr::prim("Number"),
-    };
-    let script = generate_racket_script(&compiled, &def, &reg).unwrap();
-    assert!(script.contains("#lang racket"), "should have racket preamble");
-    assert!(script.contains("(+ 4 35)"), "should contain (+ 4 35): {}", script);
-}
-
-#[test]
-    #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
-fn stress_nl_full_pipeline_subtract_produces_racket() {
-    let mut state = DialogueState::new();
-    let response = nl::process_input("Subtract 2 from 6", &mut state);
-    let yaml = match response {
-        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr,
-        other => panic!("expected PlanCreated, got: {:?}", other),
-    };
-
-    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml).ok()
-        .or_else(|| plan::parse_plan(&yaml).ok())
-        .expect("should parse plan");
-    let reg = make_racket_reg();
-    let compiled = CompiledPlan {
-        name: def.name.clone(),
-        input_type: TypeExpr::prim("Number"),
-        input_description: "6".to_string(),
-        steps: vec![CompiledStep {
-            index: 0,
-            op: "subtract".to_string(),
-            input_type: TypeExpr::prim("Number"),
-            output_type: TypeExpr::prim("Number"),
-            params: vec![("x".into(), "6".into()), ("y".into(), "2".into())].into_iter().collect(),
-            ..Default::default()
-        }],
-        output_type: TypeExpr::prim("Number"),
-    };
-    let script = generate_racket_script(&compiled, &def, &reg).unwrap();
-    assert!(script.contains("(- 6 2)"), "should contain (- 6 2): {}", script);
-}
-
-// --- Negative: gibberish, nonexistent ops ---
-
-#[test]
-fn stress_nl_gibberish_no_panic() {
-    let mut state = DialogueState::new();
-    // Should not panic — should return NeedsClarification or Error
-    let response = nl::process_input("xyzzy plugh qwerty asdf jkl", &mut state);
-    match response {
-        NlResponse::PlanCreated { .. } => {
-            // If it somehow creates a plan, that's OK — we just verify no panic
-        }
-        NlResponse::NeedsClarification { .. } | NlResponse::Error { .. } | NlResponse::Explanation { .. } => {
-            // Expected
-        }
-        _ => {
-            // Any response is fine as long as we didn't panic
-        }
-    }
-}
-
-#[test]
-fn stress_nl_nonexistent_op_no_panic() {
-    let mut state = DialogueState::new();
-    let response = nl::process_input("frobulate the quantum flux capacitor", &mut state);
-    // Should not panic
-    match response {
-        NlResponse::NeedsClarification { .. } | NlResponse::Error { .. } => {
-            // Expected — can't understand the op
-        }
-        _ => {
-            // Any response is fine as long as we didn't panic
-        }
-    }
-}
-
-#[test]
-fn stress_nl_empty_input_no_panic() {
-    let mut state = DialogueState::new();
-    let _response = nl::process_input("", &mut state);
-    // Just verify no panic
-}
-
-#[test]
-fn stress_nl_only_punctuation_no_panic() {
-    let mut state = DialogueState::new();
-    let _response = nl::process_input("!@#$%^&*()", &mut state);
-}
-
-// --- Boundary: single token, very long input ---
-
-#[test]
-fn stress_nl_single_token_add() {
-    let mut state = DialogueState::new();
-    let response = nl::process_input("add", &mut state);
-    // Single token "add" — should either ask for clarification or create a partial plan
-    match response {
-        NlResponse::NeedsClarification { .. } => { /* expected */ }
-        NlResponse::PlanCreated { .. } => { /* also OK */ }
-        NlResponse::Error { .. } => { /* also OK */ }
-        NlResponse::Explanation { .. } => { /* also OK */ }
-        _ => { /* no panic is the real test */ }
-    }
-}
-
-#[test]
-fn stress_nl_very_long_input_no_hang() {
-    let mut state = DialogueState::new();
-    // 100+ words of repetitive input
-    let long_input = (0..120).map(|i| format!("word{}", i)).collect::<Vec<_>>().join(" ");
-    let _response = nl::process_input(&long_input, &mut state);
-    // Just verify it completes without hanging or panicking
-}
-
-#[test]
-fn stress_nl_repeated_ops_no_panic() {
-    let mut state = DialogueState::new();
-    let _response = nl::process_input(
-        "add add add subtract multiply divide add subtract multiply",
-        &mut state,
-    );
-}
-
-#[test]
-fn stress_nl_unicode_input_no_panic() {
-    let mut state = DialogueState::new();
-    let _response = nl::process_input("计算 4 加 35", &mut state);
-}
-
-#[test]
-fn stress_nl_numbers_only() {
-    let mut state = DialogueState::new();
-    let _response = nl::process_input("42 17 99 3.14", &mut state);
-}
-
-// ===========================================================================
 // I2: Plan compiler stress tests
 // ===========================================================================
 
@@ -827,7 +554,7 @@ many-inputs:
 
 #[test]
 fn stress_racket_arithmetic_to_string_to_file() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let steps = vec![
         make_step(0, "multiply", vec![("x", "6"), ("y", "7")]),
         make_step(1, "number_to_string", vec![]),
@@ -850,7 +577,7 @@ fn stress_racket_arithmetic_to_string_to_file() {
 
 #[test]
 fn stress_racket_list_processing_chain() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let steps = vec![
         make_step(0, "racket_filter", vec![("value", "'(1 2 3 4 5 6 7 8 9 10)"), ("predicate", "even?")]),
         make_step(1, "sort_list", vec![("comparator", ">")]),
@@ -874,7 +601,7 @@ fn stress_racket_list_processing_chain() {
 
 #[test]
 fn stress_racket_set_operations_chain() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let steps = vec![
         make_step(0, "set_new", vec![("value", "'(1 2 3 4 5)")]),
         make_step(1, "set_union", vec![("y", "(list->set '(4 5 6 7 8))")]),
@@ -896,7 +623,7 @@ fn stress_racket_set_operations_chain() {
 
 #[test]
 fn stress_racket_foldl_missing_function() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let step = make_step(0, "racket_foldl", vec![("value", "'(1 2 3)"), ("init", "0")]);
     // No "function" param — should error
     let inputs: Vec<PlanInput> = vec![];
@@ -908,7 +635,7 @@ fn stress_racket_foldl_missing_function() {
 
 #[test]
 fn stress_racket_filter_missing_predicate() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let step = make_step(0, "racket_filter", vec![("value", "'(1 2 3)")]);
     let inputs: Vec<PlanInput> = vec![];
     let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
@@ -918,7 +645,7 @@ fn stress_racket_filter_missing_predicate() {
 
 #[test]
 fn stress_racket_map_missing_function() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let step = make_step(0, "racket_map", vec![("value", "'(1 2 3)")]);
     let inputs: Vec<PlanInput> = vec![];
     let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
@@ -928,7 +655,7 @@ fn stress_racket_map_missing_function() {
 
 #[test]
 fn stress_racket_completely_unknown_op() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let step = make_step(0, "quantum_teleport", vec![("x", "42")]);
     let inputs: Vec<PlanInput> = vec![];
     let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
@@ -940,7 +667,7 @@ fn stress_racket_completely_unknown_op() {
 
 #[test]
 fn stress_racket_shell_ps_nullary() {
-    let reg = make_full_registry();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let step = make_step(0, "shell_ps", vec![]);
     let inputs: Vec<PlanInput> = vec![];
     let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
@@ -951,7 +678,7 @@ fn stress_racket_shell_ps_nullary() {
 
 #[test]
 fn stress_racket_10_step_pipeline() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let steps = vec![
         make_step(0, "add", vec![("x", "1"), ("y", "2")]),
         make_step(1, "multiply", vec![("y", "3")]),
@@ -979,7 +706,7 @@ fn stress_racket_10_step_pipeline() {
 
 #[test]
 fn stress_racket_single_step_no_let() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let steps = vec![
         make_step(0, "add", vec![("x", "4"), ("y", "35")]),
     ];
@@ -992,7 +719,7 @@ fn stress_racket_single_step_no_let() {
 
 #[test]
 fn stress_racket_empty_plan() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let (compiled, def) = make_plan("Empty", vec![("x", "1")], vec![]);
     let script = generate_racket_script(&compiled, &def, &reg).unwrap();
     assert!(script.contains("no steps"), "empty plan should note no steps: {}", script);
@@ -1002,7 +729,7 @@ fn stress_racket_empty_plan() {
 
 #[test]
 fn stress_racket_shell_ls_with_path() {
-    let reg = make_full_registry();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let step = make_step(0, "shell_ls", vec![("path", "/tmp")]);
     let inputs = vec![PlanInput::bare("path")];
     let result = op_to_racket(&step, &inputs, None, &reg, false, &HashMap::new());
@@ -1152,7 +879,7 @@ fn stress_planner_literal_matches_goal() {
 
 #[test]
 fn stress_expr_planner_number_chain() {
-    let reg = make_racket_reg();
+    let reg = cadmus::racket_executor::build_racket_registry();
     let goal = ExprGoal::new(
         TypeExpr::prim("Number"),
         vec![

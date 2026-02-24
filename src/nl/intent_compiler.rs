@@ -882,7 +882,7 @@ mod tests {
     #[test]
     fn test_program_first_registered_op() {
         // Directly test the program-first path with a known algorithm op
-        use crate::nl::intent_ir::{IntentIR, IntentIRResult, IRStep, IRInput, IRSelector};
+        use crate::nl::intent_ir::{IntentIR, IRStep, IRInput, IRSelector};
 
         let ir = IntentIR {
             output: "Number".to_string(),
@@ -918,7 +918,7 @@ mod tests {
 
     #[test]
     fn test_program_first_quicksort() {
-        use crate::nl::intent_ir::{IntentIR, IntentIRResult, IRStep, IRInput, IRSelector};
+        use crate::nl::intent_ir::{IntentIR, IRStep, IRInput, IRSelector};
 
         let ir = IntentIR {
             output: "List(Number)".to_string(),
