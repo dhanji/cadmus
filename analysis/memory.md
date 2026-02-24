@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-24T08:44:11Z | Size: 76.6k chars
+> Updated: 2026-02-24T11:44:14Z | Size: 77.3k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -962,3 +962,11 @@ plan-name:
 - 229 NL autoregression plans (was 218), 100% pass rate
 - 205 algorithm plans (was 194) + 24 pipeline = 229 total
 - 1449 tests passed, 0 failed
+
+### Test Hygiene (commit `6132b53`)
+- **5 test files deleted**: trace_pipeline.rs, trace_promote.rs, pipeline_trace.rs, complex_programs.rs, nl_comic_trace.rs
+- **39 tests removed** (28 passed + 11 ignored), all duplicated or diagnostic
+- **Flaky test fixed**: `test_type_symmetric_discovery_tabular` in shell_callable_tests.rs — replaced HashMap-order-dependent inference-kind assertion with stable registration+symbol check
+- **Registry helpers deduplicated**: 4 local `build_racket_registry()` helpers replaced with canonical `cadmus::racket_executor::build_racket_registry()`
+- **Final counts**: 1421 passed, 0 failed, 65 ignored
+- **Net**: -1538 lines, +24 lines across 11 files
