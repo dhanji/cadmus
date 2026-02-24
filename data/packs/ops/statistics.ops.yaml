@@ -1,0 +1,180 @@
+# Statistics Operations Pack
+# ==========================
+# Pure numeric statistics operations for data analysis tasks.
+# Each op has a typed signature and a Racket implementation body.
+
+name: statistics
+description: "Statistics operations: mean, median, mode, variance, standard deviation, percentile, correlation"
+
+ops:
+
+  - name: mean_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "mean_list"
+    description: "Compute the arithmetic mean of a list of numbers"
+    racket_body: |
+      (exact->inexact (/ (apply + lst) (length lst)))
+
+  - name: median_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "median_list"
+    description: "Compute the median of a list of numbers"
+    racket_body: |
+      (let* ([sorted (sort lst <)] [n (length sorted)] [mid (quotient n 2)]) (if (odd? n) (list-ref sorted mid) (exact->inexact (/ (+ (list-ref sorted (- mid 1)) (list-ref sorted mid)) 2))))
+
+  - name: mode_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "mode_list"
+    description: "Compute the mode (most frequent value) of a list of numbers"
+    racket_body: |
+      (let* ([counts (make-hash)] [_ (for-each (lambda (x) (hash-update! counts x add1 0)) lst)] [max-count (apply max (hash-values counts))]) (car (sort (filter (lambda (k) (= (hash-ref counts k) max-count)) (hash-keys counts)) <)))
+
+  - name: variance_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "variance_list"
+    description: "Compute the population variance of a list of numbers"
+    racket_body: |
+      (let* ([m (/ (apply + lst) (length lst))] [diffs (map (lambda (x) (expt (- x m) 2)) lst)]) (exact->inexact (/ (apply + diffs) (length lst))))
+
+  - name: stddev_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "stddev_list"
+    description: "Compute the population standard deviation of a list of numbers"
+    racket_body: |
+      (let* ([m (/ (apply + lst) (length lst))] [diffs (map (lambda (x) (expt (- x m) 2)) lst)]) (sqrt (exact->inexact (/ (apply + diffs) (length lst)))))
+
+  - name: range_stat
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "range_stat"
+    description: "Compute the range (max minus min) of a list of numbers"
+    racket_body: |
+      (- (apply max lst) (apply min lst))
+
+  - name: min_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "min_list"
+    description: "Find the minimum value in a list of numbers"
+    racket_body: |
+      (apply min lst)
+
+  - name: max_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "max_list"
+    description: "Find the maximum value in a list of numbers"
+    racket_body: |
+      (apply max lst)
+
+  - name: percentile
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'p']
+    output: "Number"
+    racket_symbol: "percentile"
+    description: "Compute the p-th percentile of a list of numbers using linear interpolation"
+    racket_body: |
+      (let* ([sorted (sort lst <)] [n (length sorted)] [k (exact->inexact (* (/ p 100) (- n 1)))] [f (exact-floor k)] [c (exact-ceiling k)]) (if (= f c) (list-ref sorted f) (+ (* (- 1 (- k f)) (list-ref sorted f)) (* (- k f) (list-ref sorted c)))))
+
+  - name: z_score
+    inputs: ['Number', 'List(Number)']
+    input_names: ['x', 'lst']
+    output: "Number"
+    racket_symbol: "z_score"
+    description: "Compute the z-score of a value relative to a list of numbers"
+    racket_body: |
+      (let* ([m (/ (apply + lst) (length lst))] [diffs (map (lambda (v) (expt (- v m) 2)) lst)] [sd (sqrt (/ (apply + diffs) (length lst)))]) (exact->inexact (/ (- x m) sd)))
+
+  - name: geometric_mean
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "geometric_mean"
+    description: "Compute the geometric mean of a list of positive numbers"
+    racket_body: |
+      (exact->inexact (expt (apply * lst) (/ 1 (length lst))))
+
+  - name: harmonic_mean
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "harmonic_mean"
+    description: "Compute the harmonic mean of a list of positive numbers"
+    racket_body: |
+      (let ([n (length lst)]) (exact->inexact (/ n (apply + (map (lambda (x) (/ 1 x)) lst)))))
+
+  - name: covariance
+    inputs: ['List(Number)', 'List(Number)']
+    input_names: ['xs', 'ys']
+    output: "Number"
+    racket_symbol: "covariance"
+    description: "Compute the population covariance of two lists of numbers"
+    racket_body: |
+      (let* ([n (length xs)] [mx (/ (apply + xs) n)] [my (/ (apply + ys) n)] [prods (map (lambda (x y) (* (- x mx) (- y my))) xs ys)]) (exact->inexact (/ (apply + prods) n)))
+
+  - name: correlation
+    inputs: ['List(Number)', 'List(Number)']
+    input_names: ['xs', 'ys']
+    output: "Number"
+    racket_symbol: "correlation"
+    description: "Compute the Pearson correlation coefficient of two lists of numbers"
+    racket_body: |
+      (let* ([n (length xs)] [mx (/ (apply + xs) n)] [my (/ (apply + ys) n)] [prods (map (lambda (x y) (* (- x mx) (- y my))) xs ys)] [cov (/ (apply + prods) n)] [sx (sqrt (/ (apply + (map (lambda (x) (expt (- x mx) 2)) xs)) n))] [sy (sqrt (/ (apply + (map (lambda (y) (expt (- y my) 2)) ys)) n))]) (exact->inexact (/ cov (* sx sy))))
+
+  - name: weighted_mean
+    inputs: ['List(Number)', 'List(Number)']
+    input_names: ['values', 'weights']
+    output: "Number"
+    racket_symbol: "weighted_mean"
+    description: "Compute the weighted mean of values with corresponding weights"
+    racket_body: |
+      (exact->inexact (/ (apply + (map * values weights)) (apply + weights)))
+
+  - name: five_number_summary
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "String"
+    racket_symbol: "five_number_summary"
+    description: "Compute the five-number summary: min, Q1, median, Q3, max"
+    racket_body: |
+      (let* ([sorted (sort lst <)] [n (length sorted)] [mid (quotient n 2)] [med (if (odd? n) (list-ref sorted mid) (exact->inexact (/ (+ (list-ref sorted (- mid 1)) (list-ref sorted mid)) 2)))] [pct (lambda (p) (let* ([k (exact->inexact (* (/ p 100) (- n 1)))] [f (exact-floor k)] [c (exact-ceiling k)]) (if (= f c) (list-ref sorted f) (+ (* (- 1 (- k f)) (list-ref sorted f)) (* (- k f) (list-ref sorted c))))))] [mn (apply min lst)] [mx (apply max lst)]) (format "~a ~a ~a ~a ~a" mn (pct 25) med (pct 75) mx))
+
+  - name: outlier_count
+    inputs: ['List(Number)', 'Number']
+    input_names: ['lst', 'threshold']
+    output: "Number"
+    racket_symbol: "outlier_count"
+    description: "Count the number of outliers in a list using z-score threshold"
+    racket_body: |
+      (let* ([n (length lst)] [m (/ (apply + lst) n)] [diffs (map (lambda (x) (expt (- x m) 2)) lst)] [sd (sqrt (exact->inexact (/ (apply + diffs) n)))]) (for/sum ([x (in-list lst)]) (if (> (abs (/ (- x m) sd)) threshold) 1 0)))
+
+  - name: normalize_list
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "List(Number)"
+    racket_symbol: "normalize_list"
+    description: "Normalize a list by computing z-scores for each element"
+    racket_body: |
+      (let* ([n (length lst)] [m (/ (apply + lst) n)] [diffs (map (lambda (x) (expt (- x m) 2)) lst)] [sd (sqrt (exact->inexact (/ (apply + diffs) n)))]) (map (lambda (x) (exact->inexact (/ (- x m) sd))) lst))
+
+  - name: mean_absolute_deviation
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "mean_absolute_deviation"
+    description: "Compute the mean absolute deviation of a list of numbers"
+    racket_body: |
+      (let* ([n (length lst)] [m (/ (apply + lst) n)]) (exact->inexact (/ (apply + (map (lambda (x) (abs (- x m))) lst)) n)))

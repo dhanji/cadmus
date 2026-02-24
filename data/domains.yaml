@@ -136,6 +136,12 @@ categories:
     plan_count: 11
     status: complete
 
+  - name: statistics
+    ops_pack: data/packs/ops/statistics.ops.yaml
+    plan_dir: data/plans/algorithms/statistics
+    plan_count: 17
+    status: complete
+
 pipeline:
   plan_dir: data/plans
   plan_count: 24
@@ -151,10 +157,6 @@ suggested_next:
     difficulty: easy
     notes: "Racket has native set support. Many multi-step plans possible (build set → operate → query)."
 
-  - name: statistics
-    description: "Mean, median, mode, variance, standard deviation, percentile, correlation"
-    difficulty: easy
-    notes: "Pure numeric. Multi-step: compute mean first, then variance from mean, then stddev from variance."
 
   - name: date-time
     description: "Date parsing, formatting, arithmetic, day-of-week, leap year"

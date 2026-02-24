@@ -54,6 +54,7 @@ const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli.f
 /// The embedded algorithm ops pack YAML (opaque algorithm atoms).
 const ALGORITHM_OPS_YAML: &str = include_str!("../data/packs/ops/algorithm.ops.yaml");
 const TEXT_PROCESSING_OPS_YAML: &str = include_str!("../data/packs/ops/text_processing.ops.yaml");
+const STATISTICS_OPS_YAML: &str = include_str!("../data/packs/ops/statistics.ops.yaml");
 
 pub fn build_full_registry() -> OperationRegistry {
     // Start with embedded fs_ops (compatibility aliases)
@@ -81,6 +82,13 @@ pub fn build_full_registry() -> OperationRegistry {
     let _ = load_ops_pack_str_into(
         &std::fs::read_to_string("data/packs/ops/text_processing.ops.yaml")
             .unwrap_or_else(|_| TEXT_PROCESSING_OPS_YAML.to_string()),
+        &mut reg,
+    );
+
+    // Merge statistics ops
+    let _ = load_ops_pack_str_into(
+        &std::fs::read_to_string("data/packs/ops/statistics.ops.yaml")
+            .unwrap_or_else(|_| STATISTICS_OPS_YAML.to_string()),
         &mut reg,
     );
 

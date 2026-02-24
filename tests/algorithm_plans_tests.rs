@@ -118,6 +118,7 @@ category_test!(test_backtracking, "data/plans/algorithms/backtracking");
 category_test!(test_interval, "data/plans/algorithms/interval");
 category_test!(test_tree, "data/plans/algorithms/tree");
 category_test!(test_text_processing, "data/plans/algorithms/text-processing");
+category_test!(test_statistics, "data/plans/algorithms/statistics");
 
 // ============================================================================
 // Aggregate test: all plans
@@ -143,6 +144,7 @@ static ALL_CATEGORIES: &[&str] = &[
     "data/plans/algorithms/interval",
     "data/plans/algorithms/tree",
     "data/plans/algorithms/text-processing",
+    "data/plans/algorithms/statistics",
 ];
 
 #[test]

@@ -3082,3 +3082,27 @@ algorithm_expansion:
   parsing: 100
   repack: 100
   unpack: 100
+
+  # statistics domain
+  variance: 100
+  stddev: 100
+  percentile: 100
+  mode: 100
+  covariance: 100
+  correlation: 100
+  interquartile: 100
+  outlier: 100
+  outliers: 100
+  skewness: 50
+  dispersion: 50
+  geometric: 100
+  harmonic: 100
+  weighted: 100
+  deviation: 100
+  normalize: 100
+  coefficient: 100
+  sample: 100
+  standard: 100
+  absolute: 100
+  summary: 100
+  pearson: 100

@@ -911,6 +911,52 @@ verbs:
     action: zero_one_knapsack
     synonyms: [knapsack]
 
+  # ==========================================================================
+  # DOMAIN 6: STATISTICS OPERATIONS
+  # ==========================================================================
+
+  - word: mean_list
+    action: mean_list
+    synonyms: [mean, average]
+  - word: median_list
+    action: median_list
+  - word: mode_list
+    action: mode_list
+  - word: variance_list
+    action: variance_list
+    synonyms: [variance]
+  - word: stddev_list
+    action: stddev_list
+    synonyms: [stddev]
+  - word: range_stat
+    action: range_stat
+  - word: min_list
+    action: min_list
+  - word: max_list
+    action: max_list
+  - word: percentile
+    action: percentile
+  - word: z_score
+    action: z_score
+  - word: geometric_mean
+    action: geometric_mean
+  - word: harmonic_mean
+    action: harmonic_mean
+  - word: covariance
+    action: covariance
+  - word: correlation
+    action: correlation
+  - word: weighted_mean
+    action: weighted_mean
+  - word: five_number_summary
+    action: five_number_summary
+  - word: outlier_count
+    action: outlier_count
+  - word: normalize_list
+    action: normalize_list
+  - word: mean_absolute_deviation
+    action: mean_absolute_deviation
+
 # ---------------------------------------------------------------------------
 # Nouns: object words → concept labels
 # ---------------------------------------------------------------------------
@@ -1882,6 +1928,64 @@ phrase_groups:
   - skeleton: [substring, count]
     canonical: multi_substring_count
 
+  # Statistics domain
+  - skeleton: [mean, list]
+    canonical: mean_list
+  - skeleton: [arithmetic, mean]
+    canonical: mean_list
+  - skeleton: [median, list]
+    canonical: median_list
+  - skeleton: [mode, list]
+    canonical: mode_list
+  - skeleton: [variance, list]
+    canonical: variance_list
+  - skeleton: [standard, deviation]
+    canonical: stddev_list
+  - skeleton: [variance, stddev]
+    canonical: variance_and_stddev
+  - skeleton: [variance, standard, deviation]
+    canonical: variance_and_stddev
+  - skeleton: [coefficient, variation]
+    canonical: coefficient_of_variation
+  - skeleton: [interquartile, range]
+    canonical: interquartile_range
+  - skeleton: [five, number, summary]
+    canonical: five_number_summary
+  - skeleton: [correlation, report]
+    canonical: correlation_report
+  - skeleton: [pearson, correlation]
+    canonical: correlation_report
+  - skeleton: [weighted, grade]
+    canonical: weighted_grade
+  - skeleton: [weighted, mean]
+    canonical: weighted_grade
+  - skeleton: [mean, median]
+    canonical: mean_minus_median
+  - skeleton: [geometric, arithmetic]
+    canonical: geometric_vs_arithmetic
+  - skeleton: [geometric, mean]
+    canonical: geometric_vs_arithmetic
+  - skeleton: [harmonic, arithmetic]
+    canonical: harmonic_vs_arithmetic
+  - skeleton: [harmonic, mean]
+    canonical: harmonic_vs_arithmetic
+  - skeleton: [sample, variance]
+    canonical: sample_variance
+  - skeleton: [standard, error]
+    canonical: standard_error
+  - skeleton: [outlier, percentage]
+    canonical: outlier_percentage
+  - skeleton: [outlier, detection]
+    canonical: outlier_percentage
+  - skeleton: [normalize, list]
+    canonical: normalize_list
+  - skeleton: [z, scores]
+    canonical: normalize_list
+  - skeleton: [dispersion, comparison]
+    canonical: dispersion_comparison
+  - skeleton: [mean, absolute, deviation]
+    canonical: dispersion_comparison
+
 fillers:
   - up
   - out
@@ -1935,8 +2039,7 @@ fillers:
   - thing
   - things
   - stuff
-  - mean
-  - means
+
   - called
   - named
 
