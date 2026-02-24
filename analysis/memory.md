@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-24T05:04:28Z | Size: 73.6k chars
+> Updated: 2026-02-24T07:05:00Z | Size: 74.8k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -928,3 +928,16 @@ plan-name:
 - Score progression: 20.2% → 81.7% (recursion fix) → 94.0% (vocab/lookup) → 95.4% (token fixes)
 - 10 remaining failures: 7 ERROR (type mismatch/unknown op), 2 CLARIFY, 1 WRONG
 - 1362 total tests passing, 1 pre-existing flaky (test_type_symmetric_discovery_tabular)
+
+### NL Autoregression 100% (plan `fix-remaining-10`, commit `e9110e7`)
+- **218/218 plans pass (100%)**, hard 100% gate in `tests/nl_autoregression.rs:474`
+- `data/nl/nl_dictionary.yaml:3055-3065` — 11 words added: lowest, zeros, radius, centered, arith, permutations, nodes, permutation, node, walk, contents
+- `src/nl/mod.rs:218-232` — Early first-token check: tries first content token as direct plan name
+- `src/nl/mod.rs:548-620` — `find_plan_by_token_overlap()` improvements:
+  - `NAME_STOPWORDS` (with/and/is/in/of/to/by/for/a/the) skipped in plan names
+  - Compound token splitting: parts of underscore-joined tokens added to token_set
+  - Score by word count (no direct match bonus — caused regressions)
+- `data/nl/nl_lexicon.yaml:1644-1645` — `[binary,tree,height,balanced]→is_balanced_tree` skeleton
+- `data/nl/nl_lexicon.yaml:1636-1637` — `[complex,arithmetic]→complex_arith` skeleton
+- `data/plans/complex_arith.sexp:1` — Description changed to NL-friendly format
+- Key insight: early token check must be limited to FIRST content token only — checking later compound tokens causes regressions (insertion_sort beats timsort, caesar_cipher beats rot13_cipher)
