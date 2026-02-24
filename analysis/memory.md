@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-24T11:44:14Z | Size: 77.3k chars
+> Updated: 2026-02-24T21:30:38Z | Size: 78.0k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -970,3 +970,14 @@ plan-name:
 - **Registry helpers deduplicated**: 4 local `build_racket_registry()` helpers replaced with canonical `cadmus::racket_executor::build_racket_registry()`
 - **Final counts**: 1421 passed, 0 failed, 65 ignored
 - **Net**: -1538 lines, +24 lines across 11 files
+
+### YAML → Sexpr Migration Complete (commit `07473a9`)
+- **All YAML plan parsing removed from src/**
+  - `parse_plan()`, `validate_plan()`, `PlanDef`/`PlanInput` Deserialize impls deleted
+  - `load_plan()` and `run_plan_str()` now sexpr-only
+  - `serde_yaml::Value` in `StepParam::Clauses` and `RawStep` Deserialize preserved (clause compilation)
+- **229 .sexp plan files** (0 .yaml), 188 algorithm atom ops
+- **70 inline YAML strings** in 8 test files converted to sexpr
+- **Sexpr type syntax**: `(File (Archive (File Image) Cbz))` not `File(Archive(File(Image), Cbz))`
+- **1421 tests passing**, 0 failures, 0 warnings
+- `src/sexpr.rs::parse_sexpr_to_plan()` is the sole plan parser entry point
