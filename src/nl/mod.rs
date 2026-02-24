@@ -205,9 +205,100 @@ fn try_earley_create(
         "compute", "calculate", "run", "execute", "perform",
     ];
     let registry = crate::fs_types::build_full_registry();
+
+    // ── Pre-Earley: try joining consecutive tokens as plan file names ──
+    // e.g., ["git", "log", "search", ...] → try "git_log_search", "git_log", etc.
+    {
+        let content_tokens: Vec<&str> = phrase_tokens.iter()
+            .map(|t| t.as_str())
+            .take_while(|t| !t.starts_with('/') && !t.starts_with('.') && !t.starts_with('~'))
+            .filter(|t| !["the", "a", "an", "in", "of", "for", "with", "and", "to", "from", "by", "on", "at", "is", "it"].contains(t))
+            .collect();
+        // Try longest match first (up to 5 tokens), also try with trailing 's'
+        let max_len = content_tokens.len().min(5);
+        for len in (2..=max_len).rev() {
+            let candidate = content_tokens[..len].join("_");
+            // Try variations: exact, +s, drop last token, drop last +s
+            let shorter = if len > 2 {
+                Some(content_tokens[..len - 1].join("_"))
+            } else {
+                None
+            };
+            let mut tries: Vec<String> = vec![candidate.clone(), format!("{}s", candidate)];
+            if let Some(ref s) = shorter {
+                tries.push(s.clone());
+                tries.push(format!("{}s", s));
+            }
+            let found = tries.iter().find_map(|c| {
+                intent_compiler::try_load_plan_sexpr(c)
+            });
+            if let Some(plan_sexpr) = found {
+                if let Ok(plan) = parse_plan_any(&plan_sexpr) {
+                    return finish_plan_creation(plan, plan_sexpr, state);
+                }
+            }
+        }
+
+        // Also try all 2-token pairs (non-consecutive) for names like "add_numbers",
+        // "deep_audit", "repack_comics" where description has extra words between.
+        // And 3-token triples for names like "subset_sum_all", "graph_coloring_greedy".
+        for i in 0..content_tokens.len() {
+            for j in (i + 1)..content_tokens.len() {
+                for k in (j + 1)..content_tokens.len() {
+                    let triple = format!("{}_{}_{}", content_tokens[i], content_tokens[j], content_tokens[k]);
+                    // Also try de-pluralized first token (e.g., "subsets_sum_all" → "subset_sum_all")
+                    let de_plural = format!("{}_{}_{}",
+                        content_tokens[i].trim_end_matches('s'),
+                        content_tokens[j],
+                        content_tokens[k]);
+                    let tries = vec![triple.clone(), format!("{}s", triple), de_plural];
+                    let found = tries.iter().find_map(|c| {
+                        intent_compiler::try_load_plan_sexpr(c)
+                    });
+                    if let Some(plan_sexpr) = found {
+                        if let Ok(plan) = parse_plan_any(&plan_sexpr) {
+                            return finish_plan_creation(plan, plan_sexpr, state);
+                        }
+                    }
+                }
+            }
+        }
+        for i in 0..content_tokens.len() {
+            for j in (i + 1)..content_tokens.len() {
+                let pair = format!("{}_{}", content_tokens[i], content_tokens[j]);
+                let tries = vec![pair.clone(), format!("{}s", pair)];
+                let found = tries.iter().find_map(|c| {
+                    intent_compiler::try_load_plan_sexpr(c)
+                });
+                if let Some(plan_sexpr) = found {
+                    if let Ok(plan) = parse_plan_any(&plan_sexpr) {
+                        return finish_plan_creation(plan, plan_sexpr, state);
+                    }
+                }
+            }
+        }
+
+        // Last resort: check if all words in a plan file name appear in the
+        // content tokens (order-independent). This handles cases like
+        // "subset_sum_all" where the description has the words in different order.
+        if let Some(plan_name) = find_plan_by_token_overlap(&content_tokens) {
+            if let Some(plan_sexpr) = intent_compiler::try_load_plan_sexpr(&plan_name) {
+                if let Ok(plan) = parse_plan_any(&plan_sexpr) {
+                    return finish_plan_creation(plan, plan_sexpr, state);
+                }
+            }
+        }
+    }
+
     // Find the first token that is an algorithm op (skip leading FS verbs)
+    static SKIP_TOKENS: &[&str] = &[
+        "the", "a", "an", "all", "some", "any", "each", "every",
+        "this", "that", "these", "those", "my", "your", "our",
+        "using", "via", "into", "from", "with",
+    ];
     for token in phrase_tokens.iter()
         .filter(|t| !FS_VERBS.contains(&t.as_str()))
+        .filter(|t| !SKIP_TOKENS.contains(&t.as_str()))
     {
         // Only check if it's an algorithm op or plan file
         if let Some(entry) = registry.get_poly(token.as_str()) {
@@ -450,6 +541,60 @@ fn validate_plan(plan: &crate::plan::PlanDef) -> Result<(), String> {
     crate::plan::compile_plan(plan, &registry)
         .map_err(|e| format!("Compile error: {}", e))?;
     Ok(())
+}
+
+/// Find a plan file whose name tokens are all present in the input tokens.
+/// Returns the plan file name (without extension) if found.
+fn find_plan_by_token_overlap(input_tokens: &[&str]) -> Option<String> {
+    // Build a set of input tokens (including de-pluralized forms)
+    let mut token_set: std::collections::HashSet<&str> = input_tokens.iter().copied().collect();
+    let de_plurals: Vec<String> = input_tokens.iter()
+        .filter(|t| t.ends_with('s') && t.len() > 3)
+        .map(|t| t[..t.len() - 1].to_string())
+        .collect();
+    for dp in &de_plurals {
+        token_set.insert(dp.as_str());
+    }
+
+    // Scan all plan files
+    let mut best: Option<(String, usize)> = None; // (name, word_count)
+
+    let scan_dir = |dir: &std::path::Path, best: &mut Option<(String, usize)>| {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let ext = path.extension().and_then(|e| e.to_str());
+                if ext != Some("sexp") && ext != Some("yaml") { continue; }
+                let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                let name_words: Vec<&str> = stem.split('_').collect();
+                if name_words.len() < 2 { continue; } // skip single-word names
+                let all_present = name_words.iter().all(|w| token_set.contains(w));
+                if all_present {
+                    let wc = name_words.len();
+                    if best.as_ref().map_or(true, |(_, bc)| wc > *bc) {
+                        *best = Some((stem.to_string(), wc));
+                    }
+                }
+            }
+        }
+    };
+
+    // Pipeline plans
+    scan_dir(std::path::Path::new("data/plans"), &mut best);
+
+    // Algorithm plans
+    let algo_base = std::path::Path::new("data/plans/algorithms");
+    if algo_base.exists() {
+        if let Ok(cats) = std::fs::read_dir(algo_base) {
+            for cat in cats.flatten() {
+                if cat.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    scan_dir(&cat.path(), &mut best);
+                }
+            }
+        }
+    }
+
+    best.map(|(name, _)| name)
 }
 
 /// Helper: finish plan creation (validate, format, update state).

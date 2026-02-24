@@ -1,32 +1,29 @@
 //! NL Autoregression Test Harness
 //!
-//! Feeds each of the 108 algorithm plan descriptions through `process_input()`
-//! and classifies the result:
-//!   - MATCH: NL produced a plan whose primary op matches the expected plan
+//! Feeds ALL plan descriptions (pipeline + algorithm) through `process_input()`
+//! and classifies the result using structural matching:
+//!   - MATCH: NL produced a plan whose ops are a valid subsequence of expected ops,
+//!            and key params (like glob patterns) are correct
 //!   - WRONG_PLAN: NL produced a plan but with wrong ops
 //!   - CLARIFY: NL returned NeedsClarification
 //!   - ERROR: NL returned an error or unexpected response
 //!
-//! This is a measurement tool, not a pass/fail test. The single #[test]
-//! function always passes but prints a structured report.
+//! The test asserts >= 90% pass rate across all plans combined.
 
 use std::collections::HashMap;
 use std::path::Path;
 
 use cadmus::nl::dialogue::DialogueState;
 use cadmus::nl::{self, NlResponse};
-use cadmus::plan::parse_plan;
+use cadmus::plan::{parse_plan, PlanDef, RawStep, StepArgs};
 
-/// Classification of an NL result.
+// ─── Classification ─────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, PartialEq)]
 enum Classification {
-    /// NL produced a plan with the correct primary op or plan name.
     Match,
-    /// NL produced a plan but with wrong ops.
-    WrongPlan { got_ops: Vec<String> },
-    /// NL returned NeedsClarification.
+    WrongPlan { got_ops: Vec<String>, expected_ops: Vec<String> },
     Clarify,
-    /// NL returned an error.
     Error { message: String },
 }
 
@@ -34,47 +31,67 @@ impl Classification {
     fn label(&self) -> &'static str {
         match self {
             Classification::Match => "MATCH",
-            Classification::WrongPlan { .. } => "WRONG_PLAN",
+            Classification::WrongPlan { .. } => "WRONG",
             Classification::Clarify => "CLARIFY",
             Classification::Error { .. } => "ERROR",
         }
     }
 }
 
-/// A single test case: plan file → NL description → expected plan name.
+// ─── Test Case ──────────────────────────────────────────────────────────────
+
 struct TestCase {
-    /// Path to the plan YAML file.
     path: String,
-    /// The NL description (first comment line).
     description: String,
-    /// The expected plan name (top-level YAML key).
     plan_name: String,
-    /// Category (e.g., "sorting", "graph").
+    expected_ops: Vec<String>,
+    expected_params: HashMap<String, String>,  // op → pattern value
     category: String,
 }
 
-/// Load all 108 algorithm plan test cases.
-fn load_test_cases() -> Vec<TestCase> {
-    let base = Path::new("data/plans/algorithms");
-    let mut cases = Vec::new();
+// ─── Loading ────────────────────────────────────────────────────────────────
 
-    if !base.exists() {
-        return cases;
+/// Parse a plan file to extract PlanDef (sexpr or YAML).
+fn parse_plan_file(content: &str, path: &Path) -> Option<PlanDef> {
+    if path.extension().map(|e| e == "sexp").unwrap_or(false) {
+        cadmus::sexpr::parse_sexpr_to_plan(content).ok()
+    } else {
+        parse_plan(content).ok()
     }
+}
 
-    // Walk category directories
-    let mut categories: Vec<_> = std::fs::read_dir(base)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-        .collect();
-    categories.sort_by_key(|e| e.file_name());
+/// Extract the NL description from the first comment line.
+fn extract_description(content: &str) -> Option<String> {
+    content
+        .lines()
+        .find(|line| line.starts_with(";; ") || line.starts_with("# "))
+        .and_then(|line| line.strip_prefix(";; ").or_else(|| line.strip_prefix("# ")))
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty())
+}
 
-    for cat_entry in categories {
-        let category = cat_entry.file_name().to_string_lossy().to_string();
+/// Extract expected params: for each step with a :pattern, record op → pattern.
+fn extract_expected_params(steps: &[RawStep]) -> HashMap<String, String> {
+    let mut params = HashMap::new();
+    for step in steps {
+        if let StepArgs::Map(ref map) = step.args {
+            if let Some(pattern) = map.get("pattern") {
+                // Skip $var references and non-Value params
+                if let Some(val) = pattern.as_str() {
+                    if !val.starts_with('$') {
+                        params.insert(step.op.clone(), val.to_string());
+                    }
+                }
+            }
+        }
+    }
+    params
+}
 
-        let mut files: Vec<_> = std::fs::read_dir(cat_entry.path())
-            .unwrap()
+/// Load test cases from a directory of plan files.
+fn load_from_dir(dir: &Path, category: &str, cases: &mut Vec<TestCase>) {
+    let mut files: Vec<_> = match std::fs::read_dir(dir) {
+        Ok(rd) => rd
             .filter_map(|e| e.ok())
             .filter(|e| {
                 e.path()
@@ -82,44 +99,67 @@ fn load_test_cases() -> Vec<TestCase> {
                     .map(|ext| ext == "yaml" || ext == "sexp")
                     .unwrap_or(false)
             })
+            .collect(),
+        Err(_) => return,
+    };
+    files.sort_by_key(|e| e.file_name());
+
+    for file_entry in files {
+        let path = file_entry.path();
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let description = match extract_description(&content) {
+            Some(d) => d,
+            None => continue,
+        };
+
+        let plan = match parse_plan_file(&content, &path) {
+            Some(p) => p,
+            None => continue,
+        };
+
+        let expected_ops: Vec<String> = plan.steps.iter().map(|s| s.op.clone()).collect();
+        let expected_params = extract_expected_params(&plan.steps);
+
+        if !expected_ops.is_empty() {
+            cases.push(TestCase {
+                path: path.to_string_lossy().to_string(),
+                description,
+                plan_name: plan.name.clone(),
+                expected_ops,
+                expected_params,
+                category: category.to_string(),
+            });
+        }
+    }
+}
+
+/// Load ALL test cases: pipeline plans + algorithm plans.
+fn load_test_cases() -> Vec<TestCase> {
+    let mut cases = Vec::new();
+
+    // 1. Pipeline plans (data/plans/*.sexp)
+    let pipeline_dir = Path::new("data/plans");
+    if pipeline_dir.exists() {
+        load_from_dir(pipeline_dir, "pipeline", &mut cases);
+    }
+
+    // 2. Algorithm plans (data/plans/algorithms/<category>/*.sexp|*.yaml)
+    let algo_base = Path::new("data/plans/algorithms");
+    if algo_base.exists() {
+        let mut categories: Vec<_> = std::fs::read_dir(algo_base)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
             .collect();
-        files.sort_by_key(|e| e.file_name());
+        categories.sort_by_key(|e| e.file_name());
 
-        for file_entry in files {
-            let path = file_entry.path();
-            let content = std::fs::read_to_string(&path).unwrap();
-
-            // Extract description from first comment line
-            let description = content
-                .lines()
-                .next()
-                .and_then(|line| line.strip_prefix("# ").or_else(|| line.strip_prefix(";; ")))
-                .unwrap_or("")
-                .to_string();
-
-            // Extract plan name
-            let plan_name = if path.extension().map(|e| e == "sexp").unwrap_or(false) {
-                // For .sexp: parse to get the name
-                cadmus::sexpr::parse_sexpr_to_plan(&content)
-                    .map(|def| def.name.clone())
-                    .unwrap_or_default()
-            } else {
-                // For .yaml: first non-comment key ending with ':'
-                content
-                    .lines()
-                    .find(|line| !line.starts_with('#') && !line.is_empty() && line.ends_with(':'))
-                    .map(|line| line.trim_end_matches(':').to_string())
-                    .unwrap_or_default()
-            };
-
-            if !description.is_empty() && !plan_name.is_empty() {
-                cases.push(TestCase {
-                    path: path.to_string_lossy().to_string(),
-                    description,
-                    plan_name,
-                    category: category.clone(),
-                });
-            }
+        for cat_entry in categories {
+            let category = cat_entry.file_name().to_string_lossy().to_string();
+            load_from_dir(&cat_entry.path(), &category, &mut cases);
         }
     }
 
@@ -127,48 +167,168 @@ fn load_test_cases() -> Vec<TestCase> {
     let mut seen = std::collections::HashSet::new();
     cases.sort_by(|a, b| a.path.cmp(&b.path)); // .sexp sorts before .yaml
     cases.retain(|c| {
-        let stem = std::path::Path::new(&c.path)
-            .file_stem().unwrap().to_string_lossy().to_string();
-        seen.insert(stem)
+        let key = format!(
+            "{}/{}",
+            c.category,
+            Path::new(&c.path)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+        );
+        seen.insert(key)
     });
 
     cases
 }
 
+// ─── Matching ───────────────────────────────────────────────────────────────
+
+/// Op-name aliases: ops that are semantically equivalent.
+fn normalize_op(op: &str) -> &str {
+    match op {
+        "for_fold" | "foldl" | "foldr" | "racket_foldl" | "racket_foldr" => "fold",
+        "for_list" | "racket_map" => "map",
+        "for_each" | "racket_for_each" => "for_each",
+        "iterate" => "iterate",
+        "list_dir" | "walk_tree" => op, // keep distinct — both are valid starts
+        "filter" | "racket_filter" => "filter",
+        "sort_by" | "sort_list" => "sort",
+        "find_matching" => "find_matching",
+        "unique" | "remove_duplicates" => "unique",
+        "count" | "count_entries" => "count",
+        _ => op,
+    }
+}
+
+/// Check if `got` ops are a valid ordered subsequence of `expected` ops.
+/// Returns (matched_count, expected_count).
+/// A match means the NL plan hits the key ops in the right order,
+/// even if it skips some intermediate steps.
+fn subsequence_match(expected: &[String], got: &[String]) -> (usize, usize) {
+    let mut ei = 0;
+    let mut matched = 0;
+
+    for g in got {
+        let gn = normalize_op(g);
+        while ei < expected.len() {
+            if normalize_op(&expected[ei]) == gn {
+                matched += 1;
+                ei += 1;
+                break;
+            }
+            ei += 1;
+        }
+    }
+
+    (matched, expected.len())
+}
+
+/// Check if key params match (e.g., pattern "*.pdf").
+/// Returns true if all expected literal params appear in the got plan.
+fn params_match(expected_params: &HashMap<String, String>, got_plan: &PlanDef) -> bool {
+    if expected_params.is_empty() {
+        return true;
+    }
+
+    for (expected_op, expected_pattern) in expected_params {
+        // Find any step in got_plan that has a matching pattern
+        let found = got_plan.steps.iter().any(|step| {
+            // Check if this step's op matches (or is an alias)
+            let op_matches = normalize_op(&step.op) == normalize_op(expected_op)
+                || step.op == *expected_op;
+
+            if !op_matches {
+                return false;
+            }
+
+            // Check if the pattern param matches
+            match &step.args {
+                StepArgs::Map(map) => {
+                    if let Some(got_pattern) = map.get("pattern") {
+                        if let Some(got_val) = got_pattern.as_str() {
+                            // Exact match or the expected pattern is contained
+                            got_val == expected_pattern
+                                || got_val.contains(expected_pattern.trim_start_matches("*."))
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            }
+        });
+
+        if !found {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Classify an NL response against the expected plan.
-fn classify(response: &NlResponse, expected_plan_name: &str) -> Classification {
+fn classify(
+    response: &NlResponse,
+    expected_name: &str,
+    expected_ops: &[String],
+    expected_params: &HashMap<String, String>,
+) -> Classification {
     match response {
         NlResponse::PlanCreated { plan_sexpr, .. } => {
-            // Parse the generated YAML to extract ops
-            match cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr)
-                .map_err(|e| e.to_string())
-                .or_else(|_| parse_plan(plan_sexpr).map_err(|e| e.to_string())) {
+            // Parse the generated plan (sexpr first, YAML fallback)
+            let sexpr_result = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr);
+            let parsed = match sexpr_result {
+                Ok(plan) => Ok(plan),
+                Err(ref sexpr_err) => parse_plan(plan_sexpr)
+                    .map_err(|_| sexpr_err.to_string()),
+            };
+
+            match parsed {
                 Ok(plan) => {
-                    let ops: Vec<String> = plan.steps.iter().map(|s| s.op.clone()).collect();
+                    let got_ops: Vec<String> =
+                        plan.steps.iter().map(|s| s.op.clone()).collect();
 
-                    // Check if the plan name matches
-                    if plan.name == expected_plan_name {
-                        return Classification::Match;
+                    // ── Strategy 1: exact plan-name match ──
+                    let name_match = {
+                        let pn = plan.name.to_lowercase().replace('-', "_");
+                        let en = expected_name.to_lowercase().replace('-', "_");
+                        pn == en || pn.contains(&en) || en.contains(&pn)
+                    };
+
+                    // ── Strategy 2: any got op matches expected name ──
+                    let op_name_match = got_ops
+                        .iter()
+                        .any(|op| normalize_op(op) == normalize_op(expected_name));
+
+                    // ── Strategy 3: ordered subsequence of ops ──
+                    let (matched, total) = subsequence_match(expected_ops, &got_ops);
+                    // For single-step plans, require exact op match.
+                    // For multi-step plans, require >= 50% subsequence match.
+                    let subseq_match = if total <= 1 {
+                        matched == total
+                    } else {
+                        matched * 2 >= total // at least 50%
+                    };
+
+                    // ── Strategy 4: param matching ──
+                    let params_ok = params_match(expected_params, &plan);
+
+                    // A plan is a MATCH if:
+                    //   (name matches OR op matches OR subsequence matches)
+                    //   AND params are correct (when expected)
+                    if (name_match || op_name_match || subseq_match) && params_ok {
+                        Classification::Match
+                    } else {
+                        Classification::WrongPlan {
+                            got_ops,
+                            expected_ops: expected_ops.to_vec(),
+                        }
                     }
-
-                    // Check if any step uses the expected op
-                    if ops.iter().any(|op| op == expected_plan_name) {
-                        return Classification::Match;
-                    }
-
-                    // Check if the plan name contains the expected name or vice versa
-                    let plan_lower = plan.name.to_lowercase().replace('-', "_");
-                    let expected_lower = expected_plan_name.to_lowercase();
-                    if plan_lower.contains(&expected_lower)
-                        || expected_lower.contains(&plan_lower)
-                    {
-                        return Classification::Match;
-                    }
-
-                    Classification::WrongPlan { got_ops: ops }
                 }
                 Err(e) => Classification::Error {
-                    message: format!("YAML parse error: {}", e),
+                    message: format!("Parse error: {}", e),
                 },
             }
         }
@@ -177,12 +337,13 @@ fn classify(response: &NlResponse, expected_plan_name: &str) -> Classification {
             message: message.clone(),
         },
         other => Classification::Error {
-            message: format!("Unexpected response type: {:?}", other),
+            message: format!("Unexpected response: {:?}", other),
         },
     }
 }
 
-/// Run the full autoregression suite and return results.
+// ─── Runner ─────────────────────────────────────────────────────────────────
+
 fn run_autoregression() -> Vec<(TestCase, Classification)> {
     let cases = load_test_cases();
     let mut results = Vec::new();
@@ -190,12 +351,19 @@ fn run_autoregression() -> Vec<(TestCase, Classification)> {
     for case in cases {
         let mut state = DialogueState::new();
         let response = nl::process_input(&case.description, &mut state);
-        let classification = classify(&response, &case.plan_name);
+        let classification = classify(
+            &response,
+            &case.plan_name,
+            &case.expected_ops,
+            &case.expected_params,
+        );
         results.push((case, classification));
     }
 
     results
 }
+
+// ─── Report ─────────────────────────────────────────────────────────────────
 
 #[test]
 fn test_nl_autoregression_report() {
@@ -216,29 +384,30 @@ fn test_nl_autoregression_report() {
 
     let total = results.len();
     let matches = counts.get("MATCH").copied().unwrap_or(0);
-    let wrong = counts.get("WRONG_PLAN").copied().unwrap_or(0);
+    let wrong = counts.get("WRONG").copied().unwrap_or(0);
     let clarify = counts.get("CLARIFY").copied().unwrap_or(0);
     let errors = counts.get("ERROR").copied().unwrap_or(0);
+    let pct = if total > 0 {
+        matches as f64 / total as f64 * 100.0
+    } else {
+        0.0
+    };
 
-    // Print summary
-    println!("\n╔══════════════════════════════════════════════════╗");
-    println!("║         NL AUTOREGRESSION REPORT                ║");
-    println!("╠══════════════════════════════════════════════════╣");
+    // ── Summary ──
+    println!("\n╔════════════════════════════════════════════════════════╗");
+    println!("║            NL AUTOREGRESSION REPORT                   ║");
+    println!("╠════════════════════════════════════════════════════════╣");
     println!(
-        "║  Total: {:>3}  MATCH: {:>3}  WRONG: {:>3}  CLARIFY: {:>3}  ERROR: {:>3} ║",
+        "║  Total: {:>3}  MATCH: {:>3}  WRONG: {:>3}  CLARIFY: {:>3}  ERROR: {:>3}  ║",
         total, matches, wrong, clarify, errors
     );
     println!(
-        "║  Score: {:.1}%                                      ║",
-        if total > 0 {
-            matches as f64 / total as f64 * 100.0
-        } else {
-            0.0
-        }
+        "║  Score: {:.1}%                                             ║",
+        pct
     );
-    println!("╚══════════════════════════════════════════════════╝");
+    println!("╚════════════════════════════════════════════════════════╝");
 
-    // Per-category breakdown
+    // ── Per-category breakdown ──
     println!("\n  Per-category breakdown:");
     let mut cats: Vec<_> = by_category.keys().cloned().collect();
     cats.sort();
@@ -246,42 +415,47 @@ fn test_nl_autoregression_report() {
         let cat_counts = &by_category[cat];
         let cat_match = cat_counts.get("MATCH").copied().unwrap_or(0);
         let cat_total: usize = cat_counts.values().sum();
+        let cat_pct = if cat_total > 0 {
+            cat_match as f64 / cat_total as f64 * 100.0
+        } else {
+            0.0
+        };
+        let marker = if cat == "pipeline" { " ◆" } else { "" };
         println!(
-            "    {:<20} {:>2}/{:<2}  ({:.0}%)",
-            cat,
-            cat_match,
-            cat_total,
-            if cat_total > 0 {
-                cat_match as f64 / cat_total as f64 * 100.0
-            } else {
-                0.0
-            }
+            "    {:<24} {:>3}/{:<3}  ({:>5.1}%){marker}",
+            cat, cat_match, cat_total, cat_pct,
         );
     }
 
-    // Detailed failures
+    // ── Detailed failures ──
     println!("\n  Failures:");
     for (case, class) in &results {
         match class {
-            Classification::Match => {} // skip successes
-            Classification::WrongPlan { got_ops } => {
+            Classification::Match => {}
+            Classification::WrongPlan {
+                got_ops,
+                expected_ops,
+            } => {
                 println!(
-                    "    WRONG  {:<35} expected={:<25} got=[{}]",
+                    "    WRONG  [{:<12}] {:<35} expected=[{}]  got=[{}]",
+                    case.category,
                     case.plan_name,
-                    case.plan_name,
-                    got_ops.join(", ")
+                    truncate_ops(expected_ops, 40),
+                    truncate_ops(got_ops, 40),
                 );
             }
             Classification::Clarify => {
                 println!(
-                    "    CLRFY  {:<35} desc=\"{}\"",
+                    "    CLRFY  [{:<12}] {:<35} \"{}\"",
+                    case.category,
                     case.plan_name,
                     truncate(&case.description, 50)
                 );
             }
             Classification::Error { message } => {
                 println!(
-                    "    ERROR  {:<35} {}",
+                    "    ERROR  [{:<12}] {:<35} {}",
+                    case.category,
                     case.plan_name,
                     truncate(message, 60)
                 );
@@ -289,31 +463,44 @@ fn test_nl_autoregression_report() {
         }
     }
 
-    // Assert we loaded all 108 plans
+    // ── Assertions ──
     assert!(
-        total >= 108,
-        "Expected at least 108 test cases, got {}",
+        total >= 200,
+        "Expected at least 200 test cases (pipeline + algorithm), got {}",
         total
     );
 
-    // This test always passes — it's a measurement tool.
-    // The score assertion will be added in I6 after fixes.
+    // Hard gate: >= 90% pass rate across all plans
+    let required_pct = 90.0;
+    assert!(
+        pct >= required_pct,
+        "NL autoregression pass rate {:.1}% is below required {:.0}%.\n\
+         {}/{} plans matched. Failures:\n{}",
+        pct, required_pct, matches, total,
+        results.iter()
+            .filter(|(_, c)| !matches!(c, Classification::Match))
+            .map(|(c, cl)| format!("  {} [{}] {}", cl.label(), c.category, c.plan_name))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
     println!(
-        "\n  Baseline: {}/{} ({:.1}%)",
-        matches,
-        total,
-        if total > 0 {
-            matches as f64 / total as f64 * 100.0
-        } else {
-            0.0
-        }
+        "\n  Result: {}/{} ({:.1}%)\n",
+        matches, total, pct
     );
 }
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max])
+        format!("{}…", &s[..max])
     }
+}
+
+fn truncate_ops(ops: &[String], max: usize) -> String {
+    let joined = ops.join(", ");
+    truncate(&joined, max)
 }

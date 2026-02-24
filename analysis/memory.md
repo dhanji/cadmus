@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-23T22:44:14Z | Size: 70.9k chars
+> Updated: 2026-02-24T02:18:35Z | Size: 72.0k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -902,3 +902,17 @@ plan-name:
   - `data/plans/algorithms/dynamic-programming/longest_increasing_subsequence.sexp` — nested for/each, when, let, mutable DP (15 lines)
 - `tests/sexpr_tests.rs` — 9 integration tests (3 inline + 3 file-based + 3 error cases)
 - 48 new tests total (39 unit + 9 integration), 1343 total passing
+
+### Sexpr Keyword Args & Migration (plan `sexpr-keyword-args-and-migration`, complete)
+- **I1**: Keyword args in sexpr: `:keyword value` pairs, `:each` modifier
+- **I2**: `plan_to_sexpr()` serializer with `infer_type_for_serialization()`, `type_str_to_sexpr()`, `type_expr_to_sexpr()`
+- **I3**: 24 pipeline plans converted from YAML to .sexp
+- **I4**: 137 simple algorithm plans converted to .sexp, 57 complex remain as .yaml
+- **I5**: NL pipeline rewired to produce sexpr output
+  - `src/nl/intent_compiler.rs:586-650` — `generate_plan_name()` produces valid identifiers via `slugify_path()`
+  - `src/sexpr.rs:1637-1690` — `infer_type_for_serialization()` mirrors plan compiler's name-based inference
+  - `src/sexpr.rs:1670-1690` — `type_str_to_sexpr()` and `type_expr_to_sexpr()` convert Cadmus types to sexpr format
+  - All 8 test files updated with `parse_plan_any()` helper (sexpr-first, YAML fallback)
+  - YAML parsing retained as fallback for 57 complex algorithm plans
+- **Total: 1447 tests passing**, 1 pre-existing flaky failure
+- **Commit**: `d3f531a`

@@ -3006,3 +3006,49 @@ algorithm_expansion:
   reverse: 100
   characters: 100
   local: 100
+
+# Pipeline plan description words (prevents false SymSpell corrections)
+  audit: 100
+  forensics: 100
+  forensic: 100
+  codebase: 100
+  pipeline: 100
+  repack: 100
+  mega: 50
+  preview: 100
+  spotlight: 100
+  cleanup: 100
+  organize: 100
+  inspect: 100
+  deduplicate: 100
+  arithmetic: 100
+  chain: 100
+  transformation: 100
+  comic: 100
+  comics: 100
+  combine: 100
+  stack: 100
+  queue: 100
+  peak: 100
+  height: 100
+  compute: 100
+  racket: 100
+  ancestor: 100
+  balanced: 100
+  valid: 100
+  identity: 100
+  trailing: 100
+  duplicate: 100
+  duplicates: 100
+  paths: 100
+  grid: 100
+  circle: 100
+  graph: 100
+  miller: 50
+  nth: 100
+  assign: 100
+  subsets: 100
+  subset: 100
+  vertices: 100
+  vertex: 100
+  indexed: 100

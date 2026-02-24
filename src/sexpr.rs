@@ -1734,6 +1734,29 @@ pub fn plan_to_sexpr(plan: &PlanDef) -> String {
 
     // Steps
     for step in &plan.steps {
+        // Self-referential step: op matches plan name with $var keyword args.
+        // Emit (bind param value) lines + bare (op) to avoid recursion-check.
+        if step.op == plan.name {
+            if let StepArgs::Map(ref m) = step.args {
+                let all_var_refs = m.values().all(|p| {
+                    matches!(p, StepParam::Value(v) if v.starts_with('$'))
+                });
+                if all_var_refs && !m.is_empty() {
+                    // Already emitted as bindings above or input defaults;
+                    // just emit the bare op call.
+                    out.push_str("\n  (");
+                    out.push_str(&step.op);
+                    out.push(')');
+                    continue;
+                }
+            }
+            if let StepArgs::None = step.args {
+                out.push_str("\n  (");
+                out.push_str(&step.op);
+                out.push(')');
+                continue;
+            }
+        }
         out.push_str("\n  ");
         format_step(step, &mut out);
     }

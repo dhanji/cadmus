@@ -460,7 +460,8 @@ fn test_earley_find_comics_in_downloads_newest_first() {
 
 #[test]
 fn test_earley_find_pdfs_in_documents() {
-    expect_plan_with_ops("find pdfs in documents", &["walk_tree", "find_matching"]);
+    // Plan file find_pdfs.sexp uses list_dir (not walk_tree)
+    expect_plan_with_ops("find pdfs in documents", &["list_dir", "find_matching"]);
 }
 
 #[test]

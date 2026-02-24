@@ -330,7 +330,21 @@ fn build_op_step_args(
 /// Searches `data/plans/algorithms/` for `<action>.yaml`.
 /// Returns the parsed PlanDef if found, None otherwise. 
 fn try_load_plan_file(action: &str) -> Option<PlanDef> {
-    // Try to find the plan file in the algorithms directory
+    // Normalize: NL may produce hyphenated names, plan files use underscores
+    let normalized = action.replace('-', "_");
+
+    // 1. Try pipeline plans (data/plans/*.sexp)
+    let pipeline_dir = std::path::Path::new("data/plans");
+    if pipeline_dir.exists() {
+        for ext in &["sexp", "yaml"] {
+            let plan_path = pipeline_dir.join(format!("{}.{}", normalized, ext));
+            if let Some(plan) = try_load_plan_at(&plan_path) {
+                return Some(plan);
+            }
+        }
+    }
+
+    // 2. Try algorithm plans (data/plans/algorithms/<category>/*.sexp|*.yaml)
     let base = std::path::Path::new("data/plans/algorithms");
     if !base.exists() {
         return None;
@@ -345,18 +359,9 @@ fn try_load_plan_file(action: &str) -> Option<PlanDef> {
 
         // Try .sexp first, then .yaml
         for ext in &["sexp", "yaml"] {
-            let plan_path = cat_entry.path().join(format!("{}.{}", action, ext));
-            if plan_path.exists() {
-                let content = std::fs::read_to_string(&plan_path).ok()?;
-                let result = if *ext == "sexp" {
-                    crate::sexpr::parse_sexpr_to_plan(&content).map_err(|e| e.to_string())
-                } else {
-                    crate::plan::parse_plan(&content).map_err(|e| e.to_string())
-                };
-                match result {
-                    Ok(plan) => return Some(plan),
-                    Err(_) => continue,
-                }
+            let plan_path = cat_entry.path().join(format!("{}.{}", normalized, ext));
+            if let Some(plan) = try_load_plan_at(&plan_path) {
+                return Some(plan);
             }
         }
     }
@@ -364,14 +369,41 @@ fn try_load_plan_file(action: &str) -> Option<PlanDef> {
     None
 }
 
+/// Try to load and parse a plan from a specific file path.
+fn try_load_plan_at(path: &std::path::Path) -> Option<PlanDef> {
+    if !path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(path).ok()?;
+    let is_sexp = path.extension().map(|e| e == "sexp").unwrap_or(false);
+    let result = if is_sexp {
+        crate::sexpr::parse_sexpr_to_plan(&content).map_err(|e| e.to_string())
+    } else {
+        crate::plan::parse_plan(&content).map_err(|e| e.to_string())
+    };
+    result.ok()
+}
+
 /// Try to load the raw content of a plan file matching the given action name.
 ///
 /// Returns the file content as a string if found, None otherwise.
 pub fn try_load_plan_sexpr(action: &str) -> Option<String> {
-    let base = std::path::Path::new("data/plans/algorithms");
-    if !base.exists() {
-        return None;
+    let normalized = action.replace('-', "_");
+
+    // 1. Try pipeline plans (data/plans/*.sexp|*.yaml)
+    let pipeline_dir = std::path::Path::new("data/plans");
+    if pipeline_dir.exists() {
+        for ext in &["sexp", "yaml"] {
+            let plan_path = pipeline_dir.join(format!("{}.{}", normalized, ext));
+            if plan_path.exists() {
+                return std::fs::read_to_string(&plan_path).ok();
+            }
+        }
     }
+
+    // 2. Try algorithm plans
+    let base = std::path::Path::new("data/plans/algorithms");
+    if !base.exists() { return None; }
 
     for cat_entry in std::fs::read_dir(base).ok()? {
         let cat_entry = cat_entry.ok()?;
@@ -381,7 +413,7 @@ pub fn try_load_plan_sexpr(action: &str) -> Option<String> {
 
         // Try .sexp first, then .yaml
         for ext in &["sexp", "yaml"] {
-            let plan_path = cat_entry.path().join(format!("{}.{}", action, ext));
+            let plan_path = cat_entry.path().join(format!("{}.{}", normalized, ext));
             if plan_path.exists() {
                 return std::fs::read_to_string(&plan_path).ok();
             }

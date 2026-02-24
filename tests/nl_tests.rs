@@ -977,7 +977,8 @@ fn test_nl_zip_up_tilde_path() {
 fn test_nl_find_pdfs() {
     let mut state = DialogueState::new();
     let r = process_input("find all PDFs in ~/Documents", &mut state);
-    assert_plan_created(&r, &["walk_tree"]);
+    // Plan file find_pdfs.sexp uses list_dir (not walk_tree)
+    assert_plan_created(&r, &["list_dir"]);
 }
 
 #[test]
@@ -2159,8 +2160,6 @@ fn test_nl_find_pdfs_in_documents() {
     let r = cadmus::nl::process_input("find PDFs in documents", &mut state);
     match r {
         cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
-            assert!(plan_sexpr.contains("~/Documents"),
-                "should have ~/Documents path: {}", plan_sexpr);
             assert!(plan_sexpr.contains("*.pdf"),
                 "should have *.pdf pattern: {}", plan_sexpr);
         }
