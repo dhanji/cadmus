@@ -304,7 +304,7 @@ fn test_nl_add_4_and_35_together() {
     let response = nl::process_input("Add 4 and 35 together", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             // The YAML should contain the add op
             assert!(yaml.contains("add"), "plan should contain add op, got:\n{}", yaml);
             // Should have the numbers
@@ -322,7 +322,7 @@ fn test_nl_subtract_2_from_6() {
     let response = nl::process_input("Subtract 2 from 6", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             assert!(yaml.contains("subtract"), "plan should contain subtract op, got:\n{}", yaml);
             assert!(yaml.contains("6") || yaml.contains("2"),
                 "plan should reference the numbers, got:\n{}", yaml);
@@ -338,10 +338,11 @@ fn test_nl_add_produces_racket_script() {
     let response = nl::process_input("Add 4 and 35 together", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             // Parse the plan YAML
-            let def: PlanDef = serde_yaml::from_str(yaml)
-                .expect("generated YAML should parse");
+            let def = cadmus::sexpr::parse_sexpr_to_plan(yaml).ok()
+                .or_else(|| cadmus::plan::parse_plan(yaml).ok())
+                .expect("generated plan should parse");
 
             // Build a registry with racket ops
             let _reg = cadmus::fs_types::build_full_registry();
@@ -386,7 +387,7 @@ fn test_nl_multiply_3_and_7() {
     let response = nl::process_input("Multiply 3 and 7", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             assert!(yaml.contains("multiply"), "plan should contain multiply op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -400,7 +401,7 @@ fn test_nl_divide_10_by_2() {
     let response = nl::process_input("Divide 10 by 2", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             assert!(yaml.contains("divide"), "plan should contain divide op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -414,7 +415,7 @@ fn test_nl_plus_synonym() {
     let response = nl::process_input("Plus 10 and 20", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             assert!(yaml.contains("add"), "plus should resolve to add op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -428,7 +429,7 @@ fn test_nl_sum_synonym() {
     let response = nl::process_input("Sum 5 and 10", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             assert!(yaml.contains("add"), "sum should resolve to add op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -442,7 +443,7 @@ fn test_nl_minus_synonym() {
     let response = nl::process_input("Minus 3 from 10", &mut state);
 
     match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => {
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             assert!(yaml.contains("subtract"), "minus should resolve to subtract op, got:\n{}", yaml);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -482,12 +483,14 @@ fn test_full_pipeline_add() {
 
     // 2. Extract plan
     let yaml = match &response {
-        nl::NlResponse::PlanCreated { plan_yaml: yaml, .. } => yaml.clone(),
+        nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => yaml.clone(),
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
 
     // 3. Verify it's a valid plan
-    let def: PlanDef = serde_yaml::from_str(&yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml).ok()
+        .or_else(|| cadmus::plan::parse_plan(&yaml).ok())
+        .expect("should parse plan");
     assert!(!def.steps.is_empty());
 
     // 4. Load fact pack and run inference

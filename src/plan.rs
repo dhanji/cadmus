@@ -1634,8 +1634,11 @@ pub fn run_plan(path: &Path) -> Result<DryRunTrace, PlanError> {
 }
 
 /// Parse a plan YAML string, compile it, and produce a dry-run trace.
-pub fn run_plan_str(yaml: &str) -> Result<DryRunTrace, PlanError> {
-    let def = parse_plan(yaml)?;
+pub fn run_plan_str(src: &str) -> Result<DryRunTrace, PlanError> {
+    // Try sexpr first, fall back to YAML
+    let def = crate::sexpr::parse_sexpr_to_plan(src)
+        .map_err(|e| PlanError::Parse(e.to_string()))
+        .or_else(|_| parse_plan(src))?;
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry)?;
     execute_plan(&compiled, &registry)

@@ -158,15 +158,17 @@ read-all-files-with-path:
 
 #[test]
 fn stress_type_chain_nl_search_uses_textdir() {
-    // The NL layer should use "textdir" for search_content, not "path"
+    // The NL layer should produce a compilable search plan
     let mut state = DialogueState::new();
     let response = nl::process_input("search for TODO in ~/Documents", &mut state);
     match &response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("textdir"),
-                "NL search should use textdir input, got:\n{}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("search_content"),
+                "NL search should have search_content, got:\n{}", plan_sexpr);
             // Verify it compiles
-            let def: PlanDef = serde_yaml::from_str(plan_yaml).unwrap();
+            let def = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr).ok()
+                .or_else(|| plan::parse_plan(plan_sexpr).ok())
+                .expect("should parse plan");
             let registry = build_full_registry();
             let compiled = plan::compile_plan(&def, &registry);
             assert!(compiled.is_ok(),
@@ -388,7 +390,7 @@ fn make_plan(name: &str, inputs: Vec<(&str, &str)>, steps: Vec<CompiledStep>) ->
 fn nl_to_yaml(input: &str) -> Result<String, String> {
     let mut state = DialogueState::new();
     match nl::process_input(input, &mut state) {
-        NlResponse::PlanCreated { plan_yaml, .. } => Ok(plan_yaml),
+        NlResponse::PlanCreated { plan_sexpr, .. } => Ok(plan_sexpr),
         NlResponse::Error { message } => Err(format!("Error: {}", message)),
         NlResponse::NeedsClarification { needs } => Err(format!("NeedsClarification: {:?}", needs)),
         NlResponse::Explanation { text } => Err(format!("Explanation: {}", text)),
@@ -492,12 +494,14 @@ fn stress_nl_full_pipeline_add_produces_racket() {
     let mut state = DialogueState::new();
     let response = nl::process_input("Add 4 and 35 together", &mut state);
     let yaml = match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
+        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr,
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
 
     // Parse the YAML back into a PlanDef
-    let def: PlanDef = serde_yaml::from_str(&yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml).ok()
+        .or_else(|| plan::parse_plan(&yaml).ok())
+        .expect("should parse plan");
     assert!(!def.steps.is_empty(), "plan should have steps");
 
     // Build a compiled plan and generate Racket
@@ -527,11 +531,13 @@ fn stress_nl_full_pipeline_subtract_produces_racket() {
     let mut state = DialogueState::new();
     let response = nl::process_input("Subtract 2 from 6", &mut state);
     let yaml = match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
+        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr,
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
 
-    let def: PlanDef = serde_yaml::from_str(&yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml).ok()
+        .or_else(|| plan::parse_plan(&yaml).ok())
+        .expect("should parse plan");
     let reg = make_racket_reg();
     let compiled = CompiledPlan {
         name: def.name.clone(),

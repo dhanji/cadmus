@@ -343,12 +343,20 @@ fn try_load_plan_file(action: &str) -> Option<PlanDef> {
             continue;
         }
 
-        let plan_path = cat_entry.path().join(format!("{}.yaml", action));
-        if plan_path.exists() {
-            let content = std::fs::read_to_string(&plan_path).ok()?;
-            match crate::plan::parse_plan(&content) {
-                Ok(plan) => return Some(plan),
-                Err(_) => return None,
+        // Try .sexp first, then .yaml
+        for ext in &["sexp", "yaml"] {
+            let plan_path = cat_entry.path().join(format!("{}.{}", action, ext));
+            if plan_path.exists() {
+                let content = std::fs::read_to_string(&plan_path).ok()?;
+                let result = if *ext == "sexp" {
+                    crate::sexpr::parse_sexpr_to_plan(&content).map_err(|e| e.to_string())
+                } else {
+                    crate::plan::parse_plan(&content).map_err(|e| e.to_string())
+                };
+                match result {
+                    Ok(plan) => return Some(plan),
+                    Err(_) => continue,
+                }
             }
         }
     }
@@ -356,12 +364,10 @@ fn try_load_plan_file(action: &str) -> Option<PlanDef> {
     None
 }
 
-/// Try to load the raw YAML content of a plan file matching the given action name.
+/// Try to load the raw content of a plan file matching the given action name.
 ///
 /// Returns the file content as a string if found, None otherwise.
-/// This is used instead of plan_to_yaml() for DSL plans because plan_to_yaml()
-/// can't serialize complex step args (sub-steps, clauses, etc.).
-pub fn try_load_plan_yaml(action: &str) -> Option<String> {
+pub fn try_load_plan_sexpr(action: &str) -> Option<String> {
     let base = std::path::Path::new("data/plans/algorithms");
     if !base.exists() {
         return None;
@@ -373,9 +379,12 @@ pub fn try_load_plan_yaml(action: &str) -> Option<String> {
             continue;
         }
 
-        let plan_path = cat_entry.path().join(format!("{}.yaml", action));
-        if plan_path.exists() {
-            return std::fs::read_to_string(&plan_path).ok();
+        // Try .sexp first, then .yaml
+        for ext in &["sexp", "yaml"] {
+            let plan_path = cat_entry.path().join(format!("{}.{}", action, ext));
+            if plan_path.exists() {
+                return std::fs::read_to_string(&plan_path).ok();
+            }
         }
     }
 
@@ -576,7 +585,7 @@ fn resolve_concept_to_patterns(concept: &str) -> Vec<String> {
 /// Generate a plan name from the steps and target path.
 fn generate_plan_name(steps: &[RawStep], target_path: &str) -> String {
     if steps.is_empty() {
-        return "unnamed-plan".to_string();
+        return "unnamed_plan".to_string();
     }
 
     let ops: Vec<&str> = steps.iter().map(|s| s.op.as_str()).collect();
@@ -607,15 +616,26 @@ fn generate_plan_name(steps: &[RawStep], target_path: &str) -> String {
     if let Some(pattern) = filter_info {
         let clean = pattern.replace("*.", "").replace(',', "-");
         if target_path != "." {
-            format!("{}-{} in {}", primary, clean, target_path)
+            let path_slug = slugify_path(target_path);
+            format!("{}_{}_in_{}", primary, clean, path_slug)
         } else {
-            format!("{}-{}", primary, clean)
+            format!("{}_{}", primary, clean)
         }
     } else if target_path != "." {
-        format!("{} in {}", primary, target_path)
+        let path_slug = slugify_path(target_path);
+        format!("{}_in_{}", primary, path_slug)
     } else {
         primary.to_string()
     }
+}
+
+/// Turn a file path into a valid identifier slug.
+fn slugify_path(path: &str) -> String {
+    path.replace("~/", "")
+        .replace('/', "_")
+        .replace('-', "_")
+        .replace('.', "_")
+        .replace(' ', "_")
 }
 
 // ---------------------------------------------------------------------------
@@ -808,9 +828,9 @@ mod tests {
 
     #[test]
     fn test_bindings_shown_in_yaml() {
-        use crate::nl::dialogue::plan_to_yaml;
+        use crate::nl::dialogue::plan_to_sexpr;
         let plan = expect_plan("find comics in downloads");
-        let yaml = plan_to_yaml(&plan);
+        let yaml = plan_to_sexpr(&plan);
         assert!(yaml.contains("ownload"),
             "YAML should contain bound path value: {}", yaml);
     }

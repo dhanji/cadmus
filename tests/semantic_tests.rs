@@ -38,7 +38,7 @@ use std::path::PathBuf;
 fn nl_to_yaml(input: &str) -> String {
     let mut state = DialogueState::new();
     match nl::process_input(input, &mut state) {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
+        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr,
         other => panic!("Expected PlanCreated for '{}', got: {:?}", input, other),
     }
 }
@@ -87,7 +87,10 @@ fn test_semantic_zip_downloads_execution() {
 #[test]
 fn test_semantic_zip_downloads_type_soundness() {
     let yaml = nl_to_yaml("zip up everything in ~/Downloads");
-    let def = parse_plan(&yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml)
+        .map_err(|e| e.to_string())
+        .or_else(|_| parse_plan(&yaml).map_err(|e| e.to_string()))
+        .unwrap();
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -185,7 +188,10 @@ fn test_semantic_extract_cbz_execution() {
     #[ignore] // TODO: fix in I3/I4 — needs Earley expansion
 fn test_semantic_extract_cbz_type_soundness() {
     let yaml = nl_to_yaml("extract the archive at ~/comic.cbz");
-    let def = parse_plan(&yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml)
+        .map_err(|e| e.to_string())
+        .or_else(|_| parse_plan(&yaml).map_err(|e| e.to_string()))
+        .unwrap();
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -268,7 +274,7 @@ fn test_semantic_multiturn_create_edit_approve() {
     // Turn 1: Create a zip plan
     let r1 = nl::process_input("zip up everything in ~/Downloads", &mut state);
     let yaml1 = match &r1 {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml.clone(),
+        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr.clone(),
         other => panic!("T1: expected PlanCreated, got: {:?}", other),
     };
     assert!(yaml1.contains("walk_tree"), "T1 should have walk_tree");
@@ -277,7 +283,7 @@ fn test_semantic_multiturn_create_edit_approve() {
     // Turn 2: Edit — add a filter to skip .git
     let r2 = nl::process_input("skip any subdirectory named .git", &mut state);
     let yaml2 = match &r2 {
-        NlResponse::PlanEdited { plan_yaml, .. } => plan_yaml.clone(),
+        NlResponse::PlanEdited { plan_sexpr, .. } => plan_sexpr.clone(),
         other => panic!("T2: expected PlanEdited, got: {:?}", other),
     };
     assert!(yaml2.contains("filter"), "T2 should add filter: {}", yaml2);
@@ -301,7 +307,7 @@ fn test_semantic_multiturn_preserves_path() {
     // Create with specific path
     let r1 = nl::process_input("zip up ~/my_project", &mut state);
     let yaml1 = match &r1 {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml.clone(),
+        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr.clone(),
         other => panic!("expected PlanCreated, got: {:?}", other),
     };
     assert!(yaml1.contains("my_project"), "should preserve path: {}", yaml1);
@@ -309,7 +315,7 @@ fn test_semantic_multiturn_preserves_path() {
     // Edit should preserve the path
     let r2 = nl::process_input("skip .DS_Store files", &mut state);
     let yaml2 = match &r2 {
-        NlResponse::PlanEdited { plan_yaml, .. } => plan_yaml.clone(),
+        NlResponse::PlanEdited { plan_sexpr, .. } => plan_sexpr.clone(),
         other => panic!("expected PlanEdited, got: {:?}", other),
     };
     assert!(yaml2.contains("my_project"), "edit should preserve path: {}", yaml2);

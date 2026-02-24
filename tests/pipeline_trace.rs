@@ -61,13 +61,14 @@ fn trace_full_pipeline() {
     let mut state = DialogueState::new();
     let response = nl::process_input(nl_input, &mut state);
     match &response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             println!("  Generated Plan YAML:");
-            for line in plan_yaml.lines() {
+            for line in plan_sexpr.lines() {
                 println!("    {}", line);
             }
             // Parse and show structure
-            if let Ok(wf) = plan::parse_plan(plan_yaml) {
+            if let Some(wf) = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr).ok()
+                .or_else(|| plan::parse_plan(plan_sexpr).ok()) {
                 println!("\n  Parsed PlanDef:");
                 println!("    name: {:?}", wf.name);
                 println!("    inputs:");

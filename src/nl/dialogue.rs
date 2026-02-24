@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use crate::nl::intent::{Intent, EditAction};
 use crate::nl::slots::{ExtractedSlots, SlotValue, StepRef, Anchor};
-use crate::plan::{PlanDef, RawStep, StepArgs, StepParam};
+use crate::plan::{PlanDef, RawStep, StepArgs};
 
 // ---------------------------------------------------------------------------
 // Focus stack for anaphora resolution
@@ -482,75 +482,9 @@ fn build_step_from_slots(op: &str, slots: &ExtractedSlots) -> RawStep {
 // Plan serialization to YAML
 // ---------------------------------------------------------------------------
 
-/// Quote a YAML value if it contains special characters.
-fn yaml_quote_if_needed(s: &str) -> String {
-    if s.contains(' ') || s.contains(':') || s.contains('#')
-        || s.contains('"') || s.contains('\'') || s.contains('\n')
-        || s.contains('*') || s.contains('&') || s.contains('!')
-        || s.contains('{') || s.contains('}') || s.contains('[') || s.contains(']')
-    {
-        format!("{:?}", s) // Rust debug format gives us double-quoted with escapes
-    } else {
-        s.to_string()
-    }
-}
-
-/// Serialize a PlanDef to YAML string.
-pub fn plan_to_yaml(wf: &PlanDef) -> String {
-    let mut lines = Vec::new();
-
-    lines.push(format!("{}:", wf.name));
-
-    if !wf.inputs.is_empty() {
-        lines.push("  inputs:".to_string());
-        for input in &wf.inputs {
-            // Render type hint if present, otherwise bare name
-            if let Some(hint) = &input.type_hint {
-                lines.push(format!("    - {}: {}", input.name, yaml_quote_if_needed(hint)));
-            } else {
-                lines.push(format!("    - {}", input.name));
-            }
-        }
-    }
-
-    // Show bindings (display-only — not parsed back)
-    if !wf.bindings.is_empty() {
-        lines.push("  bindings:".to_string());
-        let mut keys: Vec<&String> = wf.bindings.keys().collect();
-        keys.sort();
-        for key in keys {
-            lines.push(format!("    {}: {}", key, wf.bindings[key]));
-        }
-    }
-
-    lines.push("  steps:".to_string());
-
-    for step in &wf.steps {
-        match &step.args {
-            StepArgs::None => {
-                lines.push(format!("    - {}", step.op));
-            }
-            StepArgs::Scalar(s) => {
-                lines.push(format!("    - {}: {}", step.op, s));
-            }
-            StepArgs::Map(m) => {
-                lines.push(format!("    - {}:", step.op));
-                let mut keys: Vec<&String> = m.keys().collect();
-                keys.sort();
-                for key in keys {
-                    let val_str = match &m[key] {
-                        StepParam::Value(s) => yaml_quote_if_needed(s),
-                        StepParam::Steps(steps) => format!("[{} sub-steps]", steps.len()),
-                        StepParam::Inline(step) => format!("{{{}}}", step.op),
-                        StepParam::Clauses(c) => format!("[{} clauses]", c.len()),
-                    };
-                    lines.push(format!("        {}: {}", key, val_str));
-                }
-            }
-        }
-    }
-
-    lines.join("\n")
+/// Serialize a PlanDef to sexpr string.
+pub fn plan_to_sexpr(wf: &PlanDef) -> String {
+    crate::sexpr::plan_to_sexpr(wf)
 }
 
 // ---------------------------------------------------------------------------
@@ -565,7 +499,7 @@ mod tests {
     // -- Plan YAML serialization --
 
     #[test]
-    fn test_plan_to_yaml_roundtrip() {
+    fn test_plan_to_sexpr_roundtrip() {
         let wf = PlanDef {
             name: "test-plan".to_string(),
             inputs: vec![crate::plan::PlanInput::bare("path")],
@@ -577,20 +511,20 @@ mod tests {
             bindings: HashMap::new(),
         };
 
-        let yaml = plan_to_yaml(&wf);
-        assert!(yaml.contains("test-plan:"));
-        assert!(yaml.contains("walk_tree"));
-        assert!(yaml.contains("sort_by: name"));
+        let sexpr = plan_to_sexpr(&wf);
+        assert!(sexpr.contains("test-plan"), "got: {}", sexpr);
+        assert!(sexpr.contains("walk_tree"), "got: {}", sexpr);
+        assert!(sexpr.contains("sort_by"), "got: {}", sexpr);
 
         // Verify it can be parsed back
-        let parsed = crate::plan::parse_plan(&yaml).unwrap();
+        let parsed = crate::sexpr::parse_sexpr_to_plan(&sexpr).unwrap();
         assert_eq!(parsed.steps.len(), 2);
         assert_eq!(parsed.steps[0].op, "walk_tree");
         assert_eq!(parsed.steps[1].op, "sort_by");
     }
 
     #[test]
-    fn test_plan_to_yaml_with_map_args() {
+    fn test_plan_to_sexpr_with_map_args() {
         let wf = PlanDef {
             name: "filter-test".to_string(),
             inputs: vec![crate::plan::PlanInput::bare("path")],
@@ -609,9 +543,9 @@ mod tests {
             bindings: HashMap::new(),
         };
 
-        let yaml = plan_to_yaml(&wf);
-        assert!(yaml.contains("filter:"));
-        assert!(yaml.contains("pattern:"));
+        let sexpr = plan_to_sexpr(&wf);
+        assert!(sexpr.contains("filter"), "got: {}", sexpr);
+        assert!(sexpr.contains("pattern"), "got: {}", sexpr);
     }
 
     // -- Edit operations --

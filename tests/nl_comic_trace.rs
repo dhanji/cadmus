@@ -17,14 +17,16 @@ use cadmus::racket_executor;
 fn nl_to_yaml(input: &str) -> String {
     let mut state = DialogueState::new();
     match nl::process_input(input, &mut state) {
-        NlResponse::PlanCreated { plan_yaml, .. } => plan_yaml,
+        NlResponse::PlanCreated { plan_sexpr, .. } => plan_sexpr,
         other => panic!("Expected PlanCreated for '{}', got: {:?}", input, other),
     }
 }
 
 fn nl_to_compiled(input: &str) -> (plan::PlanDef, plan::CompiledPlan) {
     let yaml = nl_to_yaml(input);
-    let def = plan::parse_plan(&yaml)
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml)
+        .map_err(|e| e.to_string())
+        .or_else(|_| plan::parse_plan(&yaml).map_err(|e| e.to_string()))
         .unwrap_or_else(|e| panic!("Parse failed for '{}': {}\nYAML:\n{}", input, e, yaml));
     let registry = fs_types::build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
@@ -62,9 +64,9 @@ fn test_nl_simple_extract_via_earley() {
     let response = nl::process_input(input, &mut state);
 
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("extract_archive") || plan_yaml.contains("extract_"),
-                "Should have extract step: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("extract_archive") || plan_sexpr.contains("extract_"),
+                "Should have extract step: {}", plan_sexpr);
         }
         other => {
             // Earley may produce a plan that fails validation for now
@@ -129,11 +131,13 @@ fn trace_nl_comic_repack() {
     println!("Response: {:?}", response);
 
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             println!("\n=== PLAN YAML ===");
-            println!("{}", plan_yaml);
+            println!("{}", plan_sexpr);
 
-            let def = plan::parse_plan(&plan_yaml).unwrap();
+            let def = cadmus::sexpr::parse_sexpr_to_plan(&plan_sexpr).ok()
+                .or_else(|| plan::parse_plan(&plan_sexpr).ok())
+                .expect("should parse plan sexpr or YAML");
             let registry = fs_types::build_full_registry();
             match plan::compile_plan(&def, &registry) {
                 Ok(compiled) => {

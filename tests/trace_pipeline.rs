@@ -25,9 +25,9 @@ fn trace_all_seven_inputs() {
         let mut state = DialogueState::new();
         let response = nl::process_input(input, &mut state);
         match &response {
-            NlResponse::PlanCreated { plan_yaml, .. } => {
+            NlResponse::PlanCreated { plan_sexpr, .. } => {
                 println!("  PlanCreated:");
-                for line in plan_yaml.lines() {
+                for line in plan_sexpr.lines() {
                     println!("    {}", line);
                 }
             }

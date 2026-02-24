@@ -388,18 +388,20 @@ fn expect_plan(input: &str) -> String {
     let mut state = DialogueState::new();
     let response = process_input(input, &mut state);
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            // Verify the YAML round-trips through parse + compile
-            let parsed = cadmus::plan::parse_plan(&plan_yaml)
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            // Verify the sexpr round-trips through parse + compile
+            let parsed = cadmus::sexpr::parse_sexpr_to_plan(&plan_sexpr)
+                .map_err(|e| e.to_string())
+                .or_else(|_| cadmus::plan::parse_plan(&plan_sexpr).map_err(|e| e.to_string()))
                 .unwrap_or_else(|e| panic!(
-                    "plan should parse for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml
+                    "plan should parse for '{}': {}\nYAML:\n{}", input, e, plan_sexpr
                 ));
             let registry = cadmus::fs_types::build_full_registry();
             cadmus::plan::compile_plan(&parsed, &registry)
                 .unwrap_or_else(|e| panic!(
-                    "plan should compile for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml
+                    "plan should compile for '{}': {:?}\nYAML:\n{}", input, e, plan_sexpr
                 ));
-            plan_yaml
+            plan_sexpr
         }
         other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
     }
@@ -628,9 +630,9 @@ fn test_earley_create_edit_approve() {
     // Edit (uses old pipeline pattern matching)
     let r2 = process_input("skip any subdirectory named .git", &mut state);
     match &r2 {
-        NlResponse::PlanEdited { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("filter"),
-                "edit should add filter:\n{}", plan_yaml);
+        NlResponse::PlanEdited { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("filter"),
+                "edit should add filter:\n{}", plan_sexpr);
         }
         other => panic!("expected PlanEdited, got: {:?}", other),
     }
@@ -653,9 +655,9 @@ fn test_earley_replace_plan() {
     assert!(matches!(r2, NlResponse::PlanCreated { .. }));
 
     // The current plan should be the zip one
-    if let NlResponse::PlanCreated { plan_yaml, .. } = r2 {
-        assert!(plan_yaml.contains("pack_archive") || plan_yaml.contains("gzip_compress"),
-            "should be zip plan:\n{}", plan_yaml);
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = r2 {
+        assert!(plan_sexpr.contains("pack_archive") || plan_sexpr.contains("gzip_compress"),
+            "should be zip plan:\n{}", plan_sexpr);
     }
 }
 
@@ -795,28 +797,29 @@ fn test_typo_correction_earley() {
 // ===========================================================================
 
 #[test]
-fn test_earley_plan_yaml_has_function_framing() {
+fn test_earley_plan_sexpr_has_function_framing() {
     let yaml = expect_plan("find comics in downloads");
-    // Function-framing: plan name as top-level key
+    // Sexpr format: (define (name ...) ...)
     let lines: Vec<&str> = yaml.lines().collect();
     assert!(!lines.is_empty());
-    // First line should be "plan-name:" (no indentation)
     let first = lines[0].trim();
-    assert!(first.ends_with(':'), "first line should be plan name: {}", first);
-    assert!(!first.starts_with(' '), "first line should not be indented: {}", first);
+    assert!(first.starts_with("(define ("), "first line should start with (define (: {}", first);
 }
 
 #[test]
-fn test_earley_plan_yaml_has_inputs() {
+fn test_earley_plan_sexpr_has_inputs() {
     let yaml = expect_plan("find comics in downloads");
-    assert!(yaml.contains("inputs:"), "should have inputs section:\n{}", yaml);
+    // Sexpr format: inputs appear as (name : Type) in the define signature
+    assert!(yaml.contains("(path"), "should have path input:\n{}", yaml);
     assert!(yaml.contains("path"), "should have path input:\n{}", yaml);
 }
 
 #[test]
-fn test_earley_plan_yaml_has_steps() {
+fn test_earley_plan_sexpr_has_steps() {
     let yaml = expect_plan("find comics in downloads");
-    assert!(yaml.contains("steps:"), "should have steps section:\n{}", yaml);
+    // Sexpr format: steps appear as (op_name ...) forms
+    assert!(yaml.contains("(walk_tree)") || yaml.contains("(find_matching"),
+        "should have step forms:\n{}", yaml);
 }
 
 // ---------------------------------------------------------------------------
@@ -829,13 +832,13 @@ fn test_binding_find_comics_in_downloads() {
     let mut state = DialogueState::new();
     let response = process_input("find comics in my downloads", &mut state);
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             // The YAML should show the bound path
-            assert!(plan_yaml.contains("ownload"),
-                "YAML should contain path literal:\n{}", plan_yaml);
+            assert!(plan_sexpr.contains("ownload"),
+                "YAML should contain path literal:\n{}", plan_sexpr);
             // The path should appear in the inputs section
-            assert!(plan_yaml.contains("path:") || plan_yaml.contains("path"),
-                "should have path input:\n{}", plan_yaml);
+            assert!(plan_sexpr.contains("path:") || plan_sexpr.contains("path"),
+                "should have path input:\n{}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -846,9 +849,9 @@ fn test_binding_zip_up_downloads() {
     let mut state = DialogueState::new();
     let response = process_input("zip up everything in downloads", &mut state);
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("ownload"),
-                "YAML should contain path literal:\n{}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("ownload"),
+                "YAML should contain path literal:\n{}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -858,13 +861,11 @@ fn test_binding_zip_up_downloads() {
 fn test_binding_no_path_has_no_binding_in_yaml() {
     // "find files" with no location should not show a path binding
     let yaml = expect_plan("find files");
-    // Should have bare "path" input, not "path: <something>"
-    let has_bare_path = yaml.lines().any(|l| {
-        let trimmed = l.trim();
-        trimmed == "- path"
-    });
-    assert!(has_bare_path,
-        "should have bare 'path' input (no binding):\n{}", yaml);
+    // Sexpr format: should have (path : ...) in define but no (bind path ...) form
+    assert!(yaml.contains("path"),
+        "should have path input:\n{}", yaml);
+    assert!(!yaml.contains("(bind "),
+        "should NOT have a binding when no path given:\n{}", yaml);
 }
 
 #[test]
@@ -872,9 +873,9 @@ fn test_binding_list_files_in_documents() {
     let mut state = DialogueState::new();
     let response = process_input("list files in documents", &mut state);
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("ocument"),
-                "YAML should contain path literal:\n{}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("ocument"),
+                "YAML should contain path literal:\n{}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }

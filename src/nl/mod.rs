@@ -32,6 +32,13 @@ use intent::EditAction;
 use slots::ExtractedSlots;
 use crate::calling_frame::CallingFrame;
 
+/// Parse a plan string — tries sexpr first, falls back to YAML.
+fn parse_plan_any(src: &str) -> Result<crate::plan::PlanDef, String> {
+    crate::sexpr::parse_sexpr_to_plan(src)
+        .map_err(|e| e.to_string())
+        .or_else(|_| crate::plan::parse_plan(src).map_err(|e| e.to_string()))
+}
+
 // ---------------------------------------------------------------------------
 // NlResponse — the output of the NL UX layer
 // ---------------------------------------------------------------------------
@@ -42,7 +49,7 @@ pub enum NlResponse {
     /// A new plan plan was created.
     PlanCreated {
         /// The plan YAML string.
-        plan_yaml: String,
+        plan_sexpr: String,
         /// Human-readable summary of what the plan does.
         summary: String,
         /// The prompt to show the user.
@@ -51,7 +58,7 @@ pub enum NlResponse {
     /// An existing plan plan was edited.
     PlanEdited {
         /// The revised plan YAML string.
-        plan_yaml: String,
+        plan_sexpr: String,
         /// Description of what changed.
         diff_description: String,
         /// The prompt to show the user.
@@ -79,7 +86,7 @@ pub enum NlResponse {
         /// Description of what was set.
         description: String,
         /// The revised plan YAML (if a plan exists).
-        plan_yaml: Option<String>,
+        plan_sexpr: Option<String>,
     },
     /// An error occurred.
     Error {
@@ -206,13 +213,13 @@ fn try_earley_create(
         if let Some(entry) = registry.get_poly(token.as_str()) {
             if entry.racket_body.is_some() {
                 let plan = intent_compiler::compile_algorithm_op_by_name(token, entry);
-                let yaml = dialogue::plan_to_yaml(&plan);
+                let yaml = dialogue::plan_to_sexpr(&plan);
                 return finish_plan_creation(plan, yaml, state);
             }
         }
-        if let Some(plan_yaml) = intent_compiler::try_load_plan_yaml(token) {
-            if let Ok(plan) = crate::plan::parse_plan(&plan_yaml) {
-                return finish_plan_creation(plan, plan_yaml, state);
+        if let Some(plan_sexpr) = intent_compiler::try_load_plan_sexpr(token) {
+            if let Ok(plan) = parse_plan_any(&plan_sexpr) {
+                return finish_plan_creation(plan, plan_sexpr, state);
             }
         }
         break; // Only check the first non-FS-verb token
@@ -240,10 +247,10 @@ fn try_earley_create(
 
     match intent_compiler::compile_intent(&ir_result) {
         intent_compiler::CompileResult::Ok(plan) => {
-            // For DSL plans loaded from files, use the raw YAML (plan_to_yaml
+            // For DSL plans loaded from files, use the raw YAML (plan_to_sexpr
             // can't serialize complex step args like sub-steps and clauses).
-            let yaml = intent_compiler::try_load_plan_yaml(&plan.name)
-                .unwrap_or_else(|| dialogue::plan_to_yaml(&plan));
+            let yaml = intent_compiler::try_load_plan_sexpr(&plan.name)
+                .unwrap_or_else(|| dialogue::plan_to_sexpr(&plan));
 
             match validate_plan(&plan) {
                 Ok(()) => {
@@ -258,7 +265,7 @@ fn try_earley_create(
                     state.focus.push(FocusEntry::WholePlan);
 
                     NlResponse::PlanCreated {
-                        plan_yaml: yaml,
+                        plan_sexpr: yaml,
                         summary,
                         prompt,
                     }
@@ -319,7 +326,7 @@ fn handle_edit_step(
 
     match dialogue::apply_edit(&wf, &action, slots, state) {
         Ok((edited_wf, diff_desc)) => {
-            let yaml = dialogue::plan_to_yaml(&edited_wf);
+            let yaml = dialogue::plan_to_sexpr(&edited_wf);
 
             match validate_plan(&edited_wf) {
                 Ok(()) => {
@@ -331,7 +338,7 @@ fn handle_edit_step(
                     state.current_plan = Some(edited_wf);
 
                     NlResponse::PlanEdited {
-                        plan_yaml: yaml,
+                        plan_sexpr: yaml,
                         diff_description: diff_desc,
                         prompt,
                     }
@@ -409,12 +416,12 @@ fn handle_set_param(
         } else {
             edited.inputs.push(crate::plan::PlanInput::bare(p.clone()));
         }
-        let yaml = dialogue::plan_to_yaml(&edited);
+        let yaml = dialogue::plan_to_sexpr(&edited);
         state.current_plan = Some(edited);
 
         NlResponse::ParamSet {
             description: desc,
-            plan_yaml: Some(yaml),
+            plan_sexpr: Some(yaml),
         }
     } else {
         NlResponse::NeedsClarification {
@@ -461,7 +468,7 @@ fn finish_plan_creation(
             );
             state.current_plan = Some(plan);
             state.focus.push(FocusEntry::WholePlan);
-            NlResponse::PlanCreated { plan_yaml: yaml, prompt, summary }
+            NlResponse::PlanCreated { plan_sexpr: yaml, prompt, summary }
         }
         Err(e) => NlResponse::Error { message: format!("Generated plan failed validation: {}", e) },
     }
@@ -531,9 +538,9 @@ mod tests {
         let response = process_input("zip up everything in my downloads", &mut state);
 
         match response {
-            NlResponse::PlanCreated { plan_yaml, summary: _, prompt } => {
-                assert!(plan_yaml.contains("walk_tree"));
-                assert!(plan_yaml.contains("pack_archive"));
+            NlResponse::PlanCreated { plan_sexpr, summary: _, prompt } => {
+                assert!(plan_sexpr.contains("walk_tree"));
+                assert!(plan_sexpr.contains("pack_archive"));
                 assert!(prompt.contains("Approve"));
                 assert!(state.current_plan.is_some());
             }
@@ -547,8 +554,8 @@ mod tests {
         let response = process_input("find all PDFs in ~/Documents", &mut state);
 
         match response {
-            NlResponse::PlanCreated { plan_yaml, .. } => {
-                assert!(plan_yaml.contains("walk_tree") || plan_yaml.contains("find_matching"));
+            NlResponse::PlanCreated { plan_sexpr, .. } => {
+                assert!(plan_sexpr.contains("walk_tree") || plan_sexpr.contains("find_matching"));
             }
             other => panic!("expected PlanCreated, got: {:?}", other),
         }
@@ -560,8 +567,8 @@ mod tests {
         let response = process_input("list ~/Downloads", &mut state);
 
         match response {
-            NlResponse::PlanCreated { plan_yaml, .. } => {
-                assert!(plan_yaml.contains("list_dir"));
+            NlResponse::PlanCreated { plan_sexpr, .. } => {
+                assert!(plan_sexpr.contains("list_dir"));
             }
             other => panic!("expected PlanCreated, got: {:?}", other),
         }
@@ -641,9 +648,9 @@ mod tests {
         // Then edit it
         let r2 = process_input("skip any subdirectory named foo", &mut state);
         match r2 {
-            NlResponse::PlanEdited { plan_yaml, .. } => {
-                assert!(plan_yaml.contains("filter"),
-                    "should have filter step: {}", plan_yaml);
+            NlResponse::PlanEdited { plan_sexpr, .. } => {
+                assert!(plan_sexpr.contains("filter"),
+                    "should have filter step: {}", plan_sexpr);
             }
             other => panic!("expected PlanEdited, got: {:?}", other),
         }
@@ -659,9 +666,9 @@ mod tests {
         let response = process_input("extrct ~/comic.cbz", &mut state);
 
         match response {
-            NlResponse::PlanCreated { plan_yaml, .. } => {
-                assert!(plan_yaml.contains("extract_archive"),
-                    "typo should be corrected: {}", plan_yaml);
+            NlResponse::PlanCreated { plan_sexpr, .. } => {
+                assert!(plan_sexpr.contains("extract_archive"),
+                    "typo should be corrected: {}", plan_sexpr);
             }
             _ => {
                 // Earley may not handle all typo variants yet — acceptable
@@ -692,8 +699,8 @@ mod tests {
         // Turn 2: Edit
         let r2 = process_input("skip any subdirectory named .git", &mut state);
         match &r2 {
-            NlResponse::PlanEdited { plan_yaml, .. } => {
-                assert!(plan_yaml.contains("filter"));
+            NlResponse::PlanEdited { plan_sexpr, .. } => {
+                assert!(plan_sexpr.contains("filter"));
             }
             other => panic!("expected PlanEdited, got: {:?}", other),
         }
@@ -721,9 +728,9 @@ mod tests {
         let mut state = DialogueState::new();
         let response = process_input("zip up everything in ~/Downloads", &mut state);
 
-        if let NlResponse::PlanCreated { plan_yaml, .. } = response {
+        if let NlResponse::PlanCreated { plan_sexpr, .. } = response {
             // Parse it back
-            let parsed = crate::plan::parse_plan(&plan_yaml);
+            let parsed = parse_plan_any(&plan_sexpr);
             assert!(parsed.is_ok(), "should parse: {:?}", parsed.err());
         }
     }

@@ -138,9 +138,11 @@ fn load_test_cases() -> Vec<TestCase> {
 /// Classify an NL response against the expected plan.
 fn classify(response: &NlResponse, expected_plan_name: &str) -> Classification {
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             // Parse the generated YAML to extract ops
-            match parse_plan(plan_yaml) {
+            match cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr)
+                .map_err(|e| e.to_string())
+                .or_else(|_| parse_plan(plan_sexpr).map_err(|e| e.to_string())) {
                 Ok(plan) => {
                     let ops: Vec<String> = plan.steps.iter().map(|s| s.op.clone()).collect();
 

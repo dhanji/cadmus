@@ -3,23 +3,30 @@
 // B7: Bugfix integration tests — multi-turn conversations
 // ===========================================================================
 
+/// Helper: parse a plan string — tries sexpr first, falls back to YAML.
+fn parse_plan_any(src: &str) -> Result<cadmus::plan::PlanDef, String> {
+    cadmus::sexpr::parse_sexpr_to_plan(src)
+        .map_err(|e| e.to_string())
+        .or_else(|_| cadmus::plan::parse_plan(src).map_err(|e| e.to_string()))
+}
+
 /// Helper: assert PlanCreated and that the YAML compiles
 fn assert_plan_compiles(response: &NlResponse, expected_ops: &[&str]) {
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             for op in expected_ops {
                 assert!(
-                    plan_yaml.contains(op),
+                    plan_sexpr.contains(op),
                     "plan should contain '{}': {}",
-                    op, plan_yaml
+                    op, plan_sexpr
                 );
             }
-            let parsed = cadmus::plan::parse_plan(plan_yaml)
+            let parsed = parse_plan_any(plan_sexpr)
                 .expect("should parse");
             let registry = cadmus::fs_types::build_full_registry();
             cadmus::plan::compile_plan(&parsed, &registry)
                 .unwrap_or_else(|e| panic!(
-                    "plan should compile: {:?}\nYAML:\n{}", e, plan_yaml
+                    "plan should compile: {:?}\nYAML:\n{}", e, plan_sexpr
                 ));
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
@@ -118,10 +125,10 @@ fn no_panic(input: &str) -> NlResponse {
 fn test_chaos_slangy_find_pdfs() {
     let r = no_panic("yo can you like find all my pdfs on the desktop real quick");
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("find_matching") || plan_yaml.contains("walk_tree")
-                || plan_yaml.contains("list_dir"),
-                "should produce a file-finding plan: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("find_matching") || plan_sexpr.contains("walk_tree")
+                || plan_sexpr.contains("list_dir"),
+                "should produce a file-finding plan: {}", plan_sexpr);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected response for slangy input: {:?}", other),
@@ -180,14 +187,14 @@ fn test_chaos_ambiguous_no_op() {
     // Should NOT produce a broken plan — either clarify or error
     match &r {
         NlResponse::NeedsClarification { .. } => {} // good
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             // If it creates a plan, it should at least compile
-            let parsed = cadmus::plan::parse_plan(plan_yaml)
+            let parsed = parse_plan_any(plan_sexpr)
                 .expect("should parse");
             let registry = cadmus::fs_types::build_full_registry();
             cadmus::plan::compile_plan(&parsed, &registry)
                 .unwrap_or_else(|e| panic!(
-                    "if plan created, it must compile: {:?}\nYAML:\n{}", e, plan_yaml
+                    "if plan created, it must compile: {:?}\nYAML:\n{}", e, plan_sexpr
                 ));
         }
         _ => {} // Error is also acceptable
@@ -273,15 +280,15 @@ fn nl_e2e_script(input: &str) -> String {
     let mut state = DialogueState::new();
     let r = process_input(input, &mut state);
     match r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            let parsed = cadmus::plan::parse_plan(&plan_yaml)
-                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            let parsed = parse_plan_any(&plan_sexpr)
+                .unwrap_or_else(|e| panic!("parse failed for '{}': {}\nYAML:\n{}", input, e, plan_sexpr));
             let registry = cadmus::fs_types::build_full_registry();
             let compiled = cadmus::plan::compile_plan(&parsed, &registry)
-                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
+                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, plan_sexpr));
             let racket_reg = build_racket_registry();
             cadmus::racket_executor::generate_racket_script(&compiled, &parsed, &racket_reg)
-                .unwrap_or_else(|e| panic!("script gen failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml))
+                .unwrap_or_else(|e| panic!("script gen failed for '{}': {:?}\nYAML:\n{}", input, e, plan_sexpr))
         }
         other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
     }
@@ -292,14 +299,14 @@ fn nl_e2e_yaml(input: &str) -> String {
     let mut state = DialogueState::new();
     let r = process_input(input, &mut state);
     match r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             // Verify it at least compiles
-            let parsed = cadmus::plan::parse_plan(&plan_yaml)
-                .unwrap_or_else(|e| panic!("parse failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
+            let parsed = parse_plan_any(&plan_sexpr)
+                .unwrap_or_else(|e| panic!("parse failed for '{}': {}\nYAML:\n{}", input, e, plan_sexpr));
             let registry = cadmus::fs_types::build_full_registry();
             cadmus::plan::compile_plan(&parsed, &registry)
-                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, plan_yaml));
-            plan_yaml
+                .unwrap_or_else(|e| panic!("compile failed for '{}': {:?}\nYAML:\n{}", input, e, plan_sexpr));
+            plan_sexpr
         }
         other => panic!("expected PlanCreated for '{}', got: {:?}", input, other),
     }
@@ -483,9 +490,9 @@ fn test_path_typo_correction_preserves_tilde_path() {
     let mut state = DialogueState::new();
     let r = process_input("findd files in ~/Documents", &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Documents"),
-                "~/Documents should survive typo correction: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Documents"),
+                "~/Documents should survive typo correction: {}", plan_sexpr);
         }
         // NeedsClarification is also acceptable if "findd" wasn't corrected
         NlResponse::NeedsClarification { .. } => {}
@@ -500,10 +507,10 @@ fn test_path_quoted_with_typo_in_context() {
     let mut state = DialogueState::new();
     let r = process_input(r#"findd files in "NO NAME""#, &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             // The quoted path should survive — either as "NO NAME" or /Volumes/NO NAME
-            assert!(plan_yaml.contains("NO NAME") || plan_yaml.contains("no name"),
-                "quoted path should survive: {}", plan_yaml);
+            assert!(plan_sexpr.contains("NO NAME") || plan_sexpr.contains("no name"),
+                "quoted path should survive: {}", plan_sexpr);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected: {:?}", other),
@@ -519,10 +526,10 @@ fn test_path_dir_alias_in_edit_context() {
 
     let r = process_input("skip desktop", &mut state);
     match &r {
-        NlResponse::PlanEdited { plan_yaml, .. } => {
+        NlResponse::PlanEdited { plan_sexpr, .. } => {
             // The skip should add a filter for "desktop" (the name), not ~/Desktop
-            assert!(!plan_yaml.contains("~/Desktop"),
-                "skip should use 'desktop' as pattern, not ~/Desktop: {}", plan_yaml);
+            assert!(!plan_sexpr.contains("~/Desktop"),
+                "skip should use 'desktop' as pattern, not ~/Desktop: {}", plan_sexpr);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected for skip desktop: {:?}", other),
@@ -536,9 +543,9 @@ fn test_path_noun_pattern_with_explicit_pattern() {
     let mut state = DialogueState::new();
     let r = process_input("find *.log files on desktop", &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("*.log") || plan_yaml.contains(".log"),
-                "explicit pattern should be present: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("*.log") || plan_sexpr.contains(".log"),
+                "explicit pattern should be present: {}", plan_sexpr);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         other => panic!("unexpected: {:?}", other),
@@ -551,9 +558,9 @@ fn test_path_multiple_paths_in_input() {
     let mut state = DialogueState::new();
     let r = process_input("rename ~/old.txt to ~/new.txt", &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("old.txt") || plan_yaml.contains("new.txt"),
-                "should capture paths: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("old.txt") || plan_sexpr.contains("new.txt"),
+                "should capture paths: {}", plan_sexpr);
         }
         NlResponse::NeedsClarification { .. } => {} // acceptable
         NlResponse::Error { .. } => {} // type mismatch is a known bug
@@ -568,9 +575,9 @@ fn test_path_url_preserved() {
     let mut state = DialogueState::new();
     let r = process_input("download https://example.com/file.tar.gz", &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("https://example.com/file.tar.gz"),
-                "URL should be preserved: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("https://example.com/file.tar.gz"),
+                "URL should be preserved: {}", plan_sexpr);
         }
         other => panic!("unexpected: {:?}", other),
     }
@@ -582,9 +589,9 @@ fn test_path_home_expansion_not_mangled() {
     let mut state = DialogueState::new();
     let r = process_input("list files in ~/Documents", &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Documents"),
-                "~/Documents should be preserved: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Documents"),
+                "~/Documents should be preserved: {}", plan_sexpr);
         }
         other => panic!("unexpected: {:?}", other),
     }
@@ -602,9 +609,9 @@ fn test_conv_create_edit_skip_approve() {
     // Step 1: Create an add plan
     let r1 = process_input("add 10 and 20", &mut state);
     match &r1 {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("add"),
-                "should have add: {}", plan_yaml);
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("add"),
+                "should have add: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -698,13 +705,13 @@ fn test_conv_ten_sequential_edits() {
     for (i, edit) in edits.iter().enumerate() {
         let r = process_input(edit, &mut state);
         match &r {
-            NlResponse::PlanEdited { plan_yaml, .. } => {
+            NlResponse::PlanEdited { plan_sexpr, .. } => {
                 // Should still parse and compile
-                let parsed = cadmus::plan::parse_plan(plan_yaml)
-                    .unwrap_or_else(|e| panic!("edit {} should parse: {:?}\nYAML:\n{}", i, e, plan_yaml));
+                let parsed = parse_plan_any(plan_sexpr)
+                    .unwrap_or_else(|e| panic!("edit {} should parse: {:?}\nYAML:\n{}", i, e, plan_sexpr));
                 let registry = cadmus::fs_types::build_full_registry();
                 cadmus::plan::compile_plan(&parsed, &registry)
-                    .unwrap_or_else(|e| panic!("edit {} should compile: {:?}\nYAML:\n{}", i, e, plan_yaml));
+                    .unwrap_or_else(|e| panic!("edit {} should compile: {:?}\nYAML:\n{}", i, e, plan_sexpr));
             }
             other => {
                 // Some edits might not apply cleanly — that's ok as long as no panic
@@ -739,10 +746,10 @@ fn test_conv_overwrite_plan() {
     // Create second plan — should overwrite
     let r2 = process_input("find pdfs in ~/Documents", &mut state);
     match &r2 {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             // Should be the new plan, not the old one
-            assert!(plan_yaml.contains("Documents") || plan_yaml.contains("pdf"),
-                "should be the new plan: {}", plan_yaml);
+            assert!(plan_sexpr.contains("Documents") || plan_sexpr.contains("pdf"),
+                "should be the new plan: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated for overwrite, got: {:?}", other),
     }
@@ -961,8 +968,8 @@ fn test_nl_zip_up_tilde_path() {
     let mut state = DialogueState::new();
     let r = process_input("zip up ~/Downloads", &mut state);
     assert_plan_created(&r, &["pack_archive"]);
-    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
-        assert!(plan_yaml.contains("~/Downloads"), "yaml: {}", plan_yaml);
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = &r {
+        assert!(plan_sexpr.contains("~/Downloads"), "yaml: {}", plan_sexpr);
     }
 }
 
@@ -1051,10 +1058,10 @@ fn test_nl_typo_walk_tree() {
     let r = process_input("wlak the direcotry tree in /tmp", &mut state);
     // Even with typos, should produce a valid plan
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             assert!(
-                plan_yaml.contains("walk_tree") || plan_yaml.contains("list_dir"),
-                "should have a dir operation: {}", plan_yaml
+                plan_sexpr.contains("walk_tree") || plan_sexpr.contains("list_dir"),
+                "should have a dir operation: {}", plan_sexpr
             );
         }
         NlResponse::NeedsClarification { .. } => {
@@ -1214,8 +1221,8 @@ fn test_nl_edit_skip_subdirectory() {
     // Edit: skip a subdirectory
     let r2 = process_input("skip any subdirectory named .git", &mut state);
     match r2 {
-        NlResponse::PlanEdited { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("filter"), "should have filter: {}", plan_yaml);
+        NlResponse::PlanEdited { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("filter"), "should have filter: {}", plan_sexpr);
         }
         other => panic!("expected PlanEdited, got: {:?}", other),
     }
@@ -1389,13 +1396,13 @@ fn test_hardening_ok_search_todo_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("ok search for TODO in ~/src", &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
-            let yaml_lower = plan_yaml.to_lowercase();
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
+            let yaml_lower = plan_sexpr.to_lowercase();
             assert!(!yaml_lower.contains("pattern: \"ok\"") && !yaml_lower.contains("pattern: ok"),
-                "'ok' should NOT be the search pattern: {}", plan_yaml);
+                "'ok' should NOT be the search pattern: {}", plan_sexpr);
             // "todo" should be the keyword
             assert!(yaml_lower.contains("todo"),
-                "should contain 'todo' as keyword: {}", plan_yaml);
+                "should contain 'todo' as keyword: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -1406,10 +1413,10 @@ fn test_hardening_so_find_pdfs_no_so_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("so find all PDFs in ~/Documents", &mut state);
     match &r {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             // "so" should not appear as a keyword/pattern
-            assert!(!plan_yaml.contains("pattern: \"so\"") && !plan_yaml.contains("pattern: so\n"),
-                "'so' should NOT be a keyword: {}", plan_yaml);
+            assert!(!plan_sexpr.contains("pattern: \"so\"") && !plan_sexpr.contains("pattern: so\n"),
+                "'so' should NOT be a keyword: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -1529,12 +1536,12 @@ fn test_nl_edited_yaml_compiles() {
 
 fn assert_plan_created(response: &NlResponse, expected_ops: &[&str]) {
     match response {
-        NlResponse::PlanCreated { plan_yaml, .. } => {
+        NlResponse::PlanCreated { plan_sexpr, .. } => {
             for op in expected_ops {
                 assert!(
-                    plan_yaml.contains(op),
+                    plan_sexpr.contains(op),
                     "plan should contain '{}': {}",
-                    op, plan_yaml
+                    op, plan_sexpr
                 );
             }
         }
@@ -1543,8 +1550,8 @@ fn assert_plan_created(response: &NlResponse, expected_ops: &[&str]) {
 }
 
 fn assert_yaml_compiles(response: &NlResponse) {
-    if let NlResponse::PlanCreated { plan_yaml, .. } = response {
-        let parsed = cadmus::plan::parse_plan(plan_yaml)
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = response {
+        let parsed = parse_plan_any(plan_sexpr)
             .expect("should parse");
         let registry = cadmus::fs_types::build_full_registry();
         cadmus::plan::compile_plan(&parsed, &registry)
@@ -1553,8 +1560,8 @@ fn assert_yaml_compiles(response: &NlResponse) {
 }
 
 fn assert_yaml_compiles_edited(response: &NlResponse) {
-    if let NlResponse::PlanEdited { plan_yaml, .. } = response {
-        let parsed = cadmus::plan::parse_plan(plan_yaml)
+    if let NlResponse::PlanEdited { plan_sexpr, .. } = response {
+        let parsed = parse_plan_any(plan_sexpr)
             .expect("should parse");
         let registry = cadmus::fs_types::build_full_registry();
         cadmus::plan::compile_plan(&parsed, &registry)
@@ -1585,11 +1592,11 @@ fn test_redteam_never_mind_rejects() {
 fn test_redteam_search_todo_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("search for TODO in ~/src", &mut state);
-    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
-        assert!(plan_yaml.contains("todo") || plan_yaml.contains("TODO"),
-            "search pattern should contain 'todo', got:\n{}", plan_yaml);
-        assert!(!plan_yaml.contains("good"),
-            "search pattern should NOT contain 'good', got:\n{}", plan_yaml);
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = &r {
+        assert!(plan_sexpr.contains("todo") || plan_sexpr.contains("TODO"),
+            "search pattern should contain 'todo', got:\n{}", plan_sexpr);
+        assert!(!plan_sexpr.contains("good"),
+            "search pattern should NOT contain 'good', got:\n{}", plan_sexpr);
     } else {
         panic!("expected PlanCreated, got: {:?}", r);
     }
@@ -1600,9 +1607,9 @@ fn test_redteam_search_todo_keyword() {
 fn test_redteam_search_fixme_keyword() {
     let mut state = DialogueState::new();
     let r = process_input("search for FIXME in ~/src", &mut state);
-    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
-        assert!(plan_yaml.contains("fixme") || plan_yaml.contains("FIXME"),
-            "search pattern should contain 'fixme', got:\n{}", plan_yaml);
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = &r {
+        assert!(plan_sexpr.contains("fixme") || plan_sexpr.contains("FIXME"),
+            "search pattern should contain 'fixme', got:\n{}", plan_sexpr);
     } else {
         panic!("expected PlanCreated, got: {:?}", r);
     }
@@ -1775,9 +1782,9 @@ fn test_redteam_create_overwrite_approve() {
     // Second create overwrites first
     let r2 = process_input("list ~/Desktop", &mut state);
     assert!(matches!(r2, NlResponse::PlanCreated { .. }));
-    if let NlResponse::PlanCreated { plan_yaml, .. } = &r2 {
-        assert!(plan_yaml.contains("list_dir"),
-            "second plan should be list_dir: {}", plan_yaml);
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = &r2 {
+        assert!(plan_sexpr.contains("list_dir"),
+            "second plan should be list_dir: {}", plan_sexpr);
     }
     let r3 = process_input("yes", &mut state);
     assert!(matches!(r3, NlResponse::Approved { .. }));
@@ -1897,10 +1904,10 @@ fn test_filetype_plist_detected_as_path() {
 fn test_filetype_flac_infers_audio_type() {
     let mut state = DialogueState::new();
     let r = process_input("copy song.flac to ~/backup/", &mut state);
-    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = &r {
         // Should compile — the dictionary gives File(Audio) for .flac
-        let def: cadmus::plan::PlanDef =
-            serde_yaml::from_str(plan_yaml).unwrap();
+        let def = parse_plan_any(plan_sexpr)
+            .unwrap_or_else(|e| panic!("should parse: {}\nsexpr:\n{}", e, plan_sexpr));
         let reg = cadmus::fs_types::build_full_registry();
         let compiled = cadmus::plan::compile_plan(&def, &reg);
         assert!(compiled.is_ok(), "flac plan should compile: {:?}", compiled.err());
@@ -1911,9 +1918,9 @@ fn test_filetype_flac_infers_audio_type() {
 fn test_filetype_scheme_infers_text_type() {
     let mut state = DialogueState::new();
     let r = process_input("search for define in program.scm", &mut state);
-    if let NlResponse::PlanCreated { plan_yaml, .. } = &r {
-        let def: cadmus::plan::PlanDef =
-            serde_yaml::from_str(plan_yaml).unwrap();
+    if let NlResponse::PlanCreated { plan_sexpr, .. } = &r {
+        let def = parse_plan_any(plan_sexpr)
+            .unwrap_or_else(|e| panic!("should parse: {}\nsexpr:\n{}", e, plan_sexpr));
         let reg = cadmus::fs_types::build_full_registry();
         let compiled = cadmus::plan::compile_plan(&def, &reg);
         assert!(compiled.is_ok(), "scheme plan should compile: {:?}", compiled.err());
@@ -1980,9 +1987,9 @@ fn test_yaml_vocab_synonyms_loaded() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("zip up everything in ~/Downloads", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("pack_archive"),
-                "should have pack_archive in YAML from synonym, got: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("pack_archive"),
+                "should have pack_archive in YAML from synonym, got: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2086,9 +2093,9 @@ fn test_yaml_full_pipeline_walk_tree() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("walk the directory tree in ~/Documents", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("walk_tree"),
-                "should have walk_tree from YAML synonyms: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("walk_tree"),
+                "should have walk_tree from YAML synonyms: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2117,15 +2124,15 @@ fn test_nl_find_screenshots_on_my_desktop() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("Find all screenshots on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", plan_yaml);
-            assert!(plan_yaml.contains("*.png"),
-                "should have *.png pattern for screenshots: {}", plan_yaml);
-            assert!(plan_yaml.contains("walk_tree"),
-                "should have walk_tree step: {}", plan_yaml);
-            assert!(plan_yaml.contains("find_matching"),
-                "should have find_matching step: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("*.png"),
+                "should have *.png pattern for screenshots: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("walk_tree"),
+                "should have walk_tree step: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("find_matching"),
+                "should have find_matching step: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2136,11 +2143,11 @@ fn test_nl_list_videos_in_my_downloads() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("list videos in my downloads", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Downloads"),
-                "should have ~/Downloads path: {}", plan_yaml);
-            assert!(plan_yaml.contains("*.mp4") || plan_yaml.contains("*.mov"),
-                "should have video pattern: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Downloads"),
+                "should have ~/Downloads path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("*.mp4") || plan_sexpr.contains("*.mov"),
+                "should have video pattern: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2151,11 +2158,11 @@ fn test_nl_find_pdfs_in_documents() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find PDFs in documents", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Documents"),
-                "should have ~/Documents path: {}", plan_yaml);
-            assert!(plan_yaml.contains("*.pdf"),
-                "should have *.pdf pattern: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Documents"),
+                "should have ~/Documents path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("*.pdf"),
+                "should have *.pdf pattern: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2167,14 +2174,14 @@ fn test_nl_zip_up_photos_on_my_desktop() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("zip up photos on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", plan_yaml);
-            assert!(plan_yaml.contains("pack_archive"),
-                "should have pack_archive step: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("pack_archive"),
+                "should have pack_archive step: {}", plan_sexpr);
             // photos → *.png pattern used as filter
-            assert!(plan_yaml.contains("*.png") || plan_yaml.contains("filter"),
-                "should have photo filter: {}", plan_yaml);
+            assert!(plan_sexpr.contains("*.png") || plan_sexpr.contains("filter"),
+                "should have photo filter: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2186,9 +2193,9 @@ fn test_nl_bare_desktop_resolves_path() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("list desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2201,12 +2208,12 @@ fn test_nl_find_stuff_no_noun_pattern() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find stuff on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_sexpr);
             // "stuff" becomes a keyword, used as *stuff* pattern in find_matching
-            assert!(plan_yaml.contains("*stuff*"),
-                "should have *stuff* keyword pattern: {}", plan_yaml);
+            assert!(plan_sexpr.contains("*stuff*"),
+                "should have *stuff* keyword pattern: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2218,11 +2225,11 @@ fn test_nl_explicit_path_with_noun() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find screenshots in ~/Projects", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Projects"),
-                "should have ~/Projects path: {}", plan_yaml);
-            assert!(plan_yaml.contains("*.png"),
-                "should have *.png pattern: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Projects"),
+                "should have ~/Projects path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("*.png"),
+                "should have *.png pattern: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2233,11 +2240,11 @@ fn test_nl_find_logs_on_desktop() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input("find logs on my desktop", &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("~/Desktop"),
-                "should have ~/Desktop path: {}", plan_yaml);
-            assert!(plan_yaml.contains("*.log"),
-                "should have *.log pattern: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("~/Desktop"),
+                "should have ~/Desktop path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("*.log"),
+                "should have *.log pattern: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2251,11 +2258,11 @@ fn test_nl_quoted_path_no_name() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input(r#"list all the files in "NO NAME""#, &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("NO NAME"),
-                "should have 'NO NAME' as path: {}", plan_yaml);
-            assert!(plan_yaml.contains("list_dir"),
-                "should have list_dir step: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("NO NAME"),
+                "should have 'NO NAME' as path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("list_dir"),
+                "should have list_dir step: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }
@@ -2267,11 +2274,11 @@ fn test_nl_quoted_path_with_find() {
     let mut state = cadmus::nl::dialogue::DialogueState::new();
     let r = cadmus::nl::process_input(r#"find PDFs in "My Backup Drive""#, &mut state);
     match r {
-        cadmus::nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("My Backup Drive"),
-                "should have 'My Backup Drive' as path: {}", plan_yaml);
-            assert!(plan_yaml.contains("*.pdf"),
-                "should have *.pdf pattern: {}", plan_yaml);
+        cadmus::nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("My Backup Drive"),
+                "should have 'My Backup Drive' as path: {}", plan_sexpr);
+            assert!(plan_sexpr.contains("*.pdf"),
+                "should have *.pdf pattern: {}", plan_sexpr);
         }
         other => panic!("expected PlanCreated, got: {:?}", other),
     }

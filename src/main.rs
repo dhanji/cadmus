@@ -99,20 +99,20 @@ fn run_chat_mode() {
         let response = nl::process_input(input, &mut state);
 
         match response {
-            nl::NlResponse::PlanCreated { plan_yaml, summary: _, prompt: _ } => {
+            nl::NlResponse::PlanCreated { plan_sexpr, summary: _, prompt: _ } => {
                 println!();
                 println!("  {}", ui::status_ok("Plan created"));
                 println!();
-                println!("{}", ui::yaml_block(&plan_yaml));
+                println!("{}", ui::plan_block(&plan_sexpr));
                 println!();
                 println!("  {}", ui::dim("approve, edit, or reject?"));
                 println!();
             }
-            nl::NlResponse::PlanEdited { plan_yaml, diff_description, .. } => {
+            nl::NlResponse::PlanEdited { plan_sexpr, diff_description, .. } => {
                 println!();
                 println!("  {}", ui::status_info(&format!("Edited: {}", diff_description)));
                 println!();
-                println!("{}", ui::yaml_block(&plan_yaml));
+                println!("{}", ui::plan_block(&plan_sexpr));
                 println!();
                 println!("  {}", ui::dim("approve?"));
                 println!();

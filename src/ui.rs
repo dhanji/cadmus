@@ -320,11 +320,11 @@ pub fn code_block_numbered(code: &str, start_line: usize) -> String {
 }
 
 /// Dim YAML block (for plan plans shown to user).
-pub fn yaml_block(yaml: &str) -> String {
+pub fn plan_block(text: &str) -> String {
     let border = dim("─────────────────────────────────────────");
     let mut out = String::new();
     out.push_str(&format!("  {}{}\n", dim("┌"), border));
-    for line in yaml.lines() {
+    for line in text.lines() {
         out.push_str(&format!("  {} {}\n", dim("│"), dim_white(line)));
     }
     out.push_str(&format!("  {}{}", dim("└"), border));
@@ -604,8 +604,8 @@ mod tests {
     }
 
     #[test]
-    fn test_yaml_block() {
-        let block = yaml_block("test-plan:\n  steps:\nsteps:\n  - walk_tree");
+    fn test_plan_block() {
+        let block = plan_block("test-plan:\n  steps:\nsteps:\n  - walk_tree");
         assert!(block.contains("test-plan:"));
         assert!(block.contains("walk_tree"));
     }

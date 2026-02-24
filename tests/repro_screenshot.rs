@@ -76,9 +76,9 @@ fn test_find_screenshot_nl_roundtrip() {
     let r1 = nl::process_input("find the latest screenshot on my desktop", &mut state);
 
     match &r1 {
-        nl::NlResponse::PlanCreated { plan_yaml, .. } => {
-            assert!(plan_yaml.contains("walk_tree") || plan_yaml.contains("find_matching"),
-                "should have walk/find: {}", plan_yaml);
+        nl::NlResponse::PlanCreated { plan_sexpr, .. } => {
+            assert!(plan_sexpr.contains("walk_tree") || plan_sexpr.contains("find_matching"),
+                "should have walk/find: {}", plan_sexpr);
         }
         other => {
             panic!("Expected PlanCreated, got: {:?}", other);

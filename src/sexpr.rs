@@ -1634,6 +1634,59 @@ pub fn parse_sexpr_to_plan(src: &str) -> Result<PlanDef, ParseError> {
     lower_to_plan(&ast)
 }
 
+/// Infer the type string for a PlanInput when serializing to sexpr.
+/// Uses the explicit type_hint if present, otherwise infers from the input name
+/// to match what the plan compiler's `infer_input_type()` would produce.
+/// Returns the type in sexpr format: (Dir Bytes) not Dir(Bytes).
+fn infer_type_for_serialization(input: &crate::plan::PlanInput) -> String {
+    if let Some(hint) = &input.type_hint {
+        return type_str_to_sexpr(hint);
+    }
+    // Mirror the name-based inference from plan.rs::infer_input_type()
+    let name = input.name.to_lowercase();
+    match name.as_str() {
+        "x" | "y" | "a" | "b" | "n" | "m" | "left" | "right" => "Number".to_string(),
+        "pathref" | "target" => "Path".to_string(),
+        "url" => "URL".to_string(),
+        "repo" => "Repo".to_string(),
+        "textdir" | "text_dir" => "(Dir (File Text))".to_string(),
+        "file" | "logfile" | "archive" => "(File Bytes)".to_string(),
+        _ if name.contains("dir") || name == "path" || name == "source" || name == "dest" => "(Dir Bytes)".to_string(),
+        _ if name.contains("url") => "URL".to_string(),
+        _ if name.contains("pattern") || name.contains("keyword") || name.contains("query") || name.contains("search") => "Pattern".to_string(),
+        _ if name.contains("size") => "Size".to_string(),
+        _ if name.contains("repository") => "Repo".to_string(),
+        _ => "Bytes".to_string(),
+    }
+}
+
+/// Convert a Cadmus type string like "Dir(Bytes)" to sexpr format "(Dir Bytes)".
+fn type_str_to_sexpr(s: &str) -> String {
+    // Simple types with no parens pass through
+    if !s.contains('(') {
+        return s.to_string();
+    }
+    // Parse as TypeExpr and re-emit in sexpr format
+    if let Ok(te) = crate::type_expr::TypeExpr::parse(s) {
+        return type_expr_to_sexpr(&te);
+    }
+    // Fallback: return as-is
+    s.to_string()
+}
+
+/// Convert a TypeExpr to sexpr format string.
+fn type_expr_to_sexpr(te: &crate::type_expr::TypeExpr) -> String {
+    use crate::type_expr::TypeExpr;
+    match te {
+        TypeExpr::Primitive(name) | TypeExpr::Var(name) => name.clone(),
+        TypeExpr::Constructor(name, args) if args.is_empty() => name.clone(),
+        TypeExpr::Constructor(name, args) => {
+            let inner: Vec<String> = args.iter().map(type_expr_to_sexpr).collect();
+            format!("({} {})", name, inner.join(" "))
+        }
+    }
+}
+
 /// Serialize a PlanDef to sexpr string for display.
 ///
 /// Handles simple pipeline plans (the NL layer output). Complex algorithm
@@ -1648,7 +1701,7 @@ pub fn plan_to_sexpr(plan: &PlanDef) -> String {
         out.push_str(" (");
         out.push_str(&input.name);
         out.push_str(" : ");
-        out.push_str(input.type_hint.as_deref().unwrap_or("Bytes"));
+        out.push_str(&infer_type_for_serialization(input));
         out.push(')');
     }
     out.push(')');
@@ -1657,7 +1710,7 @@ pub fn plan_to_sexpr(plan: &PlanDef) -> String {
     if let Some(output) = &plan.output {
         if let Some(first) = output.first() {
             out.push_str(" : ");
-            out.push_str(first);
+            out.push_str(&type_str_to_sexpr(first));
         }
     }
 
