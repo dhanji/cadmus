@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-24T07:05:00Z | Size: 74.8k chars
+> Updated: 2026-02-24T08:44:11Z | Size: 76.6k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -941,3 +941,24 @@ plan-name:
 - `data/nl/nl_lexicon.yaml:1636-1637` — `[complex,arithmetic]→complex_arith` skeleton
 - `data/plans/complex_arith.sexp:1` — Description changed to NL-friendly format
 - Key insight: early token check must be limited to FIRST content token only — checking later compound tokens causes regressions (insertion_sort beats timsort, caesar_cipher beats rot13_cipher)
+
+### Cadmus Continuous Improvement Runbook (plan `cadmus-runbook`, commit `af32f6f`)
+- `RUNBOOK.md` [1-553] — Machine-executable guide for AI agents to add new domains. 6 phases, 3 appendices.
+- `data/domains.yaml` [1-202] — Machine-readable registry: 19 algorithm categories + pipeline, 11 suggested_next domains
+- `tests/domain_autoregression.rs` — Full-funnel report: NL match → compile → codegen → execute → correct output
+- `data/packs/ops/text_processing.ops.yaml` — 16 ops: string_split, string_join, chars_of, csv_parse_row, word_count, char_frequency, char_frequency_report, title_case, repeat_string, pad_left, truncate_string, strip_whitespace, count_substring, camel_to_snake, text_statistics
+- `data/plans/algorithms/text-processing/` — 11 plans (8 multi-step = 73%)
+- `src/fs_types.rs:82-88` — text_processing.ops.yaml loaded in build_full_registry()
+- `src/racket_executor.rs:59-64` — text_processing.ops.yaml loaded in build_racket_registry()
+
+### Codegen Fixes (discovered during text-processing implementation)
+- `src/racket_executor.rs` — `emit_racket_body_defines()` + `emit_raw_step_defines()`: recursive sub-step scanning for ops with racket_body
+- `src/racket_executor.rs` — racket_body define emission now uses `poly.racket_symbol` instead of `op.replace('_', "-")`
+- `src/racket_executor.rs` — `compile_single_substep()` uses `input_names` order from registry (not alphabetical) for param ordering
+- `src/racket_executor.rs` — `if_then`/`conditional` sub-step handler added (test/then/else params)
+- **Key insight**: ops with underscores in racket_symbol (e.g., `csv_parse_row`) were broken because define used hyphens but sub-step calls used underscores
+
+### Test Counts (post-runbook)
+- 229 NL autoregression plans (was 218), 100% pass rate
+- 205 algorithm plans (was 194) + 24 pipeline = 229 total
+- 1449 tests passed, 0 failed
