@@ -15,7 +15,7 @@ use cadmus::nl;
 use cadmus::nl::dialogue::DialogueState;
 use cadmus::nl::NlResponse;
 use cadmus::plan::{
-    parse_plan, compile_plan, run_plan, run_plan_str,
+    compile_plan, run_plan, run_plan_str,
 };
 use cadmus::fs_types::build_full_registry;
 use cadmus::fs_strategy::run_fs_goal;
@@ -89,7 +89,6 @@ fn test_semantic_zip_downloads_type_soundness() {
     let yaml = nl_to_yaml("zip up everything in ~/Downloads");
     let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml)
         .map_err(|e| e.to_string())
-        .or_else(|_| parse_plan(&yaml).map_err(|e| e.to_string()))
         .unwrap();
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
@@ -186,7 +185,6 @@ fn test_semantic_extract_cbz_type_soundness() {
     let yaml = nl_to_yaml("extract the archive at ~/comic.cbz");
     let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml)
         .map_err(|e| e.to_string())
-        .or_else(|_| parse_plan(&yaml).map_err(|e| e.to_string()))
         .unwrap();
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
@@ -352,14 +350,11 @@ fn test_semantic_empty_input_handled() {
 
 #[test]
 fn test_semantic_unknown_op_compile_error() {
-    let yaml = r#"
-bad:
-  inputs:
-    - path
-  steps:
-    - totally_fake_op
+    let sexpr = r#"
+(define (bad (path : Dir))
+  (totally_fake_op))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(sexpr).unwrap();
     let registry = build_full_registry();
     let result = compile_plan(&def, &registry);
     assert!(result.is_err(), "unknown op should fail at compile time");
@@ -794,13 +789,10 @@ fn test_semantic_reject_clears_state() {
 
 #[test]
 fn test_semantic_plan_empty_steps_rejected() {
-    let yaml = r#"
-name: "empty"
-inputs:
-  path: "/tmp"
-steps: []
+    let sexpr = r#"
+(define (empty (path : Dir)))
 "#;
-    let result = parse_plan(yaml);
+    let result = cadmus::sexpr::parse_sexpr_to_plan(sexpr);
     assert!(result.is_err(), "empty steps should be rejected");
 }
 
@@ -808,15 +800,12 @@ steps: []
 fn test_semantic_plan_type_mismatch_caught() {
     // list_dir produces Seq(Entry(Name, Bytes))
     // extract_archive takes File(Archive(...)) — type mismatch
-    let yaml = r#"
-bad-chain:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - extract_archive
+    let sexpr = r#"
+(define (bad-chain (path : Dir))
+  (list_dir)
+  (extract_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(sexpr).unwrap();
     let registry = build_full_registry();
     let result = compile_plan(&def, &registry);
     assert!(result.is_err(), "type mismatch should be caught at compile time");

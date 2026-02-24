@@ -7,11 +7,11 @@ use cadmus::plan;
 use cadmus::fs_types;
 
 // ---------------------------------------------------------------------------
-// Helper: compile a plan YAML and generate a Racket script
+// Helper: compile a plan sexpr and generate a Racket script
 // ---------------------------------------------------------------------------
 
-fn compile_to_racket(yaml: &str) -> Result<String, String> {
-    let def = plan::parse_plan(yaml)
+fn compile_to_racket(src: &str) -> Result<String, String> {
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src)
         .map_err(|e| format!("parse: {}", e))?;
     let registry = fs_types::build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
@@ -28,20 +28,14 @@ fn compile_to_racket(yaml: &str) -> Result<String, String> {
 
 #[test]
 fn test_find_screenshot_compile() {
-    let yaml = r#"
-
-filter-entries-by-name-pattern-in-desktop:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - find_matching:
-        pattern: "*.png"
-    - sort_by: name
-
+    let src = r#"
+(define (filter-entries-by-name-pattern-in-desktop (path : Dir))
+  (walk_tree)
+  (find_matching :pattern "*.png")
+  (sort_by :key "name"))
 "#;
 
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("#lang racket"), "should have racket preamble");
     assert!(script.contains("shell-lines"), "should use shell-lines");
     assert!(script.contains("shell-quote"), "should use shell-quote for safety");
@@ -56,18 +50,12 @@ filter-entries-by-name-pattern-in-desktop:
 
 #[test]
 fn test_walk_tree_filter_compiles() {
-    let yaml = r#"
-
-find-pdfs:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        pattern: "*.pdf"
-
+    let src = r#"
+(define (find-pdfs (path : Dir))
+  (walk_tree)
+  (filter :pattern "*.pdf"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("find"), "should use find");
     assert!(script.contains("regexp"), "should use regexp for filter");
     assert!(script.contains("\\.pdf"), "should have pdf pattern");
@@ -75,17 +63,12 @@ find-pdfs:
 
 #[test]
 fn test_walk_tree_sort_compiles() {
-    let yaml = r#"
-
-list-sorted:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - sort_by: name
-
+    let src = r#"
+(define (list-sorted (path : Dir))
+  (walk_tree)
+  (sort_by :key "name"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("find"), "should use find");
     assert!(script.contains("sort"), "should use sort");
     assert!(script.contains("string<?"), "should sort by string comparison");
@@ -98,19 +81,14 @@ list-sorted:
 #[test]
 fn test_filter_without_pattern_errors() {
     // filter without a pattern param should error in Racket codegen
-    let yaml = r#"
-
-bad-filter:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - filter
-
+    let src = r#"
+(define (bad-filter (path : Dir))
+  (list_dir)
+  (filter))
 "#;
     // This should fail at the Racket codegen level (filter needs a pattern)
     // but the plan compiler may accept it (filter is polymorphic)
-    let def = plan::parse_plan(yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src).unwrap();
     let registry = fs_types::build_full_registry();
     match plan::compile_plan(&def, &registry) {
         Ok(compiled) => {
@@ -139,16 +117,11 @@ bad-filter:
 
 #[test]
 fn test_injection_safe_in_racket_output() {
-    let yaml = r#"
-
-injection-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-
+    let src = r#"
+(define (injection-test (path : Dir))
+  (list_dir))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // The dangerous path should be inside (shell-quote ...), not bare
     assert!(script.contains("shell-quote"), "must use shell-quote");
     // Should NOT have the path directly in a shell command string
@@ -160,19 +133,13 @@ injection-test:
 fn test_pipeline_with_prev_binding() {
     // Multi-step: walk_tree → filter → sort_by
     // Steps 2 and 3 should reference step-1 and step-2
-    let yaml = r#"
-
-pipeline:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        pattern: "*.txt"
-    - sort_by: name
-
+    let src = r#"
+(define (pipeline (path : Dir))
+  (walk_tree)
+  (filter :pattern "*.txt")
+  (sort_by :key "name"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("step-1"), "should have step-1 binding");
     assert!(script.contains("step-2"), "should have step-2 binding");
     assert!(script.contains("step-3"), "should have step-3 binding");
@@ -181,37 +148,27 @@ pipeline:
 
 #[test]
 fn test_head_tail_count_in_pipeline() {
-    let yaml = r#"
-
-count-files:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - count
-
+    let src = r#"
+(define (count-files (path : Dir))
+  (walk_tree)
+  (count))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("length"), "count in pipeline should use (length ...)");
 }
 
 #[test]
 fn test_unique_in_pipeline() {
     // unique takes Seq(Line) — use a text file input
-    let yaml = r#"
-
-unique-lines:
-  inputs:
-    - file
-  steps:
-    - read_file
-    - unique
-
+    let src = r#"
+(define (unique-lines (file : File))
+  (read_file)
+  (unique))
 "#;
     // read_file on a .txt file gives Text, but unique needs Seq(Line)
     // This may not compile through the type system, so just test the codegen path
     // if it does compile
-    if let Ok(script) = compile_to_racket(yaml) {
+    if let Ok(script) = compile_to_racket(src) {
         assert!(script.contains("remove-duplicates") || script.contains("unique"),
             "unique should use remove-duplicates or unique: {}", script);
     }
@@ -219,18 +176,12 @@ unique-lines:
 
 #[test]
 fn test_exclude_filter_in_pipeline() {
-    let yaml = r#"
-
-skip-git:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        exclude: ".git"
-
+    let src = r#"
+(define (skip-git (path : Dir))
+  (walk_tree)
+  (filter :exclude ".git"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // Exclude filter should negate the match
     assert!(script.contains("not"), "exclude filter should negate: {}", script);
     assert!(script.contains("regexp-match?"), "should use regexp-match?");
@@ -246,16 +197,11 @@ skip-git:
 
 #[test]
 fn test_subsumption_list_dir_uses_shell_ls() {
-    let yaml = r#"
-
-list:
-  inputs:
-    - path
-  steps:
-    - list_dir
-
+    let src = r#"
+(define (list (path : Dir))
+  (list_dir))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("shell-lines"), "should use shell-lines: {}", script);
     assert!(script.contains("ls"), "should use ls command: {}", script);
     assert!(script.contains("shell-quote"), "should quote path: {}", script);
@@ -263,16 +209,11 @@ list:
 
 #[test]
 fn test_subsumption_walk_tree_uses_shell_find() {
-    let yaml = r#"
-
-walk:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-
+    let src = r#"
+(define (walk (path : Dir))
+  (walk_tree))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("shell-lines"), "should use shell-lines: {}", script);
     assert!(script.contains("find"), "should use find command: {}", script);
     assert!(script.contains("shell-quote"), "should quote path: {}", script);
@@ -280,34 +221,23 @@ walk:
 
 #[test]
 fn test_subsumption_read_file_uses_shell_cat() {
-    let yaml = r#"
-
-read:
-  inputs:
-    - file
-  steps:
-    - read_file
-
+    let src = r#"
+(define (read (file : File))
+  (read_file))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("shell-lines"), "should use shell-lines: {}", script);
     assert!(script.contains("cat"), "should use cat command: {}", script);
 }
 
 #[test]
 fn test_subsumption_search_content_uses_shell_grep() {
-    let yaml = r#"
-
-search:
-  inputs:
-    - textdir
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "TODO"
-
+    let src = r#"
+(define (search (textdir : (Dir (File Text))))
+  (walk_tree)
+  (search_content :pattern "TODO"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("shell-lines"), "should use shell-lines: {}", script);
     assert!(script.contains("grep"), "should use grep command: {}", script);
     assert!(script.contains("TODO"), "should include search pattern: {}", script);
@@ -315,64 +245,44 @@ search:
 
 #[test]
 fn test_subsumption_head_first_step_uses_shell() {
-    let yaml = r#"
-
-head:
-  inputs:
-    - file
-  steps:
-    - head
-
+    let src = r#"
+(define (head (file : File))
+  (head))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("shell-lines"), "first-step head should use shell: {}", script);
     assert!(script.contains("head"), "should use head command: {}", script);
 }
 
 #[test]
 fn test_subsumption_tail_first_step_uses_shell() {
-    let yaml = r#"
-
-tail:
-  inputs:
-    - file
-  steps:
-    - tail
-
+    let src = r#"
+(define (tail (file : File))
+  (tail))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("shell-lines"), "first-step tail should use shell: {}", script);
     assert!(script.contains("tail"), "should use tail command: {}", script);
 }
 
 #[test]
 fn test_subsumption_sort_by_first_step_uses_shell() {
-    let yaml = r#"
-
-sort:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - sort_by: name
-
+    let src = r#"
+(define (sort (path : Dir))
+  (list_dir)
+  (sort_by :key "name"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("sort"), "should use sort command: {}", script);
 }
 
 #[test]
 fn test_subsumption_download_uses_shell_curl() {
-    let yaml = r#"
-
-download:
-  inputs:
-    - url
-  steps:
-    - download
-
+    let src = r#"
+(define (download (url : URL))
+  (download))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("shell-lines"), "should use shell-lines: {}", script);
     assert!(script.contains("curl"), "should use curl command: {}", script);
 }
@@ -383,18 +293,12 @@ download:
 
 #[test]
 fn test_native_filter_in_pipeline_uses_racket_filter() {
-    let yaml = r#"
-
-filter-in-pipeline:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        pattern: "*.rs"
-
+    let src = r#"
+(define (filter-in-pipeline (path : Dir))
+  (walk_tree)
+  (filter :pattern "*.rs"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // Step 1: shell bridge (find)
     assert!(script.contains("find"), "step 1 should use find");
     // Step 2: Racket-native filter
@@ -404,17 +308,12 @@ filter-in-pipeline:
 
 #[test]
 fn test_native_sort_in_pipeline_uses_racket_sort() {
-    let yaml = r#"
-
-sort-in-pipeline:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - sort_by: name
-
+    let src = r#"
+(define (sort-in-pipeline (path : Dir))
+  (walk_tree)
+  (sort_by :key "name"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // Step 2: Racket-native sort
     assert!(script.contains("(sort"), "should use Racket sort: {}", script);
     assert!(script.contains("string<?"), "should use string<? comparator: {}", script);
@@ -422,37 +321,26 @@ sort-in-pipeline:
 
 #[test]
 fn test_native_count_in_pipeline_uses_length() {
-    let yaml = r#"
-
-count-in-pipeline:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - count
-
+    let src = r#"
+(define (count-in-pipeline (path : Dir))
+  (walk_tree)
+  (count))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("(length"), "count in pipeline should use (length): {}", script);
 }
 
 #[test]
 fn test_native_head_in_pipeline_uses_take() {
-    let yaml = r#"
-
-head-in-pipeline:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - filter:
-        pattern: "*.txt"
-    - head
-
+    let src = r#"
+(define (head-in-pipeline (path : Dir))
+  (list_dir)
+  (filter :pattern "*.txt")
+  (head))
 "#;
     // head expects File(Text) not Seq — this may not type-check.
     // If it does compile, verify it uses take in pipeline.
-    if let Ok(script) = compile_to_racket(yaml) {
+    if let Ok(script) = compile_to_racket(src) {
         assert!(script.contains("(take") || script.contains("head"),
             "head in pipeline should use take or head: {}", script);
     }
@@ -460,19 +348,13 @@ head-in-pipeline:
 
 #[test]
 fn test_native_tail_in_pipeline_uses_take_right() {
-    let yaml = r#"
-
-tail-in-pipeline:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - filter:
-        pattern: "*.log"
-    - tail
-
+    let src = r#"
+(define (tail-in-pipeline (path : Dir))
+  (list_dir)
+  (filter :pattern "*.log")
+  (tail))
 "#;
-    if let Ok(script) = compile_to_racket(yaml) {
+    if let Ok(script) = compile_to_racket(src) {
         assert!(script.contains("(take-right") || script.contains("tail"),
             "tail in pipeline should use take-right or tail: {}", script);
     }
@@ -480,19 +362,13 @@ tail-in-pipeline:
 
 #[test]
 fn test_native_unique_in_pipeline_uses_remove_duplicates() {
-    let yaml = r#"
-
-unique-in-pipeline:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        pattern: "*.txt"
-    - sort_by: name
-
+    let src = r#"
+(define (unique-in-pipeline (path : Dir))
+  (walk_tree)
+  (filter :pattern "*.txt")
+  (sort_by :key "name"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // sort_by in pipeline should use Racket sort
     assert!(script.contains("(sort") || script.contains("string<?"),
         "sort_by in pipeline should use Racket sort: {}", script);
@@ -504,19 +380,13 @@ unique-in-pipeline:
 
 #[test]
 fn test_mixed_pipeline_find_filter_sort_head() {
-    let yaml = r#"
-
-find-recent-rust-files:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        pattern: "*.rs"
-    - sort_by: name
-
+    let src = r#"
+(define (find-recent-rust-files (path : Dir))
+  (walk_tree)
+  (filter :pattern "*.rs")
+  (sort_by :key "name"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // Step 1: shell bridge
     assert!(script.contains("find"), "step 1 should use find");
     assert!(script.contains("shell-lines"), "should have shell-lines");
@@ -537,31 +407,21 @@ find-recent-rust-files:
 #[test]
 fn test_search_content_requires_pattern() {
     // Verify count and unique work in pipeline (dual behavior)
-    let yaml_count = r#"
-
-count-files:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - count
-
+    let src_count = r#"
+(define (count-files (path : Dir))
+  (list_dir)
+  (count))
 "#;
-    let script = compile_to_racket(yaml_count).expect("count should compile");
+    let script = compile_to_racket(src_count).expect("count should compile");
     assert!(script.contains("(length"), "count in pipeline should use length: {}", script);
 
     // search_content without pattern should error
-    let yaml = r#"
-
-search-without-pattern:
-  inputs:
-    - textdir
-  steps:
-    - walk_tree
-    - search_content
-
+    let src = r#"
+(define (search-without-pattern (textdir : (Dir (File Text))))
+  (walk_tree)
+  (search_content))
 "#;
-    let def = plan::parse_plan(yaml).unwrap();
+    let def = cadmus::sexpr::parse_sexpr_to_plan(src).unwrap();
     let registry = fs_types::build_full_registry();
     match plan::compile_plan(&def, &registry) {
         Ok(compiled) => {
@@ -592,17 +452,12 @@ search-without-pattern:
 fn test_walk_tree_pack_archive_seq_bridge() {
     // walk_tree → pack_archive: walk_tree produces List(String).
     // pack_archive (now subsumed to shell_tar) should bridge the seq.
-    let yaml = r#"
-
-zip-up-downloads:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - pack_archive
-
+    let src = r#"
+(define (zip-up-downloads (path : Dir))
+  (walk_tree)
+  (pack_archive))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // The bridge should use string-join, map shell-quote, or append-map
     assert!(script.contains("string-join") || script.contains("map shell-quote") || script.contains("append-map"),
         "pack_archive after walk_tree should bridge:\n{}", script);
@@ -617,18 +472,12 @@ zip-up-downloads:
 fn test_walk_tree_search_content_seq_bridge() {
     // walk_tree → search_content: walk_tree produces List(String),
     // search_content should iterate over each file with grep
-    let yaml = r#"
-
-search-for-todo:
-  inputs:
-    - textdir
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "TODO"
-
+    let src = r#"
+(define (search-for-todo (textdir : (Dir (File Text))))
+  (walk_tree)
+  (search_content :pattern "TODO"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // Should use append-map to grep each file
     assert!(script.contains("append-map"),
         "search_content after walk_tree should use append-map:\n{}", script);
@@ -642,19 +491,13 @@ search-for-todo:
 fn test_three_step_walk_filter_pack() {
     // walk_tree → filter → pack_archive: filter output is still Seq,
     // so pack_archive should still get the bridge
-    let yaml = r#"
-
-zip-pdfs:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        pattern: "*.pdf"
-    - pack_archive
-
+    let src = r#"
+(define (zip-pdfs (path : Dir))
+  (walk_tree)
+  (filter :pattern "*.pdf")
+  (pack_archive))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // pack_archive (step 3) should bridge because filter (step 2) output is Seq
     assert!(script.contains("string-join") || script.contains("map shell-quote") || script.contains("append-map"),
         "pack_archive after filter should still bridge:\n{}", script);
@@ -666,16 +509,11 @@ zip-pdfs:
 #[test]
 fn test_list_dir_single_step_no_bridge() {
     // Single-step list_dir: no bridge needed (no prev step)
-    let yaml = r#"
-
-list-downloads:
-  inputs:
-    - path
-  steps:
-    - list_dir
-
+    let src = r#"
+(define (list-downloads (path : Dir))
+  (list_dir))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // Should use shell-quote on the input path, not string-join
     assert!(script.contains("shell-quote"),
         "single-step list_dir should use shell-quote:\n{}", script);
@@ -689,19 +527,13 @@ list-downloads:
 fn test_walk_tree_filter_sort_no_bridge() {
     // walk_tree → filter → sort_by: all ops handle lists natively,
     // no bridge needed (filter and sort_by are Racket-native)
-    let yaml = r#"
-
-find-and-sort-pdfs:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - find_matching:
-        pattern: "*.pdf"
-    - sort_by: name
-
+    let src = r#"
+(define (find-and-sort-pdfs (path : Dir))
+  (walk_tree)
+  (find_matching :pattern "*.pdf")
+  (sort_by :key "name"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     // These ops handle lists natively — no string-join or append-map
     assert!(!script.contains("string-join"),
         "native pipeline should NOT use string-join:\n{}", script);
@@ -716,16 +548,11 @@ find-and-sort-pdfs:
 #[test]
 fn test_arithmetic_no_bridge() {
     // Pure Racket arithmetic: no bridge needed
-    let yaml = r#"
-
-add-numbers:
-  steps:
-    - add:
-        x: "42"
-        y: "17"
-
+    let src = r#"
+(define (add-numbers) : Number
+  (+ 42 17))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("(+ 42 17)"),
         "should generate (+ 42 17):\n{}", script);
     assert!(!script.contains("string-join"),
@@ -738,20 +565,13 @@ add-numbers:
 fn test_walk_tree_filter_search_content_bridge() {
     // walk_tree → filter → search_content: filter output is still Seq,
     // search_content should iterate
-    let yaml = r#"
-
-search-rust-files-for-todo:
-  inputs:
-    - textdir
-  steps:
-    - walk_tree
-    - filter:
-        pattern: "*.rs"
-    - search_content:
-        pattern: "TODO"
-
+    let src = r#"
+(define (search-rust-files-for-todo (textdir : (Dir (File Text))))
+  (walk_tree)
+  (filter :pattern "*.rs")
+  (search_content :pattern "TODO"))
 "#;
-    let script = compile_to_racket(yaml).expect("should compile");
+    let script = compile_to_racket(src).expect("should compile");
     assert!(script.contains("append-map"),
         "search_content after filter should use append-map:\n{}", script);
     assert!(script.contains("grep"),

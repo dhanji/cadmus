@@ -1521,3 +1521,313 @@ ops:
     description: "Check if binary tree is a valid BST"
     racket_body: |
       (let* ([valid (lambda (valid t lo hi) (if (null? t) #t (let ([v (car t)]) (and (> v lo) (< v hi) (valid valid (cadr t) lo v) (valid valid (caddr t) v hi)))))]) (valid valid tree -inf.0 +inf.0))
+
+  # =========================================================================
+  # Extracted from multi-step YAML plans
+  # =========================================================================
+
+  - name: integer_partition_count
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "integer-partition-count"
+    description: "Integer partition count: number of ways to write n as sum of positive integers"
+    racket_body: |
+      (let* ( [step-1 (+ n 1)] [step-2 (make-vector step-1 0)] [step-3 (vector-set! step-2 0 1)] [step-4 (range 1 (+ n 1))] [step-5 (for-each (lambda (i) (for ([j (in-range i (+ n 1))]) (let* ([body-1 (vector-ref step-2 j)] [body-2 (- j i)] [body-3 (vector-ref step-2 body-2)] [body-4 (+ body-1 body-3)] [body-5 (vector-set! step-2 j body-4)]) body-5))) step-4)] [step-6 (vector-ref step-2 n)] ) step-6)
+
+  - name: pascals_triangle_row
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "pascals-triangle-row"
+    description: "Pascal's triangle row: row n (0-indexed)"
+    racket_body: |
+      (let* ( [step-1 (range 1 (+ n 1))] [step-2 (for/fold ([row (list 1)]) ([i (in-list step-1)]) (let* ([body-1 (- i 1)] [body-2 (list-ref row body-1)] [body-3 (- n i)] [body-4 (+ body-3 1)] [body-5 (* body-2 body-4)] [body-6 (quotient body-5 i)] [body-7 (list body-6)] [body-8 (append row body-7)]) body-8))] ) step-2)
+
+  - name: triangular_number
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "triangular-number"
+    description: "Triangular number: T(n) = n*(n+1)/2"
+    racket_body: |
+      (let* ( [step-1 (range 1 (+ n 1))] [step-2 (for/sum ([i (in-list step-1)]) i)] ) step-2)
+
+  - name: bit_reversal
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "bit-reversal"
+    description: "Bit reversal: reverse bits of 8-bit number"
+    racket_body: |
+      (let* ( [step-1 (range 0 8)] [step-2 (for/fold ([result 0]) ([i (in-list step-1)]) (let* ([body-1 (arithmetic-shift n (- 0 i))] [body-2 (bitwise-and body-1 1)] [body-3 (arithmetic-shift result 1)] [body-4 (bitwise-ior body-3 body-2)]) body-4))] ) step-2)
+
+  - name: gray_code
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "gray-code"
+    description: "Gray code: generate n-bit Gray code sequence"
+    racket_body: |
+      (let* ( [step-1 (expt 2 n)] [step-2 (for/list ([i (in-range 0 step-1)]) (bitwise-xor i (arithmetic-shift i -1)))] ) step-2)
+
+  - name: single_number_xor
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "single-number-xor"
+    description: "Single number: find element appearing once (others appear twice)"
+    racket_body: |
+      (for/fold ([result 0]) ([x (in-list lst)]) (bitwise-xor result x))
+
+  - name: xor_sum
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "xor-sum"
+    description: "XOR sum: XOR of all integers from 1 to n"
+    racket_body: |
+      (let* ( [step-1 (range 1 (+ n 1))] [step-2 (for/fold ([result 0]) ([i (in-list step-1)]) (bitwise-xor result i))] ) step-2)
+
+  - name: catalan_number
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "catalan-number"
+    description: "Catalan number: C(n) = C(2n,n)/(n+1)"
+    racket_body: |
+      (let* ( [step-1 (range 0 n)] [step-2 (for/fold ([r 1]) ([i (in-list step-1)]) (let* ([body-1 (* 2 n)] [body-2 (- body-1 i)] [body-3 (* r body-2)] [body-4 (+ i 1)] [body-5 (quotient body-3 body-4)]) body-5))] [step-3 (+ n 1)] [step-4 (quotient step-2 step-3)] ) step-4)
+
+  - name: n_choose_k
+    inputs: ['Number', 'Number']
+    input_names: ['n', 'k']
+    output: "Number"
+    racket_symbol: "n-choose-k"
+    description: "Binomial coefficient: C(n,k) = n! / (k! * (n-k)!)"
+    racket_body: |
+      (let* ( [step-1 (range 0 k)] [step-2 (for/fold ([result 1]) ([i (in-list step-1)]) (let* ([body-1 (- n i)] [body-2 (* result body-1)] [body-3 (+ i 1)] [body-4 (quotient body-2 body-3)]) body-4))] ) step-2)
+
+  - name: permutation_count
+    inputs: ['Number', 'Number']
+    input_names: ['n', 'k']
+    output: "Number"
+    racket_symbol: "permutation-count"
+    description: "Permutation count: P(n,k) = n! / (n-k)!"
+    racket_body: |
+      (let* ( [step-1 (- n k)] [step-2 (range step-1 n)] [step-3 (for/product ([i (in-list step-2)]) (+ i 1))] ) step-3)
+
+  - name: power_set
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "power-set"
+    description: "Power set: all subsets of a set"
+    racket_body: |
+      (let* ( [step-1 (length lst)] [step-2 (expt 2 step-1)] [step-3 (range 0 step-2)] [step-4 (map (lambda (mask) (let* ([body-1 (range 0 step-1)] [body-2 (for/fold ([subset (list)]) ([i (in-list body-1)]) (let* ([body-1 (arithmetic-shift 1 i)] [body-2 (bitwise-and mask body-1)] [body-3 (cond [(> body-2 0) (let* ([body-1 (list-ref lst i)] [body-2 (append subset (list body-1))]) body-2)] [else subset])]) body-3))]) body-2)) step-3)] ) step-4)
+
+  - name: skip_list
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "skip-list"
+    description: "Skip list: insert elements and check membership"
+    racket_body: |
+      (let* ( [step-1 (list 3 6 7 9 12)] [step-2 (sort step-1 <)] [step-3 (member 7 step-2)] [step-4 (cond [step-3 #t] [else #f])] [step-5 (member 5 step-2)] [step-6 (cond [step-5 #t] [else #f])] [step-7 (list step-4 step-6)] ) step-7)
+
+  - name: trie_prefix_tree
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "trie-prefix-tree"
+    description: "Trie: insert words and count those with given prefix"
+    racket_body: |
+      (let* ( [step-1 (list "apple" "app" "ape" "bat" "bar")] [step-2 (for/sum ([w (in-list step-1)]) (let* ([body-1 (string-length w)] [body-2 (cond [(and (>= body-1 2) (string=? (substring w 0 2) "ap")) 1] [else 0])]) body-2))] ) step-2)
+
+  - name: coin_change
+    inputs: ['Number']
+    input_names: ['amount']
+    output: "Number"
+    racket_symbol: "coin-change"
+    description: "Coin change: minimum coins to make amount"
+    racket_body: |
+      (let* ( [step-1 (+ amount 1)] [step-2 (make-vector step-1 (+ amount 1))] [step-3 (vector-set! step-2 0 0)] [step-4 (list 1 5 10 25)] [step-5 (for-each (lambda (c) (for ([a (in-range c (+ amount 1))]) (let* ([body-1 (vector-ref step-2 a)] [body-2 (- a c)] [body-3 (vector-ref step-2 body-2)] [body-4 (+ body-3 1)] [body-5 (min body-1 body-4)] [body-6 (vector-set! step-2 a body-5)]) body-6))) step-4)] [step-6 (vector-ref step-2 amount)] ) step-6)
+
+  - name: rod_cutting
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "rod-cutting"
+    description: "Rod cutting: maximum revenue from cutting rod of length n"
+    racket_body: |
+      (let* ( [step-1 (vector 0 1 5 8 9 10 17 17 20)] [step-2 (+ n 1)] [step-3 (make-vector step-2 0)] [step-4 (for ([i (in-range 1 (+ n 1))]) (for ([j (in-range 1 (+ i 1))]) (let* ([body-1 (vector-ref step-3 i)] [body-2 (vector-ref step-1 j)] [body-3 (- i j)] [body-4 (vector-ref step-3 body-3)] [body-5 (+ body-2 body-4)] [body-6 (max body-1 body-5)] [body-7 (vector-set! step-3 i body-6)]) body-7)))] [step-5 (vector-ref step-3 n)] ) step-5)
+
+  - name: subset_sum
+    inputs: ['Number']
+    input_names: ['target']
+    output: "Number"
+    racket_symbol: "subset-sum"
+    description: "Subset sum: can a subset sum to target?"
+    racket_body: |
+      (let* ( [step-1 (list 3 34 4 12 5 2)] [step-2 (+ target 1)] [step-3 (make-vector step-2 #f)] [step-4 (vector-set! step-3 0 #t)] [step-5 (for-each (lambda (x) (for ([j (in-range target (- x 1) -1)]) (let* ([body-1 (- j x)] [body-2 (vector-ref step-3 body-1)] [body-3 (when body-2 (vector-set! step-3 j #t))]) body-3))) step-1)] [step-6 (vector-ref step-3 target)] ) step-6)
+
+  - name: zero_one_knapsack
+    inputs: ['Number']
+    input_names: ['capacity']
+    output: "Number"
+    racket_symbol: "zero-one-knapsack"
+    description: "0/1 Knapsack: maximize value within weight capacity"
+    racket_body: |
+      (let* ( [step-1 (vector 1 3 4 5)] [step-2 (vector 1 4 5 7)] [step-3 (vector-length step-1)] [step-4 (+ capacity 1)] [step-5 (make-vector step-4 0)] [step-6 (for ([i (in-range 0 step-3)]) (for ([w (in-range capacity (- (vector-ref step-1 i) 1) -1)]) (let* ([body-1 (vector-ref step-5 w)] [body-2 (vector-ref step-1 i)] [body-3 (- w body-2)] [body-4 (vector-ref step-5 body-3)] [body-5 (vector-ref step-2 i)] [body-6 (+ body-4 body-5)] [body-7 (max body-1 body-6)] [body-8 (vector-set! step-5 w body-7)]) body-8)))] [step-7 (vector-ref step-5 capacity)] ) step-7)
+
+  - name: closest_pair_of_points
+    inputs: ['List(Any)']
+    input_names: ['pts']
+    output: "Number"
+    racket_symbol: "closest-pair-of-points"
+    description: "Closest pair of points: minimum distance between any two points"
+    racket_body: |
+      (let* ( [step-1 (length pts)] [step-2 (box step-1)] [step-3 (for* ([i (in-range 0 step-1)] [j (in-range (+ i 1) step-1)]) (let* ([body-1 (list-ref pts i)] [body-2 (list-ref pts j)] [body-3 (car body-1)] [body-4 (car body-2)] [body-5 (- body-3 body-4)] [body-6 (cdr body-1)] [body-7 (cdr body-2)] [body-8 (- body-6 body-7)] [body-9 (* body-5 body-5)] [body-10 (* body-8 body-8)] [body-11 (+ body-9 body-10)] [body-12 (sqrt body-11)] [body-13 (when (< body-12 (unbox step-2)) (set-box! step-2 body-12))]) body-13))] [step-4 (unbox step-2)] ) step-4)
+
+  - name: point_in_polygon
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "point-in-polygon"
+    description: "Point in polygon: ray casting algorithm"
+    racket_body: |
+      (let* ( [step-1 (vector 0 4 4 0)] [step-2 (vector 0 0 4 4)] [step-3 (range 0 n)] [step-4 (for/sum ([i (in-list step-3)]) (let* ([body-1 (+ i 1)] [body-2 (modulo body-1 n)] [body-3 (vector-ref step-1 i)] [body-4 (vector-ref step-2 i)] [body-5 (vector-ref step-1 body-2)] [body-6 (vector-ref step-2 body-2)] [body-7 (cond [(and (or (and (<= body-4 1) (> body-6 1)) (and (<= body-6 1) (> body-4 1))) (< 1 (+ body-3 (/ (* (- 1 body-4) (- body-5 body-3)) (- body-6 body-4))))) 1] [else 0])]) body-7))] [step-5 (odd? step-4)] ) step-5)
+
+  - name: shoelace_polygon_area
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "shoelace-polygon-area"
+    description: "Shoelace formula: area of polygon given vertices"
+    racket_body: |
+      (let* ( [step-1 (vector 0 4 0)] [step-2 (vector 0 0 3)] [step-3 (range 0 n)] [step-4 (for/sum ([i (in-list step-3)]) (let* ([body-1 (+ i 1)] [body-2 (modulo body-1 n)] [body-3 (vector-ref step-1 i)] [body-4 (vector-ref step-2 body-2)] [body-5 (* body-3 body-4)] [body-6 (vector-ref step-1 body-2)] [body-7 (vector-ref step-2 i)] [body-8 (* body-6 body-7)] [body-9 (- body-5 body-8)]) body-9))] [step-5 (abs step-4)] [step-6 (quotient step-5 2)] ) step-6)
+
+  - name: bellman_ford
+    inputs: ['Number', 'List(List(Number))']
+    input_names: ['n', 'edges']
+    output: "Number"
+    racket_symbol: "bellman-ford"
+    description: "Bellman-Ford: shortest paths with negative edges"
+    racket_body: |
+      (let* ( [step-1 (make-vector n +inf.0)] [step-2 (vector-set! step-1 0 0)] [step-3 (- n 1)] [step-4 (range 0 step-3)] [step-5 (for-each (lambda (_) (for-each (lambda (e) (let* ([body-1 (first e)] [body-2 (second e)] [body-3 (third e)] [body-4 (vector-ref step-1 body-1)] [body-5 (+ body-4 body-3)] [body-6 (vector-ref step-1 body-2)] [body-7 (when (< body-5 body-6) (vector-set! step-1 body-2 body-5))]) body-7)) edges)) step-4)] [step-6 (vector->list step-1)] ) step-6)
+
+  - name: floyd_warshall
+    inputs: ['Number', 'Vector(Vector(Number))']
+    input_names: ['n', 'd']
+    output: "Number"
+    racket_symbol: "floyd-warshall"
+    description: "Floyd-Warshall: all-pairs shortest paths"
+    racket_body: |
+      (let* ( [step-1 (for* ([k (in-range 0 n)] [i (in-range 0 n)] [j (in-range 0 n)]) (let* ([body-1 (vector-ref d i)] [body-2 (vector-ref body-1 k)] [body-3 (vector-ref d k)] [body-4 (vector-ref body-3 j)] [body-5 (+ body-2 body-4)] [body-6 (vector-ref body-1 j)] [body-7 (when (< body-5 body-6) (vector-set! body-1 j body-5))]) body-7))] [step-2 (vector-ref d 0)] [step-3 (vector->list step-2)] ) step-3)
+
+  - name: prim_mst
+    inputs: ['Number', 'Vector(List(Any))']
+    input_names: ['n', 'adj']
+    output: "Number"
+    racket_symbol: "prim-mst"
+    description: "Prim's MST: minimum spanning tree using greedy approach"
+    racket_body: |
+      (let* ( [step-1 (make-vector 4 #f)] [step-2 (make-vector 4 +inf.0)] [step-3 (vector-set! step-2 0 0)] [step-4 (range 0 n)] [step-5 (for/sum ([_ (in-list step-4)]) (let* ([body-1 (range 0 n)] [body-2 (for/fold ([best -1]) ([i (in-list body-1)]) (let* ([body-1 (vector-ref step-1 i)] [body-2 (not body-1)] [body-3 (cond [body-2 (cond [(equal? best -1) i] [(< (vector-ref step-2 i) (vector-ref step-2 best)) i] [else best])] [else best])]) body-3))] [body-3 (vector-set! step-1 body-2 #t)] [body-4 (vector-ref adj body-2)] [body-5 (for-each (lambda (edge) (let* ([body-1 (car edge)] [body-2 (cdr edge)] [body-3 (vector-ref step-1 body-1)] [body-4 (not body-3)] [body-5 (vector-ref step-2 body-1)] [body-6 (< body-2 body-5)] [body-7 (and body-4 body-6)] [body-8 (when body-7 (vector-set! step-2 body-1 body-2))]) body-8)) body-4)] [body-6 (vector-ref step-2 body-2)]) body-6))] ) step-5)
+
+  - name: consistent_hashing
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "consistent-hashing"
+    description: "Consistent hashing: assign keys to nodes on a ring"
+    racket_body: |
+      (let* ( [step-1 (list 100 200 300)] [step-2 (sort step-1 <)] [step-3 (for/fold ([result -1]) ([node (in-list step-2)]) (cond [(and (equal? result -1) (>= node 150)) node] [else result]))] [step-4 (cond [(equal? step-3 -1) (first step-2)] [else step-3])] ) step-4)
+
+  - name: fnv1a_hash
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "fnv1a-hash"
+    description: "FNV-1a hash (32-bit)"
+    racket_body: |
+      (let* ( [step-1 (string->list s)] [step-2 (for/fold ([hash 2166136261]) ([c (in-list step-1)]) (let* ([body-1 (char->integer c)] [body-2 (bitwise-xor hash body-1)] [body-3 (* body-2 16777619)] [body-4 (modulo body-3 4294967296)]) body-4))] ) step-2)
+
+  - name: murmurhash3
+    inputs: ['String']
+    input_names: ['s']
+    output: "Number"
+    racket_symbol: "murmurhash3"
+    description: "MurmurHash3 (simplified 32-bit)"
+    racket_body: |
+      (let* ( [step-1 (string->list s)] [step-2 (map (lambda (c) (char->integer c)) step-1)] [step-3 (for/fold ([h 42]) ([b (in-list step-2)]) (let* ([body-1 (* b 3432918353)] [body-2 (modulo body-1 4294967296)] [body-3 (bitwise-ior (arithmetic-shift body-2 15) (arithmetic-shift body-2 -17))] [body-4 (modulo body-3 4294967296)] [body-5 (* body-4 461845907)] [body-6 (modulo body-5 4294967296)] [body-7 (bitwise-xor h body-6)] [body-8 (bitwise-ior (arithmetic-shift body-7 13) (arithmetic-shift body-7 -19))] [body-9 (modulo body-8 4294967296)] [body-10 (* body-9 5)] [body-11 (+ body-10 3864292196)] [body-12 (modulo body-11 4294967296)]) body-12))] [step-4 (length step-2)] [step-5 (bitwise-xor step-3 step-4)] [step-6 (arithmetic-shift step-5 -16)] [step-7 (bitwise-xor step-5 step-6)] [step-8 (* step-7 2246822507)] [step-9 (modulo step-8 4294967296)] [step-10 (arithmetic-shift step-9 -13)] [step-11 (bitwise-xor step-9 step-10)] [step-12 (* step-11 3266489909)] [step-13 (modulo step-12 4294967296)] [step-14 (arithmetic-shift step-13 -16)] [step-15 (bitwise-xor step-13 step-14)] [step-16 (modulo step-15 4294967296)] ) step-16)
+
+  - name: sieve_of_eratosthenes
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "sieve-of-eratosthenes"
+    description: "Sieve of Eratosthenes: find all primes up to n"
+    racket_body: |
+      (let* ( [step-1 (+ n 1)] [step-2 (make-vector step-1 #t)] [step-3 (vector-set! step-2 0 #f)] [step-4 (vector-set! step-2 1 #f)] [step-5 (sqrt n)] [step-6 (exact-floor step-5)] [step-7 (+ step-6 1)] [step-8 (for ([i (in-range 2 step-7)]) (when (vector-ref step-2 i) (let* ([body-1 (* i i)] [body-2 (for ([j (in-range body-1 (+ n 1) i)]) (vector-set! step-2 j #f))]) body-2)))] [step-9 (range 2 (+ n 1))] [step-10 (for/fold ([primes (list)]) ([i (in-list step-9)]) (cond [(vector-ref step-2 i) (append primes (list i))] [else primes]))] ) step-10)
+
+  - name: monte_carlo_pi
+    inputs: ['Number']
+    input_names: ['n']
+    output: "Number"
+    racket_symbol: "monte-carlo-pi"
+    description: "Monte Carlo Pi estimation using fixed seed"
+    racket_body: |
+      (let* ( [step-1 (random-seed 42)] [step-2 (range 0 n)] [step-3 (for/sum ([_ (in-list step-2)]) (let* ([body-1 (random)] [body-2 (random)] [body-3 (* body-1 body-1)] [body-4 (* body-2 body-2)] [body-5 (+ body-3 body-4)] [body-6 (cond [(<= body-5 1.0) 1] [else 0])]) body-6))] [step-4 (* 4.0 step-3)] [step-5 (/ step-4 n)] [step-6 (* step-5 100)] [step-7 (round step-6)] [step-8 (/ step-7 100)] ) step-8)
+
+  - name: insertion_sort
+    inputs: ['List(Number)']
+    input_names: ['lst']
+    output: "Number"
+    racket_symbol: "insertion-sort"
+    description: "Insertion sort"
+    racket_body: |
+      (for/fold ([sorted (list)]) ([x (in-list lst)]) (let loop ([s sorted] [acc (list)]) (cond [(null? s) (append (reverse acc) (list x))] [(<= x (car s)) (append (reverse acc) (cons x s))] [else (loop (cdr s) (cons (car s) acc))])))
+
+  - name: aho_corasick
+    inputs: ['String']
+    input_names: ['text']
+    output: "Number"
+    racket_symbol: "aho-corasick"
+    description: "Aho-Corasick: multi-pattern search (simplified — count total matches)"
+    racket_body: |
+      (let* ( [step-1 (list "he" "she" "his" "hers")] [step-2 (for/sum ([pat (in-list step-1)]) (let* ([body-1 (string-length pat)] [body-2 (string-length text)] [body-3 (- body-2 body-1)] [body-4 (+ body-3 1)] [body-5 (range 0 body-4)] [body-6 (for/sum ([i (in-list body-5)]) (let* ([body-1 (+ i body-1)] [body-2 (cond [(string=? (substring text i body-1) pat) 1] [else 0])]) body-2))]) body-6))] ) step-2)
+
+  - name: hamming_distance
+    inputs: ['String', 'String']
+    input_names: ['s1', 's2']
+    output: "Number"
+    racket_symbol: "hamming-distance"
+    description: "Hamming distance: count positions where strings differ"
+    racket_body: |
+      (let* ( [step-1 (string-length s1)] [step-2 (range 0 step-1)] [step-3 (for/sum ([i (in-list step-2)]) (let* ([body-1 (string-ref s1 i)] [body-2 (string-ref s2 i)] [body-3 (cond [(char=? body-1 body-2) 0] [else 1])]) body-3))] ) step-3)
+
+  - name: csv_column_sum
+    inputs: ['String', 'Number']
+    input_names: ['data', 'col']
+    output: "Number"
+    racket_symbol: "csv-column-sum"
+    description: "CSV column sum: parse CSV rows and sum a numeric column"
+    racket_body: |
+      (let* ([rows (regexp-split (regexp-quote "\n") data)]) (for/sum ([row (in-list rows)]) (let* ([fields (string-split row ",")] [val (list-ref fields col)]) (string->number val))))
+
+  - name: multi_substring_count
+    inputs: ['String', 'String']
+    input_names: ['data', 'sub']
+    output: "Number"
+    racket_symbol: "multi-substring-count"
+    description: "Multi-string substring count: count total occurrences of a pattern across comma-separated strings"
+    racket_body: |
+      (let* ([parts (regexp-split (regexp-quote ",") data)]) (for/sum ([s (in-list parts)]) (let ([slen (string-length s)] [sublen (string-length sub)]) (if (= sublen 0) 0 (let loop ([i 0] [count 0]) (if (> (+ i sublen) slen) count (if (string=? (substring s i (+ i sublen)) sub) (loop (+ i sublen) (+ count 1)) (loop (+ i 1) count))))))))
+
+  - name: word_frequency
+    inputs: ['String', 'String']
+    input_names: ['text', 'target']
+    output: "Number"
+    racket_symbol: "word-frequency"
+    description: "Word frequency: count occurrences of a target word in text"
+    racket_body: |
+      (let* ([words (regexp-split (regexp-quote " ") text)]) (for/sum ([w (in-list words)]) (if (equal? w target) 1 0)))

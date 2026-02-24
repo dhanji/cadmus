@@ -36,7 +36,6 @@ use crate::calling_frame::CallingFrame;
 fn parse_plan_any(src: &str) -> Result<crate::plan::PlanDef, String> {
     crate::sexpr::parse_sexpr_to_plan(src)
         .map_err(|e| e.to_string())
-        .or_else(|_| crate::plan::parse_plan(src).map_err(|e| e.to_string()))
 }
 
 // ---------------------------------------------------------------------------

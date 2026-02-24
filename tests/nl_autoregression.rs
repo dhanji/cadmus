@@ -15,7 +15,7 @@ use std::path::Path;
 
 use cadmus::nl::dialogue::DialogueState;
 use cadmus::nl::{self, NlResponse};
-use cadmus::plan::{parse_plan, PlanDef, RawStep, StepArgs};
+use cadmus::plan::{PlanDef, RawStep, StepArgs};
 
 // ─── Classification ─────────────────────────────────────────────────────────
 
@@ -53,11 +53,7 @@ struct TestCase {
 
 /// Parse a plan file to extract PlanDef (sexpr or YAML).
 fn parse_plan_file(content: &str, path: &Path) -> Option<PlanDef> {
-    if path.extension().map(|e| e == "sexp").unwrap_or(false) {
-        cadmus::sexpr::parse_sexpr_to_plan(content).ok()
-    } else {
-        parse_plan(content).ok()
-    }
+    cadmus::sexpr::parse_sexpr_to_plan(content).ok()
 }
 
 /// Extract the NL description from the first comment line.
@@ -277,13 +273,9 @@ fn classify(
 ) -> Classification {
     match response {
         NlResponse::PlanCreated { plan_sexpr, .. } => {
-            // Parse the generated plan (sexpr first, YAML fallback)
-            let sexpr_result = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr);
-            let parsed = match sexpr_result {
-                Ok(plan) => Ok(plan),
-                Err(ref sexpr_err) => parse_plan(plan_sexpr)
-                    .map_err(|_| sexpr_err.to_string()),
-            };
+            // Parse the generated plan
+            let parsed = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr)
+                .map_err(|e| e.to_string());
 
             match parsed {
                 Ok(plan) => {

@@ -1,23 +1,23 @@
 
+fn parse_plan_any(src: &str) -> cadmus::plan::PlanDef {
+    cadmus::sexpr::parse_sexpr_to_plan(src)
+        .expect("should parse plan")
+}
+fn try_parse_plan_any(src: &str) -> Result<cadmus::plan::PlanDef, String> {
+    cadmus::sexpr::parse_sexpr_to_plan(src)
+        .map_err(|e| e.to_string())
+}
 #[test]
 fn stress_type_chain_full_search_pipeline_with_path() {
     // path + walk_tree + filter + search_content (no read_file:each needed)
     // search_content reads files itself — it takes Seq(Entry(Name, File(Text)))
     let yaml = r#"
-
-search-pipeline:
-  inputs:
-    - path
-    - pattern
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - search_content:
-        pattern: "$pattern"
-
+(define (search-pipeline (path : Dir) (pattern : String))
+  (walk_tree)
+  (filter :extension ".txt")
+  (search_content :pattern $pattern))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry);
     assert!(compiled.is_ok(),
@@ -29,16 +29,11 @@ search-pipeline:
 fn stress_type_chain_path_list_dir_no_promotion() {
     // list_dir doesn't need File(Text), so Dir(Bytes) should NOT be promoted
     let yaml = r#"
-
-list-directory:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - sort_by: name
-
+(define (list-directory (path : Dir))
+  (list_dir)
+  (sort_by :key "name"))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
         .expect("list_dir should compile with Dir(Bytes)");
@@ -60,18 +55,11 @@ fn stress_type_chain_textdir_search_content_compiles() {
     // textdir → Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
     // → search_content: should compile
     let yaml = r#"
-
-search-with-textdir:
-  inputs:
-    - textdir
-    - pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
-
+(define (search-with-textdir (textdir : (Dir (File Text))) (pattern : String))
+  (walk_tree)
+  (search_content :pattern $pattern))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry);
     assert!(compiled.is_ok(),
@@ -90,18 +78,11 @@ fn stress_type_chain_path_search_content_fails() {
     // → auto-promotes to Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
     // → search_content: should now SUCCEED thanks to type promotion
     let yaml = r#"
-
-search-with-path:
-  inputs:
-    - path
-    - pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
-
+(define (search-with-path (path : Dir) (pattern : String))
+  (walk_tree)
+  (search_content :pattern $pattern))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let result = plan::compile_plan(&def, &registry);
     // After type promotion fix, this should compile
@@ -115,18 +96,12 @@ fn stress_type_chain_textdir_read_file_each_compiles() {
     // textdir → Dir(File(Text)) → walk_tree → Seq(Entry(Name, File(Text)))
     // → read_file: each → Seq(Entry(Name, Text))
     let yaml = r#"
-
-read-all-files:
-  inputs:
-    - textdir
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - read_file: each
-
+(define (read-all-files (textdir : (Dir (File Text))))
+  (walk_tree)
+  (filter :extension ".txt")
+  (read_file :each))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry);
     assert!(compiled.is_ok(),
@@ -138,18 +113,12 @@ fn stress_type_chain_path_read_file_each_fails() {
     // path → Dir(Bytes) BUT compiler sees read_file downstream
     // → auto-promotes to Dir(File(Text)) → walk_tree → filter → read_file: each → SUCCEEDS
     let yaml = r#"
-
-read-all-files-with-path:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - read_file: each
-
+(define (read-all-files-with-path (path : Dir))
+  (walk_tree)
+  (filter :extension ".txt")
+  (read_file :each))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let result = plan::compile_plan(&def, &registry);
     assert!(result.is_ok(),
@@ -167,7 +136,6 @@ fn stress_type_chain_nl_search_uses_textdir() {
                 "NL search should have search_content, got:\n{}", plan_sexpr);
             // Verify it compiles
             let def = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr).ok()
-                .or_else(|| plan::parse_plan(plan_sexpr).ok())
                 .expect("should parse plan");
             let registry = build_full_registry();
             let compiled = plan::compile_plan(&def, &registry);
@@ -201,18 +169,11 @@ fn stress_type_chain_nl_list_uses_path() {
 fn stress_promotion_no_bytes_no_promotion() {
     // Dir(File(Text)) should NOT trigger promotion (no Bytes to promote)
     let yaml = r#"
-
-already-typed:
-  inputs:
-    - textdir
-    - pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
-
+(define (already-typed (textdir : (Dir (File Text))) (pattern : String))
+  (walk_tree)
+  (search_content :pattern $pattern))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
         .expect("should compile without promotion");
@@ -227,15 +188,10 @@ fn stress_promotion_bytes_with_polymorphic_only_no_binding() {
     // list_dir doesn't constrain `a` to anything specific, so _promote
     // stays unbound → no promotion
     let yaml = r#"
-
-list-only:
-  inputs:
-    - path
-  steps:
-    - list_dir
-
+(define (list-only (path : Dir))
+  (list_dir))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
         .expect("should compile with Dir(Bytes)");
@@ -249,18 +205,11 @@ fn stress_promotion_discovered_via_unification() {
     // walk_tree: Dir(a) → Seq(Entry(Name, a))  — _promote flows through as `a`
     // search_content: Seq(Entry(Name, File(Text))) — forces _promote = File(Text)
     let yaml = r#"
-
-search-via-promotion:
-  inputs:
-    - path
-    - pattern
-  steps:
-    - walk_tree
-    - search_content:
-        pattern: "$pattern"
-
+(define (search-via-promotion (path : Dir) (pattern : String))
+  (walk_tree)
+  (search_content :pattern $pattern))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
         .expect("promotion should discover File(Text)");
@@ -276,18 +225,12 @@ fn stress_promotion_each_mode_read_file() {
     // For read_file to work, the Entry value must be File(something)
     // → _promote = File(Text) (since read_file needs File(a))
     let yaml = r#"
-
-read-files-via-promotion:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - read_file: each
-
+(define (read-files-via-promotion (path : Dir))
+  (walk_tree)
+  (filter :extension ".txt")
+  (read_file :each))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
         .expect("promotion should make read_file:each work");
@@ -387,32 +330,17 @@ fn nl_to_yaml(input: &str) -> Result<String, String> {
 #[test]
 fn stress_plan_8_step_fs_pipeline() {
     let yaml = r#"
-
-deep-fs-pipeline:
-  inputs:
-    - logfile
-    - sed_pattern
-    - awk_prog
-  steps:
-    - awk_extract:
-        program: "$awk_prog"
-    - sed_script:
-        script: "$sed_pattern"
-    - awk_extract:
-        program: "{print $1}"
-    - sed_script:
-        script: "s/WARN/INFO/g"
-    - awk_extract:
-        program: "{print $2}"
-    - sed_script:
-        script: "s/INFO/DEBUG/g"
-    - awk_extract:
-        program: "{print $1, $2}"
-    - sed_script:
-        script: "s/DEBUG/TRACE/g"
-
+(define (deep-fs-pipeline (logfile : File) (sed_pattern : String) (awk_prog : String))
+  (awk_extract :program $awk_prog)
+  (sed_script :script $sed_pattern)
+  (awk_extract :program "{print $1}")
+  (sed_script :script "s/WARN/INFO/g")
+  (awk_extract :program "{print $2}")
+  (sed_script :script "s/INFO/DEBUG/g")
+  (awk_extract :program "{print $1, $2}")
+  (sed_script :script "s/DEBUG/TRACE/g"))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse 8-step plan");
+    let def = parse_plan_any(yaml);
     assert_eq!(def.steps.len(), 8);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
@@ -423,19 +351,12 @@ deep-fs-pipeline:
 #[test]
 fn stress_plan_var_resolution() {
     let yaml = r#"
-
-var-resolution:
-  inputs:
-    - path
-    - ext
-  steps:
-    - walk_tree
-    - filter:
-        extension: "$ext"
-    - sort_by: name
-
+(define (var-resolution (path : Dir) (ext : String))
+  (walk_tree)
+  (filter :extension $ext)
+  (sort_by :key "name"))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
         .expect("should compile with $var refs");
@@ -449,19 +370,13 @@ var-resolution:
 #[test]
 fn stress_plan_unknown_op() {
     let yaml = r#"
-
-unknown-op:
-  inputs:
-    - path
-  steps:
-    - walk_tree
-    - filter:
-        extension: ".txt"
-    - nonexistent_op_xyz
-    - sort_by: name
-
+(define (unknown-op (path : Dir))
+  (walk_tree)
+  (filter :extension ".txt")
+  (nonexistent_op_xyz)
+  (sort_by :key "name"))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let result = plan::compile_plan(&def, &registry);
     assert!(result.is_err(), "should fail on unknown op");
@@ -474,14 +389,9 @@ unknown-op:
 #[test]
 fn stress_plan_empty_steps() {
     let yaml = r#"
-
-empty:
-  inputs:
-    - path
-  steps: []
-
+(define (empty (path : Dir)))
 "#;
-    let result = plan::parse_plan(yaml);
+    let result = try_parse_plan_any(yaml);
     // Empty steps should fail at either parse or compile time
     assert!(result.is_err(), "empty steps should fail at parse time");
 }
@@ -489,13 +399,10 @@ empty:
 #[test]
 fn stress_plan_no_inputs() {
     let yaml = r#"
-
-no-inputs:
-  steps:
-    - walk_tree
-
+(define (no-inputs)
+  (walk_tree))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let result = plan::compile_plan(&def, &registry);
     // Plans without inputs are valid (e.g., arithmetic plans, or ops that use defaults)
@@ -507,15 +414,10 @@ no-inputs:
 #[test]
 fn stress_plan_single_step() {
     let yaml = r#"
-
-single-step:
-  inputs:
-    - path
-  steps:
-    - list_dir
-
+(define (single-step (path : Dir))
+  (list_dir))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     let registry = build_full_registry();
     let compiled = plan::compile_plan(&def, &registry)
         .expect("single step should compile");
@@ -525,21 +427,11 @@ single-step:
 #[test]
 fn stress_plan_many_inputs() {
     let yaml = r#"
-
-many-inputs:
-  inputs:
-    - path
-    - ext
-    - pattern
-    - mode
-    - limit
-  steps:
-    - walk_tree
-    - filter:
-        extension: "$ext"
-
+(define (many-inputs (path : Dir) (ext : String) (pattern : String) (mode : String) (limit : String))
+  (walk_tree)
+  (filter :extension $ext))
 "#;
-    let def = plan::parse_plan(yaml).expect("should parse");
+    let def = parse_plan_any(yaml);
     assert_eq!(def.inputs.len(), 5);
     let registry = build_full_registry();
     let _compiled = plan::compile_plan(&def, &registry)

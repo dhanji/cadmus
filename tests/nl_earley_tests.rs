@@ -392,7 +392,6 @@ fn expect_plan(input: &str) -> String {
             // Verify the sexpr round-trips through parse + compile
             let parsed = cadmus::sexpr::parse_sexpr_to_plan(&plan_sexpr)
                 .map_err(|e| e.to_string())
-                .or_else(|_| cadmus::plan::parse_plan(&plan_sexpr).map_err(|e| e.to_string()))
                 .unwrap_or_else(|e| panic!(
                     "plan should parse for '{}': {}\nYAML:\n{}", input, e, plan_sexpr
                 ));

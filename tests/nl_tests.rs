@@ -7,7 +7,6 @@
 fn parse_plan_any(src: &str) -> Result<cadmus::plan::PlanDef, String> {
     cadmus::sexpr::parse_sexpr_to_plan(src)
         .map_err(|e| e.to_string())
-        .or_else(|_| cadmus::plan::parse_plan(src).map_err(|e| e.to_string()))
 }
 
 /// Helper: assert PlanCreated and that the YAML compiles

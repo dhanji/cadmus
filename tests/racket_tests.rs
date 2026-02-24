@@ -341,7 +341,6 @@ fn test_nl_add_produces_racket_script() {
         nl::NlResponse::PlanCreated { plan_sexpr: yaml, .. } => {
             // Parse the plan YAML
             let def = cadmus::sexpr::parse_sexpr_to_plan(yaml).ok()
-                .or_else(|| cadmus::plan::parse_plan(yaml).ok())
                 .expect("generated plan should parse");
 
             // Build a registry with racket ops
@@ -489,7 +488,6 @@ fn test_full_pipeline_add() {
 
     // 3. Verify it's a valid plan
     let def = cadmus::sexpr::parse_sexpr_to_plan(&yaml).ok()
-        .or_else(|| cadmus::plan::parse_plan(&yaml).ok())
         .expect("should parse plan");
     assert!(!def.steps.is_empty());
 

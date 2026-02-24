@@ -131,12 +131,8 @@ impl PlanResult {
 
 // ─── Loading ────────────────────────────────────────────────────────────────
 
-fn parse_plan_file(content: &str, path: &Path) -> Option<PlanDef> {
-    if path.extension().map(|e| e == "sexp").unwrap_or(false) {
-        cadmus::sexpr::parse_sexpr_to_plan(content).ok()
-    } else {
-        plan::parse_plan(content).ok()
-    }
+fn parse_plan_file(content: &str, _path: &Path) -> Option<PlanDef> {
+    cadmus::sexpr::parse_sexpr_to_plan(content).ok()
 }
 
 fn extract_description(content: &str) -> Option<String> {
@@ -235,8 +231,7 @@ fn check_nl_match(
 
     match &response {
         NlResponse::PlanCreated { plan_sexpr, .. } => {
-            let parsed = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr)
-                .or_else(|_| plan::parse_plan(plan_sexpr));
+            let parsed = cadmus::sexpr::parse_sexpr_to_plan(plan_sexpr);
 
             match parsed {
                 Ok(plan) => {

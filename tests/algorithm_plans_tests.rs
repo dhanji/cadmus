@@ -25,13 +25,8 @@ fn run_algorithm_plan(plan_path: &str) -> (String, String) {
         .unwrap_or_else(|| panic!("No expected comment in {}", plan_path));
 
     // Parse based on extension
-    let def = if plan_path.ends_with(".sexp") {
-        cadmus::sexpr::parse_sexpr_to_plan(&content)
-            .unwrap_or_else(|e| panic!("Parse failed for {}: {}", plan_path, e))
-    } else {
-        plan::parse_plan(&content)
-            .unwrap_or_else(|e| panic!("Parse failed for {}: {}", plan_path, e))
-    };
+    let def = cadmus::sexpr::parse_sexpr_to_plan(&content)
+        .unwrap_or_else(|e| panic!("Parse failed for {}: {}", plan_path, e));
 
     let frame = DefaultFrame::from_plan(&def);
     let execution = frame.invoke(&def)
@@ -202,21 +197,11 @@ fn test_all_plans_compile() {
 
     for plan_path in &all_plans {
         let content = fs::read_to_string(&plan_path).unwrap();
-        let def = if plan_path.ends_with(".sexp") {
-            match cadmus::sexpr::parse_sexpr_to_plan(&content) {
-                Ok(d) => d,
-                Err(e) => {
-                    failures.push(format!("  {} — parse: {}", plan_path, e));
-                    continue;
-                }
-            }
-        } else {
-            match plan::parse_plan(&content) {
-                Ok(d) => d,
-                Err(e) => {
-                    failures.push(format!("  {} — parse: {}", plan_path, e));
-                    continue;
-                }
+        let def = match cadmus::sexpr::parse_sexpr_to_plan(&content) {
+            Ok(d) => d,
+            Err(e) => {
+                failures.push(format!("  {} — parse: {}", plan_path, e));
+                continue;
             }
         };
         if let Err(e) = plan::compile_plan(&def, &registry) {

@@ -1012,7 +1012,15 @@ fn check_no_recursion(name: &str, exprs: &[Expr]) -> Result<(), ParseError> {
 fn check_expr_no_recursion(name: &str, expr: &Expr) -> Result<(), ParseError> {
     match expr {
         Expr::Call { op, args, keywords } => {
-            if op == name && (!args.is_empty() || !keywords.is_empty()) {
+            // Block actual recursion but allow pipeline steps that happen to
+            // share the plan name.  A call is "pipeline-safe" when every
+            // argument is a $step-N or $body-N reference (i.e. it consumes
+            // earlier pipeline output, not the plan's own parameters).
+            let is_pipeline_ref = |e: &Expr| matches!(e, Expr::Var(v) if
+                v.starts_with("$step-") || v.starts_with("$body-"));
+            let all_pipeline = args.iter().all(is_pipeline_ref)
+                && keywords.iter().all(|(_, v)| is_pipeline_ref(v));
+            if op == name && (!args.is_empty() || !keywords.is_empty()) && !all_pipeline {
                 return Err(ParseError::at(0, format!(
                     "recursion not allowed: '{}' cannot call itself", name
                 )));

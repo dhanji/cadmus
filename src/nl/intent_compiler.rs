@@ -375,12 +375,7 @@ fn try_load_plan_at(path: &std::path::Path) -> Option<PlanDef> {
         return None;
     }
     let content = std::fs::read_to_string(path).ok()?;
-    let is_sexp = path.extension().map(|e| e == "sexp").unwrap_or(false);
-    let result = if is_sexp {
-        crate::sexpr::parse_sexpr_to_plan(&content).map_err(|e| e.to_string())
-    } else {
-        crate::plan::parse_plan(&content).map_err(|e| e.to_string())
-    };
+    let result = crate::sexpr::parse_sexpr_to_plan(&content).map_err(|e| e.to_string());
     result.ok()
 }
 

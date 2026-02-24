@@ -1,10 +1,15 @@
 // Archive codegen tests — end-to-end verification of the archive format
-// specialization pipeline: plan YAML → compile → format resolution →
+// specialization pipeline: plan sexpr → compile → format resolution →
 // Racket codegen.
+
+fn parse_plan_any(src: &str) -> cadmus::plan::PlanDef {
+    cadmus::sexpr::parse_sexpr_to_plan(src)
+        .expect("should parse plan")
+}
 
 use std::collections::HashMap;
 use cadmus::plan::{
-    parse_plan, compile_plan, step_needs_map, CompiledStep,
+    compile_plan, step_needs_map, CompiledStep,
 };
 use cadmus::racket_executor::generate_racket_script;
 use cadmus::fs_types::build_full_registry;
@@ -16,8 +21,8 @@ use cadmus::type_expr::TypeExpr;
 
 use cadmus::racket_executor::build_racket_registry;
 
-fn compile_and_generate(yaml: &str) -> (cadmus::plan::CompiledPlan, String) {
-    let def = parse_plan(yaml).unwrap();
+fn compile_and_generate(src: &str) -> (cadmus::plan::CompiledPlan, String) {
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
     let racket_reg = build_racket_registry();
@@ -32,14 +37,11 @@ fn compile_and_generate(yaml: &str) -> (cadmus::plan::CompiledPlan, String) {
 #[test]
 fn test_type_driven_map_extract_archive() {
     // extract_archive on a single CBZ file should NOT be wrapped in (map ...)
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(File(Image), Cbz))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive (File Image) Cbz))))
+  (extract_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -51,15 +53,12 @@ test:
 #[test]
 fn test_type_driven_map_on_seq_input() {
     // extract_archive: each on Seq input should need map
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - extract_archive: each
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (extract_archive :each))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -72,15 +71,12 @@ test:
 
 #[test]
 fn test_sort_by_does_not_trigger_map() {
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - sort_by: name
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (sort_by :key "name"))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -91,16 +87,12 @@ test:
 
 #[test]
 fn test_find_matching_does_not_trigger_map() {
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - find_matching:
-        pattern: "*.txt"
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (find_matching :pattern "*.txt"))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -111,15 +103,12 @@ test:
 
 #[test]
 fn test_map_wrapping_uses_line_variable() {
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - extract_archive: each
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (extract_archive :each))
 "#;
-    let (_, script) = compile_and_generate(yaml);
+    let (_, script) = compile_and_generate(src);
 
     // Should use (map (lambda (_line) ...) step-1)
     assert!(script.contains("(map (lambda (_line)"),
@@ -135,14 +124,11 @@ test:
 
 #[test]
 fn test_cbz_resolves_to_extract_zip() {
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(File(Image), Cbz))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive (File Image) Cbz))))
+  (extract_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -152,14 +138,11 @@ test:
 
 #[test]
 fn test_tar_gz_resolves_to_extract_tar_gz() {
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(Bytes, TarGz))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive Bytes TarGz))))
+  (extract_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -169,14 +152,11 @@ test:
 
 #[test]
 fn test_rar_resolves_to_extract_rar() {
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(Bytes, Rar))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive Bytes Rar))))
+  (extract_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -186,14 +166,11 @@ test:
 
 #[test]
 fn test_cbr_resolves_to_extract_rar() {
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(File(Image), Cbr))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive (File Image) Cbr))))
+  (extract_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -204,15 +181,12 @@ test:
 #[test]
 fn test_unresolved_format_keeps_generic_op() {
     // Dir(Bytes) input — format is unresolved
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - extract_archive: each
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (extract_archive :each))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -227,57 +201,45 @@ test:
 
 #[test]
 fn test_cbz_generates_unzip() {
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(File(Image), Cbz))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive (File Image) Cbz))))
+  (extract_archive))
 "#;
-    let (_, script) = compile_and_generate(yaml);
+    let (_, script) = compile_and_generate(src);
     assert!(script.contains("unzip"),
         "CBZ should generate unzip command: {}", script);
 }
 
 #[test]
 fn test_tar_gz_generates_tar_xzf() {
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(Bytes, TarGz))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive Bytes TarGz))))
+  (extract_archive))
 "#;
-    let (_, script) = compile_and_generate(yaml);
+    let (_, script) = compile_and_generate(src);
     assert!(script.contains("tar") && script.contains("-xzf"),
         "TarGz should generate tar -xzf: {}", script);
 }
 
 #[test]
 fn test_rar_generates_unrar() {
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(Bytes, Rar))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive Bytes Rar))))
+  (extract_archive))
 "#;
-    let (_, script) = compile_and_generate(yaml);
+    let (_, script) = compile_and_generate(src);
     assert!(script.contains("unrar"),
         "RAR should generate unrar command: {}", script);
 }
 
 #[test]
 fn test_unresolved_format_falls_back_to_tar() {
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - extract_archive: each
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (extract_archive :each))
 "#;
-    let (_, script) = compile_and_generate(yaml);
+    let (_, script) = compile_and_generate(src);
     assert!(script.contains("tar"),
         "unresolved format should fall back to tar: {}", script);
 }
@@ -334,14 +296,11 @@ fn test_comic_repack_pipeline_generates_racket() {
 #[test]
 fn test_comic_repack_typed_input_uses_unzip() {
     // When the input is a specific .cbz file, the format resolves
-    let yaml = r#"
-repack-single-cbz:
-  inputs:
-    - path: "File(Archive(File(Image), Cbz))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (repack-single-cbz (path : (File (Archive (File Image) Cbz))))
+  (extract_archive))
 "#;
-    let (compiled, script) = compile_and_generate(yaml);
+    let (compiled, script) = compile_and_generate(src);
 
     assert_eq!(compiled.steps[0].op, "extract_zip",
         "should resolve to extract_zip");
@@ -356,15 +315,12 @@ repack-single-cbz:
 #[test]
 fn test_pack_zip_resolves_from_output_type() {
     // When pack_archive produces File(Archive(a, Zip)), resolve to pack_zip
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(Bytes, Zip))"
-  steps:
-    - extract_archive
-    - pack_archive
+    let src = r#"
+(define (test (path : (File (Archive Bytes Zip))))
+  (extract_archive)
+  (pack_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -411,15 +367,12 @@ fn test_step_needs_map_with_racket_registry() {
 fn test_pack_archive_without_output_defaults_to_output_zip() {
     // pack_archive without explicit output param should still generate valid
     // Racket with a default output filename
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(Bytes, Zip))"
-  steps:
-    - extract_archive
-    - pack_archive
+    let src = r#"
+(define (test (path : (File (Archive Bytes Zip))))
+  (extract_archive)
+  (pack_archive))
 "#;
-    let (compiled, script) = compile_and_generate(yaml);
+    let (compiled, script) = compile_and_generate(src);
 
     // Should still compile and generate Racket
     assert!(compiled.steps.len() >= 2, "should have at least 2 steps");
@@ -430,18 +383,14 @@ test:
 
 #[test]
 fn test_find_matching_cbz_narrows_format() {
-    // *.cbz pattern should narrow Bytes → File(Archive(File(Image), Cbz))
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - find_matching:
-        pattern: "*.cbz"
-    - extract_archive: each
+    // *.cbz pattern should narrow Bytes → (File (Archive (File Image) Cbz))
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (find_matching :pattern "*.cbz")
+  (extract_archive :each))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -453,16 +402,12 @@ test:
 #[test]
 fn test_find_matching_txt_does_not_narrow_to_archive() {
     // *.txt pattern should NOT produce an archive type
-    let yaml = r#"
-test:
-  inputs:
-    - path
-  steps:
-    - list_dir
-    - find_matching:
-        pattern: "*.txt"
+    let src = r#"
+(define (test (path : Dir))
+  (list_dir)
+  (find_matching :pattern "*.txt"))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
 
@@ -502,14 +447,11 @@ fn test_extract_map_mode_uses_temp_dirs() {
 #[test]
 fn test_single_extract_no_temp_dir() {
     // A single (non-MAP) extract should NOT use temp dir isolation
-    let yaml = r#"
-test:
-  inputs:
-    - path: "File(Archive(File(Image), Cbz))"
-  steps:
-    - extract_archive
+    let src = r#"
+(define (test (path : (File (Archive (File Image) Cbz))))
+  (extract_archive))
 "#;
-    let def = parse_plan(yaml).unwrap();
+    let def = parse_plan_any(src);
     let registry = build_full_registry();
     let compiled = compile_plan(&def, &registry).unwrap();
     let racket_reg = build_racket_registry();
