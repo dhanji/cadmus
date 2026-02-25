@@ -13,8 +13,8 @@ fn test_racket_facts_property_count() {
     let idx = load_fact_pack(&path).expect("should load racket_facts");
     assert_eq!(
         idx.pack.properties.len(),
-        312,
-        "racket_facts should have exactly 312 properties"
+        360,
+        "racket_facts should have exactly 360 properties"
     );
 }
 
@@ -24,8 +24,8 @@ fn test_macos_cli_facts_property_count() {
     let idx = load_fact_pack(&path).expect("should load macos_cli_facts");
     assert_eq!(
         idx.pack.properties.len(),
-        461,
-        "macos_cli_facts should have exactly 461 properties"
+        546,
+        "macos_cli_facts should have exactly 546 properties"
     );
 }
 

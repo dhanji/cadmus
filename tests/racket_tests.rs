@@ -123,7 +123,7 @@ fn test_racket_subtract_not_in_ops_pack() {
 #[test]
 fn test_racket_facts_load() {
     let facts = load_racket_facts_from_str(RACKET_FACTS_YAML).unwrap();
-    assert_eq!(facts.pack.entities.len(), 72);
+    assert_eq!(facts.pack.entities.len(), 84);
     assert_eq!(facts.pack.axes.len(), 6);
     assert!(facts.pack.claims.len() >= 16);
     assert!(facts.pack.evidence.len() >= 8);

@@ -701,6 +701,58 @@ synonyms:
   - phrase: [divide]
     op: divide
 
+  # Desktop automation (peekaboo)
+  - phrase: [take, screenshot]
+    op: shell_peekaboo_see
+  - phrase: [screenshot]
+    op: shell_peekaboo_see
+  - phrase: [list, apps]
+    op: shell_peekaboo_list
+  - phrase: [list, applications]
+    op: shell_peekaboo_list
+  - phrase: [list, windows]
+    op: shell_peekaboo_list
+  - phrase: [launch, app]
+    op: shell_peekaboo_app
+  - phrase: [open, app]
+    op: shell_peekaboo_app
+  - phrase: [quit, app]
+    op: shell_peekaboo_app
+  - phrase: [focus, window]
+    op: shell_peekaboo_window
+  - phrase: [close, window]
+    op: shell_peekaboo_window
+  - phrase: [minimize, window]
+    op: shell_peekaboo_window
+  - phrase: [maximize, window]
+    op: shell_peekaboo_window
+  - phrase: [move, window]
+    op: shell_peekaboo_window
+  - phrase: [resize, window]
+    op: shell_peekaboo_window
+  - phrase: [click]
+    op: shell_peekaboo_click
+  - phrase: [double, click]
+    op: shell_peekaboo_click
+  - phrase: [right, click]
+    op: shell_peekaboo_click
+  - phrase: [type, text]
+    op: shell_peekaboo_type
+  - phrase: [press, key]
+    op: shell_peekaboo_press
+  - phrase: [keyboard, shortcut]
+    op: shell_peekaboo_hotkey
+  - phrase: [hotkey]
+    op: shell_peekaboo_hotkey
+  - phrase: [scroll]
+    op: shell_peekaboo_scroll
+  - phrase: [drag, drop]
+    op: shell_peekaboo_drag
+  - phrase: [read, clipboard]
+    op: shell_peekaboo_clipboard
+  - phrase: [copy, clipboard]
+    op: shell_peekaboo_clipboard
+
 
 # ---------------------------------------------------------------------------
 # Contractions: contraction → expansion

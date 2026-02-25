@@ -3082,3 +3082,28 @@ algorithm_expansion:
   parsing: 100
   repack: 100
   unpack: 100
+
+  # desktop-automation domain (peekaboo)
+  peekaboo: 100
+  apps: 100
+  click: 100
+  launch: 100
+  focus: 80
+  submit: 80
+  see: 100
+  applications: 80
+  screenshot: 80
+  hotkey: 80
+  shortcut: 60
+  menubar: 60
+  swipe: 60
+  tile: 100
+  drag: 80
+  clipboard: 80
+  minimize: 60
+  maximize: 60
+  resize: 80
+  relaunch: 60
+  unhide: 60
+  frontmost: 50
+  annotate: 50

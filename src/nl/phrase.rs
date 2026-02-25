@@ -46,6 +46,8 @@ fn stopwords() -> &'static HashSet<&'static str> {
             "will", "shall", "may", "might", "should",
             "let", "gonna", "wanna", "gotta",
             "thing", "things", "stuff",
+            // Conjunctions
+            "and", "or",
             // Prepositions that can appear inside phrases
             "for", "about", "to", "of", "on", "by", "with", "using",
             // Generic words that appear between algorithm name parts
@@ -315,5 +317,13 @@ mod tests {
         let tokens: Vec<String> = "write a program".split_whitespace().map(String::from).collect();
         let result = phrase_tokenize(&tokens);
         assert_eq!(result, vec!["implement"]);
+    }
+
+    #[test]
+    fn test_list_running_apps_phrase() {
+        let tokens: Vec<String> = "list running apps".split_whitespace().map(String::from).collect();
+        let result = phrase_tokenize(&tokens);
+        eprintln!("phrase_tokenize({:?}) = {:?}", tokens, result);
+        assert_eq!(result, vec!["list_running_apps"]);
     }
 }

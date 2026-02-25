@@ -256,6 +256,46 @@ entities:
     name: "shell-openssl"
     description: "Cryptographic operations via openssl"
 
+  # --- Desktop automation operations (Peekaboo) ---
+  # Discovered via type-symmetric from shell_ls (shell_text_lines) and
+  # shell_mv (shell_exec) anchors.
+  - id: op_shell_peekaboo_list
+    name: "shell-peekaboo-list"
+    description: "List running apps, windows, screens via peekaboo"
+  - id: op_shell_peekaboo_see
+    name: "shell-peekaboo-see"
+    description: "Capture and analyze UI elements via peekaboo"
+  - id: op_shell_peekaboo_click
+    name: "shell-peekaboo-click"
+    description: "Click UI elements via peekaboo"
+  - id: op_shell_peekaboo_type
+    name: "shell-peekaboo-type"
+    description: "Type text into focused element via peekaboo"
+  - id: op_shell_peekaboo_hotkey
+    name: "shell-peekaboo-hotkey"
+    description: "Press keyboard shortcuts via peekaboo"
+  - id: op_shell_peekaboo_press
+    name: "shell-peekaboo-press"
+    description: "Press keys via peekaboo"
+  - id: op_shell_peekaboo_scroll
+    name: "shell-peekaboo-scroll"
+    description: "Scroll via peekaboo"
+  - id: op_shell_peekaboo_drag
+    name: "shell-peekaboo-drag"
+    description: "Drag and drop via peekaboo"
+  - id: op_shell_peekaboo_app
+    name: "shell-peekaboo-app"
+    description: "Control applications via peekaboo"
+  - id: op_shell_peekaboo_window
+    name: "shell-peekaboo-window"
+    description: "Manipulate windows via peekaboo"
+  - id: op_shell_peekaboo_clipboard
+    name: "shell-peekaboo-clipboard"
+    description: "Read/write clipboard via peekaboo"
+  - id: op_shell_peekaboo_open
+    name: "shell-peekaboo-open"
+    description: "Open URLs/files via peekaboo"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -1042,6 +1082,102 @@ compact_properties:
       racket_symbol: shell-yq
     type_symmetry:
       type_symmetry_class: shell_structured
+  op_shell_peekaboo_list:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_list
+      racket_symbol: shell-peekaboo-list
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_peekaboo_see:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_see
+      racket_symbol: shell-peekaboo-see
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_peekaboo_click:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_click
+      racket_symbol: shell-peekaboo-click
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_type:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_type
+      racket_symbol: shell-peekaboo-type
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_hotkey:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_hotkey
+      racket_symbol: shell-peekaboo-hotkey
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_press:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_press
+      racket_symbol: shell-peekaboo-press
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_scroll:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_scroll
+      racket_symbol: shell-peekaboo-scroll
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_drag:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_drag
+      racket_symbol: shell-peekaboo-drag
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_app:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_app
+      racket_symbol: shell-peekaboo-app
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_window:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_window
+      racket_symbol: shell-peekaboo-window
+    type_symmetry:
+      type_symmetry_class: shell_session
+  op_shell_peekaboo_clipboard:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_clipboard
+      racket_symbol: shell-peekaboo-clipboard
+    type_symmetry:
+      type_symmetry_class: shell_text_lines
+  op_shell_peekaboo_open:
+    category:
+      category_name: shell
+    type_signature:
+      op_name: shell_peekaboo_open
+      racket_symbol: shell-peekaboo-open
+    type_symmetry:
+      type_symmetry_class: shell_session
   op_string_downcase:
     category:
       category_name: string

@@ -63,7 +63,7 @@ fn make_inputs(pairs: Vec<(&str, &str)>) -> Vec<cadmus::plan::PlanInput> {
 #[test]
 fn test_cli_facts_load() {
     let pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
-    assert_eq!(pack.entities.len(), 62, "expected 62 CLI tool entities");
+    assert_eq!(pack.entities.len(), 74, "expected 74 CLI tool entities");
     assert_eq!(pack.axes.len(), 5);
     assert!(pack.claims.len() >= 60);
     assert!(pack.evidence.len() >= 5);
@@ -85,7 +85,7 @@ fn test_cli_facts_submodes_count() {
     let submodes: Vec<_> = pack.properties.iter()
         .filter(|p| p.key.starts_with("submode_"))
         .collect();
-    assert_eq!(submodes.len(), 151, "expected 141 submode properties");
+    assert_eq!(submodes.len(), 176, "expected 141 submode properties");
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_cli_facts_type_symmetry_classes() {
         }
     }
     assert_eq!(classes.len(), 11, "expected 11 type symmetry classes");
-    assert_eq!(classes["shell_text_lines"].len(), 24, "text_lines should have 24 tools");
+    assert_eq!(classes["shell_text_lines"].len(), 27, "text_lines should have 27 tools");
     assert_eq!(classes["shell_tabular"].len(), 3, "tabular should have 3 tools");
     assert_eq!(classes["shell_tree"].len(), 2, "tree should have 2 tools");
 }
@@ -294,7 +294,7 @@ fn test_submode_total_count() {
     let cli_pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
     let cli_facts = FactPackIndex::build(cli_pack);
     let submodes = discover_shell_submodes(&mut reg, &facts, &cli_facts);
-    assert_eq!(submodes.len(), 151, "expected 141 submode ops");
+    assert_eq!(submodes.len(), 176, "expected 141 submode ops");
 }
 
 #[test]
@@ -575,7 +575,7 @@ fn test_submode_idempotent() {
     let second = discover_shell_submodes(&mut reg, &facts, &cli_facts2);
     let count_after_second = reg.poly_op_names().len();
 
-    assert_eq!(first.len(), 151);
+    assert_eq!(first.len(), 176);
     assert_eq!(second.len(), 0, "second run should discover 0 new ops");
     assert_eq!(count_after_first, count_after_second, "op count should not change");
 }
@@ -607,4 +607,84 @@ fn test_sort_submodes() {
     assert!(reg.get_poly("shell_sort_reverse").is_some());
     assert!(reg.get_poly("shell_sort_unique").is_some());
     assert!(reg.get_poly("shell_sort_numeric_reverse").is_some());
+}
+
+// ===========================================================================
+// 10. Peekaboo Desktop Automation
+// ===========================================================================
+
+#[test]
+fn test_peekaboo_base_ops_discovered() {
+    let reg = cadmus::fs_types::build_full_registry();
+    // Base peekaboo ops should be discovered via type-symmetric inference
+    for name in &[
+        "shell_peekaboo_list", "shell_peekaboo_see", "shell_peekaboo_click",
+        "shell_peekaboo_type", "shell_peekaboo_hotkey", "shell_peekaboo_press",
+        "shell_peekaboo_scroll", "shell_peekaboo_drag", "shell_peekaboo_app",
+        "shell_peekaboo_window", "shell_peekaboo_clipboard", "shell_peekaboo_open",
+    ] {
+        assert!(reg.get_poly(name).is_some(), "missing peekaboo base op: {}", name);
+    }
+}
+
+#[test]
+fn test_peekaboo_submodes_discovered() {
+    let reg = cadmus::fs_types::build_full_registry();
+    // Peekaboo submodes should be discovered from macos_cli fact pack
+    for name in &[
+        "shell_peekaboo_list_apps", "shell_peekaboo_list_windows",
+        "shell_peekaboo_list_json", "shell_peekaboo_see_json",
+        "shell_peekaboo_see_annotate", "shell_peekaboo_click_double",
+        "shell_peekaboo_click_right", "shell_peekaboo_type_return",
+        "shell_peekaboo_type_clear", "shell_peekaboo_app_launch",
+        "shell_peekaboo_app_quit", "shell_peekaboo_app_switch",
+        "shell_peekaboo_window_focus", "shell_peekaboo_window_close",
+        "shell_peekaboo_window_move", "shell_peekaboo_window_resize",
+        "shell_peekaboo_clipboard_read", "shell_peekaboo_clipboard_write",
+    ] {
+        assert!(reg.get_poly(name).is_some(), "missing peekaboo submode: {}", name);
+    }
+}
+
+#[test]
+fn test_peekaboo_ops_have_shell_meta() {
+    let reg = cadmus::fs_types::build_full_registry();
+    let op = reg.get_poly("shell_peekaboo_click").unwrap();
+    assert!(op.meta.is_some(), "peekaboo_click should have meta");
+    let meta = op.meta.as_ref().unwrap();
+    assert_eq!(meta.category.as_deref(), Some("shell"));
+}
+
+#[test]
+fn test_peekaboo_type_signatures() {
+    let reg = cadmus::fs_types::build_full_registry();
+
+    // Query ops: String → List(String) (like shell_ls)
+    let list = reg.get_poly("shell_peekaboo_list").unwrap();
+    assert_eq!(format!("{}", list.signature.output), "List(String)");
+
+    // Action ops: String → String (like shell_tmux)
+    let click = reg.get_poly("shell_peekaboo_click").unwrap();
+    assert_eq!(format!("{}", click.signature.output), "String");
+
+    // Submodes inherit parent type
+    let click_double = reg.get_poly("shell_peekaboo_click_double").unwrap();
+    assert_eq!(format!("{}", click_double.signature.output), "String");
+
+    let list_apps = reg.get_poly("shell_peekaboo_list_apps").unwrap();
+    assert_eq!(format!("{}", list_apps.signature.output), "List(String)");
+}
+
+#[test]
+fn test_peekaboo_submode_completeness() {
+    // Every peekaboo entity in macos_cli.facts.yaml should have its submodes discovered
+    let reg = cadmus::fs_types::build_full_registry();
+    let peekaboo_ops: Vec<String> = reg.poly_op_names().into_iter()
+        .filter(|n| n.contains("peekaboo"))
+        .map(|s| s.to_string())
+        .collect();
+
+    // 12 base + 25 submodes = 37 total
+    assert!(peekaboo_ops.len() >= 37,
+        "expected at least 37 peekaboo ops, got {}: {:?}", peekaboo_ops.len(), peekaboo_ops);
 }

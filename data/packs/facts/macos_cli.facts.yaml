@@ -250,6 +250,44 @@ entities:
     name: "openssl"
     description: "Cryptographic toolkit — hashing, encryption, certificates"
 
+  # --- Desktop automation tools (Peekaboo) ---
+  - id: cli_peekaboo_list
+    name: "peekaboo list"
+    description: "List running applications, windows, screens, or menu bar items"
+  - id: cli_peekaboo_see
+    name: "peekaboo see"
+    description: "Capture and analyze UI elements for automation — returns element map with IDs"
+  - id: cli_peekaboo_click
+    name: "peekaboo click"
+    description: "Click on UI elements by ID, query, or coordinates"
+  - id: cli_peekaboo_type
+    name: "peekaboo type"
+    description: "Type text or send keyboard input to the focused element"
+  - id: cli_peekaboo_hotkey
+    name: "peekaboo hotkey"
+    description: "Press keyboard shortcuts and key combinations"
+  - id: cli_peekaboo_press
+    name: "peekaboo press"
+    description: "Press individual keys or key sequences"
+  - id: cli_peekaboo_scroll
+    name: "peekaboo scroll"
+    description: "Scroll the mouse wheel in any direction"
+  - id: cli_peekaboo_drag
+    name: "peekaboo drag"
+    description: "Perform drag and drop operations"
+  - id: cli_peekaboo_app
+    name: "peekaboo app"
+    description: "Control applications — launch, quit, relaunch, hide, unhide, switch"
+  - id: cli_peekaboo_window
+    name: "peekaboo window"
+    description: "Manipulate application windows — focus, close, minimize, maximize, move, resize"
+  - id: cli_peekaboo_clipboard
+    name: "peekaboo clipboard"
+    description: "Read or write the macOS clipboard (text, images, files)"
+  - id: cli_peekaboo_open
+    name: "peekaboo open"
+    description: "Open a URL or file with its default or specified application"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -795,6 +833,106 @@ claims:
     axis: shell_submodes
     text: "openssl subcommands: dgst -sha256 (hash), dgst -md5 (MD5 hash), enc -aes-256-cbc (encrypt), x509 (certificate operations)"
 
+  # --- peekaboo list ---
+  - id: cli_peekaboo_list_base
+    entity: cli_peekaboo_list
+    axis: shell_output_format
+    text: "peekaboo list outputs running applications, windows, screens, or menu bar items. With --json, outputs structured JSON."
+  - id: cli_peekaboo_list_flags
+    entity: cli_peekaboo_list
+    axis: shell_submodes
+    text: "peekaboo list supports subcommands: apps (list running apps), windows --app APP (list windows for app), screens (list displays), menubar (list menu bar items), permissions (check permissions). Supports --json flag."
+
+  # --- peekaboo see ---
+  - id: cli_peekaboo_see_base
+    entity: cli_peekaboo_see
+    axis: shell_output_format
+    text: "peekaboo see captures a screenshot and analyzes UI elements. Returns element map with IDs (B1, T2, etc.) for use with click/type commands. With --json, outputs structured element data."
+  - id: cli_peekaboo_see_flags
+    entity: cli_peekaboo_see
+    axis: shell_submodes
+    text: "peekaboo see supports flags: --app APP (target application), --json (structured output), --annotate (annotated screenshot), --window-title TITLE (specific window), --mode MODE (screen, window, frontmost)"
+
+  # --- peekaboo click ---
+  - id: cli_peekaboo_click_base
+    entity: cli_peekaboo_click
+    axis: shell_output_format
+    text: "peekaboo click clicks on UI elements by ID, text query, or coordinates. Returns exit status."
+  - id: cli_peekaboo_click_flags
+    entity: cli_peekaboo_click
+    axis: shell_submodes
+    text: "peekaboo click supports flags: --on ID (element ID from see), --coords X,Y (click at coordinates), --double (double-click), --right (right-click), --app APP (target app), --window-title TITLE"
+
+  # --- peekaboo type ---
+  - id: cli_peekaboo_type_base
+    entity: cli_peekaboo_type
+    axis: shell_output_format
+    text: "peekaboo type sends keyboard input to the focused element. Returns exit status."
+  - id: cli_peekaboo_type_flags
+    entity: cli_peekaboo_type
+    axis: shell_submodes
+    text: "peekaboo type supports flags: --return (press return after typing), --clear (clear field first), --tab N (press tab N times), --delay MS (delay between keys), --app APP (target app)"
+
+  # --- peekaboo hotkey ---
+  - id: cli_peekaboo_hotkey_base
+    entity: cli_peekaboo_hotkey
+    axis: shell_output_format
+    text: "peekaboo hotkey presses keyboard shortcuts. Returns exit status."
+
+  # --- peekaboo press ---
+  - id: cli_peekaboo_press_base
+    entity: cli_peekaboo_press
+    axis: shell_output_format
+    text: "peekaboo press presses individual keys or key sequences. Returns exit status."
+
+  # --- peekaboo scroll ---
+  - id: cli_peekaboo_scroll_base
+    entity: cli_peekaboo_scroll
+    axis: shell_output_format
+    text: "peekaboo scroll scrolls the mouse wheel in any direction. Returns exit status."
+
+  # --- peekaboo drag ---
+  - id: cli_peekaboo_drag_base
+    entity: cli_peekaboo_drag
+    axis: shell_output_format
+    text: "peekaboo drag performs drag and drop operations. Returns exit status."
+
+  # --- peekaboo app ---
+  - id: cli_peekaboo_app_base
+    entity: cli_peekaboo_app
+    axis: shell_output_format
+    text: "peekaboo app controls applications: launch, quit, relaunch, hide, unhide, switch. Returns exit status."
+  - id: cli_peekaboo_app_flags
+    entity: cli_peekaboo_app
+    axis: shell_submodes
+    text: "peekaboo app supports subcommands: launch APP (start app), quit --app APP (quit app), switch --to APP (switch to app), hide --app APP (hide app), unhide --app APP (show app), relaunch APP (restart app)"
+
+  # --- peekaboo window ---
+  - id: cli_peekaboo_window_base
+    entity: cli_peekaboo_window
+    axis: shell_output_format
+    text: "peekaboo window manipulates windows: focus, close, minimize, maximize, move, resize. Returns exit status."
+  - id: cli_peekaboo_window_flags
+    entity: cli_peekaboo_window
+    axis: shell_submodes
+    text: "peekaboo window supports subcommands: focus --app APP (bring to front), close --app APP (close window), minimize --app APP (minimize), maximize --app APP (maximize), move --app APP --x N --y N (reposition), resize --app APP --width N --height N (resize)"
+
+  # --- peekaboo clipboard ---
+  - id: cli_peekaboo_clipboard_base
+    entity: cli_peekaboo_clipboard
+    axis: shell_output_format
+    text: "peekaboo clipboard reads or writes the macOS clipboard. Read outputs clipboard text to stdout."
+  - id: cli_peekaboo_clipboard_flags
+    entity: cli_peekaboo_clipboard
+    axis: shell_submodes
+    text: "peekaboo clipboard supports subcommands: read (output clipboard contents), write TEXT (set clipboard contents)"
+
+  # --- peekaboo open ---
+  - id: cli_peekaboo_open_base
+    entity: cli_peekaboo_open
+    axis: shell_output_format
+    text: "peekaboo open opens a URL or file with its default or specified application. Returns exit status."
+
 # ---------------------------------------------------------------------------
 # Evidence
 # ---------------------------------------------------------------------------
@@ -823,6 +961,31 @@ evidence:
     supports: cli_curl_base
     text: "man curl — transfer a URL"
     source: "curl.se documentation"
+
+  - id: ev_peekaboo_list
+    supports: cli_peekaboo_list_base
+    text: "peekaboo list — list running applications, windows, screens, or menu bar items"
+    source: "peekaboo --help"
+
+  - id: ev_peekaboo_see
+    supports: cli_peekaboo_see_base
+    text: "peekaboo see — capture and analyze UI elements for automation"
+    source: "peekaboo --help"
+
+  - id: ev_peekaboo_click
+    supports: cli_peekaboo_click_base
+    text: "peekaboo click — click on UI elements or coordinates"
+    source: "peekaboo --help"
+
+  - id: ev_peekaboo_app
+    supports: cli_peekaboo_app_base
+    text: "peekaboo app — control applications: launch, quit, relaunch, hide, unhide, switch"
+    source: "peekaboo --help"
+
+  - id: ev_peekaboo_window
+    supports: cli_peekaboo_window_base
+    text: "peekaboo window — manipulate application windows"
+    source: "peekaboo --help"
 
 # ---------------------------------------------------------------------------
 # Properties — structured data for the inference engine
@@ -1585,6 +1748,146 @@ compact_properties:
       racket_symbol: shell-zip
     shell_type_symmetry:
       type_symmetry_class: shell_exec
+  cli_peekaboo_list:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_apps: apps
+      submode_windows: windows
+      submode_screens: screens
+      submode_menubar: menubar
+      submode_json: --json
+    shell_type_signature:
+      base_command: "peekaboo list"
+      op_name: shell_peekaboo_list
+      racket_symbol: shell-peekaboo-list
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_peekaboo_see:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_json: --json
+      submode_annotate: --annotate
+    shell_type_signature:
+      base_command: "peekaboo see"
+      op_name: shell_peekaboo_see
+      racket_symbol: shell-peekaboo-see
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_peekaboo_click:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_double: --double
+      submode_right: --right
+    shell_type_signature:
+      base_command: "peekaboo click"
+      op_name: shell_peekaboo_click
+      racket_symbol: shell-peekaboo-click
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_type:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_return: --return
+      submode_clear: --clear
+    shell_type_signature:
+      base_command: "peekaboo type"
+      op_name: shell_peekaboo_type
+      racket_symbol: shell-peekaboo-type
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_hotkey:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: "peekaboo hotkey"
+      op_name: shell_peekaboo_hotkey
+      racket_symbol: shell-peekaboo-hotkey
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_press:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: "peekaboo press"
+      op_name: shell_peekaboo_press
+      racket_symbol: shell-peekaboo-press
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_scroll:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: "peekaboo scroll"
+      op_name: shell_peekaboo_scroll
+      racket_symbol: shell-peekaboo-scroll
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_drag:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: "peekaboo drag"
+      op_name: shell_peekaboo_drag
+      racket_symbol: shell-peekaboo-drag
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_app:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_launch: launch
+      submode_quit: quit
+      submode_switch: switch
+      submode_hide: hide
+      submode_unhide: unhide
+      submode_relaunch: relaunch
+    shell_type_signature:
+      base_command: "peekaboo app"
+      op_name: shell_peekaboo_app
+      racket_symbol: shell-peekaboo-app
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_window:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_focus: focus
+      submode_close: close
+      submode_minimize: minimize
+      submode_maximize: maximize
+      submode_move: move
+      submode_resize: resize
+    shell_type_signature:
+      base_command: "peekaboo window"
+      op_name: shell_peekaboo_window
+      racket_symbol: shell-peekaboo-window
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
+  cli_peekaboo_clipboard:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_read: read
+      submode_write: write
+    shell_type_signature:
+      base_command: "peekaboo clipboard"
+      op_name: shell_peekaboo_clipboard
+      racket_symbol: shell-peekaboo-clipboard
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_peekaboo_open:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: "peekaboo open"
+      op_name: shell_peekaboo_open
+      racket_symbol: shell-peekaboo-open
+    shell_type_symmetry:
+      type_symmetry_class: shell_session
 relations:
   - kind: ordinal
     id: rel_shell_category

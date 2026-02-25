@@ -911,6 +911,27 @@ verbs:
     action: zero_one_knapsack
     synonyms: [knapsack]
 
+  # ==========================================================================
+  # DOMAIN 6: DESKTOP AUTOMATION (peekaboo plans)
+  # ==========================================================================
+
+  - word: list_running_apps
+    action: list_running_apps
+  - word: launch_and_focus
+    action: launch_and_focus
+  - word: see_and_click
+    action: see_and_click
+  - word: click_type_submit
+    action: click_type_submit
+  - word: tile_two_windows
+    action: tile_two_windows
+  - word: screenshot
+    action: see_and_click
+    synonyms: [screencap, screengrab, capture]
+  - word: tile
+    action: tile_two_windows
+    synonyms: [snap, sidebyside]
+
 # ---------------------------------------------------------------------------
 # Nouns: object words → concept labels
 # ---------------------------------------------------------------------------
@@ -1881,6 +1902,38 @@ phrase_groups:
     canonical: snake_to_title
   - skeleton: [substring, count]
     canonical: multi_substring_count
+
+  # --- Desktop automation phrases (peekaboo) ---
+  - skeleton: [list, running, apps]
+    canonical: list_running_apps
+  - skeleton: [list, apps]
+    canonical: list_running_apps
+  - skeleton: [show, running, apps]
+    canonical: list_running_apps
+  - skeleton: [running, apps]
+    canonical: list_running_apps
+  - skeleton: [running, applications]
+    canonical: list_running_apps
+  - skeleton: [launch, focus]
+    canonical: launch_and_focus
+  - skeleton: [open, focus]
+    canonical: launch_and_focus
+  - skeleton: [start, focus]
+    canonical: launch_and_focus
+  - skeleton: [take, screenshot]
+    canonical: see_and_click
+  - skeleton: [see, click]
+    canonical: see_and_click
+  - skeleton: [click, type]
+    canonical: click_type_submit
+  - skeleton: [click, type, submit]
+    canonical: click_type_submit
+  - skeleton: [tile, windows]
+    canonical: tile_two_windows
+  - skeleton: [snap, windows]
+    canonical: tile_two_windows
+  - skeleton: [side, side]
+    canonical: tile_two_windows
 
 fillers:
   - up
