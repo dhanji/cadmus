@@ -1,0 +1,195 @@
+# macOS Task Operations Pack
+# ===========================
+# Complex multi-command operations for macOS desktop tasks.
+# Each op has a racket_body that generates the full Racket script.
+# These shadow the type-only declarations in fs.ops.yaml, adding
+# racket_body for codegen while preserving the rich type signatures.
+
+name: macos_tasks
+description: "macOS desktop task operations: trash, organize, rename, backup"
+
+ops:
+
+  # =========================================================================
+  # Trash — move to ~/.Trash safely
+  # =========================================================================
+  - name: trash
+    racket_symbol: "trash"
+    type_params: [a]
+    inputs: ["a"]
+    output: "Unit"
+    description: "(trash path) — move file/dir to Trash"
+    input_names: [path]
+    racket_body: |
+      (define (trash path)
+        (shell-exec (string-append "mv " (shell-quote path) " ~/.Trash/")))
+
+  # =========================================================================
+  # Find recent files — find -mtime
+  # =========================================================================
+  - name: find_recent
+    racket_symbol: "find-recent"
+    inputs: ["Dir(Bytes)", "Name"]
+    output: "Seq(Entry(Name, Bytes))"
+    description: "(find-recent dir days) — find files modified within N days"
+    input_names: [dir, days]
+    racket_body: |
+      (define (find-recent dir days)
+        (shell-lines (string-append "find " (shell-quote dir) " -maxdepth 1 -type f -mtime -" days)))
+
+  # =========================================================================
+  # Find modified since — find -newermt
+  # =========================================================================
+  - name: find_modified_since
+    racket_symbol: "find-modified-since"
+    inputs: ["Dir(Bytes)", "Name"]
+    output: "Seq(Entry(Name, Bytes))"
+    description: "(find-modified-since dir since) — find files modified since timestamp"
+    input_names: [dir, since]
+    racket_body: |
+      (define (find-modified-since dir since)
+        (shell-lines (string-append "find " (shell-quote dir) " -maxdepth 1 -type f -newermt " (shell-quote since))))
+
+  # =========================================================================
+  # Find by size — find -size
+  # =========================================================================
+  - name: find_by_size
+    racket_symbol: "find-by-size"
+    inputs: ["Dir(Bytes)", "Size"]
+    output: "Seq(Entry(Name, Bytes))"
+    description: "(find-by-size dir min-size) — find files larger than threshold"
+    input_names: [dir, min_size]
+    racket_body: |
+      (define (find-by-size dir min-size)
+        (shell-lines (string-append "find " (shell-quote dir) " -type f -size +" min-size)))
+
+  # =========================================================================
+  # Rename by date — rename files using modification date
+  # =========================================================================
+  - name: rename_by_date
+    racket_symbol: "rename-by-date"
+    inputs: ["Dir(Bytes)"]
+    output: "Seq(Entry(Name, Bytes))"
+    description: "(rename-by-date dir) — rename files using modification date prefix"
+    input_names: [dir]
+    racket_body: |
+      (define (rename-by-date dir)
+        (for-each
+          (lambda (f)
+            (let* ([full (string-append dir "/" f)]
+                   [date (string-trim (shell-result (string-append "stat -f '%Sm' -t '%Y-%m-%d_%H%M%S' " (shell-quote full))))]
+                   [new-name (string-append dir "/" date "_" f)])
+              (when (not (equal? full new-name))
+                (shell-exec (string-append "mv " (shell-quote full) " " (shell-quote new-name))))))
+          (filter (lambda (f) (not (string-prefix? "." f)))
+            (shell-lines (string-append "ls " (shell-quote dir))))))
+
+  # =========================================================================
+  # Organize by extension — group files into subdirs by extension
+  # =========================================================================
+  - name: organize_by_extension
+    racket_symbol: "organize-by-extension"
+    inputs: ["Dir(Bytes)"]
+    output: "Dir(Bytes)"
+    description: "(organize-by-extension dir) — group files into subdirectories by extension"
+    input_names: [dir]
+    racket_body: |
+      (define (organize-by-extension dir)
+        (for-each
+          (lambda (f)
+            (let* ([full (string-append dir "/" f)]
+                   [ext (path-get-extension full)]
+                   [folder (if ext (substring ext 1) "no-extension")]
+                   [dest-dir (string-append dir "/" folder)])
+              (shell-exec (string-append "mkdir -p " (shell-quote dest-dir)))
+              (shell-exec (string-append "mv " (shell-quote full) " " (shell-quote dest-dir) "/"))))
+          (filter (lambda (f) (and (not (string-prefix? "." f))
+                                   (not (directory-exists? (string-append dir "/" f)))))
+            (shell-lines (string-append "ls " (shell-quote dir))))))
+
+  # =========================================================================
+  # Show hidden files — toggle Finder hidden files
+  # =========================================================================
+  - name: show_hidden_files
+    racket_symbol: "show-hidden-files"
+    inputs: []
+    output: "Unit"
+    description: "(show-hidden-files) — toggle display of hidden files in Finder"
+    input_names: []
+    racket_body: |
+      (define (show-hidden-files)
+        (shell-exec "defaults write com.apple.finder AppleShowAllFiles -bool true")
+        (shell-exec "killall Finder"))
+
+  # =========================================================================
+  # Replace in filenames — batch rename with pattern
+  # =========================================================================
+  - name: replace_in_filenames
+    racket_symbol: "replace-in-filenames"
+    inputs: ["Dir(Bytes)", "Pattern", "Pattern"]
+    output: "Seq(Entry(Name, Bytes))"
+    description: "(replace-in-filenames dir find replace) — batch rename files"
+    input_names: [dir, find, replace]
+    racket_body: |
+      (define (replace-in-filenames dir find replace)
+        (for-each
+          (lambda (f)
+            (let* ([new-f (string-replace f find replace)]
+                   [old-path (string-append dir "/" f)]
+                   [new-path (string-append dir "/" new-f)])
+              (when (not (equal? f new-f))
+                (shell-exec (string-append "mv " (shell-quote old-path) " " (shell-quote new-path))))))
+          (shell-lines (string-append "ls " (shell-quote dir)))))
+
+  # =========================================================================
+  # Find duplicates by hash — find+shasum
+  # =========================================================================
+  - name: find_duplicates_by_hash
+    racket_symbol: "find-duplicates-by-hash"
+    inputs: ["Dir(Bytes)"]
+    output: "Seq(Entry(Name, Hash))"
+    description: "(find-duplicates-by-hash dir) — find duplicate files by content hash"
+    input_names: [dir]
+    racket_body: |
+      (define (find-duplicates-by-hash dir)
+        (let* ([files (shell-lines (string-append "find " (shell-quote dir) " -type f"))]
+               [seen (make-hash)]
+               [dupes '()])
+          (for-each
+            (lambda (f)
+              (let ([h (string-trim (shell-result (string-append "shasum -a 256 " (shell-quote f))))])
+                (let ([key (car (string-split h "  "))])
+                  (if (hash-has-key? seen key)
+                      (set! dupes (cons f dupes))
+                      (hash-set! seen key #t)))))
+            files)
+          dupes))
+
+  # =========================================================================
+  # Compare directories — diff -rq
+  # =========================================================================
+  - name: compare_dirs
+    racket_symbol: "compare-dirs"
+    inputs: ["Dir(Bytes)", "Dir(Bytes)"]
+    output: "Diff"
+    description: "(compare-dirs dir1 dir2) — compare two directory trees"
+    input_names: [dir1, dir2]
+    racket_body: |
+      (define (compare-dirs dir1 dir2)
+        (shell-lines (string-append "diff -rq " (shell-quote dir1) " " (shell-quote dir2))))
+
+  # =========================================================================
+  # Backup timestamped — cp -a with timestamp
+  # =========================================================================
+  - name: backup_timestamped
+    racket_symbol: "backup-timestamped"
+    inputs: ["Dir(Bytes)", "Path"]
+    output: "Dir(Bytes)"
+    description: "(backup-timestamped src dest) — create timestamped backup copy"
+    input_names: [src, dest]
+    racket_body: |
+      (define (backup-timestamped src dest)
+        (let* ([ts (string-trim (shell-result "date +%Y%m%d_%H%M%S"))]
+               [base (path->string (file-name-from-path (string->path src)))]
+               [target (string-append dest "/" base "_backup_" ts)])
+          (shell-exec (string-append "cp -a " (shell-quote src) " " (shell-quote target)))))

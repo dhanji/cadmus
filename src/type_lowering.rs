@@ -261,6 +261,20 @@ const SUBSUMPTION_MAP: &[SubsumptionEntry] = &[
     SubsumptionEntry { fs_op: "base64_encode", shell_op: "shell_base64", arity: 1, note: "base64 encode" },
     SubsumptionEntry { fs_op: "base64_decode", shell_op: "shell_base64", arity: 1, note: "base64 -D decode" },
     SubsumptionEntry { fs_op: "openssl_hash", shell_op: "shell_openssl", arity: 2, note: "openssl dgst" },
+    // =====================================================================
+    // fs.ops.yaml — macOS tasks & batch operations
+    // =====================================================================
+    SubsumptionEntry { fs_op: "trash", shell_op: "shell_trash", arity: 1, note: "mv to ~/.Trash" },
+    SubsumptionEntry { fs_op: "find_recent", shell_op: "shell_find", arity: 1, note: "find -mtime" },
+    SubsumptionEntry { fs_op: "find_modified_since", shell_op: "shell_find", arity: 1, note: "find -newermt" },
+    SubsumptionEntry { fs_op: "find_by_size", shell_op: "shell_find", arity: 1, note: "find -size" },
+    SubsumptionEntry { fs_op: "rename_by_date", shell_op: "shell_rename_by_date", arity: 1, note: "rename by mtime" },
+    SubsumptionEntry { fs_op: "organize_by_extension", shell_op: "shell_organize_by_ext", arity: 1, note: "mkdir+mv by ext" },
+    SubsumptionEntry { fs_op: "show_hidden_files", shell_op: "shell_defaults", arity: 0, note: "defaults write AppleShowAllFiles" },
+    SubsumptionEntry { fs_op: "replace_in_filenames", shell_op: "shell_rename_pattern", arity: 1, note: "rename pattern in filenames" },
+    SubsumptionEntry { fs_op: "find_duplicates_by_hash", shell_op: "shell_find_dupes", arity: 1, note: "find+shasum duplicates" },
+    SubsumptionEntry { fs_op: "compare_dirs", shell_op: "shell_diff", arity: 2, note: "diff -rq dirs" },
+    SubsumptionEntry { fs_op: "backup_timestamped", shell_op: "shell_cp", arity: 2, note: "cp -a timestamped" },
 ];
 
 /// Look up the subsumption entry for an fs_op name.

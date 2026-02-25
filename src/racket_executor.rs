@@ -72,6 +72,12 @@ pub fn build_racket_registry() -> OperationRegistry {
         &mut reg,
     );
 
+    // Merge macOS tasks ops (complex multi-command operations with racket_body)
+    let _ = crate::registry::load_ops_pack_str_into(
+        include_str!("../data/packs/ops/macos_tasks.ops.yaml"),
+        &mut reg,
+    );
+
     let racket_facts_yaml = include_str!("../data/packs/facts/racket.facts.yaml");
     if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(racket_facts_yaml) {
         crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);

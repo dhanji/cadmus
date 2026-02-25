@@ -3084,6 +3084,7 @@ algorithm_expansion:
   unpack: 100
 
   # statistics domain
+
   variance: 100
   stddev: 100
   percentile: 100
@@ -3106,3 +3107,69 @@ algorithm_expansion:
   absolute: 100
   summary: 100
   pearson: 100
+
+  # macOS tasks domain
+  changed: 80
+  today: 80
+  yesterday: 80
+  midnight: 60
+  modified: 80
+  recent: 80
+  recently: 80
+  threshold: 60
+  hidden: 80
+  toggle: 60
+  display: 80
+  finder: 80
+  trash: 80
+  safely: 60
+  desktop: 80
+  organize: 80
+  organized: 80
+  subfolders: 60
+  extension: 80
+  batch: 60
+  rename: 80
+  photos: 80
+  spaces: 60
+  dashes: 60
+  replacing: 60
+  duplicate: 80
+  duplicates: 80
+  hash: 80
+  compare: 80
+  differences: 60
+  backup: 80
+  timestamped: 60
+  unzip: 80
+  zip: 80
+  folder: 80
+  folders: 80
+  archive: 80
+  shortcuts: 60
+  sensible: 60
+  leaving: 60
+  prefix: 60
+  image: 80
+  downloaded: 80
+  ds_store: 60
+  recursively: 60
+  copy: 80
+  documents: 80
+  tmux: 80
+  session: 80
+  attach: 80
+  commit: 80
+  push: 80
+  unstaged: 60
+  remote: 80
+  filenames: 80
+  filename: 80
+  date: 100
+  dates: 80
+  modification: 80
+  prefix: 80
+  suffix: 80
+  repeating: 80
+  given: 80
+  substring: 80

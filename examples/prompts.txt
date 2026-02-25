@@ -1,0 +1,45 @@
+make each of these NL prompts to cadmus work by producing the correct plan, implementing ops and facts along the way if needed. the format is "prompt:: description of success criteria".
+
+alternate phrasings of words/phrases in the prompt are specified in {}. For example "push to {repo, repository}" should not be take literally, but expand to two equivalent paraphrasings of the same prompt.
+
+* attach to an existing tmux session:: should run tmux and attach to an existing session or create a new one (use default name "main")
+* commit {all,everything}:: should add all unstaged changes and commit after asking for a commit message
+* commit and push:: as above, but also run git push
+
+* open the downloads folder:: should open ~/Downloads in Finder
+
+* show me what’s taking up space:: should list disk usage for the home directory, sorted largest first
+
+* find the pdf I downloaded yesterday:: should search ~/Downloads for PDFs modified in the last 24h
+
+* delete all the .DS_Store files:: should recursively remove .DS_Store files from the current directory
+
+* rename all photos to date-based names:: should batch-rename image files using EXIF or modified date
+
+* move everything in downloads into folders by file type:: should group files into subfolders by extension
+
+* show hidden files here:: should toggle display of dotfiles in Finder
+
+* clean up my desktop:: should move files on ~/Desktop into sensible folders, leaving shortcuts alone
+
+* zip this folder:: should create a zip archive of the current directory
+
+* unzip this here:: should extract the archive into the current directory
+
+* find large files:: should list files over a size threshold (default 100MB)
+
+* show files I changed today:: should list files modified since midnight
+
+* copy this folder to documents:: should recursively copy the current directory to ~/Documents
+
+* safely delete this:: should move the target to Trash, not rm
+
+* compare these two folders:: should diff directory contents and report differences
+
+* show me recent files:: should list recently modified files across common user directories
+
+* make a backup of this folder:: should create a timestamped copy in a backup location
+
+* replace spaces with dashes in filenames:: should batch-rename files accordingly
+
+* find duplicate files:: should detect duplicates by hash, not name

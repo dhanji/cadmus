@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-25T03:52:28Z | Size: 82.1k chars
+> Updated: 2026-02-25T22:52:16Z | Size: 83.3k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -1024,3 +1024,17 @@ plan-name:
 - `data/nl/nl_vocab.yaml` [488 lines] — contractions, ordinals, approvals, rejections, stopwords, dir_aliases, noun_patterns
 - `data/nl/nl_lexicon.yaml` — Earley lexicon: verbs, nouns, approvals, rejections, explain_triggers, phrase_groups
 - `data/nl/nl_dictionary.yaml` — SymSpell frequency dictionary
+
+### Prompts.txt Plans Feature (plan `prompts-txt-plans`)
+- **22 new .sexp plan files** in `data/plans/` for macOS desktop tasks
+- `data/packs/ops/fs.ops.yaml` — 11 new ops: trash, find_recent, find_modified_since, find_by_size, rename_by_date, organize_by_extension, show_hidden_files, replace_in_filenames, find_duplicates_by_hash, compare_dirs, backup_timestamped
+- `data/packs/ops/macos_tasks.ops.yaml` — 13 ops with `racket_body` (shadows fs.ops.yaml for codegen)
+- `src/fs_types.rs:58` — `MACOS_TASKS_OPS_YAML` const, loaded in `build_full_registry()` at line 96-102
+- `src/racket_executor.rs:75-80` — macos_tasks.ops.yaml loaded in `build_racket_registry()`
+- `src/type_lowering.rs:265-277` — 11 new subsumption entries
+- `data/nl/nl_dictionary.yaml` — ~68 words added for macOS task domain
+- `tests/prompts_tests.rs` — 33 integration tests
+- `tests/fs_integration.rs:503` — Op count updated from 60 to 71
+- **Bugfix**: `data/plans/algorithms/string/longest_repeating_substring.sexp` — description no longer mentions "suffix array" (caused wrong plan match)
+- **Total: 1337 tests passed**, 0 failed, 65 ignored
+- **NL autoregression: 268/268 (100%)**

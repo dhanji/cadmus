@@ -439,3 +439,73 @@ ops:
     properties:
       idempotent: true
     description: "rsync -a — synchronize directory to destination"
+
+  # =========================================================================
+  # Phase 6: macOS Tasks & Batch Operations
+  # =========================================================================
+
+  - name: trash
+    type_params: [a]
+    inputs: ["a"]
+    output: "Unit"
+    description: "mv to ~/.Trash — safely move file/dir to Trash"
+
+  - name: find_recent
+    inputs: ["Dir(Bytes)", "Name"]
+    output: "Seq(Entry(Name, Bytes))"
+    properties:
+      idempotent: true
+    description: "find -mtime — find files modified within N days"
+
+  - name: find_modified_since
+    inputs: ["Dir(Bytes)", "Name"]
+    output: "Seq(Entry(Name, Bytes))"
+    properties:
+      idempotent: true
+    description: "find -newermt — find files modified since a timestamp"
+
+  - name: find_by_size
+    inputs: ["Dir(Bytes)", "Size"]
+    output: "Seq(Entry(Name, Bytes))"
+    properties:
+      idempotent: true
+    description: "find -size — find files larger than a threshold"
+
+  - name: rename_by_date
+    inputs: ["Dir(Bytes)"]
+    output: "Seq(Entry(Name, Bytes))"
+    description: "rename files using modification date as YYYY-MM-DD_HHMMSS prefix"
+
+  - name: organize_by_extension
+    inputs: ["Dir(Bytes)"]
+    output: "Dir(Bytes)"
+    description: "group files into subdirectories by file extension"
+
+  - name: show_hidden_files
+    inputs: []
+    output: "Unit"
+    description: "defaults write — toggle display of hidden files in Finder"
+
+  - name: replace_in_filenames
+    inputs: ["Dir(Bytes)", "Pattern", "Pattern"]
+    output: "Seq(Entry(Name, Bytes))"
+    description: "batch rename files replacing pattern in filenames"
+
+  - name: find_duplicates_by_hash
+    inputs: ["Dir(Bytes)"]
+    output: "Seq(Entry(Name, Hash))"
+    properties:
+      idempotent: true
+    description: "find duplicate files by content hash"
+
+  - name: compare_dirs
+    inputs: ["Dir(Bytes)", "Dir(Bytes)"]
+    output: "Diff"
+    properties:
+      commutative: false
+    description: "diff -rq — compare two directory trees"
+
+  - name: backup_timestamped
+    inputs: ["Dir(Bytes)", "Path"]
+    output: "Dir(Bytes)"
+    description: "cp -a with timestamped name — create a backup copy"

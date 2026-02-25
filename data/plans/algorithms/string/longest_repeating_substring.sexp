@@ -1,4 +1,4 @@
-;; Longest repeating substring using suffix array
+;; Longest repeating substring of a given string
 ;; Example: "banana" → "ana"
 ;; expected: ana
 

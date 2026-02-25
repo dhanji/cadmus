@@ -55,6 +55,7 @@ const MACOS_CLI_FACTS_YAML: &str = include_str!("../data/packs/facts/macos_cli.f
 const ALGORITHM_OPS_YAML: &str = include_str!("../data/packs/ops/algorithm.ops.yaml");
 const TEXT_PROCESSING_OPS_YAML: &str = include_str!("../data/packs/ops/text_processing.ops.yaml");
 const STATISTICS_OPS_YAML: &str = include_str!("../data/packs/ops/statistics.ops.yaml");
+const MACOS_TASKS_OPS_YAML: &str = include_str!("../data/packs/ops/macos_tasks.ops.yaml");
 
 pub fn build_full_registry() -> OperationRegistry {
     // Start with embedded fs_ops (compatibility aliases)
@@ -89,6 +90,13 @@ pub fn build_full_registry() -> OperationRegistry {
     let _ = load_ops_pack_str_into(
         &std::fs::read_to_string("data/packs/ops/statistics.ops.yaml")
             .unwrap_or_else(|_| STATISTICS_OPS_YAML.to_string()),
+        &mut reg,
+    );
+
+    // Merge macOS tasks ops (complex multi-command operations with racket_body)
+    let _ = load_ops_pack_str_into(
+        &std::fs::read_to_string("data/packs/ops/macos_tasks.ops.yaml")
+            .unwrap_or_else(|_| MACOS_TASKS_OPS_YAML.to_string()),
         &mut reg,
     );
 
