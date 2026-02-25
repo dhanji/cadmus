@@ -25,6 +25,10 @@
 //!
 //! The grammar is intentionally permissive — it accepts many phrasings
 //! and relies on the Intent IR layer to validate semantics.
+//!
+//! Approve/reject/explain are handled outside the Earley parser via
+//! simple token matching against the lexicon's approval/rejection/explain
+//! word lists. This keeps the grammar focused on command parsing.
 
 use crate::nl::earley::{Grammar, Rule, Symbol};
 

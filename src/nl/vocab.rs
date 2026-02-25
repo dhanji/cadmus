@@ -1,8 +1,8 @@
 //! NL vocabulary loader — loads word lists from YAML.
 //!
 //! Single consolidated loader for all NL word-list data:
-//! synonyms, contractions, ordinals, approvals, rejections, stopwords,
-//! filler phrases, and filler prefixes.
+//! contractions, ordinals, approvals, rejections, stopwords, filler phrases,
+//! filler prefixes, directory aliases, and noun patterns.
 //!
 //! Uses the standard disk-first + `include_str!` fallback pattern.
 
@@ -22,7 +22,6 @@ const EMBEDDED_VOCAB: &str = include_str!("../../data/nl/nl_vocab.yaml");
 
 #[derive(Debug, Deserialize)]
 struct VocabYaml {
-    synonyms: Vec<SynonymEntry>,
     contractions: HashMap<String, String>,
     ordinals: HashMap<String, u32>,
     approvals: ApprovalRejectionYaml,
@@ -34,12 +33,6 @@ struct VocabYaml {
     dir_aliases: HashMap<String, String>,
     #[serde(default)]
     noun_patterns: HashMap<String, Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SynonymEntry {
-    phrase: Vec<String>,
-    op: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,8 +48,6 @@ struct ApprovalRejectionYaml {
 /// Loaded NL vocabulary, indexed for fast lookup.
 #[derive(Debug)]
 pub struct NlVocab {
-    /// Synonym table: list of (phrase_tokens, canonical_op_name), sorted longest-first.
-    pub synonyms: Vec<(Vec<String>, String)>,
     /// Contractions: sorted longest-first for replacement order.
     pub contractions: Vec<(String, String)>,
     /// Ordinal words → numeric values.
@@ -112,13 +103,6 @@ fn parse_vocab(yaml_str: &str) -> Result<NlVocab, String> {
     let raw: VocabYaml = serde_yaml::from_str(yaml_str)
         .map_err(|e| format!("YAML parse error: {}", e))?;
 
-    // Build synonym table — sorted by phrase length descending (longest match first)
-    let mut synonyms: Vec<(Vec<String>, String)> = raw.synonyms
-        .into_iter()
-        .map(|e| (e.phrase, e.op))
-        .collect();
-    synonyms.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-
     // Build contractions — sorted by key length descending (longest first)
     let mut contractions: Vec<(String, String)> = raw.contractions.into_iter().collect();
     contractions.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
@@ -136,7 +120,6 @@ fn parse_vocab(yaml_str: &str) -> Result<NlVocab, String> {
     let noun_patterns = raw.noun_patterns;
 
     Ok(NlVocab {
-        synonyms,
         contractions,
         ordinals,
         approval_singles,
@@ -162,44 +145,11 @@ mod tests {
     #[test]
     fn test_vocab_loads() {
         let v = vocab();
-        assert!(!v.synonyms.is_empty(), "synonyms should not be empty");
         assert!(!v.contractions.is_empty(), "contractions should not be empty");
         assert!(!v.ordinals.is_empty(), "ordinals should not be empty");
         assert!(!v.approval_singles.is_empty(), "approval_singles should not be empty");
         assert!(!v.rejection_singles.is_empty(), "rejection_singles should not be empty");
         assert!(!v.stopwords.is_empty(), "stopwords should not be empty");
-    }
-
-    #[test]
-    fn test_synonyms_sorted_longest_first() {
-        let v = vocab();
-        for window in v.synonyms.windows(2) {
-            assert!(
-                window[0].0.len() >= window[1].0.len(),
-                "synonyms should be sorted longest-first: {:?} before {:?}",
-                window[0].0, window[1].0
-            );
-        }
-    }
-
-    #[test]
-    fn test_synonym_zip_up_everything() {
-        let v = vocab();
-        let found = v.synonyms.iter().find(|(phrase, _)| {
-            phrase == &vec!["zip".to_string(), "up".to_string(), "everything".to_string()]
-        });
-        assert!(found.is_some(), "should have 'zip up everything' synonym");
-        assert_eq!(found.unwrap().1, "pack_archive");
-    }
-
-    #[test]
-    fn test_synonym_ls_single_word() {
-        let v = vocab();
-        let found = v.synonyms.iter().find(|(phrase, _)| {
-            phrase == &vec!["ls".to_string()]
-        });
-        assert!(found.is_some(), "should have 'ls' synonym");
-        assert_eq!(found.unwrap().1, "list_dir");
     }
 
     #[test]
@@ -285,13 +235,6 @@ mod tests {
         assert!(v.filler_prefixes.contains("also"));
         assert!(v.filler_prefixes.contains("and"));
         assert!(v.filler_prefixes.contains("then"));
-    }
-
-    #[test]
-    fn test_synonym_count() {
-        let v = vocab();
-        // Should have ~200 synonyms
-        assert!(v.synonyms.len() >= 190, "expected ~200 synonyms, got {}", v.synonyms.len());
     }
 
     #[test]

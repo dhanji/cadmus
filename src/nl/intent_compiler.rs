@@ -33,7 +33,7 @@
 
 use std::collections::HashMap;
 
-use crate::nl::intent_ir::{IntentIR, IntentIRResult};
+use crate::nl::intent_ir::{IntentIR, IntentIRResult, UtteranceKind};
 use crate::nl::vocab;
 use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs};
 
@@ -50,6 +50,12 @@ pub enum CompileResult {
     Error(String),
     /// No intent to compile (empty input / gibberish).
     NoIntent,
+    /// User approved the current plan.
+    Approve,
+    /// User rejected the current plan.
+    Reject,
+    /// User asked for an explanation.
+    Explain { subject: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +67,13 @@ pub enum CompileResult {
 /// Uses the primary intent. Alternatives are preserved in DialogueState
 /// by the caller.
 pub fn compile_intent(result: &IntentIRResult) -> CompileResult {
+    // Check utterance kind first — approve/reject/explain don't produce plans
+    match &result.kind {
+        UtteranceKind::Approve => return CompileResult::Approve,
+        UtteranceKind::Reject => return CompileResult::Reject,
+        UtteranceKind::Explain { subject } => return CompileResult::Explain { subject: subject.clone() },
+        UtteranceKind::Command => {}
+    }
     match &result.primary {
         None => CompileResult::NoIntent,
         Some(ir) => compile_ir(ir),
@@ -691,6 +704,7 @@ mod tests {
             CompileResult::Ok(plan) => plan,
             CompileResult::Error(e) => panic!("expected Ok, got Error: {}", e),
             CompileResult::NoIntent => panic!("expected Ok, got NoIntent"),
+            other => panic!("expected Ok, got: {:?}", other),
         }
     }
 

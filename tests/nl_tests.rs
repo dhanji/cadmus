@@ -1991,8 +1991,8 @@ fn test_yaml_vocab_contractions_loaded() {
 #[test]
 fn test_yaml_vocab_ordinals_loaded() {
     let result = cadmus::nl::normalize::normalize("move first step");
-    assert!(result.canonical_tokens.contains(&"1".to_string()),
-        "should canonicalize 'first' to '1': {:?}", result.canonical_tokens);
+    assert!(result.tokens.contains(&"1".to_string()),
+        "should canonicalize 'first' to '1': {:?}", result.tokens);
 }
 
 #[test]

@@ -1,5 +1,6 @@
         
-//! Dialogue state, focus stack, and DSL generation for the NL UX layer.
+//! Dialogue state, focus stack, slot extraction, and DSL generation for the
+//! NL UX layer.
 //!
 //! Maintains lightweight state across conversation turns:
 //! - **FocusStack** — ranked entries for anaphora resolution ("it", "that")
@@ -7,14 +8,432 @@
 //! - **Delta transforms** — apply edits to existing PlanDef
 //! - **DSL generation** — build PlanDef from intent + slots
 //!
+//! Also contains **slot extraction** — the lightweight structured extraction
+//! of paths, step references, patterns, modifiers, and keywords from token
+//! sequences. Used exclusively for edit handling.
+//!
 //! CRITICAL: All generated PlanDefs are validated by feeding them through
 //! `plan::compile_plan()`. The NL layer never bypasses the engine.
 
 use std::collections::HashMap;
 
-use crate::nl::intent::{Intent, EditAction};
-use crate::nl::slots::{ExtractedSlots, SlotValue, StepRef, Anchor};
+/// Edit actions for the EditStep intent.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EditAction {
+    Add,
+    Remove,
+    Move,
+    Skip,
+    Change,
+    Insert,
+}
+
 use crate::plan::{PlanDef, RawStep, StepArgs};
+
+// ---------------------------------------------------------------------------
+// Slot types (moved from slots.rs)
+// ---------------------------------------------------------------------------
+
+/// A typed slot value extracted from user input.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SlotValue {
+    /// A filesystem path (~/Downloads, /tmp/foo, etc.)
+    Path(String),
+    /// A canonical operation name.
+    OpName(String),
+    /// A reference to a plan step (by number or relative position).
+    StepRef(StepRef),
+    /// A glob or regex pattern (*.pdf, foo*, etc.)
+    Pattern(String),
+    /// A key-value parameter.
+    Param(String, String),
+    /// A modifier flag.
+    Modifier(Modifier),
+    /// A keyword/name that doesn't fit other categories.
+    Keyword(String),
+}
+
+/// A reference to a plan step.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StepRef {
+    /// Absolute step number (1-indexed).
+    Number(u32),
+    /// Relative: the previous step.
+    Previous,
+    /// Relative: the next step.
+    Next,
+    /// Relative: the first step.
+    First,
+    /// Relative: the last step.
+    Last,
+}
+
+/// A modifier flag that affects operation behavior.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Modifier {
+    Recursive,
+    CaseInsensitive,
+    Reverse,
+    Verbose,
+    DryRun,
+    Force,
+    Quiet,
+    All,
+    Each,
+}
+
+/// An anchor position for edit operations (where to insert/move).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Anchor {
+    Before(StepRef),
+    After(StepRef),
+    AtEnd,
+    AtStart,
+}
+
+/// Extracted slots from a token sequence.
+#[derive(Debug, Clone)]
+pub struct ExtractedSlots {
+    /// All extracted slot values, in order of appearance.
+    pub slots: Vec<SlotValue>,
+    /// The primary target path, if any.
+    pub target_path: Option<String>,
+    /// The primary operation, if any.
+    pub primary_op: Option<String>,
+    /// Step references found.
+    pub step_refs: Vec<StepRef>,
+    /// Anchor for edit operations.
+    pub anchor: Option<Anchor>,
+    /// Modifiers found.
+    pub modifiers: Vec<Modifier>,
+    /// Pattern arguments (globs, names).
+    pub patterns: Vec<String>,
+    /// Keywords (unclassified meaningful tokens).
+    pub keywords: Vec<String>,
+}
+
+impl ExtractedSlots {
+    fn new() -> Self {
+        Self {
+            slots: Vec::new(),
+            target_path: None,
+            primary_op: None,
+            step_refs: Vec::new(),
+            anchor: None,
+            modifiers: Vec::new(),
+            patterns: Vec::new(),
+            keywords: Vec::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Slot extraction
+// ---------------------------------------------------------------------------
+
+/// Extract structured slots from a sequence of tokens.
+pub fn extract_slots(tokens: &[String]) -> ExtractedSlots {
+    let mut result = ExtractedSlots::new();
+
+    let stopwords = &super::vocab::vocab().stopwords;
+
+    let mut i = 0;
+    while i < tokens.len() {
+        let token = &tokens[i];
+
+        // 1. Path detection
+        if is_path(token) {
+            let path = token.clone();
+            result.slots.push(SlotValue::Path(path.clone()));
+            if result.target_path.is_none() {
+                result.target_path = Some(path);
+            }
+            i += 1;
+            continue;
+        }
+
+        // 2. Canonical op name
+        if super::normalize::is_canonical_op(token) {
+            result.slots.push(SlotValue::OpName(token.clone()));
+            if result.primary_op.is_none() {
+                result.primary_op = Some(token.clone());
+            }
+            i += 1;
+            continue;
+        }
+
+        // 3. Step reference: "step N" or "step previous/next/first/last"
+        if token == "step" {
+            if let Some(next) = tokens.get(i + 1) {
+                if let Some(step_ref) = parse_step_ref(next) {
+                    result.slots.push(SlotValue::StepRef(step_ref.clone()));
+                    result.step_refs.push(step_ref);
+                    i += 2;
+                    continue;
+                }
+            }
+        }
+
+        // 4. Bare step reference (number that could be a step)
+        if let Ok(n) = token.parse::<u32>() {
+            if n > 0 && n <= 100 {
+                let step_ref = StepRef::Number(n);
+                result.slots.push(SlotValue::StepRef(step_ref.clone()));
+                result.step_refs.push(step_ref);
+                i += 1;
+                continue;
+            }
+        }
+
+        // 5. Relative step references
+        if let Some(step_ref) = parse_relative_ref(token) {
+            result.slots.push(SlotValue::StepRef(step_ref.clone()));
+            result.step_refs.push(step_ref);
+            i += 1;
+            continue;
+        }
+
+        // 6. Anchor: "before X" / "after X"
+        if token == "before" || token == "after" {
+            if let Some(next) = tokens.get(i + 1) {
+                let step_ref = if next == "step" {
+                    tokens.get(i + 2).and_then(|t| parse_step_ref(t))
+                } else {
+                    parse_step_ref(next)
+                };
+                if let Some(sr) = step_ref {
+                    let anchor = if token == "before" {
+                        Anchor::Before(sr)
+                    } else {
+                        Anchor::After(sr)
+                    };
+                    result.anchor = Some(anchor);
+                    i += if tokens.get(i + 1).map(|t| t == "step").unwrap_or(false) { 3 } else { 2 };
+                    continue;
+                }
+            }
+        }
+
+        // 7. Modifier detection
+        if let Some(modifier) = parse_modifier(token) {
+            result.slots.push(SlotValue::Modifier(modifier.clone()));
+            result.modifiers.push(modifier);
+            i += 1;
+            continue;
+        }
+
+        // 8. Pattern detection (glob-like)
+        if is_pattern(token) {
+            result.slots.push(SlotValue::Pattern(token.clone()));
+            result.patterns.push(token.clone());
+            i += 1;
+            continue;
+        }
+
+        // 9. Directory alias: "my desktop" → ~/Desktop, or bare "desktop" → ~/Desktop
+        {
+            let vocab = &super::vocab::vocab();
+            let dir_aliases = &vocab.dir_aliases;
+
+            if token == "my" {
+                if let Some(next) = tokens.get(i + 1) {
+                    if let Some(path) = dir_aliases.get(next.as_str()) {
+                        let path = path.clone();
+                        result.slots.push(SlotValue::Path(path.clone()));
+                        if result.target_path.is_none() {
+                            result.target_path = Some(path);
+                        }
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+
+            if let Some(alias_path) = dir_aliases.get(token.as_str()) {
+                let also_noun = vocab.noun_patterns.contains_key(token.as_str());
+                if !(also_noun && result.target_path.is_some()) {
+                    let path = alias_path.clone();
+                    result.slots.push(SlotValue::Path(path.clone()));
+                    if result.target_path.is_none() {
+                        result.target_path = Some(path);
+                    }
+                    i += 1;
+                    continue;
+                }
+            }
+        }
+
+        // 10. Noun-to-filetype pattern: "screenshots" → *.png, "photos" → *.png *.jpg etc.
+        {
+            let noun_patterns = &super::vocab::vocab().noun_patterns;
+            if i + 1 < tokens.len() {
+                let bigram = format!("{} {}", token, tokens[i + 1]);
+                if let Some(patterns) = noun_patterns.get(bigram.as_str()) {
+                    for p in patterns {
+                        result.slots.push(SlotValue::Pattern(p.clone()));
+                        result.patterns.push(p.clone());
+                    }
+                    i += 2;
+                    continue;
+                }
+            }
+            if let Some(patterns) = noun_patterns.get(token.as_str()) {
+                for p in patterns {
+                    result.slots.push(SlotValue::Pattern(p.clone()));
+                    result.patterns.push(p.clone());
+                }
+                i += 1;
+                continue;
+            }
+        }
+
+        // 11. "named X" / "called X" — extract the name as a keyword
+        if (token == "named" || token == "called" || token == "matching") && i + 1 < tokens.len() {
+            let name = tokens[i + 1].clone();
+            result.slots.push(SlotValue::Keyword(name.clone()));
+            result.keywords.push(name);
+            i += 2;
+            continue;
+        }
+
+        // 12. Fuzzy op name matching
+        if let Some(op) = fuzzy_match_op(token) {
+            result.slots.push(SlotValue::OpName(op.clone()));
+            if result.primary_op.is_none() {
+                result.primary_op = Some(op);
+            }
+            i += 1;
+            continue;
+        }
+
+        // 13. Skip stopwords, keep meaningful keywords
+        if !stopwords.contains(token.as_str()) && !token.is_empty() {
+            result.slots.push(SlotValue::Keyword(token.clone()));
+            result.keywords.push(token.clone());
+        }
+
+        i += 1;
+    }
+
+    result
+}
+
+// ---------------------------------------------------------------------------
+// Slot detection helpers
+// ---------------------------------------------------------------------------
+
+/// Check if a token looks like a filesystem path.
+fn is_path(token: &str) -> bool {
+    if token.contains(' ') { return true; }
+    if token.starts_with("~/") || token.starts_with('/') || token.starts_with("$HOME")
+        || token.starts_with("$PWD") || token.contains("://") { return true; }
+    if token.contains('/') && token.contains('.') { return true; }
+    if token.ends_with('/') && token.len() > 1 { return true; }
+    if let Some(dot_pos) = token.rfind('.') {
+        let ext = &token[dot_pos + 1..];
+        let name_part = &token[..dot_pos];
+        if !name_part.is_empty() && !ext.is_empty() && !name_part.contains('*')
+            && crate::filetypes::dictionary().is_known_extension(ext) { return true; }
+    }
+    if token.contains('/') && token.len() > 2 { return true; }
+    false
+}
+
+/// Check if a token looks like a glob/pattern.
+fn is_pattern(token: &str) -> bool {
+    (token.starts_with("*.") || token.starts_with('*') || token.ends_with('*'))
+        && !super::normalize::is_canonical_op(token)
+}
+
+/// Parse a step reference from a token.
+fn parse_step_ref(token: &str) -> Option<StepRef> {
+    if let Ok(n) = token.parse::<u32>() {
+        if n > 0 && n <= 100 { return Some(StepRef::Number(n)); }
+    }
+    parse_relative_ref(token)
+}
+
+/// Parse a relative step reference.
+fn parse_relative_ref(token: &str) -> Option<StepRef> {
+    match token {
+        "previous" | "prev" | "preceding" => Some(StepRef::Previous),
+        "next" | "following" | "subsequent" => Some(StepRef::Next),
+        "first" | "beginning" | "start" => Some(StepRef::First),
+        "last" | "end" | "final" => Some(StepRef::Last),
+        _ => None,
+    }
+}
+
+/// Parse a modifier from a token.
+fn parse_modifier(token: &str) -> Option<Modifier> {
+    match token {
+        "recursive" | "recursively" | "recurse" => Some(Modifier::Recursive),
+        "case-insensitive" | "caseinsensitive" | "nocase" | "ignorecase" => Some(Modifier::CaseInsensitive),
+        "reverse" | "reversed" | "descending" | "desc" => Some(Modifier::Reverse),
+        "verbose" | "detailed" => Some(Modifier::Verbose),
+        "dry-run" | "dryrun" | "simulate" | "preview" => Some(Modifier::DryRun),
+        "force" | "forced" => Some(Modifier::Force),
+        "quiet" | "silent" | "suppress" => Some(Modifier::Quiet),
+        "each" => Some(Modifier::Each),
+        _ => None,
+    }
+}
+
+/// Try to fuzzy-match a token against known canonical op names.
+/// Returns Some(canonical_name) if edit distance <= 2, None otherwise.
+fn fuzzy_match_op(token: &str) -> Option<String> {
+    if token.len() < 4 { return None; }
+    static COMMON_WORDS: &[&str] = &[
+        "step", "file", "name", "type", "size", "time", "date",
+        "path", "text", "data", "line", "word", "char", "byte",
+        "skip", "stop", "help", "show", "make", "take", "give",
+        "keep", "save", "load", "send", "call", "mean", "work",
+        "like", "want", "need", "have", "been", "done", "here",
+        "there", "what", "when", "where", "which", "that", "this",
+        "from", "into", "with", "about", "after", "before",
+    ];
+    if COMMON_WORDS.contains(&token) { return None; }
+
+    let ops = super::normalize::canonical_ops();
+    let mut best: Option<(String, usize)> = None;
+    for op in ops.iter() {
+        if let Some(d) = edit_distance_bounded(token, op.as_str(), 2) {
+            match &best {
+                Some((_, best_d)) if d < *best_d => best = Some((op.to_string(), d)),
+                None => best = Some((op.to_string(), d)),
+                _ => {}
+            }
+        }
+    }
+    best.map(|(op, _)| op)
+}
+
+/// Compute edit distance with early termination if > max_distance.
+fn edit_distance_bounded(a: &str, b: &str, max_distance: usize) -> Option<usize> {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let (a_len, b_len) = (a_chars.len(), b_chars.len());
+    if a_len.abs_diff(b_len) > max_distance { return None; }
+
+    let mut prev = vec![0usize; b_len + 1];
+    let mut curr = vec![0usize; b_len + 1];
+    for j in 0..=b_len { prev[j] = j; }
+
+    for i in 1..=a_len {
+        curr[0] = i;
+        let mut min_in_row = curr[0];
+        for j in 1..=b_len {
+            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
+            min_in_row = min_in_row.min(curr[j]);
+        }
+        if min_in_row > max_distance { return None; }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    let result = prev[b_len];
+    if result <= max_distance { Some(result) } else { None }
+}
 
 // ---------------------------------------------------------------------------
 // Focus stack for anaphora resolution
@@ -119,8 +538,6 @@ pub struct DialogueState {
     pub focus: FocusStack,
     /// Number of turns in this conversation.
     pub turn_count: usize,
-    /// The last recognized intent.
-    pub last_intent: Option<Intent>,
 }
 
 impl DialogueState {
@@ -130,7 +547,6 @@ impl DialogueState {
             alternative_intents: Vec::new(),
             focus: FocusStack::new(),
             turn_count: 0,
-            last_intent: None,
         }
     }
 
@@ -554,7 +970,7 @@ mod tests {
     fn test_edit_on_empty_state_error() {
         let mut state = DialogueState::new();
         // Skip with no keywords should fail
-        let slots_empty = crate::nl::slots::extract_slots(&[]);
+        let slots_empty = extract_slots(&[]);
         let result_empty = apply_edit(
             &PlanDef {
                 name: "test".to_string(),
@@ -563,7 +979,7 @@ mod tests {
                 steps: vec![],
                 bindings: HashMap::new(),
             },
-            &crate::nl::intent::EditAction::Skip,
+            &EditAction::Skip,
             &slots_empty,
             &mut state,
         );
@@ -585,7 +1001,7 @@ mod tests {
         };
 
         let normalized = crate::nl::normalize::normalize("skip any subdirectory named foo");
-        let extracted = crate::nl::slots::extract_slots(&normalized.canonical_tokens);
+        let extracted = extract_slots(&normalized.tokens);
 
         let (edited, desc) = apply_skip(&mut wf.clone(), &extracted, &mut state).unwrap();
         assert!(edited.steps.iter().any(|s| s.op == "filter"), "should have filter step");
@@ -613,7 +1029,7 @@ mod tests {
             bindings: HashMap::new(),
         };
 
-        let extracted = crate::nl::slots::extract_slots(&["step".to_string(), "2".to_string()]);
+        let extracted = extract_slots(&["step".to_string(), "2".to_string()]);
         let (edited, desc) = apply_remove(&mut wf.clone(), &extracted, &mut state).unwrap();
         assert_eq!(edited.steps.len(), 2);
         assert_eq!(edited.steps[0].op, "walk_tree");
@@ -636,7 +1052,7 @@ mod tests {
             bindings: HashMap::new(),
         };
 
-        let extracted = crate::nl::slots::extract_slots(&[
+        let extracted = extract_slots(&[
             "step".to_string(), "3".to_string(),
             "before".to_string(), "step".to_string(), "2".to_string(),
         ]);
@@ -693,7 +1109,6 @@ mod tests {
         let state = DialogueState::new();
         assert!(state.current_plan.is_none());
         assert_eq!(state.turn_count, 0);
-        assert!(state.last_intent.is_none());
     }
 
     #[test]

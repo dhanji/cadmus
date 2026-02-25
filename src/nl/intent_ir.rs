@@ -79,6 +79,19 @@ pub struct IRStep {
     pub params: HashMap<String, String>,
 }
 
+/// The kind of utterance parsed.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UtteranceKind {
+    /// A command to create a plan.
+    Command,
+    /// User approves the current plan.
+    Approve,
+    /// User rejects the current plan.
+    Reject,
+    /// User asks for an explanation of something.
+    Explain { subject: String },
+}
+
 /// Result of converting parse trees to Intent IRs.
 #[derive(Debug, Clone)]
 pub struct IntentIRResult {
@@ -86,6 +99,8 @@ pub struct IntentIRResult {
     pub primary: Option<IntentIR>,
     /// Alternative interpretations, ranked by score.
     pub alternatives: Vec<IntentIR>,
+    /// The kind of utterance (Command, Approve, Reject, Explain).
+    pub kind: UtteranceKind,
 }
 
 // ---------------------------------------------------------------------------
@@ -101,6 +116,7 @@ pub fn parse_trees_to_intents(parses: &[RankedParse]) -> IntentIRResult {
         return IntentIRResult {
             primary: None,
             alternatives: Vec::new(),
+            kind: UtteranceKind::Command,
         };
     }
 
@@ -123,7 +139,7 @@ pub fn parse_trees_to_intents(parses: &[RankedParse]) -> IntentIRResult {
         Vec::new()
     };
 
-    IntentIRResult { primary, alternatives }
+    IntentIRResult { primary, alternatives, kind: UtteranceKind::Command }
 }
 
 /// Convert a single parse tree to an Intent IR.

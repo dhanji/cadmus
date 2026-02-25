@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-24T21:30:38Z | Size: 78.0k chars
+> Updated: 2026-02-24T23:10:05Z | Size: 79.7k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -981,3 +981,17 @@ plan-name:
 - **Sexpr type syntax**: `(File (Archive (File Image) Cbz))` not `File(Archive(File(Image), Cbz))`
 - **1421 tests passing**, 0 failures, 0 warnings
 - `src/sexpr.rs::parse_sexpr_to_plan()` is the sole plan parser entry point
+
+### Statistics Domain (plan `statistics-domain`, commit `323a46e`)
+- `data/packs/ops/statistics.ops.yaml` — 19 ops: mean_list, median_list, mode_list, variance_list, stddev_list, range_stat, min_list, max_list, percentile, z_score, geometric_mean, harmonic_mean, covariance, correlation, weighted_mean, five_number_summary, outlier_count, normalize_list, mean_absolute_deviation
+- `data/plans/algorithms/statistics/` — 17 plans (12 multi-step=71%, 5 single-step=29%)
+- Multi-step plans: coefficient_of_variation (4 ops), sample_variance (5 ops), outlier_percentage (4 ops), standard_error (4 ops), interquartile_range (3 ops), mean_minus_median (3 ops), geometric_vs_arithmetic (3 ops), harmonic_vs_arithmetic (3 ops), dispersion_comparison (3 ops), correlation_report (2 ops), variance_and_stddev (2 ops), weighted_grade (2 ops)
+- Single-step plans: mean_list, median_list, mode_list, five_number_summary, normalize_list
+- `src/fs_types.rs:56` — STATISTICS_OPS_YAML const, loaded in build_full_registry()
+- `src/racket_executor.rs:68` — statistics.ops.yaml loaded in build_racket_registry()
+- NL: 24 dictionary words, 19 lexicon verbs, 30 phrase skeletons
+- Removed 'mean'/'means' from fillers in nl_lexicon.yaml (conflict with statistics domain)
+- 246 total plans in NL autoregression (was 229), 100% pass rate
+- 1422 total tests, 0 failures
+- Key learning: arity-1 Racket ops (length, sqrt) need scalar arg syntax `(op $ref)` not keyword syntax `(op :param $ref)` — get_one_operand checks mode param then prev_binding, ignores named params
+- Key learning: sexpr type syntax is `(List Number)` not `List(Number)`

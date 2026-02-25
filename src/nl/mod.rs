@@ -1,22 +1,18 @@
 //! Natural Language UX layer.
 //!
-//! A deterministic, low-latency adapter that converts chatty user input
-//! into structured plan YAML / Goal DSL instructions for Cadmus.
+//! A deterministic, low-latency adapter that converts natural language input
+//! into structured plan definitions for Cadmus.
 //! Pipeline:
 //!
 //! 1. **Normalization** — case fold, punctuation strip, synonym mapping (`normalize`)
 //! 2. **Typo correction** — domain-bounded SymSpell dictionary (`typo`)
-//! 3. **Intent dispatch** — approve/reject/explain/edit via keyword match (`intent`)
-//! 4. **Earley parsing** — grammar-based parse of commands (`earley`, `grammar`, `lexicon`)
-//! 5. **Intent IR** — parse tree → structured intent (`intent_ir`)
-//! 6. **Intent compilation** — IntentIR → PlanDef (`intent_compiler`)
+//! 3. **Lexicon dispatch** — approve/reject/explain via lexicon, edits via pattern match
+//! 4. **Earley parsing** — grammar-based parse of commands → IntentIR → PlanDef
 //!
 //! Plus dialogue state management (`dialogue`) for multi-turn conversations.
 
 pub mod normalize;
 pub mod typo;
-pub mod intent;
-pub mod slots;
 pub mod dialogue;
 pub mod vocab;
 pub mod earley;
@@ -27,9 +23,8 @@ pub mod intent_compiler;
 pub mod phrase;
 
 use dialogue::{DialogueState, DialogueError, FocusEntry};
-use intent::Intent;
-use intent::EditAction;
-use slots::ExtractedSlots;
+use dialogue::EditAction;
+use dialogue::ExtractedSlots;
 use crate::calling_frame::CallingFrame;
 
 /// Parse a plan string — tries sexpr first, falls back to YAML.
@@ -117,63 +112,104 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
     let dict = typo::domain_dict();
     let corrected_tokens = dict.correct_tokens(&first_pass.tokens);
 
-    // 3. Re-normalize corrected tokens for synonym mapping
-    let corrected_input = corrected_tokens.iter()
-        .map(|t| if t.contains(' ') { format!("\"{}\"", t) } else { t.clone() })
-        .collect::<Vec<_>>()
-        .join(" ");
-    let normalized = normalize::normalize(&corrected_input);
+    let lex = lexicon::lexicon();
 
-    // 4. Parse intent (old pipeline — used for approve/reject/explain/edit)
-    let intent_result = intent::parse_intent(&normalized);
+    // 3. Check approve/reject/explain via lexicon (before Earley parse)
+    if lex.is_approve(&corrected_tokens) {
+        return handle_approve(state);
+    }
+    if lex.is_reject(&corrected_tokens) {
+        state.current_plan = None;
+        state.alternative_intents.clear();
+        return NlResponse::Rejected;
+    }
+    if let Some(subject) = lex.try_explain(&corrected_tokens) {
+        return handle_explain(&subject);
+    }
 
-    // 5. Extract slots (old pipeline — used for edit handling)
-    let extracted = slots::extract_slots(&normalized.canonical_tokens);
-
-    // 6. Update focus stack
-    update_focus(state, &extracted);
-
-    // 7. Store last intent
-    state.last_intent = Some(intent_result.clone());
-
-    // 8. Dispatch: approve/reject/explain/edit use old pipeline;
-    //    plan creation uses Earley parser (sole path).
-    match intent_result {
-        Intent::EditStep { action, rest: _ } => {
-            // Only handle edits if there's a current plan to edit.
-            // Otherwise, fall through to Earley parser (e.g., "skip list" is
-            // both an edit command and an algorithm name).
-            if state.current_plan.is_some() {
-                return handle_edit_step(action, &extracted, state);
-            }
-            try_earley_create(&corrected_tokens, state, Vec::new())
-        }
-        Intent::ExplainOp { subject, rest: _ } => {
-            handle_explain(&subject)
-        }
-        Intent::Approve => {
-            handle_approve(state)
-        }
-        Intent::Reject => {
-            state.current_plan = None;
-            state.alternative_intents.clear();
-            NlResponse::Rejected
-        }
-        Intent::AskQuestion { tokens } => {
-            handle_question(&tokens)
-        }
-        Intent::SetParam { param, value, rest: _ } => {
-            handle_set_param(param, value, &extracted, state)
-        }
-        Intent::NeedsClarification { needs } => {
-            // Try the Earley parser — it may understand what keyword match couldn't
-            try_earley_create(&corrected_tokens, state, needs)
-        }
-        Intent::CreatePlan { op: _, rest: _ } => {
-            // Earley parser is the sole path for plan creation
-            try_earley_create(&corrected_tokens, state, Vec::new())
+    // 4. Check for edit commands (lightweight pattern match)
+    //    Only if there's a current plan to edit.
+    if state.current_plan.is_some() {
+        if let Some((action, rest_tokens)) = try_detect_edit(&corrected_tokens) {
+            // Extract slots from the rest tokens for edit handling
+            let extracted = dialogue::extract_slots(&rest_tokens);
+            return handle_edit_step(action, &extracted, state);
         }
     }
+
+    // 5. Earley parse for plan creation (sole path)
+    try_earley_create(&corrected_tokens, state, Vec::new())
+}
+
+/// Try to detect an edit command from tokens.
+/// Returns (EditAction, rest_tokens) if detected.
+fn try_detect_edit(tokens: &[String]) -> Option<(EditAction, Vec<String>)> {
+    if tokens.is_empty() {
+        return None;
+    }
+
+    // Skip filler prefixes
+    let vocab = vocab::vocab();
+    let mut start = 0;
+    while start < tokens.len() && vocab.filler_prefixes.contains(&tokens[start]) {
+        start += 1;
+    }
+    if start >= tokens.len() {
+        return None;
+    }
+    let first = &tokens[start];
+
+    let action_map: &[(&[&str], EditAction)] = &[
+        (&["skip", "exclude", "ignore", "omit"], EditAction::Skip),
+        (&["remove", "delete", "drop", "cut"], EditAction::Remove),
+        (&["add", "append", "include"], EditAction::Add),
+        (&["move", "reorder", "swap", "rearrange"], EditAction::Move),
+        (&["change", "modify", "update", "alter", "set", "use"], EditAction::Change),
+        (&["insert", "prepend", "put"], EditAction::Insert),
+    ];
+
+    for (keywords, action) in action_map {
+        if keywords.contains(&first.as_str()) {
+            // Check for step reference or named/subdirectory keywords
+            let has_step_ref = tokens.iter().any(|t| {
+                t == "step" || t == "previous" || t == "next" || t == "last"
+                    || t == "before" || t == "after"
+                    || t.parse::<u32>().is_ok()
+            });
+            let has_named = tokens.iter().any(|t| t == "named" || t == "called" || t == "matching");
+            let has_subdirectory = tokens.iter().any(|t| {
+                t == "subdirectory" || t == "subdirectories" || t == "subfolder" || t == "subdir"
+            });
+
+            if has_step_ref || has_named || has_subdirectory
+                || (*action == EditAction::Skip)
+            {
+                // Don't treat as edit if it looks like arithmetic
+                if normalize::is_canonical_op(first) {
+                    let rest = &tokens[start + 1..];
+                    let looks_arithmetic = rest.iter().all(|t|
+                        t.parse::<f64>().is_ok() || matches!(t.as_str(), "and" | "together" | "from" | "by" | "with" | "to" | "of")
+                    ) && rest.iter().any(|t| t.parse::<f64>().is_ok());
+                    if looks_arithmetic {
+                        return None;
+                    }
+                }
+                let rest: Vec<String> = tokens[start + 1..].to_vec();
+                return Some((action.clone(), rest));
+            }
+        }
+    }
+
+    // "move step 2 before step 1" pattern
+    if first == "move" || first == "move_entry" {
+        let has_step = tokens.iter().any(|t| t == "step");
+        if has_step {
+            let rest: Vec<String> = tokens[start + 1..].to_vec();
+            return Some((EditAction::Move, rest));
+        }
+    }
+
+    None
 }
 
 
@@ -390,6 +426,17 @@ fn try_earley_create(
                 "I couldn't parse that as a command. Try something like 'compute fibonacci' or 'find PDFs in ~/Documents'.".to_string(),
             ],
         },
+        intent_compiler::CompileResult::Approve => {
+            handle_approve(state)
+        }
+        intent_compiler::CompileResult::Reject => {
+            state.current_plan = None;
+            state.alternative_intents.clear();
+            NlResponse::Rejected
+        }
+        intent_compiler::CompileResult::Explain { subject } => {
+            handle_explain(&subject)
+        }
     }
 }
 
@@ -476,80 +523,9 @@ fn handle_explain(subject: &str) -> NlResponse {
     NlResponse::Explanation { text }
 }
 
-fn handle_question(tokens: &[String]) -> NlResponse {
-    // Check if any token is an op name — if so, explain it
-    for token in tokens {
-        if normalize::is_canonical_op(token) {
-            return NlResponse::Explanation {
-                text: get_op_explanation(token),
-            };
-        }
-    }
-
-    NlResponse::NeedsClarification {
-        needs: vec![
-            "I'm not sure how to answer that.".to_string(),
-            "Try asking about a specific operation, like 'what does walk_tree mean?'".to_string(),
-        ],
-    }
-}
-
-fn handle_set_param(
-    param: Option<String>,
-    value: Option<String>,
-    _slots: &ExtractedSlots,
-    state: &mut DialogueState,
-) -> NlResponse {
-    let wf = match &state.current_plan {
-        Some(wf) => wf.clone(),
-        None => {
-            return NlResponse::NeedsClarification {
-                needs: vec!["There's no current plan to modify.".to_string()],
-            };
-        }
-    };
-
-    let desc = match (&param, &value) {
-        (Some(p), Some(v)) => format!("Set {} to {}.", p, v),
-        _ => "Parameter updated.".to_string(),
-    };
-
-    // For now, just acknowledge — full param editing would modify plan inputs
-    if let (Some(p), Some(v)) = (param, value) {
-        let mut edited = wf;
-        // Update existing input or add new one
-        if let Some(existing) = edited.inputs.iter_mut().find(|i| i.name == *p) {
-            existing.type_hint = Some(v.clone());
-        } else {
-            edited.inputs.push(crate::plan::PlanInput::bare(p.clone()));
-        }
-        let yaml = dialogue::plan_to_sexpr(&edited);
-        state.current_plan = Some(edited);
-
-        NlResponse::ParamSet {
-            description: desc,
-            plan_sexpr: Some(yaml),
-        }
-    } else {
-        NlResponse::NeedsClarification {
-            needs: vec!["What parameter and value? Try 'set <param> to <value>'.".to_string()],
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// Update the focus stack based on extracted slots.
-fn update_focus(state: &mut DialogueState, slots: &ExtractedSlots) {
-    if let Some(op) = &slots.primary_op {
-        state.focus.push(FocusEntry::MentionedOp { op: op.clone() });
-    }
-    if let Some(path) = &slots.target_path {
-        state.focus.push(FocusEntry::Artifact { path: path.clone() });
-    }
-}
 
 /// Validate a plan YAML string by parsing and compiling it.
 fn validate_plan(plan: &crate::plan::PlanDef) -> Result<(), String> {

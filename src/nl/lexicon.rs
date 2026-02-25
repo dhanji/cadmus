@@ -26,6 +26,12 @@ const EMBEDDED_LEXICON: &str = include_str!("../../data/nl/nl_lexicon.yaml");
 struct LexiconYaml {
     verbs: Vec<VerbEntry>,
     nouns: Vec<NounEntry>,
+    #[serde(default)]
+    approvals: Option<ApprovalRejectionLex>,
+    #[serde(default)]
+    rejections: Option<ApprovalRejectionLex>,
+    #[serde(default)]
+    explain_triggers: Vec<String>,
     prepositions: Vec<String>,
     possessives: Vec<String>,
     determiners: Vec<String>,
@@ -37,6 +43,13 @@ struct LexiconYaml {
     #[serde(default)]
     phrase_groups: Vec<PhraseGroupEntry>,
 }
+#[derive(Debug, Deserialize)]
+struct ApprovalRejectionLex {
+    single: Vec<String>,
+    #[serde(default)]
+    multi: Vec<String>,
+}
+
 /// A phrase group: multi-word verb phrase → canonical single token.
 #[derive(Debug, Clone)]
 pub struct PhraseGroup {
@@ -168,12 +181,103 @@ pub struct Lexicon {
 
     /// Phrase groups for multi-word verb phrase canonicalization.
     pub phrase_groups: Vec<PhraseGroup>,
+
+    /// Single-word approval tokens.
+    pub approval_singles: std::collections::HashSet<String>,
+    /// Multi-word approval phrases (space-separated).
+    pub approval_multis: Vec<String>,
+    /// Single-word rejection tokens.
+    pub rejection_singles: std::collections::HashSet<String>,
+    /// Multi-word rejection phrases (space-separated).
+    pub rejection_multis: Vec<String>,
+    /// Explain trigger words.
+    pub explain_triggers: std::collections::HashSet<String>,
+}
+
+impl Lexicon {
+    /// Check if the tokens represent an approval.
+    ///
+    /// Matches single-word approvals, multi-word approval phrases,
+    /// and compound approvals like "ok lgtm", "sure why not".
+    pub fn is_approve(&self, tokens: &[String]) -> bool {
+        if tokens.is_empty() {
+            return false;
+        }
+        if tokens.len() == 1 {
+            return self.approval_singles.contains(&tokens[0]);
+        }
+        // Multi-token: check multi-word phrases
+        let joined = tokens.join(" ");
+        if self.approval_multis.iter().any(|a| joined == *a || joined.starts_with(a)) {
+            return true;
+        }
+        // Compound: first word is approval + rest is approval or filler
+        if self.approval_singles.contains(&tokens[0]) {
+            let tail = tokens[1..].join(" ");
+            // Tail is a multi-word approval
+            if self.approval_multis.iter().any(|a| tail == *a || tail.starts_with(a)) {
+                return true;
+            }
+            // Tail is a single approval word
+            if tokens.len() == 2 && self.approval_singles.contains(&tokens[1]) {
+                return true;
+            }
+            // Approval + short tail (permissive: "sure why not", "yeah that works")
+            // But not long inputs like "ok compute fibonacci" — those are commands.
+            if tokens.len() <= 4 {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if the tokens represent a rejection.
+    pub fn is_reject(&self, tokens: &[String]) -> bool {
+        if tokens.is_empty() {
+            return false;
+        }
+        if tokens.len() == 1 {
+            return self.rejection_singles.contains(&tokens[0]);
+        }
+        // Multi-token: only match known multi-word phrases or
+        // rejection word + short tail. Don't match "n queens" as rejection.
+        let joined = tokens.join(" ");
+        if self.rejection_multis.iter().any(|r| joined == *r || joined.starts_with(r)) {
+            return true;
+        }
+        // First word is rejection + short tail (max 3 tokens total).
+        // Longer inputs like "n queens count solutions" are commands, not rejections.
+        if self.rejection_singles.contains(&tokens[0]) && tokens.len() <= 4 {
+            return true;
+        }
+        false
+    }
+
+    /// Check if the tokens represent an explain request.
+    /// Returns the subject if so.
+    pub fn try_explain(&self, tokens: &[String]) -> Option<String> {
+        if tokens.is_empty() {
+            return None;
+        }
+        // First token must be an explain trigger
+        if !self.explain_triggers.contains(&tokens[0]) {
+            return None;
+        }
+        // Find the subject: first non-stopword token after the trigger
+        let stopwords = ["is", "does", "do", "mean", "means", "work", "works", "the", "a", "an"];
+        for token in &tokens[1..] {
+            if stopwords.contains(&token.as_str()) {
+                continue;
+            }
+            return Some(token.clone());
+        }
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
 // TokenClassifier implementation
 // ---------------------------------------------------------------------------
-
 impl TokenClassifier for Lexicon {
     fn classify(&self, token: &str) -> Vec<String> {
         let lower = token.to_lowercase();
@@ -352,6 +456,39 @@ fn parse_lexicon(yaml_str: &str) -> Result<Lexicon, String> {
         .map(|w| { add_cat(w, "filler"); w.to_lowercase() })
         .collect();
 
+    // Approvals
+    let mut approval_singles = std::collections::HashSet::new();
+    let mut approval_multis = Vec::new();
+    if let Some(ref approvals) = raw.approvals {
+        for word in &approvals.single {
+            let lower = word.to_lowercase();
+            add_cat(&lower, "approval");
+            approval_singles.insert(lower);
+        }
+        for phrase in &approvals.multi {
+            approval_multis.push(phrase.to_lowercase());
+        }
+    }
+
+    // Rejections
+    let mut rejection_singles = std::collections::HashSet::new();
+    let mut rejection_multis = Vec::new();
+    if let Some(ref rejections) = raw.rejections {
+        for word in &rejections.single {
+            let lower = word.to_lowercase();
+            add_cat(&lower, "rejection");
+            rejection_singles.insert(lower);
+        }
+        for phrase in &rejections.multi {
+            rejection_multis.push(phrase.to_lowercase());
+        }
+    }
+
+    // Explain triggers
+    let explain_triggers: std::collections::HashSet<String> = raw.explain_triggers.iter()
+        .map(|w| { add_cat(w, "explain_trigger"); w.to_lowercase() })
+        .collect();
+
     // Deduplicate categories for each word
     for cats in categories.values_mut() {
         cats.sort();
@@ -380,6 +517,11 @@ fn parse_lexicon(yaml_str: &str) -> Result<Lexicon, String> {
         determiners,
         quantifiers,
         conjunctions,
+        approval_singles,
+        approval_multis,
+        rejection_singles,
+        rejection_multis,
+        explain_triggers,
     })
 }
 
@@ -565,5 +707,87 @@ mod tests {
             assert!(pg.skeleton.len() >= 2,
                 "phrase group skeleton must have 2+ words: {:?}", pg.skeleton);
         }
+    }
+
+    // -- Approval/Rejection/Explain tests --
+
+    #[test]
+    fn test_approve_lgtm() {
+        let lex = lexicon();
+        assert!(lex.is_approve(&["lgtm".into()]));
+    }
+
+    #[test]
+    fn test_approve_yes() {
+        let lex = lexicon();
+        assert!(lex.is_approve(&["yes".into()]));
+    }
+
+    #[test]
+    fn test_approve_sounds_good() {
+        let lex = lexicon();
+        assert!(lex.is_approve(&["sounds".into(), "good".into()]));
+    }
+
+    #[test]
+    fn test_approve_ok_lgtm() {
+        let lex = lexicon();
+        assert!(lex.is_approve(&["ok".into(), "lgtm".into()]));
+    }
+
+    #[test]
+    fn test_approve_sure_why_not() {
+        let lex = lexicon();
+        assert!(lex.is_approve(&["sure".into(), "why".into(), "not".into()]));
+    }
+
+    #[test]
+    fn test_approve_y() {
+        let lex = lexicon();
+        assert!(lex.is_approve(&["y".into()]));
+    }
+
+    #[test]
+    fn test_reject_no() {
+        let lex = lexicon();
+        assert!(lex.is_reject(&["no".into()]));
+    }
+
+    #[test]
+    fn test_reject_scratch_that() {
+        let lex = lexicon();
+        assert!(lex.is_reject(&["scratch".into(), "that".into()]));
+    }
+
+    #[test]
+    fn test_reject_nah_i_am_good() {
+        let lex = lexicon();
+        assert!(lex.is_reject(&["nah".into(), "i".into(), "am".into(), "good".into()]));
+    }
+
+    #[test]
+    fn test_explain_filter() {
+        let lex = lexicon();
+        let subject = lex.try_explain(&["explain".into(), "filter".into()]);
+        assert_eq!(subject, Some("filter".into()));
+    }
+
+    #[test]
+    fn test_explain_what_is_walk_tree() {
+        let lex = lexicon();
+        let subject = lex.try_explain(&["what".into(), "is".into(), "walk_tree".into()]);
+        assert_eq!(subject, Some("walk_tree".into()));
+    }
+
+    #[test]
+    fn test_not_approve_when_empty() {
+        let lex = lexicon();
+        assert!(!lex.is_approve(&[]));
+    }
+
+    #[test]
+    fn test_not_reject_when_empty() {
+        let lex = lexicon();
+        assert!(!lex.is_reject(&[]));
     }
 }

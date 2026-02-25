@@ -2044,3 +2044,159 @@ fillers:
   - named
 
 
+
+# ---------------------------------------------------------------------------
+# Approvals: words/phrases that signal user approval
+# ---------------------------------------------------------------------------
+# Single-word approvals are classified as "approval" terminal.
+# Multi-word approvals are handled by the grammar (ApprovalPhrase rules).
+
+approvals:
+  single:
+    - lgtm
+    - "yes"
+    - yep
+    - yeah
+    - yea
+    - ok
+    - okay
+    - sure
+    - approve
+    - approved
+    - confirm
+    - confirmed
+    - go
+    - proceed
+    - accept
+    - accepted
+    - fine
+    - great
+    - perfect
+    - nice
+    - cool
+    - awesome
+    - excellent
+    - good
+    - agreed
+    - aye
+    - affirmative
+    - absolutely
+    - definitely
+    - totally
+    - done
+    - "y"
+  multi:
+    - sounds good
+    - looks good
+    - looks great
+    - looks fine
+    - sounds great
+    - sounds fine
+    - sounds right
+    - sounds correct
+    - that is good
+    - that is great
+    - that is fine
+    - that is correct
+    - that is right
+    - that is perfect
+    - that works
+    - go ahead
+    - go for it
+    - do it
+    - ship it
+    - send it
+    - let us go
+    - let us do it
+    - make it so
+    - run it
+    - i approve
+    - i accept
+    - i agree
+    - i confirm
+    - yes please
+    - yes do it
+    - yes go ahead
+    - ok do it
+    - ok go ahead
+    - ok sounds good
+    - all good
+    - all set
+    - we are good
+
+# ---------------------------------------------------------------------------
+# Rejections: words/phrases that signal user rejection
+# ---------------------------------------------------------------------------
+
+rejections:
+  single:
+    - "no"
+    - nope
+    - nah
+    - cancel
+    - stop
+    - abort
+    - quit
+    - reject
+    - rejected
+    - reset
+    - restart
+    - "n"
+    - negative
+    - never
+    - refuse
+    - declined
+  multi:
+    - start over
+    - start again
+    - try again
+    - do over
+    - no thanks
+    - no thank you
+    - not that
+    - not this
+    - scratch that
+    - forget it
+    - forget that
+    - never mind
+    - scrap that
+    - scrap it
+    - scrap the plan
+    - nah scrap
+    - nah forget
+    - nah scratch
+    - nah never
+    - nevermind
+    - i do not want
+    - i do not like
+    - actually no
+    - actually nah
+    - actually never mind
+    - wait no
+    - wait stop
+    - wait cancel
+    - nah i am good
+    - nah i am fine
+    - no i am good
+    - no i am fine
+    - forget about it
+    - forget about that
+    - that is wrong
+    - that is not right
+    - that is not what i want
+    - undo that
+    - undo it
+    - take it back
+    - go back
+    - back up
+    - step back
+
+# ---------------------------------------------------------------------------
+# Explain triggers: words that signal an explanation request
+# ---------------------------------------------------------------------------
+
+explain_triggers:
+  - explain
+  - describe
+  - what
+  - how
