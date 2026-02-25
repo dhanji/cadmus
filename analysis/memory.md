@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-24T23:10:05Z | Size: 79.7k chars
+> Updated: 2026-02-25T03:52:28Z | Size: 82.1k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -995,3 +995,32 @@ plan-name:
 - 1422 total tests, 0 failures
 - Key learning: arity-1 Racket ops (length, sqrt) need scalar arg syntax `(op $ref)` not keyword syntax `(op :param $ref)` — get_one_operand checks mode param then prev_binding, ignores named params
 - Key learning: sexpr type syntax is `(List Number)` not `List(Number)`
+
+### NL Pipeline Cleanup (plan `nl-old-pipeline-cleanup`, commit `4572670`)
+- **Deleted**: `src/nl/intent.rs` (1094 lines, 54 tests) — Intent enum, parse_intent()
+- **Deleted**: `src/nl/slots.rs` (926 lines, 54 tests) — SlotValue, StepRef, extract_slots()
+- **Moved to dialogue.rs**: EditAction, SlotValue, StepRef, Anchor, Modifier, ExtractedSlots, extract_slots(), is_path(), fuzzy_match_op(), edit_distance_bounded()
+- **Removed from normalize.rs**: `apply_synonyms()` (142 lines), `canonical_tokens` field from NormalizedInput
+- **Removed from nl_vocab.yaml**: 688 lines of synonym data (1181→488 lines)
+- **Removed from vocab.rs**: `synonyms` field from NlVocab, SynonymEntry struct
+- **Removed from mod.rs**: handle_question(), handle_set_param(), update_focus() (dead code)
+- **Added to lexicon.rs**: `is_approve()`, `is_reject()`, `try_explain()` methods
+- **Added to nl_lexicon.yaml**: `approvals:`, `rejections:`, `explain_triggers:` sections
+- **process_input() flow**: normalize → typo correct → lexicon approve/reject/explain → try_detect_edit → Earley parse
+- Net: -2237 lines, 2 files deleted, 1304 tests pass, NL autoregression 246/246 (100%)
+
+### NL Module Structure (post-cleanup)
+- `src/nl/mod.rs` [961 lines] — process_input(), try_earley_create(), try_detect_edit(), handle_approve/edit/explain
+- `src/nl/dialogue.rs` [1121 lines] — DialogueState, FocusStack, EditAction, slot types + extract_slots(), apply_edit(), plan_to_sexpr()
+- `src/nl/normalize.rs` [401 lines] — normalize(), tokenize(), expand_contractions(), canonicalize_ordinal(), is_canonical_op()
+- `src/nl/vocab.rs` [283 lines] — NlVocab (contractions, ordinals, stopwords, filler_phrases, dir_aliases, noun_patterns)
+- `src/nl/lexicon.rs` [793 lines] — Earley lexicon + approve/reject/explain detection
+- `src/nl/earley.rs` [788 lines] — Earley parser engine
+- `src/nl/grammar.rs` [380 lines] — Command grammar builder
+- `src/nl/intent_ir.rs` [687 lines] — IntentIR schema
+- `src/nl/intent_compiler.rs` [1034 lines] — IntentIR → PlanDef
+- `src/nl/phrase.rs` [319 lines] — Phrase tokenizer
+- `src/nl/typo.rs` [612 lines] — SymSpell typo correction
+- `data/nl/nl_vocab.yaml` [488 lines] — contractions, ordinals, approvals, rejections, stopwords, dir_aliases, noun_patterns
+- `data/nl/nl_lexicon.yaml` — Earley lexicon: verbs, nouns, approvals, rejections, explain_triggers, phrase_groups
+- `data/nl/nl_dictionary.yaml` — SymSpell frequency dictionary
