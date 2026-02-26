@@ -63,7 +63,7 @@ fn make_inputs(pairs: Vec<(&str, &str)>) -> Vec<cadmus::plan::PlanInput> {
 #[test]
 fn test_cli_facts_load() {
     let pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
-    assert_eq!(pack.entities.len(), 62, "expected 62 CLI tool entities");
+    assert_eq!(pack.entities.len(), 66, "expected 66 CLI tool entities");
     assert_eq!(pack.axes.len(), 5);
     assert!(pack.claims.len() >= 60);
     assert!(pack.evidence.len() >= 5);
@@ -85,7 +85,7 @@ fn test_cli_facts_submodes_count() {
     let submodes: Vec<_> = pack.properties.iter()
         .filter(|p| p.key.starts_with("submode_"))
         .collect();
-    assert_eq!(submodes.len(), 151, "expected 141 submode properties");
+    assert_eq!(submodes.len(), 168, "expected 168 submode properties");
 }
 
 #[test]
@@ -107,8 +107,8 @@ fn test_cli_facts_type_symmetry_classes() {
         }
     }
     assert_eq!(classes.len(), 11, "expected 11 type symmetry classes");
-    assert_eq!(classes["shell_text_lines"].len(), 24, "text_lines should have 24 tools");
-    assert_eq!(classes["shell_tabular"].len(), 3, "tabular should have 3 tools");
+    assert_eq!(classes["shell_text_lines"].len(), 25, "text_lines should have 25 tools");
+    assert_eq!(classes["shell_tabular"].len(), 4, "tabular should have 4 tools");
     assert_eq!(classes["shell_tree"].len(), 2, "tree should have 2 tools");
 }
 
@@ -294,7 +294,7 @@ fn test_submode_total_count() {
     let cli_pack: FactPack = serde_yaml::from_str(MACOS_CLI_FACTS_YAML).unwrap();
     let cli_facts = FactPackIndex::build(cli_pack);
     let submodes = discover_shell_submodes(&mut reg, &facts, &cli_facts);
-    assert_eq!(submodes.len(), 151, "expected 141 submode ops");
+    assert_eq!(submodes.len(), 158, "expected 158 submode ops");
 }
 
 #[test]
@@ -575,7 +575,7 @@ fn test_submode_idempotent() {
     let second = discover_shell_submodes(&mut reg, &facts, &cli_facts2);
     let count_after_second = reg.poly_op_names().len();
 
-    assert_eq!(first.len(), 151);
+    assert_eq!(first.len(), 158);
     assert_eq!(second.len(), 0, "second run should discover 0 new ops");
     assert_eq!(count_after_first, count_after_second, "op count should not change");
 }

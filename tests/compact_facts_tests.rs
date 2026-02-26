@@ -24,8 +24,8 @@ fn test_macos_cli_facts_property_count() {
     let idx = load_fact_pack(&path).expect("should load macos_cli_facts");
     assert_eq!(
         idx.pack.properties.len(),
-        461,
-        "macos_cli_facts should have exactly 461 properties"
+        498,
+        "macos_cli_facts should have exactly 498 properties"
     );
 }
 

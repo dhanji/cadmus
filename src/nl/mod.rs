@@ -13,6 +13,7 @@
 
 pub mod normalize;
 pub mod typo;
+pub mod recipes;
 pub mod dialogue;
 pub mod vocab;
 pub mod earley;
@@ -123,6 +124,14 @@ pub fn process_input(input: &str, state: &mut DialogueState) -> NlResponse {
         state.alternative_intents.clear();
         return NlResponse::Rejected;
     }
+    // 3b. Check for command recipe queries ("give me the command to ...",
+    //     "how do I ... from terminal", "what's the command for ...")
+    if let Some(content_tokens) = try_recipe_query(&corrected_tokens) {
+        if let Some(response) = handle_recipe_query(&content_tokens) {
+            return response;
+        }
+    }
+
     if let Some(subject) = lex.try_explain(&corrected_tokens) {
         return handle_explain(&subject);
     }
@@ -521,6 +530,151 @@ fn handle_edit_step(
 fn handle_explain(subject: &str) -> NlResponse {
     let text = get_op_explanation(subject);
     NlResponse::Explanation { text }
+}
+
+// ---------------------------------------------------------------------------
+// Command recipe queries
+// ---------------------------------------------------------------------------
+
+/// Detect whether the input is a command recipe query.
+/// Returns the content tokens (with the query pattern prefix stripped) if so.
+///
+/// Recognized patterns:
+///   - "give me the command to/for ..."
+///   - "what's/whats the command to/for ..."
+///   - "what command do I use to ..."
+///   - "show me the command to/for ..."
+///   - "how do I ... from terminal/command line"
+///   - "what is the command to/for ..."
+fn try_recipe_query(tokens: &[String]) -> Option<Vec<String>> {
+    if tokens.len() < 3 {
+        return None;
+    }
+
+    let t: Vec<&str> = tokens.iter().map(|s| s.as_str()).collect();
+
+    // Pattern: "give me the command to/for ..."
+    if let Some(rest) = strip_prefix_seq(&t, &["give", "me", "the", "command"]) {
+        return Some(strip_leading_preps(&rest));
+    }
+
+    // Pattern: "what/whats the command to/for ..."
+    if t[0] == "what" || t[0] == "whats" {
+        if let Some(rest) = strip_prefix_seq(&t[1..], &["the", "command"]) {
+            return Some(strip_leading_preps(&rest));
+        }
+        if let Some(rest) = strip_prefix_seq(&t[1..], &["is", "the", "command"]) {
+            return Some(strip_leading_preps(&rest));
+        }
+        // "what command do I use to ..."
+        if let Some(rest) = strip_prefix_seq(&t[1..], &["command", "do"]) {
+            return Some(strip_leading_preps(&rest));
+        }
+    }
+
+    // Pattern: "show me the command to/for ..."
+    if let Some(rest) = strip_prefix_seq(&t, &["show", "me", "the", "command"]) {
+        return Some(strip_leading_preps(&rest));
+    }
+
+    // Pattern: "how do I ... from terminal/command line"
+    if t.len() >= 4 && t[0] == "how" && t[1] == "do" {
+        // Check for trailing "from terminal" / "from the command line" / "from the terminal"
+        let has_terminal_suffix = has_suffix(&t, &["from", "terminal"])
+            || has_suffix(&t, &["from", "the", "terminal"])
+            || has_suffix(&t, &["from", "the", "command", "line"])
+            || has_suffix(&t, &["from", "command", "line"])
+            || has_suffix(&t, &["in", "terminal"])
+            || has_suffix(&t, &["in", "the", "terminal"]);
+
+        if has_terminal_suffix {
+            // Strip "how do I" prefix and terminal suffix
+            let rest: Vec<String> = t[2..].iter().map(|s| s.to_string()).collect();
+            let content = strip_leading_preps(&rest);
+            let content = strip_terminal_suffix(content);
+            if !content.is_empty() {
+                return Some(content);
+            }
+        }
+    }
+
+    None
+}
+
+/// Strip a fixed prefix sequence from tokens. Returns remaining tokens if matched.
+fn strip_prefix_seq(tokens: &[&str], prefix: &[&str]) -> Option<Vec<String>> {
+    if tokens.len() < prefix.len() {
+        return None;
+    }
+    for (t, p) in tokens.iter().zip(prefix.iter()) {
+        if *t != *p {
+            return None;
+        }
+    }
+    Some(tokens[prefix.len()..].iter().map(|s| s.to_string()).collect())
+}
+
+/// Strip leading prepositions (to, for, about) from token list.
+fn strip_leading_preps(tokens: &[String]) -> Vec<String> {
+    let skip = &["to", "for", "about", "i", "use"];
+    let start = tokens.iter()
+        .position(|t| !skip.contains(&t.as_str()))
+        .unwrap_or(tokens.len());
+    tokens[start..].iter().map(|s| s.to_string()).collect()
+}
+
+/// Check if tokens end with the given suffix.
+fn has_suffix(tokens: &[&str], suffix: &[&str]) -> bool {
+    if tokens.len() < suffix.len() {
+        return false;
+    }
+    let start = tokens.len() - suffix.len();
+    tokens[start..].iter().zip(suffix.iter()).all(|(a, b)| a == b)
+}
+
+/// Strip trailing "from terminal" / "from the command line" etc.
+fn strip_terminal_suffix(mut tokens: Vec<String>) -> Vec<String> {
+    let suffixes: &[&[&str]] = &[
+        &["from", "the", "command", "line"],
+        &["from", "command", "line"],
+        &["from", "the", "terminal"],
+        &["from", "terminal"],
+        &["in", "the", "terminal"],
+        &["in", "terminal"],
+    ];
+    for suffix in suffixes {
+        if tokens.len() >= suffix.len() {
+            let start = tokens.len() - suffix.len();
+            let matches = tokens[start..].iter()
+                .zip(suffix.iter())
+                .all(|(a, b)| a.as_str() == *b);
+            if matches {
+                tokens.truncate(start);
+                break;
+            }
+        }
+    }
+    tokens
+}
+
+/// Handle a recipe query: look up the command and return a displayln program.
+fn handle_recipe_query(content_tokens: &[String]) -> Option<NlResponse> {
+    let idx = recipes::recipe_index();
+    let recipe = idx.lookup(content_tokens)?;
+
+    // Generate a simple (displayln "command") Racket program
+    let script = format!(
+        "#!/usr/bin/env racket\n#lang racket\n(displayln \"{}\")\n",
+        recipe.command.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+
+    let text = format!(
+        "{}\n\nRacket program:\n{}",
+        recipe.description,
+        script.trim()
+    );
+
+    Some(NlResponse::Explanation { text })
 }
 
 // ---------------------------------------------------------------------------
@@ -957,5 +1111,77 @@ mod tests {
         assert!(matches!(r, NlResponse::PlanCreated { .. }), "new plan after approve: {:?}", r);
         let r2 = process_input("ok", &mut state);
         assert!(matches!(r2, NlResponse::Approved { .. }), "approve new plan: {:?}", r2);
+    }
+
+    // -- Recipe query detection --
+
+    #[test]
+    fn test_try_recipe_query_give_me_command() {
+        let tokens: Vec<String> = "give me the command to reset git"
+            .split_whitespace().map(String::from).collect();
+        let result = try_recipe_query(&tokens);
+        assert!(result.is_some());
+        let content = result.unwrap();
+        assert!(content.contains(&"reset".to_string()));
+        assert!(content.contains(&"git".to_string()));
+    }
+
+    #[test]
+    fn test_try_recipe_query_whats_the_command() {
+        let tokens: Vec<String> = "whats the command for listing processes"
+            .split_whitespace().map(String::from).collect();
+        let result = try_recipe_query(&tokens);
+        assert!(result.is_some());
+        let content = result.unwrap();
+        assert!(content.contains(&"listing".to_string()));
+        assert!(content.contains(&"processes".to_string()));
+    }
+
+    #[test]
+    fn test_try_recipe_query_how_do_i_from_terminal() {
+        let tokens: Vec<String> = "how do i cherry pick a commit from terminal"
+            .split_whitespace().map(String::from).collect();
+        let result = try_recipe_query(&tokens);
+        assert!(result.is_some());
+        let content = result.unwrap();
+        assert!(content.contains(&"cherry".to_string()));
+        assert!(content.contains(&"pick".to_string()));
+        // "from terminal" should be stripped
+        assert!(!content.contains(&"terminal".to_string()));
+    }
+
+    #[test]
+    fn test_try_recipe_query_no_match() {
+        let tokens: Vec<String> = "zip up my downloads folder"
+            .split_whitespace().map(String::from).collect();
+        assert!(try_recipe_query(&tokens).is_none());
+    }
+
+    #[test]
+    fn test_try_recipe_query_too_short() {
+        let tokens: Vec<String> = "hi there"
+            .split_whitespace().map(String::from).collect();
+        assert!(try_recipe_query(&tokens).is_none());
+    }
+
+    #[test]
+    fn test_handle_recipe_query_git_reset() {
+        let tokens: Vec<String> = vec!["git".into(), "reset".into()];
+        let result = handle_recipe_query(&tokens);
+        assert!(result.is_some());
+        match result.unwrap() {
+            NlResponse::Explanation { text } => {
+                assert!(text.contains("git"), "should mention git: {}", text);
+                assert!(text.contains("reset"), "should mention reset: {}", text);
+                assert!(text.contains("displayln"), "should have displayln: {}", text);
+            }
+            other => panic!("expected Explanation, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_handle_recipe_query_no_match() {
+        let tokens: Vec<String> = vec!["make".into(), "pasta".into()];
+        assert!(handle_recipe_query(&tokens).is_none());
     }
 }

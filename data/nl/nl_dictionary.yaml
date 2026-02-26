@@ -3173,3 +3173,28 @@ algorithm_expansion:
   repeating: 80
   given: 80
   substring: 80
+  # command recipe domain
+  cherry: 80
+  caffeinate: 60
+  fswatch: 60
+  launchctl: 60
+  defaults: 80
+  oneline: 60
+  mtime: 40
+  graph: 80
+  processes: 80
+  recursive: 80
+  terminal: 80
+  unzip: 80
+  reset: 80
+  soft: 80
+  pick: 80
+  tracked: 60
+  sleep: 80
+  prevent: 80
+  monitor: 80
+  listing: 80
+  awake: 60
+  preferences: 60
+  visual: 60
+  uncommit: 40

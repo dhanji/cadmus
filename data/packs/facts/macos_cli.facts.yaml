@@ -250,6 +250,20 @@ entities:
     name: "openssl"
     description: "Cryptographic toolkit — hashing, encryption, certificates"
 
+  # --- macOS-specific system tools ---
+  - id: cli_caffeinate
+    name: "caffeinate"
+    description: "Prevent the system from sleeping (macOS)"
+  - id: cli_defaults
+    name: "defaults"
+    description: "Read and write macOS user defaults (preferences) from the command line"
+  - id: cli_fswatch
+    name: "fswatch"
+    description: "Monitor filesystem events (cross-platform, available via brew)"
+  - id: cli_launchctl
+    name: "launchctl"
+    description: "Manage macOS system and user services (launchd)"
+
 # ---------------------------------------------------------------------------
 # Axes
 # ---------------------------------------------------------------------------
@@ -983,6 +997,7 @@ compact_properties:
       submode_all_files: -a
       submode_depth: -d
       submode_summary: -sh
+      submode_human: -h
     shell_type_signature:
       base_command: du
       op_name: shell_du
@@ -1011,6 +1026,7 @@ compact_properties:
       submode_dirs_only: -type d
       submode_files_only: -type f
       submode_max_depth: -maxdepth
+      submode_delete: -delete
     shell_type_signature:
       base_command: find
       op_name: shell_find
@@ -1040,6 +1056,11 @@ compact_properties:
       submode_stash_pop: stash pop
       submode_status: status
       submode_tag: tag
+      submode_reset: reset --hard HEAD
+      submode_reset_soft: reset --soft HEAD~1
+      submode_cherry_pick: cherry-pick
+      submode_ls_files: ls-files
+      submode_log_graph: log --graph --oneline --all
     shell_type_signature:
       base_command: git
       op_name: shell_git
@@ -1585,6 +1606,55 @@ compact_properties:
       racket_symbol: shell-zip
     shell_type_symmetry:
       type_symmetry_class: shell_exec
+  cli_caffeinate:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_idle: -i
+      submode_display: -d
+      submode_system: -s
+      submode_run_command: -i --
+    shell_type_signature:
+      base_command: caffeinate
+      op_name: shell_caffeinate
+      racket_symbol: shell-caffeinate
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_defaults:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_read: read
+      submode_write: write
+      submode_delete: delete
+    shell_type_signature:
+      base_command: defaults
+      op_name: shell_defaults
+      racket_symbol: shell-defaults
+    shell_type_symmetry:
+      type_symmetry_class: shell_exec
+  cli_fswatch:
+    shell_category:
+      category_name: shell
+    shell_type_signature:
+      base_command: fswatch
+      op_name: shell_fswatch
+      racket_symbol: shell-fswatch
+    shell_type_symmetry:
+      type_symmetry_class: shell_text_lines
+  cli_launchctl:
+    shell_category:
+      category_name: shell
+    shell_submodes:
+      submode_list: list
+      submode_load: load
+      submode_unload: unload
+    shell_type_signature:
+      base_command: launchctl
+      op_name: shell_launchctl
+      racket_symbol: shell-launchctl
+    shell_type_symmetry:
+      type_symmetry_class: shell_tabular
 relations:
   - kind: ordinal
     id: rel_shell_category
