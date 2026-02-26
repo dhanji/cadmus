@@ -266,7 +266,7 @@ fn build_task_keywords() -> HashMap<&'static str, Vec<&'static str>> {
     m.insert("unzip", vec!["extract", "decompress", "archive"]);
     m.insert("tar", vec!["archive", "compress", "extract"]);
     m.insert("git", vec!["repository", "repo", "version", "control"]);
-    m.insert("caffeinate", vec!["sleep", "prevent", "awake", "keep"]);
+    m.insert("caffeinate", vec!["sleep", "sleeping", "prevent", "awake", "keep", "stop", "computer", "disable"]);
     m.insert("defaults", vec!["preferences", "settings", "hidden", "show"]);
     m.insert("fswatch", vec!["watch", "monitor", "changes", "filesystem"]);
     m.insert("grep", vec!["search", "pattern", "text", "find"]);
@@ -292,7 +292,7 @@ fn build_task_keywords() -> HashMap<&'static str, Vec<&'static str>> {
     m.insert("defaults_write", vec!["write", "set", "hidden", "show", "preference"]);
     m.insert("zip_create", vec!["create", "compress", "folder", "recursive"]);
     m.insert("unzip_extract", vec!["extract", "decompress", "archive"]);
-    m.insert("caffeinate_idle", vec!["idle", "sleep", "prevent"]);
+    m.insert("caffeinate_idle", vec!["idle", "sleep", "sleeping", "prevent", "stop", "computer", "disable"]);
     m.insert("caffeinate_run_command", vec!["command", "run", "while", "awake"]);
     m
 }

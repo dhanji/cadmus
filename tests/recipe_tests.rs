@@ -328,3 +328,38 @@ fn test_recipe_displayln_has_command() {
     // The displayln should contain the actual command
     assert!(text.contains("git cherry-pick"), "displayln should contain the command");
 }
+
+// ===========================================================================
+// 6. "how do I ..." without terminal suffix
+// ===========================================================================
+
+#[test]
+fn test_how_do_i_stop_computer_sleeping() {
+    let result = recipe_query("how do i stop the computer from sleeping");
+    assert!(result.is_some(), "should match caffeinate recipe");
+    let text = result.unwrap();
+    assert!(text.contains("caffeinate"), "should mention caffeinate: {}", text);
+}
+
+#[test]
+fn test_how_do_i_prevent_sleep() {
+    let result = recipe_query("how do i prevent sleep");
+    assert!(result.is_some(), "should match caffeinate recipe");
+    let text = result.unwrap();
+    assert!(text.contains("caffeinate"), "should mention caffeinate: {}", text);
+}
+
+#[test]
+fn test_how_do_i_keep_awake() {
+    let result = recipe_query("how do i keep the computer awake");
+    assert!(result.is_some(), "should match caffeinate recipe");
+    let text = result.unwrap();
+    assert!(text.contains("caffeinate"), "should mention caffeinate: {}", text);
+}
+
+#[test]
+fn test_how_does_not_trigger_recipe() {
+    // "how does filter work" should NOT be a recipe query
+    let result = recipe_query("how does filter work");
+    assert!(result.is_none(), "'how does X work' should not match recipe query");
+}

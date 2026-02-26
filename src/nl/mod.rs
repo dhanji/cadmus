@@ -578,7 +578,7 @@ fn try_recipe_query(tokens: &[String]) -> Option<Vec<String>> {
     }
 
     // Pattern: "how do I ... from terminal/command line"
-    if t.len() >= 4 && t[0] == "how" && t[1] == "do" {
+    if t.len() >= 4 && t[0] == "how" && t[1] == "do" && t.get(2).map_or(false, |w| *w == "i") {
         // Check for trailing "from terminal" / "from the command line" / "from the terminal"
         let has_terminal_suffix = has_suffix(&t, &["from", "terminal"])
             || has_suffix(&t, &["from", "the", "terminal"])
@@ -588,10 +588,17 @@ fn try_recipe_query(tokens: &[String]) -> Option<Vec<String>> {
             || has_suffix(&t, &["in", "the", "terminal"]);
 
         if has_terminal_suffix {
-            // Strip "how do I" prefix and terminal suffix
-            let rest: Vec<String> = t[2..].iter().map(|s| s.to_string()).collect();
+            // Strip "how do I" prefix (skip "i") and terminal suffix
+            let rest: Vec<String> = t[3..].iter().map(|s| s.to_string()).collect();
             let content = strip_leading_preps(&rest);
             let content = strip_terminal_suffix(content);
+            if !content.is_empty() {
+                return Some(content);
+            }
+        } else {
+            // "how do I ..." without terminal suffix — still a recipe query
+            let rest: Vec<String> = t[3..].iter().map(|s| s.to_string()).collect();
+            let content = strip_leading_preps(&rest);
             if !content.is_empty() {
                 return Some(content);
             }
@@ -1183,5 +1190,46 @@ mod tests {
     fn test_handle_recipe_query_no_match() {
         let tokens: Vec<String> = vec!["make".into(), "pasta".into()];
         assert!(handle_recipe_query(&tokens).is_none());
+    }
+
+    #[test]
+    fn test_try_recipe_query_how_do_i_no_terminal_suffix() {
+        let tokens: Vec<String> = "how do i stop the computer from sleeping"
+            .split_whitespace().map(String::from).collect();
+        let result = try_recipe_query(&tokens);
+        assert!(result.is_some(), "should match 'how do i' without terminal suffix");
+        let content = result.unwrap();
+        assert!(content.contains(&"stop".to_string()));
+        assert!(content.contains(&"sleeping".to_string()));
+    }
+
+    #[test]
+    fn test_try_recipe_query_how_do_i_prevent_sleep() {
+        let tokens: Vec<String> = "how do i prevent sleep"
+            .split_whitespace().map(String::from).collect();
+        let result = try_recipe_query(&tokens);
+        assert!(result.is_some(), "should match 'how do i prevent sleep'");
+        let content = result.unwrap();
+        assert!(content.contains(&"prevent".to_string()));
+        assert!(content.contains(&"sleep".to_string()));
+    }
+
+    #[test]
+    fn test_try_recipe_query_how_does_not_match() {
+        // "how does" should NOT match the recipe query pattern (no "i")
+        let tokens: Vec<String> = "how does filter work"
+            .split_whitespace().map(String::from).collect();
+        assert!(try_recipe_query(&tokens).is_none(),
+            "'how does X work' should not be a recipe query");
+    }
+
+    #[test]
+    fn test_try_recipe_query_how_do_i_too_short() {
+        // "how do i" alone should not match (no content after stripping)
+        let tokens: Vec<String> = "how do i"
+            .split_whitespace().map(String::from).collect();
+        // len is 3, but we need >= 4
+        assert!(try_recipe_query(&tokens).is_none(),
+            "'how do i' alone should not match");
     }
 }

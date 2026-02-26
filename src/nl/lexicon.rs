@@ -264,7 +264,7 @@ impl Lexicon {
             return None;
         }
         // Find the subject: first non-stopword token after the trigger
-        let stopwords = ["is", "does", "do", "mean", "means", "work", "works", "the", "a", "an"];
+        let stopwords = ["is", "does", "do", "mean", "means", "work", "works", "the", "a", "an", "i"];
         for token in &tokens[1..] {
             if stopwords.contains(&token.as_str()) {
                 continue;
