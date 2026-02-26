@@ -80,6 +80,173 @@ pub fn compile_intent(result: &IntentIRResult) -> CompileResult {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Declarative action→ops mapping
+//
+// Each filesystem action maps to a sequence of ops. The planner's
+// lower_to_plan_def() converts these to RawSteps with params.
+// ---------------------------------------------------------------------------
+
+/// An action's op recipe: the sequence of ops to emit for a given action.
+struct ActionRecipe {
+    /// Ordered list of op names to emit.
+    ops: &'static [&'static str],
+}
+
+/// Look up the op recipe for a filesystem action label.
+/// Takes the IR for context-dependent recipes (e.g., compress file vs dir).
+/// Returns None for unknown actions (they fall through to algorithm-op lookup).
+fn action_recipe(action: &str, ir: &IntentIR) -> Option<ActionRecipe> {
+    // Check if the input looks like a file path (for compress)
+    let target_is_file = ir.inputs.first()
+        .and_then(|i| i.selector.scope.as_ref())
+        .map(|s| is_file_path(&s.dir))
+        .unwrap_or(false);
+
+    match action {
+        "select" | "retrieve"      => Some(ActionRecipe { ops: &["walk_tree", "find_matching"] }),
+        "traverse"                  => Some(ActionRecipe { ops: &["walk_tree"] }),
+        "enumerate"                 => Some(ActionRecipe { ops: &["list_dir"] }),
+        "compress" => {
+            if target_is_file {
+                Some(ActionRecipe { ops: &["gzip_compress"] })
+            } else {
+                Some(ActionRecipe { ops: &["walk_tree", "pack_archive"] })
+            }
+        }
+        "decompress"                => Some(ActionRecipe { ops: &["extract_archive"] }),
+        "search_text"               => Some(ActionRecipe { ops: &["walk_tree", "search_content"] }),
+        "deduplicate"               => Some(ActionRecipe { ops: &["walk_tree", "find_duplicates"] }),
+        "count"                     => Some(ActionRecipe { ops: &["walk_tree", "count_entries"] }),
+        "order"                     => Some(ActionRecipe { ops: &["sort_by"] }),
+        "read"                      => Some(ActionRecipe { ops: &["read_file"] }),
+        "delete"                    => Some(ActionRecipe { ops: &["delete"] }),
+        "copy"                      => Some(ActionRecipe { ops: &["copy"] }),
+        "move"                      => Some(ActionRecipe { ops: &["move_entry"] }),
+        "rename"                    => Some(ActionRecipe { ops: &["rename"] }),
+        "compare"                   => Some(ActionRecipe { ops: &["diff"] }),
+        "checksum"                  => Some(ActionRecipe { ops: &["checksum"] }),
+        "download"                  => Some(ActionRecipe { ops: &["download"] }),
+        _ => None,
+    }
+}
+
+/// Compile an IR step using the declarative action recipe.
+/// Returns Some(Vec<RawStep>) if the action has a recipe, None otherwise.
+fn try_action_recipe(
+    action: &str,
+    ir_step: &crate::nl::intent_ir::IRStep,
+    ir: &IntentIR,
+    prior_steps: usize,
+) -> Option<Vec<RawStep>> {
+    let recipe = action_recipe(action, ir)?;
+    let mut steps = Vec::new();
+
+    // Extract pattern from IR (concept resolution or explicit)
+    let pattern = extract_pattern_from_ir(ir_step, ir);
+
+    // If this is the first step and the action operates on sequences
+    // but the input is a directory, prepend walk_tree.
+    if prior_steps == 0 && action == "order" {
+        steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
+    }
+
+    for &op in recipe.ops {
+
+
+        let args = build_recipe_step_args(op, ir_step, &pattern);
+        steps.push(RawStep { op: op.to_string(), args });
+    }
+    Some(steps)
+}
+
+/// Build step args for a recipe op based on IR params.
+fn build_recipe_step_args(
+    op: &str,
+    ir_step: &crate::nl::intent_ir::IRStep,
+    pattern: &Option<String>,
+) -> StepArgs {
+    match op {
+        "find_matching" | "filter" => {
+            if let Some(pat) = pattern {
+                let mut m = HashMap::new();
+                m.insert("pattern".to_string(), pat.clone());
+                StepArgs::from_string_map(m)
+            } else {
+                StepArgs::None
+            }
+        }
+        "sort_by" => {
+            // The IR step for "order" has `by` and `direction` params.
+            // We combine them into a single scalar mode string.
+            let field = ir_step.params.get("by").map(|s| s.as_str()).unwrap_or("name");
+            let direction = ir_step.params.get("direction").map(|s| s.as_str()).unwrap_or("ascending");
+
+            let mode = match field {
+                "modification_time" | "mtime" | "date" | "time" => {
+                    if direction == "descending" { "mtime_desc" } else { "mtime" }
+                }
+                "size" => {
+                    if direction == "descending" { "size_desc" } else { "size" }
+                }
+                "name" | "alphabetical" => {
+                    if direction == "descending" { "name_desc" } else { "name" }
+                }
+                _ => "name",
+            };
+
+            StepArgs::Scalar(mode.to_string())
+        }
+        "search_content" => {
+            if let Some(pat) = pattern {
+                let mut m = HashMap::new();
+                m.insert("pattern".to_string(), pat.clone());
+                StepArgs::from_string_map(m)
+            } else {
+                StepArgs::None
+            }
+        }
+        _ => StepArgs::None,
+    }
+}
+
+/// Extract a file pattern from an IR step, resolving concepts to glob patterns.
+fn extract_pattern_from_ir(
+    ir_step: &crate::nl::intent_ir::IRStep,
+    ir: &IntentIR,
+) -> Option<String> {
+    // 1. Explicit pattern in step params
+    if let Some(pat) = ir_step.params.get("pattern") {
+        return Some(pat.clone());
+    }
+    // 2. Concept from a select step's "where" clause
+    if let Some(where_val) = ir_step.params.get("where") {
+        if let Some(kind) = where_val.strip_prefix("kind: \"").and_then(|s| s.strip_suffix('"')) {
+            let patterns = resolve_concept_to_patterns(kind);
+            if !patterns.is_empty() {
+                return Some(patterns.join(","));
+            }
+        }
+    }
+    // 3. Check other steps in the IR for concepts
+    for step in &ir.steps {
+        if step.action == "select" {
+            if let Some(where_val) = step.params.get("where") {
+                if let Some(kind) = where_val.strip_prefix("kind: \"").and_then(|s| s.strip_suffix('"')) {
+                    let patterns = resolve_concept_to_patterns(kind);
+                    if !patterns.is_empty() {
+                        return Some(patterns.join(","));
+                    }
+                }
+            }
+            if let Some(pat) = step.params.get("pattern") {
+                return Some(pat.clone());
+            }
+        }
+    }
+    None
+}
+
 /// Compile a single IntentIR to a PlanDef.
 pub fn compile_ir(ir: &IntentIR) -> CompileResult {
     // ── Short-circuit: if the primary action is a registered algorithm op
@@ -144,73 +311,10 @@ pub fn compile_ir(ir: &IntentIR) -> CompileResult {
     for ir_step in &ir.steps {
         let action = ir_step.action.as_str();
 
-        // 1. Try filesystem-specific multi-step patterns first.
-        //    These are more specific than the program-first path.
-        match action {
-            "select" => {
-                compile_select_step(ir_step, &target_path, &mut steps);
-                continue;
-            }
-            "order" => {
-                compile_order_step(ir_step, &mut steps);
-                continue;
-            }
-            "compress" => {
-                compile_compress_step(&target_path, &mut steps);
-                continue;
-            }
-            "search_text" => {
-                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
-                steps.push(RawStep { op: "search_content".into(), args: StepArgs::None });
-                continue;
-            }
-            "decompress" => {
-                steps.push(RawStep { op: "extract_archive".into(), args: StepArgs::None });
-                continue;
-            }
-            "enumerate" => {
-                steps.push(RawStep { op: "list_dir".into(), args: StepArgs::None });
-                continue;
-            }
-            "traverse" => {
-                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
-                continue;
-            }
-            "count" => {
-                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
-                steps.push(RawStep { op: "count_entries".into(), args: StepArgs::None });
-                continue;
-            }
-            "read" => {
-                steps.push(RawStep { op: "read_file".into(), args: StepArgs::None });
-                continue;
-            }
-            "delete" | "copy" | "rename" | "checksum" | "download" => {
-                let op = match action {
-                    "delete" => "delete",
-                    "copy" => "copy",
-                    "rename" => "rename",
-                    "checksum" => "checksum",
-                    "download" => "download",
-                    _ => unreachable!(),
-                };
-                steps.push(RawStep { op: op.into(), args: StepArgs::None });
-                continue;
-            }
-            "move" => {
-                steps.push(RawStep { op: "move_entry".into(), args: StepArgs::None });
-                continue;
-            }
-            "deduplicate" => {
-                steps.push(RawStep { op: "walk_tree".into(), args: StepArgs::None });
-                steps.push(RawStep { op: "find_duplicates".into(), args: StepArgs::None });
-                continue;
-            }
-            "compare" => {
-                steps.push(RawStep { op: "diff".into(), args: StepArgs::None });
-                continue;
-            }
-            _ => {}
+        // 1. Try declarative action recipe for known filesystem actions.
+        if let Some(planned_steps) = try_action_recipe(action, ir_step, ir, steps.len()) {
+            steps.extend(planned_steps);
+            continue;
         }
 
         // 2. Program-first: check if the action label is a registered op.
@@ -435,7 +539,6 @@ pub fn try_load_plan_sexpr(action: &str) -> Option<String> {
 // Filesystem step compilation helpers
 // ---------------------------------------------------------------------------
 
-/// Compile a "select" action to walk_tree + find_matching/filter steps.
 /// Compile a registered algorithm op into a single-step PlanDef.
 ///
 /// This is the short-circuit path for algorithm atoms: the IR's filesystem
@@ -484,107 +587,6 @@ pub fn compile_algorithm_op_by_name(
     }
 }
 
-fn compile_select_step(
-    ir_step: &crate::nl::intent_ir::IRStep,
-    _target_path: &str,
-    steps: &mut Vec<RawStep>,
-) {
-    // Always start with walk_tree
-    steps.push(RawStep {
-        op: "walk_tree".to_string(),
-        args: StepArgs::None,
-    });
-
-    // Resolve concept to file patterns
-    let concept = ir_step.params.get("where")
-        .and_then(|w| {
-            w.strip_prefix("kind: \"")
-                .and_then(|s| s.strip_suffix('"'))
-                .map(|s| s.to_string())
-        });
-
-    let patterns = if let Some(ref concept_label) = concept {
-        resolve_concept_to_patterns(concept_label)
-    } else {
-        Vec::new()
-    };
-
-    // Check for explicit pattern in params
-    let explicit_pattern = ir_step.params.get("pattern").cloned();
-
-    // Build the filter step
-    if !patterns.is_empty() {
-        let pattern_str = patterns.join(",");
-        let mut params = HashMap::new();
-        params.insert("pattern".to_string(), pattern_str);
-        steps.push(RawStep {
-            op: "find_matching".to_string(),
-            args: StepArgs::from_string_map(params),
-        });
-    } else if let Some(ref pat) = explicit_pattern {
-        let mut params = HashMap::new();
-        params.insert("pattern".to_string(), pat.clone());
-        steps.push(RawStep {
-            op: "find_matching".to_string(),
-            args: StepArgs::from_string_map(params),
-        });
-    } else {
-        // No patterns and no concept — still add find_matching for edit operations
-        steps.push(RawStep {
-            op: "find_matching".to_string(),
-            args: StepArgs::None,
-        });
-    }
-}
-
-/// Compile an "order" action to a sort_by step.
-fn compile_order_step(
-    ir_step: &crate::nl::intent_ir::IRStep,
-    steps: &mut Vec<RawStep>,
-) {
-    let field = ir_step.params.get("by").cloned().unwrap_or_else(|| "name".to_string());
-    let direction = ir_step.params.get("direction").cloned().unwrap_or_else(|| "ascending".to_string());
-
-    let mode = match field.as_str() {
-        "modification_time" | "mtime" | "date" | "time" => {
-            if direction == "descending" { "mtime_desc" } else { "mtime" }
-        }
-        "size" => {
-            if direction == "descending" { "size_desc" } else { "size" }
-        }
-        "name" | "alphabetical" => {
-            if direction == "descending" { "name_desc" } else { "name" }
-        }
-        _ => "name",
-    };
-
-    steps.push(RawStep {
-        op: "sort_by".to_string(),
-        args: StepArgs::Scalar(mode.to_string()),
-    });
-}
-
-/// Compile a "compress" action.
-fn compile_compress_step(
-    target_path: &str,
-    steps: &mut Vec<RawStep>,
-) {
-    if is_file_path(target_path) {
-        steps.push(RawStep {
-            op: "gzip_compress".to_string(),
-            args: StepArgs::None,
-        });
-    } else {
-        steps.push(RawStep {
-            op: "walk_tree".to_string(),
-            args: StepArgs::None,
-        });
-        steps.push(RawStep {
-            op: "pack_archive".to_string(),
-            args: StepArgs::None,
-        });
-    }
-}
 
 /// Check if a path looks like a file (has an extension).
 fn is_file_path(path: &str) -> bool {
@@ -1030,5 +1032,207 @@ mod tests {
         let ops: Vec<&str> = plan.steps.iter().map(|s| s.op.as_str()).collect();
         assert!(ops.contains(&"walk_tree"));
         assert!(ops.contains(&"find_matching"));
+    }
+
+    // -- Recipe system tests --
+
+    /// Helper: build an IR with a single action step and compile it.
+    fn compile_action(action: &str, params: HashMap<String, String>) -> CompileResult {
+        use crate::nl::intent_ir::{IntentIR, IRStep, IRInput, IRSelector};
+
+        let ir = IntentIR {
+            output: "Any".to_string(),
+            inputs: vec![IRInput {
+                name: "path".to_string(),
+                type_expr: "Dir".to_string(),
+                selector: IRSelector { scope: None },
+            }],
+            steps: vec![IRStep {
+                action: action.to_string(),
+                input_refs: vec![],
+                output_ref: "result".to_string(),
+                params,
+            }],
+            constraints: vec![],
+            acceptance: vec![],
+            score: 1.0,
+        };
+        compile_ir(&ir)
+    }
+
+    fn expect_ops(action: &str, params: HashMap<String, String>) -> Vec<String> {
+        match compile_action(action, params) {
+            CompileResult::Ok(plan) => plan.steps.iter().map(|s| s.op.clone()).collect(),
+            other => panic!("expected Ok for '{}', got: {:?}", action, other),
+        }
+    }
+
+    #[test]
+    fn test_recipe_select() {
+        let ops = expect_ops("select", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree", "find_matching"]);
+    }
+
+    #[test]
+    fn test_recipe_retrieve() {
+        let ops = expect_ops("retrieve", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree", "find_matching"]);
+    }
+
+    #[test]
+    fn test_recipe_traverse() {
+        let ops = expect_ops("traverse", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree"]);
+    }
+
+    #[test]
+    fn test_recipe_enumerate() {
+        let ops = expect_ops("enumerate", HashMap::new());
+        assert_eq!(ops, vec!["list_dir"]);
+    }
+
+    #[test]
+    fn test_recipe_decompress() {
+        let ops = expect_ops("decompress", HashMap::new());
+        assert_eq!(ops, vec!["extract_archive"]);
+    }
+
+    #[test]
+    fn test_recipe_compress_dir() {
+        // No file path in scope → directory compress
+        let ops = expect_ops("compress", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree", "pack_archive"]);
+    }
+
+    #[test]
+    fn test_recipe_compress_file() {
+        use crate::nl::intent_ir::{IntentIR, IRStep, IRInput, IRSelector, IRScope};
+
+        let ir = IntentIR {
+            output: "Any".to_string(),
+            inputs: vec![IRInput {
+                name: "file".to_string(),
+                type_expr: "File".to_string(),
+                selector: IRSelector {
+                    scope: Some(IRScope { dir: "~/report.txt".to_string(), recursive: false }),
+                },
+            }],
+            steps: vec![IRStep {
+                action: "compress".to_string(),
+                input_refs: vec![],
+                output_ref: "result".to_string(),
+                params: HashMap::new(),
+            }],
+            constraints: vec![],
+            acceptance: vec![],
+            score: 1.0,
+        };
+        match compile_ir(&ir) {
+            CompileResult::Ok(plan) => {
+                let ops: Vec<&str> = plan.steps.iter().map(|s| s.op.as_str()).collect();
+                assert_eq!(ops, vec!["gzip_compress"]);
+            }
+            other => panic!("expected Ok, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_recipe_search_text() {
+        let ops = expect_ops("search_text", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree", "search_content"]);
+    }
+
+    #[test]
+    fn test_recipe_deduplicate() {
+        let ops = expect_ops("deduplicate", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree", "find_duplicates"]);
+    }
+
+    #[test]
+    fn test_recipe_count() {
+        let ops = expect_ops("count", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree", "count_entries"]);
+    }
+
+    #[test]
+    fn test_recipe_order_prepends_walk_tree() {
+        // When order is the first step, walk_tree is prepended
+        let ops = expect_ops("order", HashMap::new());
+        assert_eq!(ops, vec!["walk_tree", "sort_by"]);
+    }
+
+    #[test]
+    fn test_recipe_order_sort_mode_mtime_desc() {
+        let mut params = HashMap::new();
+        params.insert("by".to_string(), "modification_time".to_string());
+        params.insert("direction".to_string(), "descending".to_string());
+        match compile_action("order", params) {
+            CompileResult::Ok(plan) => {
+                let sort = plan.steps.iter().find(|s| s.op == "sort_by").unwrap();
+                match &sort.args {
+                    StepArgs::Scalar(mode) => assert_eq!(mode, "mtime_desc"),
+                    other => panic!("expected Scalar, got: {:?}", other),
+                }
+            }
+            other => panic!("expected Ok, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_recipe_order_sort_mode_size() {
+        let mut params = HashMap::new();
+        params.insert("by".to_string(), "size".to_string());
+        params.insert("direction".to_string(), "ascending".to_string());
+        match compile_action("order", params) {
+            CompileResult::Ok(plan) => {
+                let sort = plan.steps.iter().find(|s| s.op == "sort_by").unwrap();
+                match &sort.args {
+                    StepArgs::Scalar(mode) => assert_eq!(mode, "size"),
+                    other => panic!("expected Scalar, got: {:?}", other),
+                }
+            }
+            other => panic!("expected Ok, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_recipe_single_ops() {
+        // Test all single-op recipes
+        assert_eq!(expect_ops("read", HashMap::new()), vec!["read_file"]);
+        assert_eq!(expect_ops("delete", HashMap::new()), vec!["delete"]);
+        assert_eq!(expect_ops("copy", HashMap::new()), vec!["copy"]);
+        assert_eq!(expect_ops("move", HashMap::new()), vec!["move_entry"]);
+        assert_eq!(expect_ops("rename", HashMap::new()), vec!["rename"]);
+        assert_eq!(expect_ops("compare", HashMap::new()), vec!["diff"]);
+        assert_eq!(expect_ops("checksum", HashMap::new()), vec!["checksum"]);
+        assert_eq!(expect_ops("download", HashMap::new()), vec!["download"]);
+    }
+
+    #[test]
+    fn test_recipe_unknown_action_falls_through() {
+        // Unknown action should NOT match a recipe — falls through to error
+        match compile_action("nonexistent_action_xyz", HashMap::new()) {
+            CompileResult::Error(_) => {} // expected
+            other => panic!("expected Error for unknown action, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_recipe_select_with_pattern() {
+        let mut params = HashMap::new();
+        params.insert("pattern".to_string(), "*.pdf".to_string());
+        match compile_action("select", params) {
+            CompileResult::Ok(plan) => {
+                let filter = plan.steps.iter().find(|s| s.op == "find_matching").unwrap();
+                match &filter.args {
+                    StepArgs::Map(m) => {
+                        let pat = m.get("pattern").and_then(|v| v.as_str()).unwrap();
+                        assert_eq!(pat, "*.pdf");
+                    }
+                    other => panic!("expected Map, got: {:?}", other),
+                }
+            }
+            other => panic!("expected Ok, got: {:?}", other),
+        }
     }
 }

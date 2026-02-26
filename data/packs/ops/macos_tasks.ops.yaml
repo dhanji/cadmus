@@ -77,7 +77,7 @@ ops:
         (for-each
           (lambda (f)
             (let* ([full (string-append dir "/" f)]
-                   [date (string-trim (shell-result (string-append "stat -f '%Sm' -t '%Y-%m-%d_%H%M%S' " (shell-quote full))))]
+                   [date (string-trim (shell-exec (string-append "stat -f '%Sm' -t '%Y-%m-%d_%H%M%S' " (shell-quote full))))]
                    [new-name (string-append dir "/" date "_" f)])
               (when (not (equal? full new-name))
                 (shell-exec (string-append "mv " (shell-quote full) " " (shell-quote new-name))))))
@@ -157,7 +157,7 @@ ops:
                [dupes '()])
           (for-each
             (lambda (f)
-              (let ([h (string-trim (shell-result (string-append "shasum -a 256 " (shell-quote f))))])
+              (let ([h (string-trim (shell-exec (string-append "shasum -a 256 " (shell-quote f))))])
                 (let ([key (car (string-split h "  "))])
                   (if (hash-has-key? seen key)
                       (set! dupes (cons f dupes))
@@ -189,7 +189,78 @@ ops:
     input_names: [src, dest]
     racket_body: |
       (define (backup-timestamped src dest)
-        (let* ([ts (string-trim (shell-result "date +%Y%m%d_%H%M%S"))]
+        (let* ([ts (string-trim (shell-exec "date +%Y%m%d_%H%M%S"))]
                [base (path->string (file-name-from-path (string->path src)))]
                [target (string-append dest "/" base "_backup_" ts)])
           (shell-exec (string-append "cp -a " (shell-quote src) " " (shell-quote target)))))
+
+  # =========================================================================
+  # Git add — stage files for commit
+  # =========================================================================
+  - name: git_add
+    racket_symbol: "git-add"
+    inputs: ["Repo"]
+    output: "StagingArea"
+    description: "(git-add files) — stage files for commit"
+    input_names: [files]
+    racket_body: |
+      (define (git-add files)
+        (shell-exec (string-append "git add " (shell-quote files))))
+
+  # =========================================================================
+  # Git commit — create a commit from staged changes
+  # =========================================================================
+  - name: git_commit
+    racket_symbol: "git-commit"
+    inputs: ["StagingArea"]
+    output: "Commit"
+    description: "(git-commit message) — create a commit from staged changes"
+    input_names: [message]
+    racket_body: |
+      (define (git-commit message)
+        (shell-exec (string-append "git commit -m " (shell-quote message))))
+
+  # =========================================================================
+  # Git push — push commits to remote
+  # =========================================================================
+  - name: git_push
+    racket_symbol: "git-push"
+    inputs: ["Commit"]
+    output: "Unit"
+    description: "(git-push remote branch) — push commits to remote"
+    input_names: [remote, branch]
+    racket_body: |
+      (define (git-push remote branch)
+        (shell-exec (string-append "git push " (shell-quote remote) " " (shell-quote branch))))
+
+  # =========================================================================
+  # Open file — open with default application (macOS)
+  # =========================================================================
+  - name: open_file
+    racket_symbol: "open-file"
+    inputs: ["Path"]
+    output: "Unit"
+    description: "(open-file path) — open file/folder with default application"
+    input_names: [path]
+    racket_body: |
+      (define (open-file path)
+        (let ([p (if (string-prefix? path "~/")
+                     (string-append (path->string (find-system-path 'home-dir)) (substring path 1))
+                     path)])
+          (shell-exec (string-append "open " (shell-quote p)))))
+
+  # =========================================================================
+  # Sync — rsync directory to destination
+  # =========================================================================
+  - name: sync
+    racket_symbol: "sync-dir"
+    inputs: ["Dir(Bytes)", "Path"]
+    output: "Dir(Bytes)"
+    description: "(sync-dir src dest) — synchronize directory to destination"
+    input_names: [src, dest]
+    racket_body: |
+      (define (sync-dir src dest)
+        (let ([d (if (string-prefix? dest "~/")
+                     (string-append (path->string (find-system-path 'home-dir)) (substring dest 1))
+                     dest)])
+          (shell-exec (string-append "rsync -a " (shell-quote src) " " (shell-quote d)))))

@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use crate::registry::{Literal, OperationRegistry, TypeId};
+use crate::plan::{PlanDef, PlanInput, RawStep, StepArgs, StepParam};
 
 // ---------------------------------------------------------------------------
 // Generic Goal — what the planner must produce
@@ -748,6 +749,109 @@ fn plan_expr_recursive(
 }
 
 // ---------------------------------------------------------------------------
+// ExprPlanNode → PlanDef lowering
+// ---------------------------------------------------------------------------
+
+/// Lower an `ExprPlanNode` tree into a flat `PlanDef` suitable for the plan
+/// compiler and Racket codegen.
+///
+/// The tree is walked depth-first. Each `Op` node becomes a `RawStep`.
+/// `Leaf` nodes become `PlanInput` entries. `Map` nodes become steps with
+/// `:each` mode. `Fold` nodes become steps (the plan compiler handles
+/// fold semantics via the op's associative property).
+///
+/// `plan_name` is used as the PlanDef name. `params` is an optional map
+/// of extra parameters to attach to specific op names (e.g., pattern for
+/// find_matching, key for sort_by).
+pub fn lower_to_plan_def(
+    node: &ExprPlanNode,
+    plan_name: &str,
+    params: &HashMap<String, HashMap<String, String>>,
+) -> PlanDef {
+    let mut inputs: Vec<PlanInput> = Vec::new();
+    let mut steps: Vec<RawStep> = Vec::new();
+    let mut bindings: HashMap<String, String> = HashMap::new();
+    let mut seen_inputs: HashSet<String> = HashSet::new();
+
+    lower_node(node, &mut inputs, &mut steps, &mut bindings, &mut seen_inputs, params);
+
+    PlanDef {
+        name: plan_name.to_string(),
+        inputs,
+        output: None,
+        steps,
+        bindings,
+    }
+}
+
+fn lower_node(
+    node: &ExprPlanNode,
+    inputs: &mut Vec<PlanInput>,
+    steps: &mut Vec<RawStep>,
+    bindings: &mut HashMap<String, String>,
+    seen_inputs: &mut HashSet<String>,
+    params: &HashMap<String, HashMap<String, String>>,
+) {
+    match node {
+        ExprPlanNode::Op { op_name, children, .. } => {
+            // Lower children first (depth-first → pipeline order)
+            for child in children {
+                lower_node(child, inputs, steps, bindings, seen_inputs, params);
+            }
+            // Build step args from params table
+            let args = if let Some(op_params) = params.get(op_name.as_str()) {
+                StepArgs::from_string_map(op_params.clone())
+            } else {
+                StepArgs::None
+            };
+            steps.push(RawStep {
+                op: op_name.clone(),
+                args,
+            });
+        }
+        ExprPlanNode::Leaf { key, output_type, .. } => {
+            if !seen_inputs.contains(key) {
+                seen_inputs.insert(key.clone());
+                let type_hint = output_type.to_string();
+                inputs.push(PlanInput::typed(&**key, type_hint));
+            }
+        }
+        ExprPlanNode::Map { op_name, child, .. } => {
+            // Lower the child (produces the Seq input)
+            lower_node(child, inputs, steps, bindings, seen_inputs, params);
+            // The mapped op gets :each mode
+            let args = if let Some(op_params) = params.get(op_name.as_str()) {
+                let mut map = op_params.iter()
+                    .map(|(k, v)| (k.clone(), StepParam::Value(v.clone())))
+                    .collect::<HashMap<_, _>>();
+                map.insert("mode".to_string(), StepParam::Value("each".to_string()));
+                StepArgs::Map(map)
+            } else {
+                StepArgs::Scalar("each".to_string())
+            };
+            steps.push(RawStep {
+                op: op_name.clone(),
+                args,
+            });
+        }
+        ExprPlanNode::Fold { op_name, child, .. } => {
+            // Lower the child (produces the Seq input)
+            lower_node(child, inputs, steps, bindings, seen_inputs, params);
+            // Fold step
+            let args = if let Some(op_params) = params.get(op_name.as_str()) {
+                StepArgs::from_string_map(op_params.clone())
+            } else {
+                StepArgs::None
+            };
+            steps.push(RawStep {
+                op: op_name.clone(),
+                args,
+            });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -1273,5 +1377,84 @@ mod tests {
             ExprPlanNode::Fold { op_name, .. } => assert_eq!(op_name, "concat_seq"),
             other => panic!("expected Fold node, got: {}", other),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // lower_to_plan_def tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_lower_single_op() {
+        let node = ExprPlanNode::Op {
+            op_name: "walk_tree".into(),
+            output_type: TypeExpr::seq(TypeExpr::prim("Entry")),
+            children: vec![ExprPlanNode::Leaf {
+                key: "path".into(),
+                output_type: TypeExpr::prim("Dir"),
+            }],
+        };
+        let def = lower_to_plan_def(&node, "test_plan", &HashMap::new());
+        assert_eq!(def.name, "test_plan");
+        assert_eq!(def.inputs.len(), 1);
+        assert_eq!(def.inputs[0].name, "path");
+        assert_eq!(def.steps.len(), 1);
+        assert_eq!(def.steps[0].op, "walk_tree");
+    }
+
+    #[test]
+    fn test_lower_two_step_pipeline() {
+        let node = ExprPlanNode::Op {
+            op_name: "filter".into(),
+            output_type: TypeExpr::seq(TypeExpr::prim("Entry")),
+            children: vec![ExprPlanNode::Op {
+                op_name: "walk_tree".into(),
+                output_type: TypeExpr::seq(TypeExpr::prim("Entry")),
+                children: vec![ExprPlanNode::Leaf {
+                    key: "path".into(),
+                    output_type: TypeExpr::prim("Dir"),
+                }],
+            }],
+        };
+        let mut params = HashMap::new();
+        let mut filter_params = HashMap::new();
+        filter_params.insert("pattern".into(), "*.pdf".into());
+        params.insert("filter".into(), filter_params);
+
+        let def = lower_to_plan_def(&node, "find_pdfs", &params);
+        assert_eq!(def.steps.len(), 2);
+        assert_eq!(def.steps[0].op, "walk_tree");
+        assert_eq!(def.steps[1].op, "filter");
+        match &def.steps[1].args {
+            StepArgs::Map(m) => assert!(m.contains_key("pattern")),
+            other => panic!("expected Map args, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_lower_map_node() {
+        let node = ExprPlanNode::Map {
+            op_name: "read_file".into(),
+            elem_output: TypeExpr::prim("Text"),
+            child: Box::new(ExprPlanNode::Leaf {
+                key: "files".into(),
+                output_type: TypeExpr::seq(TypeExpr::prim("File")),
+            }),
+        };
+        let def = lower_to_plan_def(&node, "read_all", &HashMap::new());
+        assert_eq!(def.steps.len(), 1);
+        assert_eq!(def.steps[0].op, "read_file");
+        assert_eq!(def.steps[0].args, StepArgs::Scalar("each".into()));
+    }
+
+    #[test]
+    fn test_lower_leaf_only() {
+        let node = ExprPlanNode::Leaf {
+            key: "data".into(),
+            output_type: TypeExpr::prim("Bytes"),
+        };
+        let def = lower_to_plan_def(&node, "empty", &HashMap::new());
+        assert_eq!(def.steps.len(), 0);
+        assert_eq!(def.inputs.len(), 1);
+        assert_eq!(def.inputs[0].name, "data");
     }
 }

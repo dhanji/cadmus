@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-26T02:00:00Z | Size: compacted
+> Updated: 2026-02-26T02:59:08Z | Size: 20.9k chars
 
 ## Core Architecture
 
@@ -300,3 +300,14 @@ normalize → typo_correct → re-normalize → lexicon approve/reject/explain �
 - `RUNBOOK.md` — Machine-executable guide for adding new domains (6 phases, 3 appendices)
 - `BUGS.md` — 16 bugs: 14 fixed, 1 deferred (BUG-009 multi-input ops), 1 by-design (BUG-012)
 - `SEMANTICS.md` — Semantic correctness analysis
+
+### Double-Define Codegen Fix (plan `fix-double-define-codegen`)
+- `src/racket_executor.rs:1404-1412` — `emit_racket_body_defines()` now checks `body.trim().starts_with("(define ")` and emits verbatim if so
+- `src/racket_executor.rs:1438-1446` — Same fix in `emit_raw_step_defines()`
+- Algorithm ops (bare expression bodies) still get wrapped in `(define (fn params) body)`
+- macOS task ops (full define bodies) emitted verbatim — no double nesting
+- `data/packs/ops/macos_tasks.ops.yaml:198-266` — 5 new ops: git_add, git_commit, git_push, open_file (tilde expansion), sync (rsync -a, tilde expansion)
+- `data/packs/ops/macos_tasks.ops.yaml` — Fixed `shell-result` → `shell-exec` in 3 ops (rename_by_date, find_duplicates_by_hash, backup_timestamped)
+- `tests/macos_tasks_tests.rs` — 21 integration tests: codegen validity, no double-define, command correctness, single-step displayln, algorithm regression
+- All 22 macOS task plans now produce valid Racket codegen (was 8/22)
+- 1411 total tests, 0 failures, 65 ignored

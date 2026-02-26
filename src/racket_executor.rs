@@ -1403,10 +1403,16 @@ fn emit_racket_body_defines(
             if let Some(poly) = registry.get_poly(&step.op) {
                 if let Some(body) = &poly.racket_body {
                     emitted.insert(step.op.clone());
-                    let fn_name = poly.racket_symbol.as_deref().unwrap_or(&step.op);
-                    let param_list = poly.input_names.join(" ");
-                    script.push_str(&format!("\n(define ({} {})\n  {})\n",
-                        fn_name, param_list, body.trim()));
+                    let trimmed = body.trim();
+                    if trimmed.starts_with("(define ") || trimmed.starts_with("(define(") {
+                        // Body already contains its own (define ...) — emit verbatim
+                        script.push_str(&format!("\n{}\n", trimmed));
+                    } else {
+                        let fn_name = poly.racket_symbol.as_deref().unwrap_or(&step.op);
+                        let param_list = poly.input_names.join(" ");
+                        script.push_str(&format!("\n(define ({} {})\n  {})\n",
+                            fn_name, param_list, trimmed));
+                    }
                 }
             }
         }
@@ -1428,10 +1434,15 @@ fn emit_raw_step_defines(
             if let Some(poly) = registry.get_poly(&step.op) {
                 if let Some(body) = &poly.racket_body {
                     emitted.insert(step.op.clone());
-                    let fn_name = poly.racket_symbol.as_deref().unwrap_or(&step.op);
-                    let param_list = poly.input_names.join(" ");
-                    script.push_str(&format!("\n(define ({} {})\n  {})\n",
-                        fn_name, param_list, body.trim()));
+                    let trimmed = body.trim();
+                    if trimmed.starts_with("(define ") || trimmed.starts_with("(define(") {
+                        script.push_str(&format!("\n{}\n", trimmed));
+                    } else {
+                        let fn_name = poly.racket_symbol.as_deref().unwrap_or(&step.op);
+                        let param_list = poly.input_names.join(" ");
+                        script.push_str(&format!("\n(define ({} {})\n  {})\n",
+                            fn_name, param_list, trimmed));
+                    }
                 }
             }
         }
