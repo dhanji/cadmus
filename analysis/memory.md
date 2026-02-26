@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-26T02:59:08Z | Size: 20.9k chars
+> Updated: 2026-02-26T07:28:48Z | Size: 22.0k chars
 
 ## Core Architecture
 
@@ -311,3 +311,16 @@ normalize → typo_correct → re-normalize → lexicon approve/reject/explain �
 - `tests/macos_tasks_tests.rs` — 21 integration tests: codegen validity, no double-define, command correctness, single-step displayln, algorithm regression
 - All 22 macOS task plans now produce valid Racket codegen (was 8/22)
 - 1411 total tests, 0 failures, 65 ignored
+
+### Type-Directed Intent Compiler (commit `4381400`)
+- `src/nl/intent_compiler.rs` — Replaced hardcoded `match action` block with declarative recipe system
+  - `ActionRecipe { ops: &[&str] }` — static slice of op names per action
+  - `action_recipe(action, ir)` — maps 18 action labels to op sequences, context-dependent for compress
+  - `try_action_recipe(action, ir_step, ir, prior_steps)` — applies recipe, extracts patterns, handles order needing walk_tree
+  - `build_recipe_step_args(op, ir_step, pattern)` — builds StepArgs per op (sort_by reads by+direction→Scalar mode)
+  - `extract_pattern_from_ir(ir_step, ir)` — resolves concept→pattern from IR params
+  - Dead code deleted: `compile_select_step`, `compile_order_step`, `compile_compress_step` (102 lines)
+- `src/generic_planner.rs:752-849` — `lower_to_plan_def()` converts ExprPlanNode tree to flat PlanDef
+- 18 action labels: select, retrieve, traverse, enumerate, compress, decompress, search_text, deduplicate, count, order, read, delete, copy, move, rename, compare, checksum, download
+- 39 intent_compiler tests (23 existing + 16 new recipe tests)
+- 1431 total tests, 0 failures
