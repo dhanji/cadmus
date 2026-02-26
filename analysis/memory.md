@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-25T22:52:16Z | Size: 83.3k chars
+> Updated: 2026-02-26T01:10:03Z | Size: 85.2k chars
 
 ### Reasoning Engine Project (`/Users/dhanji/src/re`)
 - `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
@@ -1038,3 +1038,21 @@ plan-name:
 - **Bugfix**: `data/plans/algorithms/string/longest_repeating_substring.sexp` — description no longer mentions "suffix array" (caused wrong plan match)
 - **Total: 1337 tests passed**, 0 failed, 65 ignored
 - **NL autoregression: 268/268 (100%)**
+
+### Command Recipe Lookup (commit `b269e77`)
+- `src/nl/recipes.rs` [1-430] — `RecipeIndex`, `Recipe` struct, `recipe_index()` OnceLock singleton
+  - `RecipeIndex::build(pack)` — builds from CLI fact pack: base_command + submode_* properties + description keywords + task-oriented keyword mapping
+  - `RecipeIndex::lookup(tokens)` — scores recipes by distinct token matches (min 2), fuzzy matching (contains with length guards), submode bonus
+  - `build_task_keywords()` — 40+ CLI command/submode → natural language keyword mappings
+  - `score_recipe()` — distinct token matching, fuzzy keyword match, coverage bonus, submode preference
+  - `fuzzy_keyword_match()` — exact, token-contains-keyword (keyword >= 4 chars), keyword-contains-token
+- `src/nl/mod.rs:127-139` — Recipe query check runs BEFORE try_explain (avoids what/how trigger interception)
+- `src/nl/mod.rs:549-660` — `try_recipe_query()`, `handle_recipe_query()`, pattern detection helpers
+  - 6 patterns: "give me the command to", "whats the command for", "what is the command to", "show me the command for", "what command do I use to", "how do I X from terminal/command line"
+  - `strip_prefix_seq()`, `strip_leading_preps()`, `has_suffix()`, `strip_terminal_suffix()`
+- `data/packs/facts/macos_cli.facts.yaml` — 4 new entities (caffeinate, defaults, fswatch, launchctl), 7 new submodes
+- `data/nl/nl_dictionary.yaml` — 25 new words for recipe domain
+- `tests/recipe_tests.rs` — 32 integration tests (20 prompts + 4 alt phrasings + 4 negative + 2 regression + 2 format)
+- **Key design**: "pasta" → "paste" by SymSpell correction was a false positive; fixed by counting distinct token matches instead of keyword matches
+- **Key design**: Recipe check must run before try_explain because "what" and "how" are explain triggers
+- **1390 total tests**, 0 failures, 65 ignored, NL autoregression 268/268 (100%)
