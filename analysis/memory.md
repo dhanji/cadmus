@@ -1,1058 +1,302 @@
 # Workspace Memory
-> Updated: 2026-02-26T01:10:03Z | Size: 85.2k chars
-
-### Reasoning Engine Project (`/Users/dhanji/src/re`)
-- `src/types.rs` — Core type system: OutputType(6), OperationKind(6 with typed I/O), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
-- `src/fact_pack.rs` — YAML fact pack loader with FactPackIndex (indexed lookups by axis/entity/claim)
-- `data/putin_stalin.yaml` — Putin vs Stalin fact pack: 7 axes, 28 claims, 17 evidence items, 3 relations, 7 uncertainties
-- `src/theory.rs` — Theory layer: transitive closure, contradiction detection, hierarchy normalization, claim normalization
-- `src/planner.rs` — Planner: goal → obligations → operations, completeness validation, gap detection
-- `src/pipeline.rs` — Execution pipeline: load → enrich → plan → execute → assemble. 6 operation executors.
-- `src/main.rs` — CLI demo entry point
-- `tests/integration.rs` — 9 integration tests covering structural completeness, type correctness, theory features
-- 23 total tests (14 unit + 9 integration), all passing
-
-### Derived Uncertainties Feature
-- `src/types.rs` [164..252] - `DerivedUncertainty` enum with 4 variants: EvidenceGap, OrdinalBoundary, CrossAxisTension, PropertyClaimMismatch. Display impl, axis()/axes() helpers.
-- `src/fact_pack.rs` [32] - `Axis.polarity: Option<String>` — optional polarity field for tension derivation
-- `src/theory.rs` [57..58] - `TheoryContext.derived_uncertainties: Vec<DerivedUncertainty>`
-- `src/theory.rs` [112..123] - OrdinalBoundary gap=0 derivation
-- `src/theory.rs` [163..173] - OrdinalBoundary gap=1 derivation
-- `src/theory.rs` [218..250] - EvidenceGap derivation
-- `src/theory.rs` [252..296] - CrossAxisTension derivation from polarity metadata
-- `src/theory.rs` [298..342] - PropertyClaimMismatch derivation
-- `src/pipeline.rs` [348..398] - `execute_surface_uncertainty()` merges 📝 authored + 🔧 derived
-- `src/planner.rs` [157..178] - Uncertainty step always planned (no longer conditional)
-- `data/tiramisu_cheesecake.yaml` - Dessert fact pack with polarity values on preparation (cost) and versatility (capability)
-- 44 total tests (26 unit + 18 integration), all passing
-
-### Strategy Pattern Feature - Codebase Analysis
-- **Current architecture**: `pipeline::run()` is the entry point, hardcoded to fact-pack comparison
-- **Current planner** (`src/planner.rs`): Hardcoded per-axis obligation generation, not generic type-directed search
-- **Current types** (`src/types.rs`): `OutputType` (6 variants), `OperationKind` (6 variants) with `output_type()` and `input_types()` methods
-- **Current theory** (`src/theory.rs`): `TheoryContext` with comparisons, divergences, hierarchies, normalized_claims, derived_uncertainties
-- **Current pipeline** (`src/pipeline.rs`): load → enrich → plan → execute → assemble; 6 operation executors
-- **Test baseline**: 44 tests (26 unit + 18 integration), all passing
-- **New modules planned**: `src/registry.rs` (op registry + typed signatures), `src/generic_planner.rs` (type-directed backtracking), `src/algebra.rs` (canonicalization + inference), `src/strategy.rs` (Strategy trait + ComparisonStrategy), `src/coding_strategy.rs` (coding domain strategy)
-
-### Strategy Pattern Feature - Complete
-- **New modules**: `src/registry.rs`, `src/generic_planner.rs`, `src/algebra.rs`, `src/strategy.rs`, `src/coding_strategy.rs`
-- **registry.rs**: TypeId (string-based), Literal, AlgebraicProperties, RewriteRule, OpSignature, ExecContext/ExecFn, OpEntry, OperationRegistry
-- **generic_planner.rs**: GenericGoal (output type + constraints), PlanNode (Op/Leaf DAG), PlanError, type-directed backtracking with cycle detection
-- **algebra.rs**: canonicalize() (flatten assoc, sort comm, drop identity, collapse absorbing, dedup idempotent), rewrite rules to fixpoint, dedup_plans(), infer() with Transitive/Symmetric/Reflexive rules, contradiction detection
-- **strategy.rs**: ReasonerStrategy trait, ComparisonStrategy wrapping existing pipeline, run_strategy() generic runner, run_comparison() for fact-pack mode
-- **coding_strategy.rs**: CodingStrategy with 6 ops (parse_source→AST, analyze_types→TypeSignature, detect_smells→CodeSmell, plan_refactoring→Refactoring, generate_tests→TestCase, compose(associative)), EXAMPLE_LONG_FUNCTION, EXAMPLE_DUPLICATE_CODE
-- **pipeline.rs**: Reduced to thin delegation to strategy::run_comparison()
-- **Test count**: 111 total (79 unit + 14 new integration + 18 original integration)
-- **Backward compatible**: All 18 original integration tests pass unchanged
-
-### Filesystem Type Grammar Feature (plan `filesystem-type-grammar`, committed)
-- `src/type_expr.rs` [1..865] — `TypeExpr` enum (Primitive/Constructor/Var), `parse()`, `Display`, `unify()` with occurs check, `Substitution` with compose. 40 unit tests.
-- `src/registry.rs` [367..538] — `PolyOpSignature`, `PolyOpEntry`, `PolyOpMatch`, `register_poly()`, `ops_for_output_expr()` with freshening+unification. `poly_ops: Vec<PolyOpEntry>` field on `OperationRegistry`. 4 new tests.
-- `src/generic_planner.rs` [413..690] — `ExprGoal`, `ExprLiteral`, `ExprPlanNode` (Op/Leaf/Map/Fold), `plan_expr()` with unification-based backtracking, map insertion (Seq(A)→Seq(B)), fold insertion (Seq(B)→B). 7 new tests.
-- `src/fs_types.rs` [1..382] — `build_fs_registry()` with 15 polymorphic ops: list_dir, read_file, write_file, stat, walk_tree, filter, sort_by, extract_archive, pack_archive, concat_seq, rename, move_entry, search_content, find_matching, map_entries. 11 tests.
-- `data/macos_fs.yaml` [1..356] — 1 entity, 6 axes, 24 claims. Tools: ls/cat/mv/find/grep/sort/sed/zip/unzip/tar/ditto/mdfind/xattr/brew/tree.
-- `src/fs_strategy.rs` [1..402] — `FilesystemStrategy`, `DryRunTrace`, `TraceStep`, `StepKind`. Dry-run only (no shell-out). 7 tests.
-- `tests/fs_integration.rs` [1..299] — 7 integration tests: CBZ repack, zip round-trip, dir walk, content search, rename/sort, no-inputs error, registry check.
-- `src/main.rs` — Updated to v0.3.0 with Strategy 3 filesystem dry-run demo.
-- **Total: 187 tests** (148 unit + 7 fs_integration + 14 generic_planner + 18 original), all passing, zero warnings.
-- **Key design**: TypeExpr is additive — existing TypeId-based strategies unchanged. Poly registry sits alongside monomorphic registry.
-
-### Plan YAML DSL
-- `src/plan.rs` [1-1200] - `PlanDef`, `RawStep`, `StepArgs`, `CompiledStep`, `CompiledPlan`, `PlanError`
-  - `parse_plan()` - custom serde deserializer for step syntax (bare string / scalar / map)
-  - `compile_plan()` - threads types through step chain, each mode, multi-input unification
-  - `execute_plan()` - produces `DryRunTrace` from compiled plan
-  - `run_plan()` / `run_plan_str()` - convenience functions
-  - `infer_input_type()` - heuristic type inference from input name/value
-- `data/plans/` - example plan YAML files (find_pdfs, extract_cbz, find_large_files)
-- `tests/plan_tests.rs` - 11 integration tests
-- `src/main.rs` - `--plan <path>` CLI flag, backward compatible no-args demo
-- Total tests: 221 (171 unit + 7 fs_integration + 14 generic_planner + 18 integration + 11 plan)
-
-### YAML Ops Pack System
-- `src/registry.rs` [546-695] - `load_ops_pack_str()`, `load_ops_pack()`, `load_ops_pack_str_into()`, `OpsPack`, `OpDef`, `OpDefProperties`, `OpsPackError`
-- `data/fs_ops.yaml` - 49 filesystem ops (source of truth, no Rust recompilation needed)
-- `data/comparison_ops.yaml` - 6 comparison reasoning ops
-- `data/coding_ops.yaml` - 6 code analysis ops
-- `src/fs_types.rs` uses `include_str!("../data/fs_ops.yaml")` as fallback + disk-first loading
-
-### Option(a) Constructor
-- `src/type_expr.rs:84-87` - `fn option(inner: TypeExpr) -> Self` — first-class constructor
-
-### walk_tree Change
-- `walk_tree` now returns `Seq(Entry(Name, a))` (flat)
-- `walk_tree_hierarchy` returns `Tree(Entry(Name, a))` (preserves hierarchy)
-- `flatten_tree` converts `Tree(a) → Seq(a)`
-
-### Test Counts
-- 263 total tests after Phases 1-5 commit (bbaa444)
-- 187 unit + 27 fs_integration + 14 reasoner_tests + 18 tiramisu + 17 plan
-
-### Plan Type Inference
-- `src/plan.rs:562` - `infer_input_type()` now handles URLs (http/https/ftp), .log/.csv/.json/.yaml/.yml/.toml/.xml/.html/.css/.sh extensions
-
-### Documentation Files
-- `ARCHITECTURE.md` [1..340] — concise architecture description: type system, registry (mono+poly), YAML ops packs, fact packs, both planners, strategies, algebra, theory, plan DSL, module map
-- `PLAYBOOK.md` [1..705] — step-by-step guide: adding ops packs, fact packs, plans, common mistakes, database domain worked example, quick reference schemas
-
-### Power Tools Pack Feature (plan `power-tools-pack`)
-- `src/fact_pack.rs` [131..213] — `FactPack::merge()` with entity/axis/relation dedup, `FactPack::merge_all()`, `FactPack::empty()`, `Relation::id()` helper
-- `src/fact_pack.rs` [268..296] — `load_fact_pack_str()`, `load_fact_packs()` multi-path loader
-- `src/types.rs` [139..166] — `Goal.fact_pack_paths: Vec<String>` (replaces `fact_pack_path`), `Goal::with_single_fact_pack()` convenience
-- `data/power_tools_ops.yaml` — 64 ops: 20 git, 6 tmux/screen, 8 jq/yq/csv, 8 awk/sed/cut/tr/paste/tee/column, 10 ps/kill/df/du/lsof/file/uname/uptime, 6 ssh/scp/wget/nc/ping/dig, 6 gzip/xz/base64/openssl
-- `data/power_tools.yaml` — 10 entities, 5 axes, 80 claims, 24 evidence, 30+ properties, 8 relations, 5 uncertainties. Entity groups: tmux vs screen, rg vs grep vs ag, jq vs yq, awk vs sed, git solo
-- `data/plans/git_log_search.yaml` — git_log → filter → sort_by
-- `data/plans/process_logs.yaml` — awk_extract → sed_script
-- `src/fs_types.rs` [29..60] — `build_fs_registry()` (fs-only) and `build_full_registry()` (fs+power_tools). Plan system uses full registry.
-- `src/plan.rs` [598..650] — Extended `infer_input_type()` with Repo, File(Json), File(Yaml), File(Csv) types
-- `tests/power_tools_tests.rs` — 20 integration tests (ops, facts, composition)
-- `PLAYBOOK.md` — Added Section 0 (Audit Existing Packs), Section 3a (Fact Pack Composition), Section 6 (Power Tools Worked Example)
-- **Total: 298 tests** (200 unit + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 plan), all passing, zero warnings
-
-### NL UX Layer Feature (plan `nl-ux-layer`)
-- `src/nl/mod.rs` [1..647] — Orchestrator: `process_input()`, `NlResponse` (8 variants: PlanCreated, PlanEdited, Explanation, Approved, Rejected, NeedsClarification, ParamSet, Error), `casual_ack()`, `get_op_explanation()`, `validate_plan_yaml()`
-- `src/nl/normalize.rs` [1..860] — `normalize()`, `NormalizedInput`, `CANONICAL_OPS` (113 ops), `is_canonical_op()`, `build_synonym_table()` (200+ entries), `apply_synonyms()` greedy longest-match, `tokenize()` with path case preservation, `expand_contractions()` (37 patterns), `canonicalize_ordinal()`. 26 tests.
-- `src/nl/typo.rs` [1..518] — `SymSpellDict`, `build_domain_dict()` (~280 words), `correct()`, `correct_tokens()`, `generate_deletes()`, `edit_distance()` (Damerau-Levenshtein). Max edit distance 2, prefix length 7. 21 tests.
-- `src/nl/intent.rs` [1..907] — `Intent` enum (8 variants: CreatePlan, EditStep, ExplainOp, Approve, Reject, AskQuestion, SetParam, NeedsClarification), `EditAction` enum (6 variants), `parse_intent()`, `recognize()`. Closed grammar with ranked patterns. 39 tests.
-- `src/nl/slots.rs` [1..597] — `SlotValue` (7 variants: Path, OpName, StepRef, Pattern, Param, Modifier, Keyword), `StepRef`, `Modifier`, `Anchor`, `ExtractedSlots`, `extract_slots()`, `fuzzy_match_op()`, `edit_distance_bounded()`. 24 tests.
-- `src/nl/dialogue.rs` [1..997] — `FocusStack`, `FocusEntry` (4 variants), `DialogueState`, `DialogueError`, `build_plan()`, `apply_edit()` (skip/remove/add/move/change/insert), `plan_to_yaml()`. 17 tests.
-- `tests/nl_tests.rs` [1..466] — 41 integration tests: 11 diverse phrasings, typo correction, 4 explanations, 7 approve + 4 reject, 3 edits, 3 multi-turn conversations, 5 YAML compilation checks
-- `src/main.rs` — `--chat` mode added (stdin line-by-line NL processing)
-- **Total: 481 tests** (342 unit + 41 nl_integration + 27 fs_integration + 14 generic_planner + 18 integration + 20 power_tools + 19 plan), all passing, zero warnings
-- **Key design**: NL layer always produces PlanDef YAML → feeds through plan::compile_plan() → engine validates and type-checks. Never bypasses the reasoner.
-
-### NL Bugfixes (plan: nl-bugfixes)
-- `src/nl/typo.rs` [337..370] - Added ~60 common English words to SymSpell dictionary to prevent false corrections ("the"→"tee", "thing"→"tee", "that"→"what", "scrap"→"script")
-- `src/nl/slots.rs` [259..310] - `is_path()` expanded: bare filenames with known extensions, trailing-slash dirs, URL-like paths. New `is_file_extension()` with ~60 extensions
-- `src/nl/dialogue.rs` [193..355] - `build_plan()` rewritten: categorizes ops as file/dir/entry/url/git, uses correct input names. New helpers: `is_url_op()`, `is_git_repo_op()`, `is_entry_op()`, `is_file_path()`, `dir_of()`, `filename_of()`
-- `src/plan.rs` [631..643] - Added `textdir` input type → `Dir(File(Text))` for search_content pipelines
-- `src/nl/normalize.rs` [379..395] - Added 7 single-word git synonyms: clone, commit, checkout, merge, fetch, pull, push
-- `src/nl/intent.rs` [384..399] - Compound sentence detection: "skip that, compress X instead" → CreatePlan
-- `src/nl/intent.rs` [214..221] - Added "scrap that/it" to reject patterns
-- `src/nl/intent.rs` [531..546] - Removed "do" from question starters
-- `src/nl/mod.rs` [129..145] - Approve/reject now check state.current_plan before firing
-- 525 total tests, 44 new tests added, all passing, zero warnings
-
-### Red-team findings for NL layer
-- `src/nl/typo.rs` — "mind"→"find" (ed1), "never"→"need" (ed2), "todo"→"good" (ed2 via DL transposition), "fixme" lost. Root cause: these common words aren't in SymSpell dict
-- `src/nl/intent.rs:168-200` — `is_approve()` doesn't match comma-separated phrases like "perfect, ship it" because tokens are ["perfect", "ship", "it"] and multi_approvals has "ship it" not "perfect ship it"
-- `src/nl/intent.rs:202-227` — `is_reject()` has "never mind" but tokens become "need find" after typo correction
-- `src/nl/mod.rs:129-135` — Approve handler doesn't clear `state.current_plan`, allowing double-approve
-- `src/nl/dialogue.rs:485` — `apply_skip` uses `slots.keywords.first()` which returns "skip" (the action word) instead of ".git" (the target)
-- `src/nl/dialogue.rs:668-682` — `resolve_step_index` falls through to op-name lookup when no step_ref, so "remove the step" looks for op "delete" instead of defaulting to last step
-- `src/nl/normalize.rs` — "remove" maps to "delete" (synonym), so "remove the step" becomes "delete the step" in canonical tokens
-
-### Red-team plan (nl-redteam) completed
-- `BUGS.md` — 12 bugs documented, 10 fixed, 1 deferred (multi-input ops), 1 by-design
-- `src/nl/typo.rs` — Added ~20 more words to SymSpell dict (mind, never, todo, fixme, etc.)
-- `src/nl/intent.rs` — Added 12 rejection patterns, compound approval logic with filler phrases
-- `src/nl/mod.rs` — Clear current_plan on approve (fixes double-approve)
-- `src/nl/dialogue.rs` — apply_skip filters 25 action words; apply_remove defaults to last step for action-verb ops
-- `tests/nl_tests.rs` — 21 new red-team integration tests
-- **567 total tests, all passing, zero warnings**
-
-### NL Hardening Phase (plan `nl-hardening`, all 6 items done)
-- `src/nl/intent.rs` [447-460] - Filler prefix skipping in `try_edit()` (also/and/then/now/plus/etc.)
-- `src/nl/intent.rs` [209-213] - Single-word tail check in compound approval (`is_approve()`)
-- `src/nl/slots.rs` [142-144] - 15 conversational fillers added to stopwords in `extract_slots()`
-- `src/plan.rs` [558-590] - `has_known_file_extension()` helper function
-- `src/plan.rs` [665-681] - Image file check + catch-all extension check before directory heuristic
-- `src/nl/dialogue.rs` [379-399] - `is_file_path()` synced with expanded extension list
-- `src/nl/typo.rs` [240-955] - Dictionary expanded from ~388 to ~2000 unique words
-- `BUGS.md` - 16 bugs total: 14 fixed, 1 deferred (BUG-009), 1 by-design (BUG-012)
-- **591 total tests**, all passing, zero warnings
-  - Unit: 406, NL integration: 87, FS integration: 27, Generic planner: 14, Integration: 18, Power tools: 20, Plan: 19
-
-### File Type Dictionary (Phase 5)
-- `data/filetypes.yaml` — 197 entries, 14 categories, YAML-driven single source of truth
-- `src/filetypes.rs` — thin loader, OnceLock singleton, `dictionary()` → `lookup()`, `lookup_by_path()`, `is_known_extension()`, `has_known_extension()`, `extensions_for_category()`, `describe_file_type()`, `all_extensions()`
-- `src/lib.rs:16` — `pub mod filetypes;`
-- `src/plan.rs:553` — `infer_input_type()` now uses `filetypes::dictionary().lookup_by_path()` instead of hardcoded chains
-- `src/nl/slots.rs:308` — `is_file_extension()` delegates to `filetypes::dictionary().is_known_extension()`
-- `src/nl/dialogue.rs:379` — `is_file_path()` delegates to `filetypes::dictionary().has_known_extension()`
-- Three hardcoded extension lists eliminated, replaced with single YAML source
-- 637 total tests (46 new), all passing, zero warnings
-- PLAYBOOK.md updated with Section 8: Adding File Types (Pure YAML — No Rust)
-
-### Phase 6: YAML Externalization (completed)
-- `data/nl/nl_vocab.yaml` — consolidated word lists (synonyms, contractions, ordinals, approvals, rejections, stopwords, filler_phrases, filler_prefixes)
-- `data/nl/nl_dictionary.yaml` — ~2473 frequency-weighted words for SymSpell typo correction
-- `src/nl/vocab.rs` — OnceLock singleton loader, disk-first + include_str! fallback
-- `src/fs_types.rs:65-93` — `get_op_description()` cached from registry, `OP_DESCRIPTIONS` OnceLock
-- `src/nl/normalize.rs:235-260` — `canonical_ops()` derived from registry via OnceLock<HashSet<String>>
-- Key design: display names come from ops YAML `description` field, NOT a separate YAML file
-- Key design: CANONICAL_OPS derived at load time from registry, NOT hardcoded
-- 1337 lines of hardcoded data removed from Rust, 3547 lines of YAML data added
-- 670 total tests, 33 new (19 vocab unit + 14 integration), zero warnings
-
-### Semantic Correctness Audit (Phase 7)
-- `tests/semantic_tests.rs` — 46 integration tests tracing goal→plan→execution across all 4 strategies
-- `SEMANTICS.md` — comprehensive analysis document
-- **Bug fixed**: `src/main.rs` used `build_fs_registry()` instead of `build_full_registry()` in `--plan` CLI mode, breaking power_tools plans (git_log_search, process_logs)
-- **Finding**: Coding strategy's `execute_plan()` in `src/strategy.rs` only returns root node result; intermediate CodeSmell/Refactoring/TypeSignature lost in `assemble()`
-- **Finding**: 3 plan YAMLs have incomplete step sequences: find_large_files (min_size unused), find_duplicates (no dedup), copy_and_organize (no copy step)
-- **Finding**: Polymorphic type system allows `Dir(Bytes)` → `Seq(Entry(Name, File(Image)))` via variable unification — this is by design, not a bug
-- **Total tests**: 716 (all passing, zero warnings)
-- **Commit**: `8754949`
-
-### Shell Executor Module
-- `src/executor.rs` [1-2112] - Full shell executor: `op_to_command()`, `generate_script()`, `run_script()`, `shell_quote()`, `extract_archive_format()`
-  - `ShellCommand` struct: command string, reads_stdin, writes_stdout
-  - `ExecutorError` enum: UnknownOp, MissingParam, ExecFailed
-  - `ScriptResult` struct: exit_code, stdout, stderr
-  - 113 ops mapped (49 fs_ops + 64 power_tools_ops)
-  - Archive format detection from TypeExpr: `File(Archive(a, Cbz))` → "Cbz"
-  - `shell_quote()` detects `$WORK_DIR` prefix → double quotes for variable expansion
-  - `generate_script()` uses intermediate temp files: `$WORK_DIR/step_N.txt`
-  - Single-step plans: standalone command (no temp file overhead)
-  - Multi-step: `set -e`, `mktemp -d`, cleanup trap, step comments
-  - Each-mode: `while IFS= read -r _line; do ... done < prev > next`
-  - `run_script()` executes via `/bin/sh -c`
-
-### CLI Changes
-- `src/main.rs` - Added `--execute` flag for plan mode
-  - `--plan <path>` always shows generated script
-  - `--plan <path> --execute` runs the script
-  - `--execute` without `--plan` prints error
-  - Chat mode: Approved → shows script → prompts "Run this? (y/n)"
-
-### NL Changes
-- `src/nl/mod.rs` - `NlResponse::Approved` changed from unit to struct variant
-  - Now carries `script: Option<String>`
-  - On approve: compiles plan → generates script → returns in Approved
-  - All test assertions updated to use `NlResponse::Approved { .. }`
-
-### Test Files
-- `tests/executor_tests.rs` [1-454] - 38 integration tests
-  - 11 plan→script tests (all YAML files)
-  - 7 script structure tests (shebang, set -e, trap, work_dir, etc.)
-  - 7 real execution tests (ls /tmp, echo, failing command, temp files)
-  - 4 NL→script integration tests
-  - 5 error/edge case tests
-  - 4 archive format detection tests
-
-### Test Counts
-- Total: 795 (was 716)
-- New: 79 (41 unit in executor.rs + 38 integration in executor_tests.rs)
-
-### Project Rename: reasoning_engine → cadmus (commit `a5156b3`)
-- Crate name is now `cadmus` in Cargo.toml
-- Binary: `target/release/cadmus`
-- All `use reasoning_engine::` → `use cadmus::` across src/ and tests/
-- Banners: "CADMUS v0.x.0" (3 locations in src/main.rs)
-- Usage: `cadmus --plan <path.yaml> [--execute]`
-- Generic uses of "reasoning" preserved (comparative, cross-entity, cross-domain, etc.)
-- 795 tests, zero warnings, 5 commits on main
-
-### NL Robustness: dir aliases + noun patterns (commit `bd48a06`)
-- `data/nl/nl_vocab.yaml` — `dir_aliases` (15 entries) and `noun_patterns` (22 entries) sections
-- `src/nl/vocab.rs` — `NlVocab.dir_aliases: HashMap<String, String>` and `NlVocab.noun_patterns: HashMap<String, Vec<String>>`
-- `src/nl/slots.rs` — steps 9 (dir alias) and 10 (noun pattern) in `extract_slots()`
-- Ambiguity: tokens that are both alias+noun prefer alias when no path set, noun when path exists
-- SymSpell corrects plurals→singulars, so both forms needed in YAML tables
-- 822 total tests, 6 commits on main
-
-### NL: Quoted string support (commit `faf8338`)
-- `src/nl/normalize.rs` — `tokenize()` refactored into pre-pass (quote extraction) + `tokenize_segment()`. Only double quotes supported (single quotes conflict with contractions like `don't`).
-- `src/nl/slots.rs` — `is_path()` now returns true for tokens containing spaces (from quoted input)
-- `src/nl/mod.rs` — `process_input()` re-quotes space-containing tokens when rejoining for second normalize pass
-- 830 total tests, 7 commits on main
-
-### NL: Path resolution chain (commit `86320e8`)
-- `src/nl/dialogue.rs` — `resolve_path()` function: bare names → `/Volumes/<name>` if exists, else pass through
-- Called from `build_plan()` right after extracting `target_path` from slots
-- Handles SD cards, USB drives, external volumes on macOS
-- 836 total tests, 8 commits on main
-
-### Red Team NL Pipeline (commit 0a81f50)
-- **78 new tests** added across 5 attack surfaces, **914 total** tests
-- **4 bugs fixed**:
-  1. `src/executor.rs:112-133` — `shell_quote()` $WORK_DIR injection: now validates safe ASCII chars after prefix
-  2. `src/executor.rs:112-133` — `shell_quote()` unicode bypass: `is_ascii_alphanumeric()` instead of `is_alphanumeric()`
-  3. `src/executor.rs:234-265` — filter `exclude` param: executor now handles with `grep -v`
-  4. `src/plan.rs:562-568`, `src/nl/dialogue.rs:338-398` — type inference reordered: `pathref`→Path before extension lookup, `repo`→Repo before dir check; added `is_path_op()` and `is_seq_op()` in `build_plan`
-- **Test categories**: shell injection (25), chaos (19), conversation flows (8), E2E ops (19), path edge cases (7)
-- Known remaining issue: `count` op expects `Seq(a)` but file types like `Csv` don't unify with `Seq(a)` — accepted as design limitation
-
-### Racket Programmer Feature (plan `racket-programmer`, commit `537cb3e`)
-- `data/racket_ops.yaml` — 47 ops: 9 arithmetic, 12 list, 9 set, 6 stdio, 8 higher-order, 4 boolean, 4 string. Only `add` has full metasignature template.
-- `data/racket_facts.yaml` — 4 entities (op_add/sub/mul/div), 5 axes, 20 claims, 9 evidence, 30+ properties. `symmetric_partner` properties link +/- and */÷. Keyword maps: add/addition/plus/sum/total → add, subtract/subtraction/minus/difference/deduct → subtract, etc.
-- `src/registry.rs` [437-476] — `MetaSignature` struct (params, return_type, invariants, category, effects), `MetaParam` struct. `register_poly_with_meta()` method. `OpDef.meta: Option<MetaSignature>`. Backward compatible.
-- `src/racket_executor.rs` — `op_to_racket()` maps 47 ops to Racket s-expressions. `generate_racket_script()` produces `#!/usr/bin/env racket` + `#lang racket`. Single-step: bare `(displayln ...)`. Multi-step: `let*` bindings. 24 unit tests.
-- `src/racket_strategy.rs` — `infer_symmetric_op()` derives type signature from partner's metasig (invariants NOT transferred). `promote_inferred_ops()` upgrades stubs. `load_keyword_map()` builds NL→op mapping from fact pack. `build_racket_registry()`. 17 unit tests.
-- `src/nl/dialogue.rs` [299-338] — Arithmetic handler in `build_plan()`: extracts numbers from step_refs, builds plan with x/y params.
-- `src/nl/intent.rs` [407-418] — Arithmetic detection in `try_edit()`: if first token is canonical op AND rest looks like numbers, falls through to CreatePlan.
-- `src/plan.rs` [581-589] — Number type inference: numeric values or x/y/a/b/n/m/left/right → `TypeExpr::prim("Number")`.
-- `src/plan.rs` [266-281] — `raw_step_to_op_params()` public helper.
-- `src/fs_types.rs` [49-72] — `build_full_registry()` now merges racket_ops.yaml alongside fs_ops and power_tools.
-- `data/nl/nl_vocab.yaml` [662-689] — Arithmetic synonyms: add/addition/plus/sum/total, subtract/subtraction/minus, multiply, divide, add together, add up, take away.
-- `data/nl/nl_dictionary.yaml` — racket_arithmetic section with 14 words for SymSpell.
-- `data/plans/add_numbers.yaml`, `data/plans/subtract_numbers.yaml` — Example plan YAMLs.
-- `src/main.rs` — `--racket` flag: `cadmus --plan path.yaml --racket` produces Racket script.
-- `tests/racket_tests.rs` — 30 integration tests: ops loading, fact pack, keyword resolution, inference, script generation, NL E2E, full pipeline.
-- **Total: 988 tests** (74 new: 44 unit + 30 integration), all passing, zero warnings.
-
-### Type-Symmetric Inference (new feature)
-- `src/racket_strategy.rs` — `InferenceKind` enum (OpSymmetric | TypeSymmetric), `find_type_symmetric_peer()`, `infer_type_symmetric_op()`, three-phase `promote_inferred_ops()`
-- `data/racket_facts.yaml` — `type_symmetry` axis with `type_symmetry_class=binop` on all 4 arithmetic ops; category gate prevents cross-domain leakage
-- `src/registry.rs:646-649` — `get_poly()` uses `rfind` (last registration wins after promotion)
-- `tests/trace_pipeline.rs` — annotated pipeline trace for 7 arithmetic inputs, shows inference kind
-- Three-phase inference: Phase 1 op-symmetric (subtract←add), Phase 2 type-symmetric (multiply←add via class binop), Phase 3 op-symmetric replay (divide←multiply)
-
-### Data-Driven Executor
-- `src/racket_executor.rs` — `op_to_racket()` now takes `&OperationRegistry`, looks up `racket_symbol` and arity from ops pack
-- `data/racket_ops.yaml` — all 52 ops have `racket_symbol` field (e.g., `add→"+"`, `set_member→"set-member?"`, `equal→"equal?"`)
-- `src/registry.rs` — `OpDef.racket_symbol`, `PolyOpEntry.racket_symbol`, `OperationRegistry::racket_symbol()`, `set_racket_symbol()`
-- Generic dispatch: arity 0→`(sym)`, arity 1→`(sym a)`, arity 2+→`(sym a b)`
-- 11 special-case ops remain: sort_list, format_string, printf, racket_map, racket_filter, racket_foldl, racket_foldr, racket_for_each, racket_apply, andmap, ormap
-- Adding a new op requires only a YAML entry — zero Rust code changes
-- 1012 tests, 0 failures, 0 warnings
-
-### Operator Discovery (Phase 0)
-- `src/racket_strategy.rs` — `discover_ops()` scans fact pack for entities with `op_name` + `racket_symbol` not in registry, registers placeholders
-- `src/racket_strategy.rs` — `meta_to_poly_signature()` builds `PolyOpSignature` from `MetaSignature`
-- `data/racket_ops.yaml` — now 49 ops (subtract, multiply, divide removed — discovered from fact pack)
-- `src/fs_types.rs` — `build_full_registry()` now runs `promote_inferred_ops` after loading ops packs
-- Four-phase inference: Phase 0 (Discovery) → Phase 1 (Op-symmetric) → Phase 2 (Type-symmetric) → Phase 3 (Op-symmetric replay)
-- multiply/divide inference path is non-deterministic (depends on HashMap iteration order) — both type-symmetric and op-symmetric paths produce identical results
-- 1012 tests, 0 failures, 0 warnings
-
-### List Op Discovery
-- `src/registry.rs` — `MetaSignature` now has `type_params: Vec<String>` field (line ~518)
-- `src/racket_strategy.rs` — `meta_to_poly_signature()` uses `TypeExpr::parse()` instead of `TypeExpr::prim()` for polymorphic type support
-- `src/racket_strategy.rs` — `collect_type_vars()` auto-collects Var nodes from parsed TypeExprs into deduplicated sorted list
-- `data/racket_ops.yaml` — 47 ops (was 49). cons and cdr are list anchors with metasigs. remove and list_reverse removed.
-- `data/racket_facts.yaml` — 8 entities (4 arithmetic + 4 list). Type symmetry classes: list_elem_to_list (cons, remove), list_to_list (cdr, list_reverse)
-- Discovery chain: cons anchor → remove via type-symmetric (list_elem_to_list), cdr anchor → list_reverse via type-symmetric (list_to_list)
-- 5 total discovered ops: subtract, multiply, divide (arithmetic) + remove, list_reverse (list)
-- 1020 tests, 0 failures
-
-### Comparison Op Discovery
-- `data/racket_ops.yaml` - `less_than` is comparison anchor with meta block (Number,Number→Boolean, category=comparison)
-- `data/racket_facts.yaml` - 6 new entities: op_less_than, op_greater_than, op_less_than_or_equal, op_greater_than_or_equal, op_string_upcase, op_string_downcase
-- `greater_than` discovered via op-symmetric from less_than
-- `less_than_or_equal`, `greater_than_or_equal` discovered via type-symmetric (class: comparison_binop)
-- `equal` is NOT in comparison_binop class (different input types: Any vs Number)
-
-### String Op Discovery
-- `data/racket_ops.yaml` - `string_upcase` is string anchor with meta block (String→String, category=string)
-- `string_downcase` discovered via type-symmetric from string_upcase (class: string_to_string)
-- `string_length` NOT affected (String→Number, different return type)
-
-### Current Totals
-- 47 ops in racket_ops.yaml
-- 14 entities in racket_facts.yaml
-- 9 discovered ops total: subtract, multiply, divide, remove, list_reverse, greater_than, less_than_or_equal, greater_than_or_equal, string_downcase
-- 5 anchors: add (arithmetic), cons (list), cdr (list), less_than (comparison), string_upcase (string)
-- 1031 tests passing
-- 16 complex programs in tests/complex_programs.rs
-
-### Complex Programs Test
-- `tests/complex_programs.rs` - 16 programs covering all domains
-- Programs 1-10: arithmetic, list, set, string, higher-order
-- Programs 11-13: comparison ops (anchor, op-symmetric, type-symmetric)
-- Programs 14-15: string ops (anchor, discovered + chain)
-- Program 16: multi-domain chain (arithmetic → string → upcase)
-
-### Shell-Callable Racket Forms (Complete)
-- `data/macos_cli_facts.yaml` - CLI fact pack: 12 entities, 45 submodes, 6 output-format classes
-- `data/racket_ops.yaml` [500..599] - 6 shell anchor ops (`shell_ls`, `shell_ps`, `shell_find`, `shell_grep`, `shell_du`, `shell_curl`)
-- `data/racket_facts.yaml` [69..108] - 12 shell entities (6 anchors + 6 type-symmetric)
-- `src/racket_strategy.rs` [636..770] - `discover_shell_submodes()`, `InferenceKind::ShellSubmode`
-- `src/racket_executor.rs` [41..105] - `shell_preamble()`, `SHELL_PREAMBLE` constant
-- `src/racket_executor.rs` [219..257] - `generate_shell_call()` with nullary/unary/binary dispatch
-- `src/fs_types.rs` [50] - `MACOS_CLI_FACTS_YAML` embedded, [88..98] Phase 4 integration
-- `tests/shell_callable_tests.rs` - 41 tests covering all layers
-- `PLAYBOOK.md` [1223..1435] - Section 10: Shell-Callable Racket Forms
-- `SUBSUMPTION.md` - Migration roadmap: 10/49 fs_ops + 4/64 power_tools_ops subsumed
-- Total registry: 246 ops after 5 inference phases
-- Total test suite: 1076 tests, 0 failures, 0 warnings
-
-### NL → Racket Compilation Fix
-- `src/racket_executor.rs` [108-345] - `is_fs_op()`, `fs_op_to_racket()`, `fs_path_operand()`, `fs_shell()`, `glob_to_grep()`, `shell_quote_for_racket()` — bridges 26 filesystem ops (walk_tree, find_matching, filter, sort_by, list_dir, etc.) to Racket shell-based expressions
-- `has_shell_ops()` updated to detect both shell-callable ops AND filesystem ops
-- All fs op paths use `(shell-quote ...)` for injection safety — never inline user paths into shell command strings
-- `tests/repro_screenshot.rs` — 15 tests for NL→Racket roundtrip
-- `tests/nl_tests.rs:53-98` — injection tests updated to accept `(shell-quote ...)` pattern
-- **1091 total tests**, 0 failures
-
-### Shell Anchor Architecture (Phase 2 context)
-- 6 anchor ops in `data/racket_ops.yaml` lines 510-620: shell_ls, shell_ps, shell_find, shell_grep, shell_du, shell_curl
-- 6 type-symmetric classes in `data/racket_facts.yaml` lines 715-940: shell_text_lines, shell_tabular, shell_tree, shell_filtered_lines, shell_single_value, shell_byte_stream
-- 6 discovered ops via type-symmetric inference: shell_cat, shell_head, shell_tail, shell_sort, shell_df, shell_wc
-- All shell ops use flat types: String → List(String) or String → String
-- Anchors have metasignatures with `category: shell` and `effects: io`
-- `discover_shell_submodes()` in `src/racket_strategy.rs:652` reads `submode_*` properties from CLI facts
-
-### fs_ops Type Signatures (the ones being subsumed)
-- `list_dir`: Dir(a) → Seq(Entry(Name, a))
-- `walk_tree`: Dir(a) → Seq(Entry(Name, a))
-- `read_file`: File(a) → a
-- `search_content`: [Seq(Entry(Name, File(Text))), Pattern] → Seq(Match(Pattern, Line))
-- `head`/`tail`: [File(Text), Count] → File(Text)
-- `sort_by`: Seq(a) → Seq(a)
-- `count`: Seq(a) → Count
-- `get_size`: Metadata → Size
-- `download`: URL → File(Bytes)
-
-### Racket-Native Forms for Intermediate Logic
-- `racket_filter` (symbol: "filter"): List(a) → List(a) — in `data/racket_ops.yaml:362`
-- `racket_map` (symbol: "map"): List(a) → List(b) — line 354
-- `sort_list` (symbol: "sort"): List(a) → List(a) — line 183
-- `racket_foldl` (symbol: "foldl"): [b, List(a)] → b — line 370
-
-### Key Design Principle
-- Shell ops = "anchors to the world" (bridge in/out of OS)
-- Racket-native ops = intermediate transformation/decision logic (filter, sort, map, fold)
-- fs_ops like `filter`, `sort_by`, `find_matching`, `unique` should map to Racket-native, NOT shell bridges
-
-### Phase 2 Type Lowering (Completed)
-- `src/type_lowering.rs` — new module with two-tier architecture
-  - `SUBSUMPTION_MAP` [60-108] — 10 world-touching fs_ops → shell ops
-  - `RACKET_NATIVE_MAP` [160-180] — 4 intermediate-logic ops → Racket primitives
-  - `DUAL_BEHAVIOR_MAP` [195-202] — 5 ops that switch shell/native based on pipeline position
-  - `RESIDUAL_FS_OPS` [260-280] — 15 ops not yet in CLI fact pack
-  - Key functions: `lookup_subsumption()`, `lookup_racket_native()`, `lookup_dual_behavior()`, `lookup_residual()`
-
-### racket_executor.rs Rewrite
-- Removed: `FS_OPS`, `is_fs_op()`, `fs_op_to_racket()` (monolithic 26-op bridge)
-- Added: `subsumed_op_to_racket()` [120-170], `racket_native_op_to_racket()` [185-270]
-- Dispatch order in `op_to_racket()`: special ops → shell ops → dual-behavior → subsumption → racket-native → residual → data-driven
-
-### NL Approval Path Fix
-- `src/nl/mod.rs:137-186` — added `discover_shell_submodes()` so extract_shell_meta() works for subsumed ops
-
-### Test Count: 1133 (up from 1091)
-
-### Racket Seq Threading Issue
-- **Problem**: When a shell-bridge step (walk_tree→shell_find) returns `List(String)` and the next step is a residual op (pack_archive) or binary subsumed op (search_content/grep), the codegen passes the list variable to `shell-quote` which expects a `String`
-- **Key insight**: `CompiledStep` has `input_type` and `output_type` as `TypeExpr` but the Racket executor currently ignores them
-- **Existing each mechanism**: `src/plan.rs` has `is_each` on `CompiledStep` and `StepArgs::is_each()` — the shell executor wraps in `while IFS= read -r _line` loops, the Racket executor wraps in `(map (lambda (_line) ...) prev)`
-- **Residual ops path**: `src/racket_executor.rs:490-500` — uses `fs_path_operand(prev_binding, input_values)` which returns the raw binding name
-- **Subsumed binary ops path**: `src/racket_executor.rs:155-170` — `search_content` (arity==2) passes `path` to `shell-quote` but `path` could be a list
-- **Type info available**: `CompiledStep.output_type` has rich types like `Seq(Entry(Name, Bytes))`, can check for `Seq(...)` constructor
-- `src/type_lowering.rs` [7000..10000] - `ResidualFsOp` struct with `is_exec` field
-- `src/racket_executor.rs` [550..620] - `generate_racket_script()` iterates compiled steps
-
-### Racket Seq→String Bridge (racket-seq-threading plan)
-- **Problem solved**: When shell-bridge steps (walk_tree→shell_find) return `List(String)` and the next step is a residual op (pack_archive) or binary subsumed op (search_content/grep), the codegen now correctly bridges the type mismatch
-- **Key function**: `is_seq_output(step, registry)` in `src/racket_executor.rs:137-174` — reads shell op metasig `return_type` via subsumption map → registry lookup, falls back to `CompiledStep.output_type.is_seq_or_list()`
-- **Bridge strategies**:
-  - Residual exec ops (pack_archive, copy): `(string-join (map shell-quote prev) " ")` — batch all files
-  - Residual lines ops (stat, diff): `(append-map (lambda (_f) (shell-lines ...)) prev)` — iterate
-  - Subsumed binary ops (search_content/grep): `(append-map (lambda (_f) (shell-lines (grep pattern _f))) prev)` — grep each file
-  - Subsumed unary ops (read_file/cat): `(append-map (lambda (_f) (shell-lines (cat _f))) prev)` — cat each file
-- **API change**: `op_to_racket()` gained `prev_is_seq: bool` parameter; `subsumed_op_to_racket()` also gained it
-- `src/type_expr.rs` [92-106] - `TypeExpr::is_seq()`, `is_list()`, `is_seq_or_list()`
-- `src/racket_executor.rs` [556-596] - residual ops bridge
-- `src/racket_executor.rs` [197-245] - subsumed ops bridge (binary + unary)
-- **Tests**: 1149 total passing, 20 new tests (8 unit for is_seq_output, 5 unit for bridges, 7 integration)
-- **data/coding_ops.yaml** - created as empty stub to fix pre-existing compile error
-
-### Stress Pipeline Tests
-- `tests/stress_pipeline.rs` [1-1281] - 80 stress tests across all 7 pipeline subsystems
-  - I1: NL end-to-end (21 tests) - `stress_nl_*`
-  - I2: Plan compiler (7 tests) - `stress_plan_*`
-  - I3: Racket codegen (12 tests) - `stress_racket_*`
-  - I4: Generic planner (7 tests) - `stress_planner_*`, `stress_expr_planner_*`
-  - I5: Inference engine (10 tests) - `stress_inference_*`
-  - I6: Type unification (11 tests) - `stress_unify_*`
-  - I7: Type lowering (10 tests) - `stress_subsumption_*`, `stress_residual_*`, `stress_has_lowering_*`, `stress_full_registry_*`
-
-### Key findings from stress testing
-- `Literal` struct has `type_id`, `key`, `value`, `metadata` — no `description` field
-- `ExprLiteral` has `description` but `Literal` does not
-- `poly_op_names()` returns `Vec<&str>` — use `contains(&"name")` not `contains("name")`
-- `multiply` inference kind is non-deterministic (OpSymmetric or TypeSymmetric depending on HashMap order)
-- `string_downcase` is always TypeSymmetric (reliable for testing)
-- `filter` is racket-native only, NOT dual-behavior
-- `sort_by`, `head`, `tail`, `count`, `unique` are dual-behavior ops
-- `walk_tree` on default Dir produces `Seq(Entry(Name, Bytes))`, not `Seq(Entry(Name, File(Text)))`
-- `parse_plan` catches empty steps before `compile_plan` runs
-- Generic planner uses `TypeId` (string-based), not `TypeExpr` — need custom registries for planner tests
-
-### Type Chain Promotion Fix
-- `src/plan.rs` [375-410] - `is_dir_bytes()`, `steps_need_file_text()` helpers
-- `src/plan.rs` [459-463] - Auto-promotion in `compile_plan()`: Dir(Bytes) → Dir(File(Text)) when downstream steps need File(Text)
-- FILE_CONTENT_OPS: `search_content`, `read_file` trigger promotion
-- NL layer already used `textdir` input name for search_content (line 271 of dialogue.rs)
-- `list_dir`, `sort_by` etc. do NOT trigger promotion — Dir(Bytes) preserved
-- `read_file: each` unwraps File(Text) → Text, so you can't chain read_file:each → search_content (search_content reads files itself)
-
-### Generalized Type Promotion (commit 2513fd6)
-- `src/plan.rs` [0..4800] - `contains_bytes()`, `replace_bytes_with_var()`, `try_promote_bytes()` — unification-based type promotion
-- Old special-case helpers `is_dir_bytes()` and `steps_need_file_text()` removed
-- Algorithm: replace `Bytes` with fresh `Var("_promote")`, simulate type chain forward, let unification discover what `_promote` should be
-- `src/plan.rs:553-555` — promotion call site in `compile_plan()`, shadows `input_type` with promoted version
-- `Substitution` now imported in plan.rs
-- 4 new tests in `tests/stress_pipeline.rs`: `stress_promotion_no_bytes_no_promotion`, `stress_promotion_bytes_with_polymorphic_only_no_binding`, `stress_promotion_discovered_via_unification`, `stress_promotion_each_mode_read_file`
-- Total: 1231 tests, 0 failures, 0 warnings
-
-### Executor Refactor (commit `6697124`)
-- `src/shell_helpers.rs` — shared utilities: `shell_quote()`, `glob_to_grep()`, `sed_escape()`, `primary_input()`, `CodegenError` enum
-- `src/executor.rs` — `ExecutorError` is now `type ExecutorError = CodegenError`
-- `src/racket_executor.rs` — `RacketError` is now `type RacketError = CodegenError`
-- `src/executor.rs` — `op_to_command()` decomposed into 16 category functions: `cmd_directory_file_io`, `cmd_filter_sort`, `cmd_archive`, `cmd_search`, `cmd_file_lifecycle`, `cmd_content_transform`, `cmd_metadata`, `cmd_macos`, `cmd_network`, `cmd_git`, `cmd_terminal_mux`, `cmd_structured_data`, `cmd_text_processing`, `cmd_process_system`, `cmd_networking`, `cmd_compression_crypto`
-- `src/executor.rs` — `ShellCommand::stdout()`, `::exec()`, `::pipe()` constructors; `source()` and `require_param()` helpers
-- `src/type_lowering.rs` — Removed dead `ResidualFsOp`, `RESIDUAL_FS_OPS`, `is_residual_fs_op()`, `lookup_residual()`
-- 1237 total tests, all passing, zero warnings
-
-### CLI Rich Formatting (plan `slick-cli`)
-- `src/ui.rs` [1-740] — ANSI color helpers, geometric icon constants, formatting primitives. Zero external deps.
-  - `color_enabled()` — OnceLock, checks NO_COLOR env var and TERM=dumb
-  - `styled()` — core function, applies ANSI codes or returns plain text
-  - 30 style functions: bold, dim, italic, red, green, blue, cyan, etc. + bold_* and badge_* variants
-  - `icon` module: 40+ flat geometric Unicode icons (✓ ✗ △ ◆ ● ○ ▸ ▰ ◇ ▪ ↔ ⊘ ⊗ ⊢ ⊥ ├ └ │ ─ → ← ↓ λ ⚙)
-  - Formatting: banner(), section(), subsection(), kv(), kv_dim(), step(), step_each(), status_ok/fail/warn/info/pending/active(), code_block(), code_block_numbered(), yaml_block(), tree_item/last/cont/blank(), bullet(), error(), warning(), info(), success(), rule(), prompt(), reset()
-  - Axis helpers: axis_header(), axis_footer(), claim(), evidence(), similarity(), contrast_line(), uncertainty(), summary_line(), gap_line(), inference_line(), conflict_line()
-  - Write helpers: write_step(), write_kv() for Display impls
-  - 30 unit tests
-- `src/main.rs` — Complete rewrite of all 3 modes (chat, plan, demo) using ui:: helpers
-  - VERSION constant "v0.7.0"
-  - All bubbly emojis (✅❌🔍🔧📋📎🔗⚔❓📝📐🤔⚡⚠) replaced with geometric icons
-  - Chat mode: compact banner, colored ◆ prompt, YAML in dim code block
-  - Plan mode: progressive status chain (● Loading → ✓ Compiled → ● Executing → ✓ Done)
-  - Demo mode: geometric section headers, axis tree formatting
-  - Error paths: red ✗ badges
-- `src/plan.rs:912` — CompiledPlan Display uses ui:: helpers
-- `src/fs_strategy.rs:119-150` — DryRunTrace and TraceStep Display use ui:: helpers
-- 1266 total tests, 0 failures, 0 warnings
-
-### Archive Codegen Fix (plan `archive-codegen-fix`)
-- `src/plan.rs` [471-517] — `step_needs_map()`, `lookup_op_inputs()` — type-driven each-mode detection. Compares step.input_type against op signature. OnceLock fallback to full registry.
-- `src/plan.rs` [751-812] — `extract_archive_format()`, `resolve_archive_op()` — format resolution. Extracts fmt from TypeExpr, looks up format_family in filetypes.yaml, rewrites generic op to format-specific.
-- `src/plan.rs` — `is_each` removed from `CompiledStep` struct
-- `src/racket_executor.rs` [625-660] — `generate_racket_script()` uses `step_needs_map` instead of `is_each`. Map steps pass `_line` as prev_binding with `prev_is_seq=false`.
-- `data/filetypes.yaml` [35-55] — `format_families` section: Cbz→zip, Cbr→rar, TarGz→tar_gz, etc.
-- `src/filetypes.rs` [303-315] — `FileTypeDictionary.format_family()` method
-- `data/packs/ops/fs_ops.yaml` [82-137] — 9 format-specific ops: extract_zip, extract_tar, extract_tar_gz, extract_tar_bz2, extract_tar_xz, extract_rar, pack_zip, pack_tar, pack_tar_gz
-- `src/type_lowering.rs` [136-151] — Subsumption entries for format-specific ops
-- `data/packs/facts/macos_cli_facts.yaml` — cli_unzip, cli_zip, cli_unrar, cli_7z entities with submodes
-- `data/packs/ops/racket_ops.yaml` [541-599] — shell_unzip, shell_zip, shell_unrar, shell_7z anchor ops
-- `tests/archive_codegen_tests.rs` — 19 tests
-- `data/plans/repack_comics.yaml` — example comic repack plan
-- `src/main.rs` [310-325] — Racket registry now runs discover_shell_submodes (Phase 4)
-- **Total: 1285 tests**, all passing, zero warnings
-
-### Comic Repack E2E Pipeline (Session 2 completion)
-- `data/nl/nl_dictionary.yaml` - SymSpell typo correction dictionary. "repack" was being corrected to "replace" (edit distance 2). Added repack, unpack, flattened.
-- `src/nl/mod.rs:93` - `process_input()` does normalize → typo_correct → re-normalize → intent → slots. The typo correction step can change words before synonym mapping.
-- `tests/nl_comic_trace.rs` - 5 E2E tests for NL comic repack: full pipeline, Racket codegen, simple extract regression, no-format-hint boundary
-- `tests/archive_codegen_tests.rs` - 22 tests total. Added: pack_archive_without_output, find_matching_cbz_narrows_format, find_matching_txt_does_not_narrow
-- `tests/semantic_tests.rs:128` - `test_semantic_find_pdfs_execution` updated to accept `File(PDF)` type (more specific than `Bytes`)
-
-### Extract Interleave Fix
-- `src/racket_executor.rs:113-118` - `is_extract_op()` helper detects `extract_*` ops
-- `src/racket_executor.rs:690-720` - MAP-mode extract codegen creates per-archive temp dirs via `(make-temporary-directory)`, extracts with `-d`, lists via `find -type f`
-- Non-MAP (single archive) extract unchanged
-- Tests: `test_extract_map_mode_uses_temp_dirs`, `test_single_extract_no_temp_dir` in `tests/archive_codegen_tests.rs`
-- Total tests: 1297 (was 1295)
-
-### Isolate Flag (ops-layer collision prevention)
-- `src/plan.rs:545-563` - `CompiledStep` now has `pub isolate: bool` field
-- `src/plan.rs:844-854` - `needs_isolation()` helper: returns true for `extract_*` ops
-- `src/plan.rs:785-797` - Compiler sets `isolate = is_each && needs_isolation(&resolved_op)`
-- `src/type_expr.rs:27-33` - `TypeExpr` now implements `Default` (returns `Primitive("Bytes")`)
-- `src/racket_executor.rs:680-720` - Racket codegen checks `step.isolate` (not `is_extract_op`)
-- `src/executor.rs:991-1017` - Bash codegen: `_td=$(mktemp -d)` + replaces `$WORK_DIR/extracted` with `$_td`
-- `is_extract_op()` helper removed from racket_executor.rs
-- All CompiledStep construction sites use `..Default::default()` for the new field
-- Total tests: 1301
-
-### Bash Executor Removal (plan `remove-bash-executor`)
-- `src/executor.rs` — **DELETED** (1425 lines, 37 unit tests). Was: `op_to_command()`, `generate_script()`, `run_script()`, `ShellCommand`, `ScriptResult`, `extract_archive_format()`
-- `tests/executor_tests.rs` — **DELETED** (668 lines, 62 integration tests)
-- `src/lib.rs` — `pub mod executor;` removed
-- `src/main.rs` — `--execute` and `--racket` flags removed. New `--run` flag executes via `racket -e`. Racket is sole codegen target.
-- `src/shell_helpers.rs` — `ExecFailed` variant, `sed_escape()`, `primary_input()` removed. `shell_quote()`, `glob_to_grep()`, `CodegenError` kept (used by racket_executor).
-- `tests/nl_tests.rs` — `nl_e2e_script()` rewritten to use `racket_executor::generate_racket_script()`. `build_racket_registry()` helper added.
-- CLI usage: `cadmus --plan <path.yaml> [--run]` (was `[--execute] [--racket]`)
-- **Total: 1202 tests** (was 1301), 0 failures, 0 warnings
-
-### Compact Properties Format (plan `compact-fact-packs`)
-- `src/fact_pack.rs` [105-185] — `CompactValue` enum (Simple/Extended), `CompactProperties` type (BTreeMap³), `expand_compact_properties()`, `RawFactPack` intermediate struct, custom `Deserialize` impl for `FactPack`
-- YAML key is `compact_properties:` (entity → axis → key → value). Simple values are strings, extended values have `value`, `ordinal?`, `note?` fields.
-- `BTreeMap` used for deterministic alphabetical iteration order
-- Old verbose `properties:` list format removed entirely — compact is the only format
-- All 3 fact pack files converted:
-  - `data/packs/facts/racket_facts.yaml`: 1939→1099 lines (43% reduction), 312 properties
-  - `data/packs/facts/macos_cli_facts.yaml`: 3003→1605 lines (47% reduction), 461 properties
-  - `data/packs/facts/putin_stalin.yaml`: 496→459 lines, 14 properties with ordinal+note
-- 13 inline YAML blocks converted (11 in theory.rs, 2 in fact_pack.rs)
-- `tests/compact_facts_tests.rs` — 16 new tests
-- `tests/shell_callable_tests.rs:189-199` — Fixed fragile test (inferred_from depends on iteration order)
-- Total: 1224 tests, 0 failures, 0 warnings
-
-### YAML Plan Refactor (commit `b7e8ed4`)
-- `src/plan.rs` renamed to `src/plan.rs`
-- `data/plans/` renamed to `data/plans/`
-- `tests/plan_tests.rs` renamed to `tests/plan_tests.rs`
-- All identifiers renamed: PlanDef→PlanDef, CompiledPlan→CompiledPlan, parse_plan→parse_plan, etc.
-- CLI flag: `--plan` → `--plan`
-- NL intent: `CreatePlan` → `CreatePlan`
-
-### New YAML Plan Format
-- Top-level key IS the plan name (snake_case function name)
-- `inputs:` is a list of typed parameters: `- name: Type`
-- `output:` declares return type (optional)
-- `steps:` unchanged
-- Example:
-  ```yaml
-  find_pdfs:
-    inputs:
-      - path: Dir
-      - keyword: Pattern
-    output: Seq(Entry(Name, File(PDF)))
-    steps:
-      - list_dir
-      - find_matching:
-          pattern: "*.pdf"
-  ```
-
-### PlanInput struct (`src/plan.rs`)
-- `PlanInput { name, type_str, default }` — typed input parameter
-- `PlanInput::typed(name, type_str)` — explicit type
-- `PlanInput::bare(name)` — type inferred from name
-- `PlanInput::from_legacy(name, value)` — value becomes default, type inferred
-- `PlanDef.input_defaults()` → HashMap for $var expansion
-- `PlanDef.input_names()` → HashSet for validation
-- `PlanDef.get_input(name)` → Option<&PlanInput>
-
-### Type Annotation Parsing (`src/plan.rs:1193`)
-- `parse_type_annotation()` — shorthands first (Dir→Dir(Bytes), File→File(Bytes)), then TypeExpr::parse(), then prim fallback
-- `resolve_input_type()` — typed inputs use parse_type_annotation, legacy inputs use infer_input_type
-
-### NL Dialogue Changes
-- `build_plan()` creates PlanInput objects (was HashMap)
-- `plan_to_yaml()` serializes typed inputs (was key: "value")
-- `generate_plan_name()` returns snake_case op name (was human-readable description)
-- Arithmetic ops put literal values in step params (not $var references)
-- `infer_type_str_from_name()` maps input names to type strings
-
-### Test Count: 1223 passed, 1 failed (pre-existing flaky)
-
-### Plan YAML DSL (was Workflow)
-- `src/plan.rs` [1-1400+] - `PlanDef`, `PlanInput`, `RawStep`, `StepArgs`, `CompiledStep`, `CompiledPlan`, `PlanError`
-  - `parse_plan()` - custom serde deserializer for function-framing YAML format
-  - `compile_plan()` - threads types through step chain, each mode, multi-input unification
-  - `execute_plan()` - produces `DryRunTrace` from compiled plan
-  - `infer_input_type()` - infers TypeExpr from PlanInput name + optional type_hint
-  - `resolve_type_hint()` [1199-1245] - resolves explicit type hints including Archive(content, format) and format primitives
-  - `PlanInput::bare("name")`, `PlanInput::typed("name", "Type")`
-- Data files: `data/plans/` (24 YAML files in function-framing format)
-- CLI: `cadmus --plan <path.yaml> [--run]`
-- NL: `plan_to_yaml()` in `src/nl/dialogue.rs` emits function-framing format
-
-### Function-framing YAML format
-```yaml
-plan-name:
-  inputs:
-    - bare_name
-    - typed_name: "Type"
-  output:
-    - type_name
-  steps:
-    - op_name
-    - op_name: each
-    - op_name: { k: v }
-```
-
-### NL Layer Architecture (pre-rewrite)
-- `src/nl/mod.rs` [0..720] - `process_input()` main entry, `NlResponse` enum, dispatches to handlers
-- `src/nl/intent.rs` [0..1082] - `Intent` enum, `parse_intent()`, pattern-match based recognition
-- `src/nl/slots.rs` [0..926] - `ExtractedSlots`, `extract_slots()`, path/op/modifier detection
-- `src/nl/normalize.rs` [0..671] - `normalize()`, tokenization, synonym mapping via `apply_synonyms()`
-- `src/nl/vocab.rs` [0..340] - `NlVocab` singleton, loads from `data/nl/nl_vocab.yaml`
-- `src/nl/typo.rs` [0..612] - SymSpell typo correction
-- `src/nl/dialogue.rs` [0..1617] - `DialogueState`, `build_plan()`, `apply_edit()`, `plan_to_yaml()`
-- `data/nl/nl_vocab.yaml` [1181 lines] - synonyms, contractions, ordinals, approvals, rejections, stopwords, dir_aliases, noun_patterns
-- `data/nl/nl_dictionary.yaml` [2583 lines] - SymSpell frequency dictionary
-
-### NL Test Counts
-- `src/nl/` inline tests: 262 pass
-- `tests/nl_tests.rs`: 184 pass  
-- `tests/semantic_tests.rs`: 45 pass
-- Total NL-related: ~491 tests
-
-### Public API to preserve
-- `process_input(input: &str, state: &mut DialogueState) -> NlResponse`
-- `NlResponse` enum variants: PlanCreated, PlanEdited, Explanation, Approved, Rejected, NeedsClarification, ParamSet, Error
-- `DialogueState` with current_plan, focus stack, turn_count, last_intent
-
-### Earley Rewrite Plan Decisions
-- Edits (skip/add/remove) stay as pattern-match, NOT routed through Earley
-- Approve/reject/explain stay as keyword match
-- DialogueState carries alternative IntentIRs
-- No external Earley crate — implement core directly
-
-### Earley NL Pipeline (Phase 4 - Complete)
-- `src/nl/earley.rs` [788 lines] - Earley parser engine (predict/scan/complete, parse forest, ranked output)
-- `src/nl/grammar.rs` [360 lines] - Command grammar builder (30+ rules, Verb Object Modifiers pattern)
-- `src/nl/lexicon.rs` [519 lines] - YAML lexicon loader + TokenClassifier
-- `data/nl/nl_lexicon.yaml` - Earley lexicon (verbs, nouns, path_nouns, orderings, prepositions, determiners, fillers)
-- `src/nl/intent_ir.rs` [671 lines] - IntentIR schema + parse_trees_to_intents()
-- `src/nl/intent_compiler.rs` [593 lines] - IntentIR → PlanDef (select, compress, decompress, order, search_text, list)
-- `src/nl/mod.rs` [813 lines] - process_input() with Earley-first + old pipeline fallback
-- `tests/nl_earley_tests.rs` [443 lines] - 38 integration tests
-
-### Key Architecture
-- Earley parser is **additive** — falls back to old pipeline when it can't parse
-- `try_earley_create()` in mod.rs is the integration point
-- `DialogueState.alternative_intents` stores alternative IntentIRs from Earley
-- Approve/reject/explain/edit still use keyword/pattern matching (old pipeline)
-- Only plan creation uses Earley parser
-
-### Commits (Phase 4)
-- `2075c0a` - Earley parser engine, lexicon, grammar (I1+I2)
-- `735ec02` - Intent IR + Intent Compiler (I3+I4)
-- `90dbff5` - Rewire NL pipeline (I5)
-- `1ad22cc` - Integration tests (I6)
-- `d3216db` - Documentation (I7)
-
-### Test Counts
-- Total: 1345 passing, 0 failing
-- Pre-existing flaky: test_type_symmetric_discovery_tabular
-
-### Verb Lexicon Expansion (commit 69b9475)
-- `data/nl/nl_lexicon.yaml` — expanded from 23 to 104 base verbs, 1186 total words
-- 103 unique action labels across 3 domains: file ops (41), programming (43), git (17), network (3)
-- New action labels are label-only — NOT implemented in `src/nl/intent_compiler.rs`
-- Unimplemented actions fall through: Earley parses → compiler returns Error → falls back to old pipeline → NeedsClarification
-- Zero synonym conflicts enforced: each word appears in exactly one verb entry
-- `tests/nl_earley_tests.rs` — 58 tests total (20 new synonym/lexicon tests)
-
-### Phrase Tokenizer (commit 5b11288)
-- `src/nl/phrase.rs` (314 lines) — greedy longest-match phrase tokenizer with stopword stripping
-- `data/nl/nl_lexicon.yaml` — 49 `phrase_groups` entries mapping content-word skeletons to canonical verb tokens
-- `src/nl/lexicon.rs` — `PhraseGroup` and `PhraseGroupEntry` types, loaded via `#[serde(default)]`
-- Wired in `src/nl/mod.rs::try_earley_create()` — `phrase::phrase_tokenize(tokens)` called before `earley::parse()`
-- Algorithm: scan tokens, match first skeleton word, skip stopwords between skeleton words, emit canonical token
-- Stopwords: 55 words (determiners, pronouns, fillers, auxiliaries, prepositions)
-- `tests/nl_earley_tests.rs` — 68 tests total (10 new phrase integration tests)
-
-### CLI Readline Support
-- `src/line_editor.rs` [1..167] - `LineEditor`, `ReadResult` — rustyline v15 wrapper with Emacs mode
-- `Cargo.toml` — `rustyline = "15"` dependency
-- `src/main.rs` — `run_chat_mode()` uses `LineEditor` instead of `stdin.lock().read_line()`
-- History file: `~/.cadmus_history`, max 1000 entries
-- Keybindings: Up/Down, Ctrl-A/E/K/U/W, Left/Right, Ctrl-C (re-prompt), Ctrl-D (EOF)
-- Confirmation prompts don't add to history
-
-### Calling Frame / Path Binding
-- `src/calling_frame.rs` [1..171] - `CallingFrame` trait, `DefaultFrame` impl — resolves input bindings
-- `src/plan.rs` - `PlanDef.bindings: HashMap<String, String>` — literal bindings for inputs
-- `src/nl/intent_compiler.rs` - `compile_ir()` populates bindings when target_path != "."
-- `src/nl/dialogue.rs` - `build_plan()` populates bindings; `plan_to_yaml()` renders `bindings:` section
-- `src/racket_executor.rs` - `fs_path_operand()` checks bindings before defaulting to "."
-- `src/nl/mod.rs` - `validate_plan()` validates PlanDef directly (renamed from validate_plan_yaml)
-- `op_to_racket()` now takes `bindings: &HashMap<String, String>` parameter
-
-### CallingFrame invoke wiring (wire-calling-frame plan)
-- `src/calling_frame.rs` — `CallingFrame::invoke()` method on trait, `DefaultFrame::invoke()` orchestrates compile_plan → build_racket_registry → generate_racket_script
-- `src/calling_frame.rs` — `InvokeError` enum: `CompileError(String)`, `CodegenError(String)`
-- `src/racket_executor.rs:40-72` — `build_racket_registry()` shared helper, loads ops pack + facts + shell submodes
-- `src/nl/mod.rs:260-263` — `handle_approve` uses `DefaultFrame::from_plan(&wf).invoke(&wf).ok()`
-- `src/main.rs:333-337` — `run_plan_mode` uses `DefaultFrame::from_plan(&def).invoke(&def)`
-- No more duplicated racket registry setup in call sites
-- Commit `9ac1321`
-
-### CallingFrame full execution (updated)
-- `src/calling_frame.rs` — `CallingFrame` trait now has 3 execution methods:
-  - `codegen(&plan) → Result<String>` — compile + generate script text
+> Updated: 2026-02-26T02:00:00Z | Size: compacted
+
+## Core Architecture
+
+### Type System
+- `src/type_expr.rs` — `TypeExpr` enum (Primitive/Constructor/Var), `parse()`, `Display`, `unify()` with occurs check, `Substitution` with compose
+  - `is_seq()`, `is_list()`, `is_seq_or_list()` — type shape queries
+  - `Default` impl returns `Primitive("Bytes")`
+  - `option(inner)` — first-class Option(a) constructor
+- `src/types.rs` — Core reasoning types: OutputType(6), OperationKind(6), Obligation, ReasoningStep, Goal, ProducedValue, AxisResult, ReasoningOutput, EngineError
+  - `DerivedUncertainty` enum: EvidenceGap, OrdinalBoundary, CrossAxisTension, PropertyClaimMismatch
+  - `Goal.fact_pack_paths: Vec<String>`, `Goal::with_single_fact_pack()`
+
+### Operation Registry
+- `src/registry.rs` — `OperationRegistry` with mono + poly ops
+  - `PolyOpSignature`, `PolyOpEntry`, `PolyOpMatch`, `register_poly()`, `ops_for_output_expr()`
+  - `MetaSignature` (params, return_type, invariants, category, effects, type_params), `MetaParam`
+  - `OpDef` fields: `racket_symbol`, `racket_body`, `input_names`, `variadic`, `meta`
+  - `load_ops_pack_str()`, `load_ops_pack_str_into()` — YAML ops pack loader
+  - `get_poly()` uses `rfind` — last registration wins (inference shadows stubs)
+  - `set_variadic()`, `set_racket_body()`, `set_input_names()`, `set_racket_symbol()`
+
+### Registry Builder
+- `src/fs_types.rs` — `build_fs_registry()` (fs-only), `build_full_registry()` (all packs + inference)
+  - Loads: fs.ops, power_tools.ops, racket.ops, algorithm.ops, text_processing.ops, statistics.ops, macos_tasks.ops
+  - Runs 5 inference phases via `promote_inferred_ops()` + `discover_shell_submodes()`
+  - `get_op_description()` cached via `OP_DESCRIPTIONS` OnceLock
+  - `MACOS_CLI_FACTS_YAML` embedded for Phase 4
+
+### Plan Compiler
+- `src/plan.rs` — `PlanDef`, `PlanInput`, `RawStep`, `StepArgs`, `CompiledStep`, `CompiledPlan`, `PlanError`
+  - `compile_plan()` — threads types through step chain, multi-input unification
+  - `load_plan()` — detects `.sexp` extension, routes to sexpr parser
+  - `try_promote_bytes()` — unification-based: replaces Bytes with Var, simulates chain forward
+  - `step_needs_map()`, `lookup_op_inputs()` — type-driven each-mode detection (OnceLock fallback)
+  - `extract_archive_format()`, `resolve_archive_op()` — format resolution via filetypes.yaml
+  - `infer_input_type()` — heuristic type inference from name/value/extension
+  - `resolve_type_hint()` — falls through to `TypeExpr::parse()` for unrecognized types
+  - `count_value_params()` — reset step detection (params fully specify inputs)
+  - `$step-N` back-references validated, exempt from `$var` validation
+  - `needs_isolation()` — true for `extract_*` ops only
+  - `CompiledStep` fields: `isolate: bool`, `clause_params: HashMap<String, Vec<serde_yaml::Value>>`
+  - `StepParam::Clauses(Vec<serde_yaml::Value>)` for cond/for_star
+  - `PlanInput::bare()`, `PlanInput::typed()`, `PlanInput::from_legacy()`
+
+### S-expression Plan DSL
+- `src/sexpr.rs` — Full sexpr parser + lowering, sole plan parser entry point
+  - `parse_sexpr_to_plan()` — public API
+  - `plan_to_sexpr()` — serializer with `infer_type_for_serialization()`, `type_str_to_sexpr()`, `type_expr_to_sexpr()`
+  - 10 core forms: define, bind, let, for/fold, for/each, cond, when, range, ref, set!, make, list
+  - `LowerCtx` tracks: ref_prefix, vectors HashSet, env (var→ref mapping)
+  - Scheme operators mapped: `+`→add, `-`→subtract, `*`→multiply, `/`→divide, `=`→equal, `<`→less_than
+  - `check_no_recursion()` rejects self-calls
+  - Keyword args: `:keyword value` pairs, `:each` modifier
+  - Bare `(op)` call emitted when step op matches plan name and all args are `$var` refs
+  - Sexpr type syntax: `(File (Archive (File Image) Cbz))` not `File(Archive(File(Image), Cbz))`
+
+### Racket Codegen
+- `src/racket_executor.rs` — `op_to_racket()`, `generate_racket_script()`
+  - `build_racket_registry()` — shared helper, loads all ops packs + facts + shell submodes
+  - Dispatch order: special → shell → dual-behavior → subsumption → racket-native → algorithm atom → data-driven
+  - `subsumed_op_to_racket()` — bridges fs_ops to shell ops with seq handling
+  - `racket_native_op_to_racket()` — intermediate logic ops
+  - `generate_shell_call()` — nullary/unary/binary dispatch
+  - `shell_preamble()`, `SHELL_PREAMBLE` constant
+  - `is_seq_output()` — reads shell op metasig return_type, falls back to CompiledStep.output_type
+  - Seq→String bridges: string-join for exec ops, append-map for lines/binary ops
+  - `emit_racket_body_defines()` + `emit_raw_step_defines()` — recursive sub-step scanning
+  - `compile_single_substep()` uses `input_names` order from registry (not alphabetical)
+  - `racket_value()` handles `$step-N` → `step-N`, `+inf.0`, `-inf.0`, `+nan.0`, `-nan.0`
+  - `get_one_operand()` prefers explicit `$step-N` refs over prev_binding
+  - Codegen handlers: for_fold, for_list, for_sum, for_product, for_and, for_or, iterate, conditional, if_then, let_bind, begin, define, build_list, cond, for_range_down, when_do, for_star, ordered_params
+  - Variadic ops split elements on whitespace
+  - Empty scalar args → no-arg calls (e.g., `random: ""` → `(random)`)
+  - MAP-mode extract: per-archive temp dirs via `(make-temporary-directory)`
+  - 11 special-case ops: sort_list, format_string, printf, racket_map, racket_filter, racket_foldl, racket_foldr, racket_for_each, racket_apply, andmap, ormap
+
+### Type Lowering
+- `src/type_lowering.rs` — two-tier architecture
+  - `SUBSUMPTION_MAP` — world-touching fs_ops → shell ops (includes format-specific archive ops)
+  - `RACKET_NATIVE_MAP` — 4 intermediate-logic ops → Racket primitives
+  - `DUAL_BEHAVIOR_MAP` — 5 ops (sort_by, head, tail, count, unique) switch shell/native by context
+  - `lookup_subsumption()`, `lookup_racket_native()`, `lookup_dual_behavior()`
+
+### Inference Engine
+- `src/racket_strategy.rs` — 5-phase inference pipeline
+  - Phase 0: `discover_ops()` — scans fact pack for entities with `op_name` + `racket_symbol` not in registry
+  - Phase 1: Op-symmetric inference (subtract←add, greater_than←less_than)
+  - Phase 2: Type-symmetric inference (multiply←add via class binop, remove←cons via list_elem_to_list)
+  - Phase 3: Op-symmetric replay (divide←multiply)
+  - Phase 4: `discover_shell_submodes()` — reads `submode_*` properties from CLI facts
+  - `InferenceKind` enum: OpSymmetric, TypeSymmetric, ShellSubmode
+  - `meta_to_poly_signature()` uses `TypeExpr::parse()` for polymorphic type support
+  - `collect_type_vars()` auto-collects Var nodes into deduplicated sorted list
+  - `load_keyword_map()` builds NL→op mapping from fact pack
+  - multiply/divide inference path is non-deterministic (HashMap iteration order) — both paths produce identical results
+  - 9 discovered ops: subtract, multiply, divide, remove, list_reverse, greater_than, less_than_or_equal, greater_than_or_equal, string_downcase
+  - 5 anchors: add (arithmetic), cons (list), cdr (list), less_than (comparison), string_upcase (string)
+
+### Shell Helpers
+- `src/shell_helpers.rs` — `shell_quote()`, `glob_to_grep()`, `CodegenError` enum
+  - `shell_quote()` special handling for `$WORK_DIR` — double quotes, validates safe ASCII after prefix
+
+### Calling Frame
+- `src/calling_frame.rs` — `CallingFrame` trait, `DefaultFrame` impl
+  - `codegen(&plan) → Result<String>` — compile + generate script
   - `invoke(&plan) → Result<Execution>` — codegen + execute
   - `run_script(&script) → Result<Execution>` — execute existing script
-- `src/calling_frame.rs` — `Execution` struct: `script`, `stdout`, `stderr`, `success`, `exit_code`
-- `src/calling_frame.rs` — `exec_racket_script()` private fn: single implementation for temp-file racket execution
-- `src/calling_frame.rs` — `InvokeError`: `CompileError`, `CodegenError`, `ExecError`
-- `src/main.rs` — `run_racket_script()` removed entirely
-- `src/main.rs` chat mode: `frame.run_script(s)` after user confirms
-- `src/main.rs` plan mode: `frame.codegen(&def)` for display, `frame.run_script(&script)` for execution
-- `src/nl/mod.rs` handle_approve: `frame.codegen(&wf).ok()` for script generation
-- Commit `ac45690`
+  - `Execution` struct: script, stdout, stderr, success, exit_code
+  - `InvokeError`: CompileError, CodegenError, ExecError
+  - `exec_racket_script()` — temp-file racket execution
+  - Atomic counter for unique temp file names (parallel test safety)
 
-### Algorithm Plan Pipeline Report
-- `tmp/report/algorithm_plan_report.md` — Full report (472 lines)
-- `tmp/report/results.json` — Raw JSON results for all 108 plans
-- `tmp/run_algorithm_plans.py` — Test harness script
-- `tmp/generate_report.py` — Report generator
+## Reasoning Engine
 
-### Pipeline Results Summary
-- 108/108 load, 44/108 compile, 44/108 codegen, 41/108 execute
-- **Compile bottleneck**: `infer_input_type()` in `src/plan.rs` only recognizes fixed input names
-  - `lst`, `graph`, `elements`, `coins`, `edges`, `points` etc. all fail
-- **list_new codegen bug**: `src/racket_executor.rs` — `(list "1 2 3")` instead of `(list 1 2 3)`
-- **Fully blocked categories**: graph (0/10), searching (0/12), sorting (0/11)
-- **High compile rate**: arithmetic (11/11), number-theory (8/9), encoding (4/4)
-- **Fidelity**: 5 correct, 3 partial, 33 wrong, 3 no-output, 64 no-codegen
+### Fact Packs
+- `src/fact_pack.rs` — YAML fact pack loader with FactPackIndex
+  - `FactPack::merge()` with entity/axis/relation dedup, `merge_all()`, `empty()`
+  - `load_fact_pack_str()`, `load_fact_packs()` multi-path loader
+  - `Axis.polarity: Option<String>` for tension derivation
+  - `CompactValue` enum (Simple/Extended), `CompactProperties` (BTreeMap³), `expand_compact_properties()`
+  - Compact format only: `compact_properties:` (entity → axis → key → value)
 
-### Algorithm Plan Full Pass (plan `algorithm-plan-full-pass`)
-- **108/108 algorithm plans** pass load→compile→codegen→execute with correct output
-- `src/plan.rs:1249` — `resolve_type_hint()` now falls through to `TypeExpr::parse()` for any unrecognized type
-- `src/plan.rs:1130` — `count_value_params()` helper for reset step detection
-- `src/plan.rs:920` — Reset steps: when params fully specify inputs, step doesn't consume pipeline type
-- `src/plan.rs:838` — `$step-N` back-reference validation in compile_plan
-- `src/plan.rs:572` — `InvalidStepRef` error variant
-- `src/plan.rs:640` — `$step-N` refs exempt from `$var` validation
-- `src/registry.rs:541` — `PolyOpEntry.variadic: bool` field
-- `src/registry.rs:774` — `OpDefProperties.variadic: bool` field
-- `src/registry.rs:637` — `set_variadic()` method
-- `src/racket_executor.rs:643` — Variadic ops split elements on whitespace
-- `src/racket_executor.rs:563` — for_fold, for_list, for_sum, for_product, for_and, for_or handlers
-- `src/racket_executor.rs:597` — iterate (named-let) handler with paren-aware binding parser
-- `src/racket_executor.rs:620` — conditional, if_then, let_bind, begin, define, build_list handlers
-- `src/racket_executor.rs:884` — `racket_value()` handles `$step-N` → `step-N`
-- `src/racket_executor.rs:818` — Input bindings emitted as `(define name value)` in scripts
-- `src/racket_executor.rs:935` — `get_one_operand()` falls back to first input name
-- `src/racket_executor.rs:995` — `parse_iterate_bindings()` respects parenthesized values
-- `src/calling_frame.rs:196` — Atomic counter for unique temp file names (parallel test safety)
-- `data/packs/ops/racket.ops.yaml` — 27 new ops: 7 iteration + 20 utility (canonical names)
-- `tests/algorithm_plans_tests.rs` — 16 integration tests (14 per-category + 1 aggregate + 1 compile-only)
-- **Total: 1468 tests**, 0 failures, 0 warnings
+### Theory Layer
+- `src/theory.rs` — `TheoryContext`: transitive closure, contradiction detection, hierarchy normalization, claim normalization
+  - `derived_uncertainties: Vec<DerivedUncertainty>` — OrdinalBoundary, EvidenceGap, CrossAxisTension, PropertyClaimMismatch
 
-### Algorithm Plan DSL Rewrite (plan `rewrite-algorithm-plans`, commit `c13e95e`)
-- **39 plans rewritten** from embedded Racket to pure Cadmus DSL sub-steps
-- **69 plans deferred** (use iterate/define/lambda/named-let patterns)
-- **All 108 plans** pass load→compile→codegen→execute
+### Planners
+- `src/planner.rs` — Per-axis obligation generation, completeness validation, gap detection
+- `src/generic_planner.rs` — Type-directed backtracking with cycle detection
+  - `GenericGoal`, `PlanNode` (Op/Leaf DAG), `PlanError`
+  - `ExprGoal`, `ExprLiteral`, `ExprPlanNode` (Op/Leaf/Map/Fold), `plan_expr()` with unification
 
-### New Parser Features
-- `src/plan.rs:451` — `StepParam::Clauses(Vec<serde_yaml::Value>)` variant for cond clauses and for_star vars
-- `src/plan.rs:917` — `CompiledStep.clause_params: HashMap<String, Vec<serde_yaml::Value>>` field
-- `src/plan.rs:596-622` — `parse_step_param` detects clause/var lists (maps with test/else/var keys)
-- `src/plan.rs:1359-1370` — `count_value_params` fixed: mode param counts when it holds real values
+### Strategies
+- `src/strategy.rs` — `ReasonerStrategy` trait, `ComparisonStrategy`, `run_strategy()`, `run_comparison()`
+- `src/coding_strategy.rs` — `CodingStrategy` with 6 ops (parse_source→AST, etc.)
+- `src/fs_strategy.rs` — `FilesystemStrategy`, `DryRunTrace`, `TraceStep`, `StepKind` (dry-run only)
+- `src/pipeline.rs` — Thin delegation to strategy::run_comparison()
 
-### New Codegen Functions
-- `src/racket_executor.rs:726-800` — `compile_cond_substep`, `compile_structured_clauses`, `compile_clause_value`, `compile_clause_body`
-- `src/racket_executor.rs:849-880` — `compile_for_range_down_substep` (reverse iteration)
-- `src/racket_executor.rs:882-900` — `compile_when_do_substep` (conditional execution)
-- `src/racket_executor.rs:902-950` — `compile_for_star_substep` (nested iteration with vars from Clauses)
-- `src/racket_executor.rs:951-980` — `compile_ordered_params_substep` (vector_set, vector_ref, make_vector, substring_op)
-- `src/racket_executor.rs:583-588` — Empty scalar args generate no-arg calls (e.g., `random: ""` → `(random)`)
-- `src/racket_executor.rs:1453-1460` — `get_one_operand` prefers explicit `$step-N` refs over prev_binding
-- `src/racket_executor.rs:1582-1586` — `racket_value` handles `+inf.0`, `-inf.0`, `+nan.0`, `-nan.0`
+### Algebra
+- `src/algebra.rs` — canonicalize() (flatten assoc, sort comm, drop identity, collapse absorbing, dedup idempotent), rewrite rules to fixpoint, dedup_plans(), infer() with Transitive/Symmetric/Reflexive
 
-### New Ops in Registry
-- `data/packs/ops/racket.ops.yaml` — Added: for_each, cond, map, round, take, drop, for_star (~140 total ops)
+## NL Pipeline
 
-### Key Design Patterns for Plans
-- **Mutation**: `make_vector` + `for_range`/`for_each` + `vector_set` (DP, graph algorithms)
-- **Conditional**: `cond` with `clauses` list (test/then/else maps stored as raw YAML)
-- **Nested loops**: `for_star` with `vars` list (each var has start/end)
-- **Accumulation**: `fold` with `acc`/`init`/`var`/`over`/`body`
-- **Short-circuit**: Use nested `cond` instead of eager `let*` to avoid invalid index access
-- **Complex data**: Use `bindings` for list/vector literals, not `list_new` (avoids whitespace splitting)
-- **No-arg ops**: Use `op: ""` for zero-argument calls
-
-### Test Count: 1471 (unchanged from pre-rewrite)
-
-### Algorithm Atoms Feature (commit `3e1faf2`)
-- `data/packs/ops/algorithm.ops.yaml` — 68 opaque algorithm ops with `racket_body` and `input_names`
-- `src/registry.rs` — `OpDef.racket_body: Option<String>`, `OpDef.input_names: Vec<String>`, `PolyOpEntry.racket_body`, `PolyOpEntry.input_names`, `set_racket_body()`, `set_input_names()`
-- `src/racket_executor.rs:57-62` — `build_racket_registry()` loads algorithm.ops.yaml
-- `src/racket_executor.rs:1246-1265` — Algorithm atom dispatch in `op_to_racket()` (before subsumption)
-- `src/racket_executor.rs:1399-1418` — `generate_racket_script()` emits deduplicated `(define ...)` blocks
-- `src/fs_types.rs:55,73-78` — `ALGORITHM_OPS_YAML` const, loaded in `build_full_registry()`
-- Two ops renamed to avoid collisions: `shell_sort→shellsort`, `base64_encode→base64_enc`
-- All 68 plan YAMLs rewritten to single-step op calls (zero let_bind/iterate remaining)
-- 108/108 algorithm plans pass, 1471 tests pass
-
-### NL Autoregression Complete (plan `nl-autoregression`, commit `e3f6c53`)
-- **Score: 108/108 (100.0%)** — all 14 algorithm categories at 100%
-- `src/nl/intent_compiler.rs:75-93` — Short-circuit in `compile_ir()`: checks if primary action (non-select, non-order) is a plan file or algorithm atom before processing filesystem IR
-- `src/nl/intent_compiler.rs:363-395` — `compile_algorithm_op()` creates clean single-step plan for registered ops with `racket_body`
-- `src/nl/intent_compiler.rs:316-345` — `try_load_plan_file()` and `try_load_plan_yaml()` load plan files by name from `data/plans/algorithms/`
-- `data/nl/nl_lexicon.yaml:1234` — `[base64, encode]` phrase group maps to `base64_enc` (not `base64_encode`)
-- `data/nl/nl_lexicon.yaml:285` — Removed "explain" from document verb synonyms
-- `data/nl/nl_dictionary.yaml` — Added "catalog" (60) and "downloads" (80) to prevent false SymSpell corrections
-- Old pipeline removed: `build_plan()`, `handle_create_plan()`, `try_earley_or_old_pipeline()` deleted from mod.rs/dialogue.rs
-- Earley parser is sole path for plan creation; approve/reject/explain/edit still use keyword/pattern matching
-- 1292 tests passing, 66 ignored, 1 known flaky (test_type_symmetric_discovery_tabular)
-
-### Algorithm Plans Expansion (plan `algorithm-plans-expansion`, commit `7b9cbd3`)
-- **86 new atomic ops** in `data/packs/ops/algorithm.ops.yaml` (154 total)
-- **4 new categories**: matrix (8 ops), backtracking (6 ops), interval (4 ops), tree (10 ops)
-- **194 total plans** across 18 categories, all pass compile+codegen+execute
-- **NL autoregression**: 176/194 (90.7%)
-- `src/nl/mod.rs` — Pre-Earley short-circuit: scans phrase tokens for algorithm ops before Earley parse
-- `src/nl/intent_compiler.rs` — `compile_algorithm_op_by_name()` public helper, select-step concept check
-- `src/nl/phrase.rs` — Added stopwords: function, problem, check, simulation, number
-- `data/nl/nl_lexicon.yaml` — 86 verb entries, 116 phrase groups, 70 alt phrases; removed "binary" from git_bisect synonyms
-- `data/nl/nl_dictionary.yaml` — 50 new SymSpell words for algorithm-specific terms
-- `PLAYBOOK.md` — Section 11: Adding Algorithm Plans (full playbook)
-- `tests/algorithm_plans_tests.rs` — 20 tests (18 categories + aggregate + compile-only)
-- 1377 total tests passing, 1 pre-existing failure, 76 ignored
-
-### S-expression Plan DSL (plan `sexpr-plan-dsl`, commit `b1548e8`)
-- `src/sexpr.rs` [1..2000] — Full sexpr parser + lowering
-  - Tokenizer: parens, brackets, atoms, strings, booleans, comments
-  - S-expression parser: `parse_sexp()` → `Sexp` tree (List, Bracket, Atom)
-  - Typed AST: `PlanAst` with `Param`, `Expr` (15 variants), `parse_plan_sexpr()`
-  - Lowering: `lower_to_plan()` → `PlanDef` + `RawStep` chain
-  - Public API: `parse_sexpr_to_plan(src) → Result<PlanDef, ParseError>`
-- 10 core forms: `define`, `bind`, `let` (sequential/let*), `for/fold`, `for/each`, `cond`, `when`, `range`, `ref`, `set!`, `make`, `list`
-- `LowerCtx` tracks: `ref_prefix` ($step vs $body), `vectors` HashSet (make-created), `env` (var→ref mapping)
-- `ref` lowers to `list_ref` for list params, `vector_ref` for make-created collections
-- Scheme operators mapped: `+`→add, `-`→subtract, `*`→multiply, `/`→divide, `=`→equal, `<`→less_than, etc.
-- No recursion: `check_no_recursion()` walks AST and rejects self-calls
-- `src/plan.rs:794-807` — `load_plan()` detects `.sexp` extension, routes to sexpr parser
-- `src/main.rs:25-30` — CLI usage updated for `.sexp` files
-- 3 example plans:
-  - `data/plans/algorithms/arithmetic/factorial.sexp` — fold over range (7 lines)
-  - `data/plans/algorithms/number-theory/euler_totient.sexp` — fold with cond+gcd (9 lines)
-  - `data/plans/algorithms/dynamic-programming/longest_increasing_subsequence.sexp` — nested for/each, when, let, mutable DP (15 lines)
-- `tests/sexpr_tests.rs` — 9 integration tests (3 inline + 3 file-based + 3 error cases)
-- 48 new tests total (39 unit + 9 integration), 1343 total passing
-
-### Sexpr Keyword Args & Migration (plan `sexpr-keyword-args-and-migration`, complete)
-- **I1**: Keyword args in sexpr: `:keyword value` pairs, `:each` modifier
-- **I2**: `plan_to_sexpr()` serializer with `infer_type_for_serialization()`, `type_str_to_sexpr()`, `type_expr_to_sexpr()`
-- **I3**: 24 pipeline plans converted from YAML to .sexp
-- **I4**: 137 simple algorithm plans converted to .sexp, 57 complex remain as .yaml
-- **I5**: NL pipeline rewired to produce sexpr output
-  - `src/nl/intent_compiler.rs:586-650` — `generate_plan_name()` produces valid identifiers via `slugify_path()`
-  - `src/sexpr.rs:1637-1690` — `infer_type_for_serialization()` mirrors plan compiler's name-based inference
-  - `src/sexpr.rs:1670-1690` — `type_str_to_sexpr()` and `type_expr_to_sexpr()` convert Cadmus types to sexpr format
-  - All 8 test files updated with `parse_plan_any()` helper (sexpr-first, YAML fallback)
-  - YAML parsing retained as fallback for 57 complex algorithm plans
-- **Total: 1447 tests passing**, 1 pre-existing flaky failure
-- **Commit**: `d3f531a`
-
-### NL Autoregression All Plans (plan `nl-autoregression-all-plans`, commit `987521f`)
-- `tests/nl_autoregression.rs` [1-500] — Rewrote harness: loads 218 plans (24 pipeline + 194 algorithm), structural matching via ordered subsequence + param checking, hard 90% assertion
-- `src/sexpr.rs:1737-1759` — `plan_to_sexpr()` emits bare `(op)` call when step op matches plan name and all args are `$var` refs (fixes recursion-check blocker for 134 algorithm plans)
-- `src/nl/mod.rs:208-290` — Multi-strategy plan-name matching: consecutive token joins, 2-token pairs, 3-token triples, pluralization (+s, de-s), token overlap scan
-- `src/nl/mod.rs:293-315` — `SKIP_TOKENS` filter (the/a/an/etc.) for single-token algorithm-op lookup
-- `src/nl/mod.rs:539-592` — `find_plan_by_token_overlap()` scans all plan files, matches when all name words appear in input tokens (order-independent)
-- `src/nl/intent_compiler.rs:332-386` — `try_load_plan_file()` and `try_load_plan_sexpr()` now search `data/plans/` (pipeline) in addition to `data/plans/algorithms/`; hyphen-to-underscore normalization
-- `data/nl/nl_dictionary.yaml:2963-3006` — 44 words added to prevent false SymSpell corrections (audit→edit, comic→commit, stack→slack, queue→query, peak→speak, height→weight, graph→grep, miller→filter, nth→kth)
-- Score progression: 20.2% → 81.7% (recursion fix) → 94.0% (vocab/lookup) → 95.4% (token fixes)
-- 10 remaining failures: 7 ERROR (type mismatch/unknown op), 2 CLARIFY, 1 WRONG
-- 1362 total tests passing, 1 pre-existing flaky (test_type_symmetric_discovery_tabular)
-
-### NL Autoregression 100% (plan `fix-remaining-10`, commit `e9110e7`)
-- **218/218 plans pass (100%)**, hard 100% gate in `tests/nl_autoregression.rs:474`
-- `data/nl/nl_dictionary.yaml:3055-3065` — 11 words added: lowest, zeros, radius, centered, arith, permutations, nodes, permutation, node, walk, contents
-- `src/nl/mod.rs:218-232` — Early first-token check: tries first content token as direct plan name
-- `src/nl/mod.rs:548-620` — `find_plan_by_token_overlap()` improvements:
-  - `NAME_STOPWORDS` (with/and/is/in/of/to/by/for/a/the) skipped in plan names
-  - Compound token splitting: parts of underscore-joined tokens added to token_set
-  - Score by word count (no direct match bonus — caused regressions)
-- `data/nl/nl_lexicon.yaml:1644-1645` — `[binary,tree,height,balanced]→is_balanced_tree` skeleton
-- `data/nl/nl_lexicon.yaml:1636-1637` — `[complex,arithmetic]→complex_arith` skeleton
-- `data/plans/complex_arith.sexp:1` — Description changed to NL-friendly format
-- Key insight: early token check must be limited to FIRST content token only — checking later compound tokens causes regressions (insertion_sort beats timsort, caesar_cipher beats rot13_cipher)
-
-### Cadmus Continuous Improvement Runbook (plan `cadmus-runbook`, commit `af32f6f`)
-- `RUNBOOK.md` [1-553] — Machine-executable guide for AI agents to add new domains. 6 phases, 3 appendices.
-- `data/domains.yaml` [1-202] — Machine-readable registry: 19 algorithm categories + pipeline, 11 suggested_next domains
-- `tests/domain_autoregression.rs` — Full-funnel report: NL match → compile → codegen → execute → correct output
-- `data/packs/ops/text_processing.ops.yaml` — 16 ops: string_split, string_join, chars_of, csv_parse_row, word_count, char_frequency, char_frequency_report, title_case, repeat_string, pad_left, truncate_string, strip_whitespace, count_substring, camel_to_snake, text_statistics
-- `data/plans/algorithms/text-processing/` — 11 plans (8 multi-step = 73%)
-- `src/fs_types.rs:82-88` — text_processing.ops.yaml loaded in build_full_registry()
-- `src/racket_executor.rs:59-64` — text_processing.ops.yaml loaded in build_racket_registry()
-
-### Codegen Fixes (discovered during text-processing implementation)
-- `src/racket_executor.rs` — `emit_racket_body_defines()` + `emit_raw_step_defines()`: recursive sub-step scanning for ops with racket_body
-- `src/racket_executor.rs` — racket_body define emission now uses `poly.racket_symbol` instead of `op.replace('_', "-")`
-- `src/racket_executor.rs` — `compile_single_substep()` uses `input_names` order from registry (not alphabetical) for param ordering
-- `src/racket_executor.rs` — `if_then`/`conditional` sub-step handler added (test/then/else params)
-- **Key insight**: ops with underscores in racket_symbol (e.g., `csv_parse_row`) were broken because define used hyphens but sub-step calls used underscores
-
-### Test Counts (post-runbook)
-- 229 NL autoregression plans (was 218), 100% pass rate
-- 205 algorithm plans (was 194) + 24 pipeline = 229 total
-- 1449 tests passed, 0 failed
-
-### Test Hygiene (commit `6132b53`)
-- **5 test files deleted**: trace_pipeline.rs, trace_promote.rs, pipeline_trace.rs, complex_programs.rs, nl_comic_trace.rs
-- **39 tests removed** (28 passed + 11 ignored), all duplicated or diagnostic
-- **Flaky test fixed**: `test_type_symmetric_discovery_tabular` in shell_callable_tests.rs — replaced HashMap-order-dependent inference-kind assertion with stable registration+symbol check
-- **Registry helpers deduplicated**: 4 local `build_racket_registry()` helpers replaced with canonical `cadmus::racket_executor::build_racket_registry()`
-- **Final counts**: 1421 passed, 0 failed, 65 ignored
-- **Net**: -1538 lines, +24 lines across 11 files
-
-### YAML → Sexpr Migration Complete (commit `07473a9`)
-- **All YAML plan parsing removed from src/**
-  - `parse_plan()`, `validate_plan()`, `PlanDef`/`PlanInput` Deserialize impls deleted
-  - `load_plan()` and `run_plan_str()` now sexpr-only
-  - `serde_yaml::Value` in `StepParam::Clauses` and `RawStep` Deserialize preserved (clause compilation)
-- **229 .sexp plan files** (0 .yaml), 188 algorithm atom ops
-- **70 inline YAML strings** in 8 test files converted to sexpr
-- **Sexpr type syntax**: `(File (Archive (File Image) Cbz))` not `File(Archive(File(Image), Cbz))`
-- **1421 tests passing**, 0 failures, 0 warnings
-- `src/sexpr.rs::parse_sexpr_to_plan()` is the sole plan parser entry point
-
-### Statistics Domain (plan `statistics-domain`, commit `323a46e`)
-- `data/packs/ops/statistics.ops.yaml` — 19 ops: mean_list, median_list, mode_list, variance_list, stddev_list, range_stat, min_list, max_list, percentile, z_score, geometric_mean, harmonic_mean, covariance, correlation, weighted_mean, five_number_summary, outlier_count, normalize_list, mean_absolute_deviation
-- `data/plans/algorithms/statistics/` — 17 plans (12 multi-step=71%, 5 single-step=29%)
-- Multi-step plans: coefficient_of_variation (4 ops), sample_variance (5 ops), outlier_percentage (4 ops), standard_error (4 ops), interquartile_range (3 ops), mean_minus_median (3 ops), geometric_vs_arithmetic (3 ops), harmonic_vs_arithmetic (3 ops), dispersion_comparison (3 ops), correlation_report (2 ops), variance_and_stddev (2 ops), weighted_grade (2 ops)
-- Single-step plans: mean_list, median_list, mode_list, five_number_summary, normalize_list
-- `src/fs_types.rs:56` — STATISTICS_OPS_YAML const, loaded in build_full_registry()
-- `src/racket_executor.rs:68` — statistics.ops.yaml loaded in build_racket_registry()
-- NL: 24 dictionary words, 19 lexicon verbs, 30 phrase skeletons
-- Removed 'mean'/'means' from fillers in nl_lexicon.yaml (conflict with statistics domain)
-- 246 total plans in NL autoregression (was 229), 100% pass rate
-- 1422 total tests, 0 failures
-- Key learning: arity-1 Racket ops (length, sqrt) need scalar arg syntax `(op $ref)` not keyword syntax `(op :param $ref)` — get_one_operand checks mode param then prev_binding, ignores named params
-- Key learning: sexpr type syntax is `(List Number)` not `List(Number)`
-
-### NL Pipeline Cleanup (plan `nl-old-pipeline-cleanup`, commit `4572670`)
-- **Deleted**: `src/nl/intent.rs` (1094 lines, 54 tests) — Intent enum, parse_intent()
-- **Deleted**: `src/nl/slots.rs` (926 lines, 54 tests) — SlotValue, StepRef, extract_slots()
-- **Moved to dialogue.rs**: EditAction, SlotValue, StepRef, Anchor, Modifier, ExtractedSlots, extract_slots(), is_path(), fuzzy_match_op(), edit_distance_bounded()
-- **Removed from normalize.rs**: `apply_synonyms()` (142 lines), `canonical_tokens` field from NormalizedInput
-- **Removed from nl_vocab.yaml**: 688 lines of synonym data (1181→488 lines)
-- **Removed from vocab.rs**: `synonyms` field from NlVocab, SynonymEntry struct
-- **Removed from mod.rs**: handle_question(), handle_set_param(), update_focus() (dead code)
-- **Added to lexicon.rs**: `is_approve()`, `is_reject()`, `try_explain()` methods
-- **Added to nl_lexicon.yaml**: `approvals:`, `rejections:`, `explain_triggers:` sections
-- **process_input() flow**: normalize → typo correct → lexicon approve/reject/explain → try_detect_edit → Earley parse
-- Net: -2237 lines, 2 files deleted, 1304 tests pass, NL autoregression 246/246 (100%)
-
-### NL Module Structure (post-cleanup)
-- `src/nl/mod.rs` [961 lines] — process_input(), try_earley_create(), try_detect_edit(), handle_approve/edit/explain
-- `src/nl/dialogue.rs` [1121 lines] — DialogueState, FocusStack, EditAction, slot types + extract_slots(), apply_edit(), plan_to_sexpr()
-- `src/nl/normalize.rs` [401 lines] — normalize(), tokenize(), expand_contractions(), canonicalize_ordinal(), is_canonical_op()
-- `src/nl/vocab.rs` [283 lines] — NlVocab (contractions, ordinals, stopwords, filler_phrases, dir_aliases, noun_patterns)
-- `src/nl/lexicon.rs` [793 lines] — Earley lexicon + approve/reject/explain detection
-- `src/nl/earley.rs` [788 lines] — Earley parser engine
-- `src/nl/grammar.rs` [380 lines] — Command grammar builder
-- `src/nl/intent_ir.rs` [687 lines] — IntentIR schema
+### Module Structure (current)
+- `src/nl/mod.rs` [961 lines] — `process_input()`, `try_earley_create()`, `try_detect_edit()`, handle_approve/edit/explain
+  - Pre-Earley short-circuit: scans phrase tokens for algorithm ops
+  - Multi-strategy plan-name matching: consecutive joins, 2/3-token pairs, pluralization, token overlap
+  - `find_plan_by_token_overlap()` — order-independent word matching with NAME_STOPWORDS
+  - Early first-token check: tries first content token as direct plan name
+  - Recipe query check runs BEFORE try_explain
+  - `try_recipe_query()`, `handle_recipe_query()` — 6 command-query patterns
+- `src/nl/dialogue.rs` [1121 lines] — `DialogueState`, `FocusStack`, `EditAction`, slot types + `extract_slots()`, `apply_edit()`, `plan_to_sexpr()`
+  - `resolve_path()` — bare names → `/Volumes/<name>` if exists (macOS volumes)
+- `src/nl/normalize.rs` [401 lines] — `normalize()`, `tokenize()`, `expand_contractions()`, `canonicalize_ordinal()`, `is_canonical_op()`
+  - `tokenize()` has pre-pass for quote extraction (double quotes only)
+  - `canonical_ops()` derived from registry via OnceLock
+- `src/nl/vocab.rs` [283 lines] — `NlVocab` singleton (contractions, ordinals, stopwords, filler_phrases, dir_aliases, noun_patterns)
+- `src/nl/lexicon.rs` [793 lines] — Earley lexicon + `is_approve()`, `is_reject()`, `try_explain()`
+  - `TokenClassifier`, `PhraseGroup`, `PhraseGroupEntry`
+- `src/nl/earley.rs` [788 lines] — Earley parser engine (predict/scan/complete, parse forest, ranked output)
+- `src/nl/grammar.rs` [380 lines] — Command grammar builder (30+ rules, Verb Object Modifiers)
+- `src/nl/intent_ir.rs` [687 lines] — IntentIR schema + `parse_trees_to_intents()`
 - `src/nl/intent_compiler.rs` [1034 lines] — IntentIR → PlanDef
-- `src/nl/phrase.rs` [319 lines] — Phrase tokenizer
-- `src/nl/typo.rs` [612 lines] — SymSpell typo correction
-- `data/nl/nl_vocab.yaml` [488 lines] — contractions, ordinals, approvals, rejections, stopwords, dir_aliases, noun_patterns
-- `data/nl/nl_lexicon.yaml` — Earley lexicon: verbs, nouns, approvals, rejections, explain_triggers, phrase_groups
-- `data/nl/nl_dictionary.yaml` — SymSpell frequency dictionary
+  - `compile_ir()` short-circuits for plan files and algorithm atoms
+  - `compile_algorithm_op()`, `compile_algorithm_op_by_name()`
+  - `try_load_plan_file()`, `try_load_plan_sexpr()` — search data/plans/ and data/plans/algorithms/
+  - `generate_plan_name()` via `slugify_path()`
+- `src/nl/phrase.rs` [319 lines] — Greedy longest-match phrase tokenizer with stopword stripping (55 stopwords)
+- `src/nl/typo.rs` [612 lines] — SymSpell typo correction (max edit distance 2, prefix length 7)
+- `src/nl/recipes.rs` [1-430] — `RecipeIndex`, `Recipe`, `recipe_index()` OnceLock
+  - Builds from CLI fact pack: base_command + submode_* + keyword mappings
+  - `score_recipe()` — distinct token matching, fuzzy match, coverage bonus
 
-### Prompts.txt Plans Feature (plan `prompts-txt-plans`)
-- **22 new .sexp plan files** in `data/plans/` for macOS desktop tasks
-- `data/packs/ops/fs.ops.yaml` — 11 new ops: trash, find_recent, find_modified_since, find_by_size, rename_by_date, organize_by_extension, show_hidden_files, replace_in_filenames, find_duplicates_by_hash, compare_dirs, backup_timestamped
-- `data/packs/ops/macos_tasks.ops.yaml` — 13 ops with `racket_body` (shadows fs.ops.yaml for codegen)
-- `src/fs_types.rs:58` — `MACOS_TASKS_OPS_YAML` const, loaded in `build_full_registry()` at line 96-102
-- `src/racket_executor.rs:75-80` — macos_tasks.ops.yaml loaded in `build_racket_registry()`
-- `src/type_lowering.rs:265-277` — 11 new subsumption entries
-- `data/nl/nl_dictionary.yaml` — ~68 words added for macOS task domain
-- `tests/prompts_tests.rs` — 33 integration tests
-- `tests/fs_integration.rs:503` — Op count updated from 60 to 71
-- **Bugfix**: `data/plans/algorithms/string/longest_repeating_substring.sexp` — description no longer mentions "suffix array" (caused wrong plan match)
-- **Total: 1337 tests passed**, 0 failed, 65 ignored
-- **NL autoregression: 268/268 (100%)**
+### NL Pipeline Flow
+normalize → typo_correct → re-normalize → lexicon approve/reject/explain → try_detect_edit → recipe query → Earley parse
+- Earley is sole path for plan creation; approve/reject/explain/edit use keyword/pattern matching
+- Unimplemented Earley actions fall through to NeedsClarification
 
-### Command Recipe Lookup (commit `b269e77`)
-- `src/nl/recipes.rs` [1-430] — `RecipeIndex`, `Recipe` struct, `recipe_index()` OnceLock singleton
-  - `RecipeIndex::build(pack)` — builds from CLI fact pack: base_command + submode_* properties + description keywords + task-oriented keyword mapping
-  - `RecipeIndex::lookup(tokens)` — scores recipes by distinct token matches (min 2), fuzzy matching (contains with length guards), submode bonus
-  - `build_task_keywords()` — 40+ CLI command/submode → natural language keyword mappings
-  - `score_recipe()` — distinct token matching, fuzzy keyword match, coverage bonus, submode preference
-  - `fuzzy_keyword_match()` — exact, token-contains-keyword (keyword >= 4 chars), keyword-contains-token
-- `src/nl/mod.rs:127-139` — Recipe query check runs BEFORE try_explain (avoids what/how trigger interception)
-- `src/nl/mod.rs:549-660` — `try_recipe_query()`, `handle_recipe_query()`, pattern detection helpers
-  - 6 patterns: "give me the command to", "whats the command for", "what is the command to", "show me the command for", "what command do I use to", "how do I X from terminal/command line"
-  - `strip_prefix_seq()`, `strip_leading_preps()`, `has_suffix()`, `strip_terminal_suffix()`
-- `data/packs/facts/macos_cli.facts.yaml` — 4 new entities (caffeinate, defaults, fswatch, launchctl), 7 new submodes
-- `data/nl/nl_dictionary.yaml` — 25 new words for recipe domain
-- `tests/recipe_tests.rs` — 32 integration tests (20 prompts + 4 alt phrasings + 4 negative + 2 regression + 2 format)
-- **Key design**: "pasta" → "paste" by SymSpell correction was a false positive; fixed by counting distinct token matches instead of keyword matches
-- **Key design**: Recipe check must run before try_explain because "what" and "how" are explain triggers
-- **1390 total tests**, 0 failures, 65 ignored, NL autoregression 268/268 (100%)
+### NL Data Files
+- `data/nl/nl_vocab.yaml` [488 lines] — contractions, ordinals, stopwords, filler_phrases, dir_aliases (15), noun_patterns (22)
+- `data/nl/nl_lexicon.yaml` — 104 base verbs, 1186 total words, 116 phrase_groups, approvals, rejections, explain_triggers
+- `data/nl/nl_dictionary.yaml` — SymSpell frequency dictionary (~2500+ words)
+
+### NL Public API
+- `process_input(input: &str, state: &mut DialogueState) -> NlResponse`
+- `NlResponse` variants: PlanCreated, PlanEdited, Explanation, Approved{script}, Rejected, NeedsClarification, ParamSet, Error
+- `DialogueState`: current_plan, focus stack, turn_count, last_intent, alternative_intents
+
+## Data Files
+
+### Ops Packs
+- `data/packs/ops/fs.ops.yaml` — filesystem ops (49 base + 11 macOS tasks + 9 format-specific archive)
+- `data/packs/ops/power_tools.ops.yaml` — 64 ops: git, tmux/screen, jq/yq/csv, awk/sed, ps/kill/df, ssh/scp, gzip/xz
+- `data/packs/ops/racket.ops.yaml` — ~47 ops: arithmetic, list, set, stdio, higher-order, boolean, string, shell anchors
+- `data/packs/ops/algorithm.ops.yaml` — 154 opaque ops with `racket_body` and `input_names`
+- `data/packs/ops/text_processing.ops.yaml` — 16 ops: string_split, csv_parse_row, char_frequency, etc.
+- `data/packs/ops/statistics.ops.yaml` — 19 ops: mean, median, mode, variance, stddev, correlation, etc.
+- `data/packs/ops/macos_tasks.ops.yaml` — 13 ops with `racket_body` (shadows fs.ops for codegen)
+- `data/packs/ops/comparison.ops.yaml` — 6 comparison reasoning ops
+- `data/packs/ops/coding.ops.yaml` — 6 code analysis ops (stub)
+
+### Fact Packs
+- `data/packs/facts/racket.facts.yaml` — 14 entities (4 arithmetic, 4 list, 6 comparison/string + 12 shell), type_symmetry axis
+- `data/packs/facts/macos_cli.facts.yaml` — CLI entities with submodes, output-format classes
+- `data/packs/facts/macos_fs.facts.yaml` — macOS filesystem tools
+- `data/packs/facts/putin_stalin.facts.yaml` — Example comparison fact pack
+
+### Other Data
+- `data/filetypes.yaml` — 197 entries, 14 categories, `format_families` section
+- `data/domains.yaml` — 19 algorithm categories + pipeline, 11 suggested_next domains
+- `data/plans/` — 24 pipeline .sexp plans + `data/plans/algorithms/` (194+ algorithm plans across 18 categories)
+
+## File Type Dictionary
+- `src/filetypes.rs` — OnceLock singleton: `dictionary()` → `lookup()`, `lookup_by_path()`, `is_known_extension()`, `has_known_extension()`, `extensions_for_category()`, `format_family()`
+
+## CLI
+- `src/main.rs` — 3 modes: `--chat` (NL readline), `--plan <path> [--run]` (plan compile/execute), default (demo)
+  - `cadmus --plan <path.sexp> [--run]` — Racket is sole codegen target
+- `src/line_editor.rs` — `LineEditor`, `ReadResult` — rustyline v15 wrapper, `~/.cadmus_history`
+- `src/ui.rs` — ANSI color helpers, geometric icons, formatting primitives (zero external deps)
+  - `color_enabled()` checks NO_COLOR/TERM=dumb
+  - 30 style functions, axis helpers, tree formatting, status badges
+
+## Key Design Principles
+
+### Op Architecture
+- Shell ops = anchors to the world (bridge in/out of OS)
+- Racket-native ops = intermediate transformation logic (filter, sort, map, fold)
+- Algorithm atoms = opaque Racket bodies with typed signatures
+- `filter` is racket-native only, NOT dual-behavior
+- `sort_by`, `head`, `tail`, `count`, `unique` are dual-behavior
+
+### Type System
+- `TypeExpr` is an open grammar — new types are just strings, no enum variants to add
+- `walk_tree` returns `Seq(Entry(Name, a))` (flat); `walk_tree_hierarchy` returns `Tree(Entry(Name, a))`
+- `walk_tree` on default Dir produces `Seq(Entry(Name, Bytes))`, not `Seq(Entry(Name, File(Text)))`
+- `PlanDef.output` is stored but NOT used for type-checking — compiler infers from step chain
+- Compiler auto-infers map mode via `step_needs_map()` — `each` keyword is a hint, not sole trigger
+
+### Inference
+- Phase ordering is deterministic, but HashMap iteration within phases is not
+- `multiply` inference kind varies between runs — both paths produce identical results
+- `string_downcase` is always TypeSymmetric (reliable for testing)
+- Category gate prevents cross-domain inference leakage
+
+### Plans
+- All plans are .sexp format; `parse_sexpr_to_plan()` is sole parser entry point
+- 268 total plans in NL autoregression, 100% pass rate
+- Mutation pattern: make_vector + for_range + vector_set
+- Conditional: cond with clauses list
+- Accumulation: fold with acc/init/var/over/body
+- Complex data: use bindings for literals, not list_new (avoids whitespace splitting)
+- No-arg ops: `op: ""` → `(random)`
+
+### Codegen
+- racket_body define emission uses `poly.racket_symbol` (not `op.replace('_', "-")`)
+- Ops with underscores in racket_symbol need matching define names
+- Arity-1 Racket ops need scalar arg syntax `(op $ref)` not keyword syntax
+
+## Gotchas & Subtle Behaviors
+- `Literal` has `type_id`, `key`, `value`, `metadata` — no `description` field; `ExprLiteral` has `description`
+- `poly_op_names()` returns `Vec<&str>` — use `contains(&"name")` not `contains("name")`
+- Generic planner uses `TypeId` (string-based), not `TypeExpr` — need custom registries for planner tests
+- `parse_plan` catches empty steps before `compile_plan` runs
+- SymSpell corrects plurals→singulars, so both forms needed in YAML tables
+- Typo correction runs BEFORE synonym mapping — corrected words may not match synonyms
+- Only double quotes supported in NL (single quotes conflict with contractions)
+- Early first-token check must be limited to FIRST content token only — later compounds cause regressions
+- "pasta" → "paste" by SymSpell was false positive; fixed by counting distinct token matches
+
+## Test Suite
+- **1390 passed, 0 failed, 65 ignored** (current)
+- Key test files:
+  - `tests/nl_autoregression.rs` — 268/268 plans, hard 100% gate
+  - `tests/nl_tests.rs` — NL integration (184 tests)
+  - `tests/nl_earley_tests.rs` — Earley parser (72 tests)
+  - `tests/stress_pipeline.rs` — 80 stress tests across 7 subsystems
+  - `tests/algorithm_plans_tests.rs` — 20 tests (18 categories + aggregate + compile-only)
+  - `tests/archive_codegen_tests.rs` — archive format codegen
+  - `tests/shell_callable_tests.rs` — shell-callable Racket forms
+  - `tests/recipe_tests.rs` — 32 command recipe tests
+  - `tests/prompts_tests.rs` — 33 macOS desktop task tests
+  - `tests/domain_autoregression.rs` — full-funnel domain report
+  - `tests/semantic_tests.rs` — 46 goal→plan→execution tests
+  - `tests/sexpr_tests.rs` — sexpr parser tests
+  - `tests/compact_facts_tests.rs` — compact properties format
+  - `tests/racket_tests.rs` — Racket codegen + inference
+  - `tests/fs_integration.rs` — filesystem integration
+  - `tests/integration.rs` — original reasoning engine tests
+  - `tests/power_tools_tests.rs` — power tools ops/facts
+  - `tests/plan_tests.rs` — plan compiler
+  - `tests/repro_screenshot.rs` — NL→Racket roundtrip
+  - `tests/generic_planner_tests.rs` — generic planner
+
+## Documentation
+- `ARCHITECTURE.md` — System architecture overview
+- `PLAYBOOK.md` — Adding ops, facts, plans, file types, shell-callable forms, algorithm plans
+- `RUNBOOK.md` — Machine-executable guide for adding new domains (6 phases, 3 appendices)
+- `BUGS.md` — 16 bugs: 14 fixed, 1 deferred (BUG-009 multi-input ops), 1 by-design (BUG-012)
+- `SEMANTICS.md` — Semantic correctness analysis

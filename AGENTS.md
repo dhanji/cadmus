@@ -50,7 +50,7 @@
 | New file type | `data/filetypes.yaml` only (zero Rust) |
 | New NL synonym | `data/nl/nl_vocab.yaml` only (zero Rust) |
 | New Earley verb | `data/nl/nl_lexicon.yaml` + possibly `src/nl/intent_compiler.rs` |
-| New plan | `data/plans/<name>.yaml` only (zero Rust) |
+| New plan | `data/plans/<name>.sexp` only (zero Rust) |
 | New fact pack | `data/packs/facts/<name>.facts.yaml` only (zero Rust) |
 | New Racket codegen pattern | `src/racket_executor.rs::op_to_racket` |
 | New type lowering | `src/type_lowering.rs` (add to `SUBSUMPTION_MAP` or `RACKET_NATIVE_MAP`) |
@@ -62,7 +62,7 @@
 |---------|-----------|
 | Plan won't compile | `src/plan.rs::compile_plan` — check `PlanError` variant |
 | Type mismatch | `src/type_expr.rs::unify` — check `UnifyError` |
-| NL misunderstands input | `src/nl/normalize.rs` (synonym mapping), `src/nl/typo.rs` (correction), `src/nl/intent.rs` (intent recognition) |
+| NL misunderstands input | `src/nl/normalize.rs` (normalization), `src/nl/typo.rs` (correction), `src/nl/lexicon.rs` (classification), `src/nl/intent_compiler.rs` (IR→plan) |
 | Racket script wrong | `src/racket_executor.rs::op_to_racket` — check dispatch order |
 | Op not found | `src/fs_types.rs::build_full_registry` — check loading order |
 | Inference not discovering op | `src/racket_strategy.rs` — check fact pack has `op_name`, `racket_symbol`, and `symmetric_partner` or `type_symmetry_class` properties |
@@ -73,7 +73,7 @@
 
 ### HashMap Iteration Order (`src/racket_strategy.rs`)
 
-The inference engine iterates over `HashMap<String, ...>` to discover ops. This means the order of Phase 1 vs Phase 2 discovery is non-deterministic. The `multiply` op can be discovered via either op-symmetric (from `divide`) or type-symmetric (from `add`) depending on iteration order. Both paths produce identical results, but tests that assert the inference kind are flaky. **Known flaky test**: `test_type_symmetric_discovery_tabular` in `tests/shell_callable_tests.rs:209`.
+The inference engine iterates over `HashMap<String, ...>` to discover ops. This means the order of Phase 1 vs Phase 2 discovery is non-deterministic. The `multiply` op can be discovered via either op-symmetric (from `divide`) or type-symmetric (from `add`) depending on iteration order. Both paths produce identical results. Tests now assert registration+symbol (stable) rather than inference kind (flaky).
 
 ### Registry `rfind` Shadowing (`src/registry.rs`)
 
@@ -105,9 +105,9 @@ The plan compiler uses a `OnceLock<OperationRegistry>` for fallback registry loo
 
 ### Do
 
-- **Run `cargo test` after every change** — 1452+ tests, catches most regressions
+- **Run `cargo test` after every change** — 1390+ tests, catches most regressions
 - **Add YAML data instead of Rust code** when possible — ops, file types, vocabulary, plans
-- **Follow the function-framing YAML format** for new plans (top-level key is plan name)
+- **Follow the sexpr format** for new plans (`.sexp` files are the sole plan format)
 - **Use `TypeExpr::parse()` to validate type expressions** before adding them to YAML
 - **Add tests for new NL patterns** — the NL layer has extensive integration tests in `tests/nl_tests.rs`
 - **Check `BUGS.md`** before investigating NL issues — it may already be documented
@@ -116,7 +116,7 @@ The plan compiler uses a `OnceLock<OperationRegistry>` for fallback registry loo
 
 - **Don't add ops with names that collide across packs** — the registry silently shadows
 - **Don't hardcode extension lists** — use `data/filetypes.yaml` via `filetypes::dictionary()`
-- **Don't hardcode synonym lists** — use `data/nl/nl_vocab.yaml` via `vocab::vocab()`
+- **Don't hardcode word lists** — use `data/nl/nl_vocab.yaml` via `vocab::vocab()` or `data/nl/nl_lexicon.yaml`
 - **Don't bypass `compile_plan()`** — it's the type-checking gate; skipping it produces untyped steps
 - **Don't add words to the SymSpell dictionary without checking for false corrections** — common words at high frequency can "correct" valid domain terms
 - **Don't assume `build_full_registry()` is cheap** — it loads 5 YAML files and runs inference; cache the result
@@ -126,7 +126,7 @@ The plan compiler uses a `OnceLock<OperationRegistry>` for fallback registry loo
 ```bash
 cargo build                    # Build debug
 cargo build --release          # Build release
-cargo test                     # Run all tests (~1452)
+cargo test                     # Run all tests (~1390)
 cargo test <test_name>         # Run specific test
 cargo test --test nl_tests     # Run NL integration tests
 cargo clippy                   # Lint
@@ -140,12 +140,12 @@ cargo fmt                      # Format
 | Assumption | Reality |
 |-----------|---------|
 | "Operations are defined in Rust" | Operations are defined in YAML (`data/packs/ops/*.ops.yaml`). Rust code loads and registers them. |
-| "The Earley parser handles all NL input" | The Earley parser only handles plan creation. Approve/reject/explain/edit use keyword matching. And ~80% of verb actions fall through to the old pipeline. |
+| "The Earley parser handles all NL input" | The Earley parser only handles plan creation. Approve/reject/explain/edit use keyword matching in `src/nl/lexicon.rs`. Unimplemented verb actions fall through to NeedsClarification. |
 | "Types are an enum" | `TypeExpr` is an open grammar — new types are just strings. No enum variants to add. |
 | "Each mode is explicit in YAML" | The compiler also infers map mode automatically via `step_needs_map()`. The `each` keyword is a hint, not the only trigger. |
-| "The bash executor still exists" | It was removed. Racket is the sole codegen target. The `--execute` flag was replaced by `--run`. |
-| "All 108 algorithm plans work" | Only 44/108 compile and 41/108 execute. The bottleneck is `infer_input_type()`. |
+| "The bash executor still exists" | It was removed. Racket is the sole codegen target. Use `--run` to execute. |
+| "All algorithm plans work out of the box" | All 194+ algorithm plans compile and execute. NL autoregression is 268/268 (100%). |
 | "Inference is deterministic" | Phase ordering is deterministic, but HashMap iteration within phases is not. The `multiply` op's inference kind varies between runs. |
 | "The output type declaration is checked" | `PlanDef.output` is stored but not used for type-checking. The compiler infers output from the step chain. |
 | "`filter` is a shell op" | `filter` is Racket-native only. `sort_by`, `head`, `tail`, `count`, `unique` are dual-behavior (shell or Racket depending on context). |
-| "Adding a new verb to the lexicon makes it work" | You also need to implement the action label in `src/nl/intent_compiler.rs::compile_ir()`. Without that, it falls through to the old pipeline. |
+| "Adding a new verb to the lexicon makes it work" | You also need to implement the action label in `src/nl/intent_compiler.rs::compile_ir()`. Without that, it falls through to NeedsClarification. |
