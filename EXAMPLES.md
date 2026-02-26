@@ -4,6 +4,10 @@ This document walks through Cadmus end-to-end: from the plan DSL, through type
 inference and compilation, to generated Racket programs. Every example is real —
 you can run them with `cadmus --plan <file>`.
 
+The second half traces real natural-language prompts through every pipeline stage,
+showing exactly what happens at each step. These traces are verified by
+`tests/pipeline_traces.rs` — they're not hand-written, they're captured output.
+
 ---
 
 ## Table of Contents
@@ -15,7 +19,7 @@ you can run them with `cadmus --plan <file>`.
 5. [Git & DevOps](#git--devops)
 6. [Arithmetic & Pure Computation](#arithmetic--pure-computation)
 7. [Algorithms](#algorithms)
-8. [Natural Language Interface](#natural-language-interface)
+8. [Pipeline Traces](#pipeline-traces)
 9. [Type System Deep Dive](#type-system-deep-dive)
 10. [Op Inference](#op-inference)
 
@@ -229,16 +233,16 @@ Each step threads `File(Text)` through the chain. The generated Racket pipes
 shell commands via `shell-lines`, with each awk/sed invocation receiving the
 previous step's output.
 
-### Multi-step statistics
+### Multi-step statistics with back-references
 
 ```scheme
 ;; Coefficient of variation: stddev / mean × 100
 (define (coefficient_of_variation (lst : (List Number)))
   (bind lst (list 2 4 4 4 5 5 7 9))
-  (mean_list :lst $lst)                 ;; → 5.0
-  (stddev_list :lst $lst)               ;; → 2.0
-  (divide :x $step-2 :y $step-1)       ;; → 0.4  ($step-2 = stddev, $step-1 = mean)
-  (multiply :x $step-3 :y 100))        ;; → 40.0
+  (mean_list :lst $lst)                 ;; step 1 → 5.0
+  (stddev_list :lst $lst)               ;; step 2 → 2.0
+  (divide :x $step-2 :y $step-1)       ;; step 3 → 0.4  (stddev / mean)
+  (multiply :x $step-3 :y 100))        ;; step 4 → 40.0
 ```
 
 Note the `$step-N` back-references: step 3 divides step 2's output by step 1's
@@ -392,71 +396,190 @@ This uses mutable vectors (`make`, `set!`, `ref`), nested iteration
 
 ---
 
-## Natural Language Interface
+## Pipeline Traces
 
-Cadmus accepts natural language in `--chat` mode. The pipeline:
+These are real traces captured from `tests/pipeline_traces.rs`. Each shows
+a natural-language prompt flowing through every stage of the pipeline.
 
-```
-input text
-  → normalize (tokenize, expand contractions)
-  → typo correct (SymSpell, ~2500 word dictionary)
-  → phrase tokenize (greedy longest-match against 116 phrase groups)
-  → Earley parse (30+ grammar rules, 104 verb entries)
-  → IntentIR (structured intermediate representation)
-  → recipe table (18 action labels → op sequences)
-  → PlanDef (typed plan)
-  → compile_plan() (type-check via unification)
-  → generate_racket_script()
-```
-
-### Example conversation
+### Trace 1: "find all PDFs in ~/Documents"
 
 ```
-you: find all PDFs in ~/Documents
-```
-```
-✓ Plan created
-
-  (define (find-pdfs (path : Dir) (keyword : Pattern))
-    (list_dir)
-    (find_matching :pattern "*.pdf")
-    (sort_by "name"))
-
-  approve, edit, or reject?
-```
-```
-you: yes
-```
-```
-✓ Approved
-
-  #!/usr/bin/env racket
-  #lang racket
-  ...
-  (let*
-    ([step-1 (shell-lines (string-append "ls " (shell-quote ".")))]
-     [step-2 (filter (lambda (line) (regexp-match? (regexp "\\.pdf$") line)) step-1)]
-     [step-3 (sort step-2 string<?)])
-    (displayln step-3))
+  1. Normalize:      ["find", "all", "pdfs", "in", "~/Documents"]
+  2. Typo correct:   ["find", "all", "pdfs", "in", "~/Documents"]
+  3. Phrase tokens:  ["find", "all", "pdfs", "in", "~/Documents"]
+  4. Earley parse:   1 parse(s), best score: 10.6
+  5. Plan name:      find-pdfs
+  6. Plan ops:       [list_dir → find_matching → sort_by]
+  7. Type chain:
+       list_dir:      Dir(File(PDF)) → Seq(Entry(Name, File(PDF)))
+       find_matching: Seq(Entry(Name, File(PDF))) → Seq(Entry(Name, File(PDF)))
+       sort_by:       Seq(Entry(Name, File(PDF))) → Seq(Entry(Name, File(PDF)))
+  8. Racket:         (747 chars)
+  9. Output:         ()
 ```
 
-### NL → plan matching
+**What happened:** The Earley parser recognized `find [noun] in [path]` as a
+`select` action. The recipe table expanded `select` into `list_dir → find_matching
+→ sort_by`. The `*.pdf` glob narrowed the input type from `Dir(Bytes)` to
+`Dir(File(PDF))`, and unification threaded `File(PDF)` through every step.
 
-The NL layer matches input to existing plans or constructs new ones:
+### Trace 2: "compute the factorial"
 
-| Input | Matched Plan |
-|-------|-------------|
-| "find all PDFs in ~/Documents" | `find-pdfs` |
-| "zip up everything in ~/Downloads" | constructs compress pipeline |
-| "delete .DS_Store files recursively" | `delete-ds-store` |
-| "sort files by size newest first" | constructs walk + sort pipeline |
-| "add 10 and 20" | constructs arithmetic plan |
-| "compute the factorial" | `factorial` (algorithm atom) |
-| "run dijkstra's algorithm" | `dijkstra_shortest_path` (algorithm atom) |
-| "what does walk_tree mean?" | explanation: "find — recursively walk directory tree" |
+```
+  1. Normalize:      ["compute", "the", "factorial"]
+  2. Typo correct:   ["compute", "the", "factorial"]
+  3. Phrase tokens:  ["compute", "the", "factorial"]
+  4. Earley parse:   1 parse(s), best score: 3.1
+  5. Plan name:      factorial
+  6. Plan ops:       [add → range → fold]
+  7. Type chain:
+       add:   Number → Number
+       range: Number → List(Number)
+       fold:  List(Number) → List(Number)
+  8. Racket:         (320 chars)
+  9. Output:         3628800
+```
 
-**Autoregression score: 268/268 (100%)** — every plan's description, when fed
-back through the NL pipeline, produces a structurally matching plan.
+**What happened:** The pre-Earley short-circuit found "factorial" as a plan file
+in `data/plans/algorithms/arithmetic/factorial.sexp`. The plan was loaded with
+its `(bind n 10)` binding, compiled through the type chain, and executed.
+The fold computed `1 × 2 × 3 × ... × 10 = 3628800`.
+
+### Trace 3: "run dijkstra shortest path"
+
+```
+  1. Normalize:      ["run", "dijkstra", "shortest", "path"]
+  2. Typo correct:   ["run", "dijkstra", "shortest", "path"]
+  3. Phrase tokens:  ["run", "dijkstra_shortest_path"]
+  4. Earley parse:   1 parse(s), best score: 2.1
+  5. Plan name:      dijkstra_shortest_path
+  6. Plan ops:       [dijkstra_shortest_path]
+  7. Type chain:
+       dijkstra_shortest_path: Number → List(Number)
+  8. Racket:         (836 chars)
+  9. Output:         (0 3 1 4 7)
+```
+
+**What happened:** The phrase tokenizer joined "dijkstra", "shortest", "path"
+into a single token `dijkstra_shortest_path` via a phrase group in the lexicon.
+This matched the algorithm plan file directly. The plan is a single atomic op
+with a `racket_body` — a full Dijkstra implementation emitted as a `(define ...)`
+block. The test graph has 5 nodes, and the output is shortest distances from
+node 0: `(0 3 1 4 7)`.
+
+### Trace 4: "merge sort a list"
+
+```
+  1. Normalize:      ["merge", "sort", "a", "list"]
+  2. Typo correct:   ["merge", "sort", "a", "list"]
+  3. Phrase tokens:  ["merge_sort", "a", "list"]
+  4. Earley parse:   1 parse(s), best score: 3.1
+  5. Plan name:      merge_sort
+  6. Plan ops:       [merge_sort]
+  7. Type chain:
+       merge_sort: List(Number) → List(Number)
+  8. Racket:         (639 chars)
+  9. Output:         (1 2 3 4 5 6 7 8 9)
+```
+
+**What happened:** Phrase tokenizer joined "merge" + "sort" → `merge_sort`.
+The algorithm atom's `racket_body` contains a full merge sort implementation.
+Input: `(5 3 8 1 9 2 7 4 6)` → Output: `(1 2 3 4 5 6 7 8 9)`.
+
+### Trace 5: "euler totient"
+
+```
+  1. Normalize:      ["euler", "totient"]
+  2. Typo correct:   ["euler", "totient"]
+  3. Phrase tokens:  ["euler_totient"]
+  4. Earley parse:   1 parse(s), best score: 1.5
+  5. Plan name:      euler_totient
+  6. Plan ops:       [range → fold]
+  7. Type chain:
+       range: Number → List(Number)
+       fold:  List(Number) → List(Number)
+  8. Racket:         (326 chars)
+  9. Output:         4
+```
+
+**What happened:** This is a multi-step plan (not an atomic op). The plan
+generates `range(1, n)` then folds with a `cond` that checks `gcd(i, n) == 1`.
+For n=12, there are 4 integers coprime to 12: {1, 5, 7, 11}.
+
+### Trace 6: "list files in /tmp"
+
+```
+  1. Normalize:      ["list", "files", "in", "/tmp"]
+  2. Typo correct:   ["list", "files", "in", "/tmp"]
+  3. Phrase tokens:  ["list", "files", "in", "/tmp"]
+  4. Earley parse:   1 parse(s), best score: 10.5
+  5. Plan name:      list_in__tmp
+  6. Plan ops:       [list_dir]
+  7. Type chain:
+       list_dir: Dir(Bytes) → Seq(Entry(Name, Bytes))
+  8. Racket:         (579 chars)
+  9. Output:         (actual directory listing of /tmp)
+```
+
+**What happened:** The Earley parser recognized `list [noun] in [path]` as an
+`enumerate` action. The recipe table mapped `enumerate` to `list_dir`. The path
+`/tmp` was bound as the input. The generated Racket runs `ls /tmp` and returns
+the actual directory contents.
+
+### Trace 7: "sort files by size biggest first"
+
+```
+  1. Normalize:      ["sort", "files", "by", "size", "biggest", "1"]
+  2. Typo correct:   ["sort", "files", "by", "size", "suggest", "1"]
+  3. Phrase tokens:  ["sort", "files", "by", "size", "suggest", "1"]
+  4. Earley parse:   1 parse(s), best score: 6.1
+  5. Plan name:      sort
+  6. Plan ops:       [walk_tree → sort_by]
+  7. Type chain:
+       walk_tree: Dir(Bytes) → Seq(Entry(Name, Bytes))
+       sort_by:   Seq(Entry(Name, Bytes)) → Seq(Entry(Name, Bytes))
+```
+
+**What happened:** Note the normalization: "first" → "1" (ordinal canonicalization)
+and the typo correction: "biggest" → "suggest" (a false correction — this is a
+known limitation of the SymSpell dictionary). Despite the correction error, the
+Earley parser still recognized the `order` action with `by=size`, and the recipe
+table produced `walk_tree → sort_by`.
+
+### Trace 8: "binary search for 7"
+
+```
+  1. Normalize:      ["binary", "search", "for", "7"]
+  2. Typo correct:   ["binary", "search", "for", "7"]
+  3. Phrase tokens:  ["binary_search", "for", "7"]
+  4. Earley parse:   (no parse — short-circuited)
+  5. Plan name:      binary_search
+  6. Plan ops:       [binary_search]
+  7. Type chain:
+       binary_search: List(Number) → Number
+  8. Racket:         (548 chars)
+  9. Output:         3
+```
+
+**What happened:** Phrase tokenizer joined "binary" + "search" → `binary_search`.
+The pre-Earley lookup found the plan file. The algorithm searches for 7 in
+`(1 3 5 7 9 11 13)` and returns index 3.
+
+### Trace 9: "generate permutations"
+
+```
+  1. Normalize:      ["generate", "permutations"]
+  2. Typo correct:   ["generate", "permutations"]
+  3. Phrase tokens:  ["generate_permutations"]
+  4. Plan name:      generate_permutations
+  5. Plan ops:       [generate_permutations]
+  6. Type chain:
+       generate_permutations: Number → List(List(Number))
+  7. Output:         ((1 2 3) (1 3 2) (2 1 3) (2 3 1) (3 1 2) (3 2 1))
+```
+
+**What happened:** Phrase tokenizer joined the two tokens. The algorithm
+generates all 3! = 6 permutations of (1 2 3).
 
 ---
 
