@@ -3,6 +3,7 @@
 //! Zero external dependencies. Uses raw ANSI escape codes.
 //! Respects the `NO_COLOR` environment variable (https://no-color.org/).
 
+use std::time::Duration;
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -285,6 +286,32 @@ pub fn status_pending(label: &str) -> String {
 
 pub fn status_active(label: &str) -> String {
     format!("{} {}", bold_blue(icon::ACTIVE), bold_blue(label))
+}
+
+/// Format a duration for display.
+///
+/// - Under 1 second: `"142ms"`
+/// - 1 second or more: `"1.3s"`
+/// - 60 seconds or more: `"1m 5.2s"`
+pub fn format_duration(d: Duration) -> String {
+    let total_ms = d.as_millis();
+    if total_ms < 1000 {
+        format!("{}ms", total_ms)
+    } else {
+        let secs = d.as_secs_f64();
+        if secs < 60.0 {
+            format!("{:.1}s", secs)
+        } else {
+            let mins = (secs / 60.0).floor() as u64;
+            let rem = secs - (mins as f64 * 60.0);
+            format!("{}m {:.1}s", mins, rem)
+        }
+    }
+}
+
+/// Format a timing label with a duration, styled dim.
+pub fn timing(label: &str, d: Duration) -> String {
+    format!("  {} {}", dim(label), dim(&format_duration(d)))
 }
 
 /// A code/script block with dim border.

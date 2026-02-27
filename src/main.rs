@@ -1,6 +1,7 @@
 use std::env;
 use std::path::Path;
 
+use std::time::Instant;
 use std::process;
 
 use cadmus::coding_strategy;
@@ -43,21 +44,26 @@ fn main() {
     }
 
     // Default: interactive chat mode
-    run_chat_mode();
+    let auto = args.iter().any(|a| a == "--auto");
+    run_chat_mode(auto);
 }
 
 // ---------------------------------------------------------------------------
 // Chat mode (NL UX)
 // ---------------------------------------------------------------------------
 
-fn run_chat_mode() {
+fn run_chat_mode(auto: bool) {
 
     use cadmus::nl;
     use cadmus::nl::dialogue::DialogueState;
     use cadmus::line_editor::{LineEditor, ReadResult};
 
     println!();
-    println!("{}", ui::banner("cadmus", VERSION, "reasoning inference engine"));
+    if auto {
+        println!("{}", ui::banner("cadmus", VERSION, "reasoning inference engine — auto mode"));
+    } else {
+        println!("{}", ui::banner("cadmus", VERSION, "reasoning inference engine"));
+    }
     println!();
     println!("  {} {}", ui::dim("try:"), ui::dim_white("zip up everything in ~/Downloads"));
     println!("  {}  {}", ui::dim("   "), ui::dim_white("find all PDFs in ~/Documents"));
@@ -96,10 +102,13 @@ fn run_chat_mode() {
         // Add to history (only non-empty, non-quit commands)
         editor.add_history(input);
 
+        let think_start = Instant::now();
         let response = nl::process_input(input, &mut state);
+        let think_elapsed = think_start.elapsed();
 
         match response {
             nl::NlResponse::PlanCreated { plan_sexpr, summary: _, prompt: _ } => {
+                if !auto {
                 println!();
                 println!("  {}", ui::status_ok("Plan created"));
                 println!();
@@ -107,6 +116,74 @@ fn run_chat_mode() {
                 println!();
                 println!("  {}", ui::dim("approve, edit, or reject?"));
                 println!();
+                } else {
+                    // Auto mode: approve, codegen, and execute in one shot
+                    use cadmus::calling_frame::{CallingFrame, DefaultFrame};
+
+                    println!();
+                    println!("  {}", ui::status_ok("Plan created"));
+                    println!();
+                    println!("{}", ui::plan_block(&plan_sexpr));
+                    println!();
+
+                    // Auto-approve: take the plan from dialogue state and codegen
+                    if let Some(plan_def) = state.current_plan.take() {
+                        let frame = DefaultFrame::from_plan(&plan_def);
+                        match frame.codegen(&plan_def) {
+                            Ok(script) => {
+
+                                println!("  {}", ui::status_ok("Approved"));
+                                println!();
+                                println!("  {}", ui::subsection("Generated Racket Program"));
+                                println!();
+                                println!("{}", ui::code_block(&script));
+                                println!();
+                                println!("{}", ui::timing("reasoning", think_elapsed));
+                                println!();
+
+                                // Execute
+                                println!("  {}", ui::status_active("Running..."));
+                                let exec_start = Instant::now();
+                                match frame.run_script(&script) {
+                                    Ok(exec) => {
+                                        let exec_elapsed = exec_start.elapsed();
+                                        if !exec.stdout.is_empty() {
+                                            println!();
+                                            println!("{}", ui::code_block(&exec.stdout));
+                                        }
+                                        if !exec.stderr.is_empty() {
+                                            eprintln!("{}", ui::dim(&exec.stderr));
+                                        }
+                                        println!();
+                                        if exec.success {
+                                            println!("  {}", ui::status_ok("Done"));
+                                        } else {
+                                            let code = exec.exit_code.unwrap_or(1);
+                                            println!("  {}", ui::status_fail(&format!("Exit code {}", code)));
+                                        }
+                                        println!("{}", ui::timing("execution", exec_elapsed));
+                                    }
+                                    Err(e) => {
+                                        let exec_elapsed = exec_start.elapsed();
+                                        println!("  {}", ui::error(&format!("{}", e)));
+                                        println!("  {}", ui::dim("Is Racket installed? Try: brew install racket"));
+                                        println!("{}", ui::timing("execution", exec_elapsed));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                println!("  {}", ui::status_fail("Codegen failed"));
+                                println!("  {}", ui::error(&format!("{}", e)));
+                                println!("{}", ui::timing("reasoning", think_elapsed));
+                            }
+                        }
+                    } else {
+                        // Plan was created but not stored (shouldn't happen)
+                        println!("  {}", ui::dim("(no plan available for auto-approve)"));
+                        println!("{}", ui::timing("reasoning", think_elapsed));
+                    }
+                    println!();
+                }
             }
             nl::NlResponse::PlanEdited { plan_sexpr, diff_description, .. } => {
                 println!();

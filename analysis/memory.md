@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-26T07:28:48Z | Size: 22.0k chars
+> Updated: 2026-02-27T22:49:48Z | Size: 22.7k chars
 
 ## Core Architecture
 
@@ -324,3 +324,12 @@ normalize → typo_correct → re-normalize → lexicon approve/reject/explain �
 - 18 action labels: select, retrieve, traverse, enumerate, compress, decompress, search_text, deduplicate, count, order, read, delete, copy, move, rename, compare, checksum, download
 - 39 intent_compiler tests (23 existing + 16 new recipe tests)
 - 1431 total tests, 0 failures
+
+### Auto-Approve Mode
+- `src/main.rs:49` — `--auto` flag parsed from CLI args
+- `src/main.rs:60-68` — Auto mode banner: "reasoning inference engine — auto mode"
+- `src/main.rs:107-182` — Auto-approve path in `PlanCreated` handler: takes plan from `state.current_plan`, codegen, execute, prints thinking+execution times
+- `src/ui.rs:293-314` — `format_duration(Duration)` and `timing(label, Duration)` helpers
+  - `<1s` → `"142ms"`, `1-60s` → `"1.3s"`, `60s+` → `"1m 5.2s"`
+- `tests/auto_approve_tests.rs` — 12 tests: format_duration edge cases, timing output, auto-approve NL flow
+- 1472 total tests, 0 failures, 66 ignored
