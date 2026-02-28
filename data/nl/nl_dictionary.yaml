@@ -3211,3 +3211,13 @@ algorithm_expansion:
   overview: 80
   lint: 80
   linter: 80
+  # web domain
+  web: 80
+  webserver: 80
+  server: 80
+  serving: 60
+  route: 60
+  handler: 60
+  pipeline: 60
+  html: 60
+  localhost: 60

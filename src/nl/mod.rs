@@ -52,6 +52,7 @@ pub enum NlResponse {
         /// The prompt to show the user.
         prompt: String,
     },
+
     /// An existing plan plan was edited.
     PlanEdited {
         /// The revised plan YAML string.
@@ -260,6 +261,7 @@ fn try_earley_create(
             .take_while(|t| !t.starts_with('/') && !t.starts_with('.') && !t.starts_with('~'))
             .filter(|t| !["the", "a", "an", "in", "of", "for", "with", "and", "to", "from", "by", "on", "at", "is", "it"].contains(t))
             .collect();
+
 
                 // ── Pre-check: first content token as a direct plan name ──
         // e.g., "wagner_fischer" joined by phrase tokenizer → try as plan file directly.
@@ -1271,5 +1273,29 @@ mod tests {
         // len is 3, but we need >= 4
         assert!(try_recipe_query(&tokens).is_none(),
             "'how do i' alone should not match");
+    }
+
+    #[test]
+    fn test_process_web_server() {
+        let mut state = DialogueState::new();
+        let response = process_input("Spin up a web server on localhost port 8080 serving hello world", &mut state);
+        match response {
+            NlResponse::PlanCreated { plan_sexpr, .. } => {
+                assert!(plan_sexpr.contains("http_server"), "expected http_server in plan, got: {}", plan_sexpr);
+            }
+            other => panic!("expected PlanCreated, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_process_add_route_web_server() {
+        let mut state = DialogueState::new();
+        let response = process_input("Add route to web server with pipeline: read file, match errors, return as html code block", &mut state);
+        match response {
+            NlResponse::PlanCreated { plan_sexpr, .. } => {
+                assert!(plan_sexpr.contains("add_route") || plan_sexpr.contains("add-route"), "expected add_route in plan, got: {}", plan_sexpr);
+            }
+            other => panic!("expected PlanCreated, got: {:?}", other),
+        }
     }
 }
