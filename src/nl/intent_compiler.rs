@@ -127,6 +127,9 @@ fn action_recipe(action: &str, ir: &IntentIR) -> Option<ActionRecipe> {
         "compare"                   => Some(ActionRecipe { ops: &["diff"] }),
         "checksum"                  => Some(ActionRecipe { ops: &["checksum"] }),
         "download"                  => Some(ActionRecipe { ops: &["download"] }),
+        "build"                     => Some(ActionRecipe { ops: &["build_project"] }),
+        "test"                      => Some(ActionRecipe { ops: &["test_project"] }),
+        "lint"                      => Some(ActionRecipe { ops: &["lint_project"] }),
         _ => None,
     }
 }
