@@ -1,0 +1,87 @@
+# Web Operations Pack
+# ===================
+# HTTP server operations for serving content via Racket's web/servlet.
+# Each op has a racket_body that generates the full Racket implementation.
+#
+# Design:
+#   - http_server: starts a web server on a given port with a default handler
+#   - add_route: registers a route handler that runs a pipeline and serves the result
+#   - format_html_code_block: wraps text content in an HTML <pre><code> block
+#
+# These ops compose: http_server creates the base server, add_route adds
+# handlers that can run arbitrary pipeline steps (read file, filter, transform)
+# and serve the result as an HTTP response.
+
+name: web
+description: "HTTP web server operations: serve content, add route handlers with pipeline bodies"
+
+ops:
+
+  # =========================================================================
+  # http_server — start a web server with a default hello-world handler
+  # =========================================================================
+  - name: http_server
+    racket_symbol: "http-server"
+    inputs: ["Number"]
+    output: "Void"
+    description: "(http-server port) — start an HTTP server on localhost:port serving hello world"
+    input_names: [port]
+    racket_body: |
+      (define (http-server port)
+        (define (start req)
+          (response/output
+            (lambda (op)
+              (display "hello world" op))
+            #:code 200
+            #:mime-type #"text/plain; charset=utf-8"))
+        (serve/servlet start
+          #:port port
+          #:listen-ip "127.0.0.1"
+          #:servlet-path "/"
+          #:servlet-regexp #rx""
+          #:launch-browser? #f
+          #:command-line? #t))
+
+  # =========================================================================
+  # add_route — register a route handler on an existing server
+  # =========================================================================
+  - name: add_route
+    racket_symbol: "add-route"
+    inputs: ["String", "String"]
+    output: "Void"
+    description: "(add-route path handler-program) — register a route that runs a pipeline program and serves the result"
+    input_names: [path, handler_program]
+    racket_body: |
+      (define (add-route path handler-program)
+        (define (handler req)
+          (define result (with-output-to-string
+            (lambda () (system (string-append "racket " handler-program)))))
+          (response/output
+            (lambda (op)
+              (display result op))
+            #:code 200
+            #:mime-type #"text/html; charset=utf-8"))
+        (serve/servlet handler
+          #:port 8080
+          #:listen-ip "127.0.0.1"
+          #:servlet-path path
+          #:servlet-regexp #rx""
+          #:launch-browser? #f
+          #:command-line? #t))
+
+  # =========================================================================
+  # format_html_code_block — wrap text in HTML <pre><code> block
+  # =========================================================================
+  - name: format_html_code_block
+    racket_symbol: "format-html-code-block"
+    type_params: [a]
+    inputs: ["a"]
+    output: "String"
+    description: "(format-html-code-block text) — wrap text content in an HTML pre/code block"
+    input_names: [text]
+    racket_body: |
+      (define (format-html-code-block text)
+        (define s (if (list? text) (string-join text "\n") text))
+        (string-append "<html><body><pre><code>"
+          (string-replace (string-replace (string-replace s "&" "&amp;") "<" "&lt;") ">" "&gt;")
+          "</code></pre></body></html>"))

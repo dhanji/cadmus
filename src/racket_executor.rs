@@ -78,6 +78,12 @@ pub fn build_racket_registry() -> OperationRegistry {
         &mut reg,
     );
 
+    // Merge web ops (HTTP server operations with racket_body)
+    let _ = crate::registry::load_ops_pack_str_into(
+        include_str!("../data/packs/ops/web.ops.yaml"),
+        &mut reg,
+    );
+
     let racket_facts_yaml = include_str!("../data/packs/facts/racket.facts.yaml");
     if let Ok(facts) = crate::racket_strategy::load_racket_facts_from_str(racket_facts_yaml) {
         crate::racket_strategy::promote_inferred_ops(&mut reg, &facts);
@@ -113,6 +119,16 @@ const SHELL_PREAMBLE: &str = r#"(require racket/system)
 (define (shell-quote s)
   (string-append "'" (string-replace s "'" "'\\''") "'"))
 "#;
+
+/// The Racket preamble for web server ops.
+///
+/// Requires web-server/servlet and web-server/servlet-env for HTTP serving.
+/// Only emitted when the script contains at least one web op (http_server, add_route).
+const WEB_PREAMBLE: &str = r#"(require racket/system web-server/servlet web-server/servlet-env)
+"#;
+
+/// Web op names that require the web preamble.
+const WEB_OPS: &[&str] = &["http_server", "add_route"];
 
 /// Check if an op is a shell-callable op by examining its metasignature.
 ///
@@ -163,6 +179,11 @@ fn has_shell_ops(compiled: &CompiledPlan, registry: &OperationRegistry) -> bool 
         is_shell_op(&s.op, registry)
             || crate::type_lowering::is_subsumed(&s.op)
     })
+}
+
+/// Check if any step in a compiled plan uses a web server op.
+fn has_web_ops(compiled: &CompiledPlan) -> bool {
+    compiled.steps.iter().any(|s| WEB_OPS.contains(&s.op.as_str()))
 }
 
 // ---------------------------------------------------------------------------
@@ -461,7 +482,12 @@ fn fs_path_operand(prev: Option<&str>, inputs: &[PlanInput], bindings: &HashMap<
             return racket_string(&expand_tilde(bound));
         }
     }
-    // No bindings — use default
+    // No explicit bindings — use the first input name as a Racket variable
+    // reference. The generated script emits (define name (vector-ref ...))
+    // for each plan input, so the variable will be bound at runtime.
+    if let Some(first) = inputs.first() {
+        return first.name.clone();
+    }
     racket_string(".")
 }
 
@@ -1297,16 +1323,19 @@ pub fn op_to_racket(
     if let Some(poly) = registry.get_poly(op) {
         if poly.racket_body.is_some() {
             let mut args = Vec::new();
-            for pname in &poly.input_names {
+            for (i, pname) in poly.input_names.iter().enumerate() {
                 if let Some(val) = params.get(pname.as_str()) {
                     args.push(racket_value(val));
+                } else if i == 0 && prev_binding.is_some() {
+                    // In a pipeline, the first input comes from the previous step
+                    args.push(prev_binding.unwrap().to_string());
                 } else {
                     args.push(pname.clone());
                 }
             }
             let fn_name = poly.racket_symbol.as_deref().unwrap_or(op);
             let expr = format!("({} {})", fn_name, args.join(" "));
-            return Ok(RacketExpr { expr, uses_prev: false });
+            return Ok(RacketExpr { expr, uses_prev: prev_binding.is_some() });
         }
     }
 
@@ -1489,6 +1518,12 @@ pub fn generate_racket_script(
         script.push_str(SHELL_PREAMBLE);
     }
 
+    // Emit web preamble if any step uses a web server op
+    if has_web_ops(compiled) {
+        script.push_str("\n");
+        script.push_str(WEB_PREAMBLE);
+    }
+
     // Collect input values for operand resolution
     let input_values = &def.inputs;
 
@@ -1499,6 +1534,17 @@ pub fn generate_racket_script(
             if let Some(val) = def.bindings.get(&input.name) {
                 script.push_str(&format!("(define {} {})\n", input.name, racket_value(val)));
             }
+        }
+    } else if !def.inputs.is_empty() {
+        // Emit command-line argument bindings for unbound plan inputs
+        // so the generated script can be run standalone:
+        //   racket script.rkt arg1 arg2 ...
+        script.push_str("\n;; Plan inputs (from command-line arguments)\n");
+        for (i, input) in def.inputs.iter().enumerate() {
+            script.push_str(&format!(
+                "(define {} (vector-ref (current-command-line-arguments) {}))\n",
+                input.name, i
+            ));
         }
     }
 

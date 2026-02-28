@@ -1,5 +1,5 @@
 # Workspace Memory
-> Updated: 2026-02-27T22:49:48Z | Size: 22.7k chars
+> Updated: 2026-02-28T00:09:00Z | Size: 24.6k chars
 
 ## Core Architecture
 
@@ -333,3 +333,26 @@ normalize → typo_correct → re-normalize → lexicon approve/reject/explain �
   - `<1s` → `"142ms"`, `1-60s` → `"1.3s"`, `60s+` → `"1m 5.2s"`
 - `tests/auto_approve_tests.rs` — 12 tests: format_duration edge cases, timing output, auto-approve NL flow
 - 1472 total tests, 0 failures, 66 ignored
+
+### Web Server Feature (plan `cadmus-http-server`)
+- `data/packs/ops/web.ops.yaml` — 3 ops: http_server, add_route, format_html_code_block
+  - All have `racket_body` with full `(define ...)` forms using web-server/servlet
+  - http_server: Number → Void (starts server on port with hello world handler)
+  - add_route: String, String → Void (registers route handler running pipeline program)
+  - format_html_code_block: a → String (polymorphic, wraps text in HTML pre/code)
+- `src/fs_types.rs:60` — `WEB_OPS_YAML` embedded constant
+- `src/fs_types.rs:103-109` — `load_ops_pack_str_into` for web ops in `build_full_registry()`
+- `src/racket_executor.rs:80-85` — web ops also loaded in `build_racket_registry()`
+- `src/racket_executor.rs:123-133` — `WEB_PREAMBLE` const: `(require web-server/servlet web-server/servlet-env)`
+- `src/racket_executor.rs:134` — `WEB_OPS` list: `["http_server", "add_route"]`
+- `src/racket_executor.rs:185-189` — `has_web_ops()` function
+- `src/racket_executor.rs:1517-1522` — web preamble emission in `generate_racket_script()`
+- `src/racket_executor.rs:1308-1312` — Fixed racket_body ops to use `prev_binding` for pipeline chaining
+- `data/plans/web_server.sexp` — Single-step plan: `(http_server :port "8080")`
+- `data/plans/add_route_web_server.sexp` — Route registration plan
+- `data/plans/error_log_pipeline.sexp` — Pipeline: read_file → format_html_code_block
+- `data/nl/nl_dictionary.yaml:2502-2510` — Added web/server/route/handler/pipeline/html/localhost to SymSpell
+- `src/nl/mod.rs:1250-1271` — NL tests for web server and add_route
+- `tests/web_server_tests.rs` — 16 tests: compilation, codegen, NL routing, registry, type chain
+- NL routing: "spin up a web server" → phrase tokenizer "run" + 2-token pair "web_server" → web_server.sexp
+- Autoregression: 271/271 (100%), 1490 total tests, 0 failures

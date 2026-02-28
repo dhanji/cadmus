@@ -345,7 +345,8 @@ mod tests {
         let frame = DefaultFrame::from_plan(&plan);
         let script = frame.codegen(&plan).expect("codegen should succeed");
         assert!(script.contains("#lang racket"));
-        assert!(script.contains("\".\""), "should use default dot path: {}", script);
+        // Plan has input "path", so codegen should reference it as a variable
+        assert!(script.contains("(shell-quote path)"), "should use plan input 'path': {}", script);
     }
 
     #[test]

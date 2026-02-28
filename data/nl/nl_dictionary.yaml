@@ -3198,3 +3198,12 @@ algorithm_expansion:
   preferences: 60
   visual: 60
   uncommit: 40
+  web: 80
+  webserver: 80
+  server: 80
+  serving: 60
+  route: 60
+  handler: 60
+  pipeline: 60
+  html: 60
+  localhost: 60
