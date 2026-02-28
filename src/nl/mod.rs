@@ -22,6 +22,8 @@ pub mod lexicon;
 pub mod intent_ir;
 pub mod intent_compiler;
 pub mod phrase;
+#[cfg(feature = "llm")]
+pub mod llm;
 
 use dialogue::{DialogueState, DialogueError, FocusEntry};
 use dialogue::EditAction;
@@ -382,6 +384,12 @@ fn try_earley_create(
     let parses = earley::parse(&grammar, &phrase_tokens, lex);
 
     if parses.is_empty() {
+        // Try LLM fallback before giving up
+        #[cfg(feature = "llm")]
+        if let Some(response) = try_llm_fallback(tokens, state) {
+            return response;
+        }
+
         if !fallback_needs.is_empty() {
             return NlResponse::NeedsClarification { needs: fallback_needs };
         }
@@ -427,14 +435,28 @@ fn try_earley_create(
                 },
             }
         }
-        intent_compiler::CompileResult::Error(msg) => NlResponse::NeedsClarification {
-            needs: vec![msg],
-        },
-        intent_compiler::CompileResult::NoIntent => NlResponse::NeedsClarification {
-            needs: vec![
-                "I couldn't parse that as a command. Try something like 'compute fibonacci' or 'find PDFs in ~/Documents'.".to_string(),
-            ],
-        },
+        intent_compiler::CompileResult::Error(msg) => {
+            #[cfg(feature = "llm")]
+            if let Some(response) = try_llm_fallback(tokens, state) {
+                return response;
+            }
+
+            NlResponse::NeedsClarification {
+                needs: vec![msg],
+            }
+        }
+        intent_compiler::CompileResult::NoIntent => {
+            #[cfg(feature = "llm")]
+            if let Some(response) = try_llm_fallback(tokens, state) {
+                return response;
+            }
+
+            NlResponse::NeedsClarification {
+                needs: vec![
+                    "I couldn't parse that as a command. Try something like 'compute fibonacci' or 'find PDFs in ~/Documents'.".to_string(),
+                ],
+            }
+        }
         intent_compiler::CompileResult::Approve => {
             handle_approve(state)
         }
@@ -787,6 +809,24 @@ fn finish_plan_creation(
             NlResponse::PlanCreated { plan_sexpr: yaml, prompt, summary }
         }
         Err(e) => NlResponse::Error { message: format!("Generated plan failed validation: {}", e) },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LLM fallback — try local model when deterministic parsing fails
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "llm")]
+fn try_llm_fallback(
+    tokens: &[String],
+    state: &mut DialogueState,
+) -> Option<NlResponse> {
+    let user_input = tokens.join(" ");
+    let (sexpr, _ops) = llm::process(&user_input)?;
+
+    match parse_plan_any(&sexpr) {
+        Ok(plan) => Some(finish_plan_creation(plan, sexpr, state)),
+        Err(_) => None,
     }
 }
 

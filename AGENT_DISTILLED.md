@@ -94,3 +94,52 @@ Cadmus already had filesystem ops (list, filter, sort, archive), algorithms, tex
 ### Step 4: Build and test
 
 Created the ops with `racket_body` implementations that shell out to grep/sed/find. Each op uses `local-require racket/system` to be self-contained. Created plans as both single-op wrappers (for NL discoverability) and multi-step compositions (the distilled sequences). Iterated on NL vocabulary until all 282 plans pass autoregression at 100%.
+
+---
+
+## Local LLM Frontend (optional)
+
+Build with `--features llm` to enable a local LLM fallback for NL input.
+
+```bash
+cargo build --features llm
+cargo run --features llm
+```
+
+### How It Works
+
+When the deterministic Earley parser can't understand user input, a local Qwen2.5-3B model (2GB, runs on Metal) takes over as a fuzzy intent matcher:
+
+1. User says something like "yo can you look through my codebase for anything using async"
+2. Earley parser fails (can't parse "yo can you...")
+3. LLM sees the input + a focused op catalog (~30 ops with descriptions)
+4. LLM outputs a simple structured response:
+   ```
+   op: grep_code
+   dir: .
+   pattern: async
+   ```
+5. Rust parses the key-value output, validates op names against the registry
+6. Rust mechanically constructs the plan sexp with correct types and binds
+7. The existing pipeline type-checks and presents the plan
+
+The LLM does NOT generate plans or code. It does two things:
+- **Fuzzy op matching**: "look through my codebase" → `grep_code`
+- **Slot extraction**: "anything using async" → `pattern: async`
+
+### Configuration
+
+Set `CADMUS_LLM_MODEL` to override the model path:
+
+```bash
+CADMUS_LLM_MODEL=~/.models/Qwen2.5-3B-Instruct-Q4_K_M.gguf cargo run --features llm
+```
+
+Default: `~/.models/Qwen2.5-3B-Instruct-Q4_K_M.gguf`
+
+### Architecture
+
+- `src/nl/llm.rs` — model loading (OnceLock), prompt construction, inference, output parsing, plan building
+- Feature-gated: `#[cfg(feature = "llm")]` — zero impact on default builds
+- Dependencies: `llama-cpp-2` (with Metal), `encoding_rs` — both optional
+- The deterministic pipeline runs first; LLM only fires on fallback (Earley parse failure or unknown action)
